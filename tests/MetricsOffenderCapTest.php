@@ -87,6 +87,14 @@ final class MetricsOffenderCapTest extends TestCase
         $analysis = Metrics::fullAnalysis($this->dir);
 
         $this->assertCount(15, $analysis['most_complex_functions'], 'display cap must stay at 15');
-        $this->assertCount(18, $analysis['all_functions'], 'full uncapped list must be exposed for offenders()');
+
+        // fullAnalysis() no longer republishes the uncapped function list. The engine
+        // ranks offenders itself and its own --fail-on gate reads that same ranking,
+        // so the CLI and the dashboard cannot disagree about what counts as an
+        // offender. total_offenders is the honest proof nothing was lost at the cap.
+        $this->assertArrayNotHasKey('all_functions', $analysis, 'the engine owns the ranking now');
+        $uncapped = Metrics::offenders($this->dir, PHP_INT_MAX);
+        $this->assertGreaterThanOrEqual(18, $uncapped['summary']['total_offenders']);
+        $this->assertGreaterThanOrEqual(18, count($uncapped['offenders']));
     }
 }

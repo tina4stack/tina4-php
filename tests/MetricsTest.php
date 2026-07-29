@@ -68,7 +68,7 @@ class MetricsTest extends TestCase
         $this->writePhpFile('nested.php', $source);
         $result = Metrics::fullAnalysis($this->tempDir);
         $byName = [];
-        foreach (($result['all_functions'] ?? []) as $f) {
+        foreach (($result['most_complex_functions'] ?? []) as $f) {
             $byName[$f['name']] = $f['complexity'];
         }
         return $byName;
@@ -174,7 +174,7 @@ class A {
 PHP);
         $result = Metrics::fullAnalysis($this->tempDir);
         $byName = [];
-        foreach (($result['all_functions'] ?? []) as $f) {
+        foreach (($result['most_complex_functions'] ?? []) as $f) {
             $byName[$f['name']] = $f['loc'];
         }
         // Span is 8 lines; code lines are function + if + return + closing brace.
@@ -185,7 +185,7 @@ PHP);
     {
         $this->writePhpFile('loc.php', "<?php\nfunction f() { return 1; }\n");
         $result = Metrics::fullAnalysis($this->tempDir);
-        $this->assertGreaterThanOrEqual(1, $result['all_functions'][0]['loc']);
+        $this->assertGreaterThanOrEqual(1, $result['most_complex_functions'][0]['loc']);
     }
 
     public function testFunctionSpanReachesTheClosingBrace(): void
@@ -195,7 +195,7 @@ PHP);
         // function's last line.
         $this->writePhpFile('loc.php', "<?php\nfunction f(\$x) {\n    return \$x;\n}\n");
         $result = Metrics::fullAnalysis($this->tempDir);
-        $this->assertSame(3, $result['all_functions'][0]['loc'], 'function + return + }');
+        $this->assertSame(3, $result['most_complex_functions'][0]['loc'], 'function + return + }');
     }
 
     // ── Quick Metrics ──────────────────────────────────────────────
@@ -371,7 +371,24 @@ PHP);
         $this->assertArrayHasKey('avg_maintainability', $result);
         $this->assertArrayHasKey('most_complex_functions', $result);
         $this->assertArrayHasKey('file_metrics', $result);
-        $this->assertArrayHasKey('violations', $result);
+        $this->assertArrayHasKey('dependency_graph', $result);
+        $this->assertSame('tina4-cli', $result['engine']);
+
+        // `violations` was the deleted analyzer's key. The ranked offenders list
+        // replaced it and lives on offenders(), which is also what the CLI's
+        // --fail-on gate reads, so the dashboard and the build cannot disagree.
+        $this->assertArrayNotHasKey('violations', $result);
+
+        // Parity lock (ADR-0002): this key set is byte-identical to the Python
+        // master's full_analysis(). One engine, one shape, comparable numbers.
+        $expected = [
+            'avg_complexity', 'avg_maintainability', 'dependency_graph', 'engine',
+            'file_metrics', 'files_analyzed', 'most_complex_functions',
+            'scan_mode', 'scan_root', 'total_functions',
+        ];
+        $actual = array_keys($result);
+        sort($actual);
+        $this->assertSame($expected, $actual, 'fullAnalysis() drifted from the Python master');
     }
 
     public function testFullAnalysisComplexityScoring(): void
@@ -463,14 +480,18 @@ class Detail
 }
 PHP);
 
+        // The engine's per-file contract (ADR-0002). One analyzer means one
+        // shape: the hand-rolled total_lines / classes / imports / warnings keys
+        // are gone, and `functions` is a COUNT here (see functionsOf()).
         $result = Metrics::fileDetail($filePath);
-        $this->assertArrayHasKey('path', $result);
-        $this->assertArrayHasKey('loc', $result);
-        $this->assertArrayHasKey('total_lines', $result);
-        $this->assertArrayHasKey('classes', $result);
-        $this->assertArrayHasKey('functions', $result);
-        $this->assertArrayHasKey('imports', $result);
-        $this->assertArrayHasKey('warnings', $result);
+        foreach ([
+            'path', 'loc', 'complexity', 'avg_complexity', 'functions',
+            'maintainability', 'has_tests', 'dep_count',
+            'coupling_efferent', 'coupling_afferent', 'instability',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $result, "missing per-file key {$key}");
+        }
+        $this->assertSame('tina4-cli', $result['engine'], 'the payload must name its engine');
     }
 
     public function testFileDetailCountsClassesAndFunctions(): void
@@ -488,15 +509,27 @@ class CountClass
 function standalone(): void {}
 PHP);
 
+        // `functions` is the engine's count. Both methods AND the standalone
+        // function are counted, which is the claim worth locking in.
         $result = Metrics::fileDetail($filePath);
-        $this->assertEquals(1, $result['classes']);
-        $this->assertCount(3, $result['functions']); // one, two, standalone
+        $this->assertSame(3, $result['functions'], 'one, two, standalone');
+
+        $names = array_column($this->functionsOf(), 'name');
+        foreach (['one', 'two', 'standalone'] as $expected) {
+            $this->assertTrue(
+                (bool) array_filter($names, static fn($n) => str_contains($n, $expected)),
+                "{$expected} missing from " . json_encode($names)
+            );
+        }
     }
 
     public function testFileDetailNonExistentFile(): void
     {
-        $result = Metrics::fileDetail('/nonexistent/file/12345.php');
-        $this->assertArrayHasKey('error', $result);
+        // No fallback: a missing file RAISES and names the path, instead of
+        // returning an {error} array a caller can forget to check.
+        $this->expectException(\Tina4\MetricsEngineException::class);
+        $this->expectExceptionMessage('no such file');
+        Metrics::fileDetail('/nonexistent/file/12345.php');
     }
 
     public function testFileDetailFunctionComplexity(): void
@@ -521,16 +554,30 @@ function complex_func(int $x): string
 }
 PHP);
 
-        $result = Metrics::fileDetail($filePath);
-        $this->assertNotEmpty($result['functions']);
+        $this->assertSame(2, Metrics::fileDetail($filePath)['functions']);
 
-        // Check that functions have complexity scores
-        foreach ($result['functions'] as $func) {
-            $this->assertArrayHasKey('complexity', $func);
-            $this->assertArrayHasKey('name', $func);
-            $this->assertArrayHasKey('line', $func);
-            $this->assertArrayHasKey('loc', $func);
+        // This assertion used to foreach over the `functions` COUNT: an int is
+        // not iterable, so the body never ran and the test proved nothing while
+        // reporting green. Assert the list is non-empty FIRST so it cannot rot
+        // back into a no-op.
+        $functions = $this->functionsOf();
+        $this->assertNotEmpty($functions);
+        foreach ($functions as $func) {
+            foreach (['name', 'complexity', 'line', 'loc'] as $key) {
+                $this->assertArrayHasKey($key, $func);
+            }
         }
+
+        // complex_func branches; simple_func does not.
+        $byName = [];
+        foreach ($functions as $fn) {
+            $byName[$fn['name']] = $fn['complexity'];
+        }
+        $this->assertGreaterThan(
+            $byName['simple_func'],
+            $byName['complex_func'],
+            'the branchy function must score higher: ' . json_encode($byName)
+        );
     }
 
     public function testFileDetailDetectsImports(): void
@@ -548,11 +595,24 @@ class ImportTest
 }
 PHP);
 
+        // The engine counts dependencies rather than listing import strings.
+        // Two `use` lines => dep_count 2.
         $result = Metrics::fileDetail($filePath);
-        $this->assertNotEmpty($result['imports']);
+        $this->assertSame(2, $result['dep_count'], 'both use statements must be counted');
     }
 
-    public function testFileDetailWarnsOnEmptyClass(): void
+    /**
+     * The engine has no empty-class warning, so there is nothing to assert here
+     * any more. The `warnings` list belonged to the deleted hand-rolled analyzer;
+     * under ADR-0002 the shared vocabulary is `offenders` (complexity, large
+     * file, low maintainability, untested), which the CLI gate reads too. An
+     * empty class trips none of those, and inventing a PHP-only warning would
+     * put a second analyzer back in the build.
+     *
+     * This is a deliberate, recorded capability drop -- see
+     * tina4-documentation/plan/v3/single-engine-metrics.md.
+     */
+    public function testAnEmptyClassIsAnalyzedWithoutError(): void
     {
         $filePath = $this->tempDir . '/EmptyClass.php';
         file_put_contents($filePath, <<<'PHP'
@@ -564,14 +624,9 @@ class EmptyClass
 PHP);
 
         $result = Metrics::fileDetail($filePath);
-        $hasEmptyClassWarning = false;
-        foreach ($result['warnings'] as $w) {
-            if ($w['type'] === 'empty_class') {
-                $hasEmptyClassWarning = true;
-                break;
-            }
-        }
-        $this->assertTrue($hasEmptyClassWarning);
+        $this->assertSame(0, $result['functions'], 'an empty class declares no functions');
+        $this->assertGreaterThan(0, $result['loc']);
+        $this->assertArrayNotHasKey('warnings', $result, 'offenders replaced the warnings list');
     }
 
     // ── Cyclomatic complexity accuracy (lock-in) ───────────────────
@@ -580,17 +635,37 @@ PHP);
     // Python AST-based analyzer (tests/test_metrics.py).
 
     /** Helper: complexity of a named function in a written-out file. */
+    /**
+     * Per-function records for ONE file: {name, file, line, complexity, loc}.
+     *
+     * fileDetail() reports `functions` as a COUNT, which is the engine's own
+     * per-file shape. Per-function detail lives in `most_complex_functions`, so
+     * scanning the single file yields exactly that file's functions. Names come
+     * back qualified (`Class.method`), which is why callers match on substring.
+     *
+     * The list is display-capped at 15 by the engine; every fixture here defines
+     * a handful of functions, well inside that.
+     *
+     * Scans the test's own temp DIRECTORY, matching complexityByName() above.
+     * fullAnalysis() resolves a scan ROOT, so handing it a single file path falls
+     * through to the framework scan and returns tina4-php's own functions.
+     */
+    private function functionsOf(?string $dir = null): array
+    {
+        return Metrics::fullAnalysis($dir ?? $this->tempDir)['most_complex_functions'];
+    }
+
     private function complexityOf(string $source, string $needle): int
     {
         $filePath = $this->tempDir . '/CcLock_' . md5($needle . $source) . '.php';
         file_put_contents($filePath, $source);
-        $result = Metrics::fileDetail($filePath);
-        foreach ($result['functions'] as $fn) {
+        $functions = $this->functionsOf();
+        foreach ($functions as $fn) {
             if (str_contains($fn['name'], $needle)) {
                 return $fn['complexity'];
             }
         }
-        $this->fail("Function '{$needle}' was not detected in: " . json_encode(array_column($result['functions'], 'name')));
+        $this->fail("Function '{$needle}' was not detected in: " . json_encode(array_column($functions, 'name')));
     }
 
     public function testComplexityIgnoresDecisionKeywordsInsideStrings(): void
@@ -738,10 +813,14 @@ class Decoy
 PHP;
         $filePath = $this->tempDir . '/Decoy.php';
         file_put_contents($filePath, $source);
-        $result = Metrics::fileDetail($filePath);
 
-        $names = array_column($result['functions'], 'name');
-        $this->assertCount(1, $result['functions'], 'Only the real declaration counts: ' . json_encode($names));
+        $names = array_column($this->functionsOf(), 'name');
+        $this->assertSame(
+            1,
+            Metrics::fileDetail($filePath)['functions'],
+            'Only the real declaration counts: ' . json_encode($names)
+        );
+        $this->assertCount(1, $names);
         $this->assertStringContainsString('realMethod', $names[0]);
 
         // None of the call-shaped strings leaked in as functions.
@@ -773,11 +852,11 @@ class RefReturn
 PHP;
         $filePath = $this->tempDir . '/RefReturn.php';
         file_put_contents($filePath, $source);
-        $result = Metrics::fileDetail($filePath);
+        $functions = $this->functionsOf();
 
-        $names = array_column($result['functions'], 'name');
+        $names = array_column($functions, 'name');
         $found = false;
-        foreach ($result['functions'] as $fn) {
+        foreach ($functions as $fn) {
             if (str_contains($fn['name'], 'pick')) {
                 $found = true;
                 // base 1 + if + && = 3

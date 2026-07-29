@@ -3,20 +3,31 @@
 namespace Tina4;
 
 /**
- * Code Metrics — token-based static analysis for the dev dashboard.
+ * Code Metrics — one engine, per ADR-0002.
  *
- * Two-tier analysis:
- *   1. Quick metrics (instant): LOC, file counts, class/function counts
- *   2. Full analysis (on-demand, cached): cyclomatic complexity, maintainability
- *      index, coupling, Halstead metrics, violations
+ * Two tiers, two different jobs:
  *
- * Zero dependencies — uses PHP's built-in token_get_all().
+ *   1. Quick metrics (instant): a FILE CENSUS. Line, file and template counts,
+ *      plus a cheap token count of classes and functions. No complexity is
+ *      computed. It stays in-process because the dashboard calls it on every
+ *      load and the native engine takes about a second on a 100-file tree.
+ *   2. Full analysis, offenders and per-file detail: the NATIVE ENGINE
+ *      (`tina4 metrics --json`). One tree-sitter implementation covering every
+ *      language, so a number measured in PHP is comparable with the same number
+ *      measured in Python, Ruby or Node.
+ *
+ * The hand-rolled token analyzer that used to live here is GONE (1442 lines). It
+ * duplicated the engine and, because each framework had its own, the four
+ * frameworks reported numbers that could not be compared - which silently
+ * undermined every cross-framework comparison built on them.
+ *
+ * There is NO FALLBACK. A missing or broken CLI THROWS MetricsEngineException
+ * naming the fix. Degrading to a second implementation is what produced
+ * incomparable numbers in the first place; a loud failure is honest where a
+ * quiet substitution is not.
  */
 class Metrics
 {
-    /** @var array{hash: string, data: ?array, time: float} */
-    private static array $fullCache = ["hash" => "", "data" => null, "time" => 0];
-
     /** Stores the resolved scan root so fileDetail() can locate framework files. */
     private static string $lastScanRoot = "";
 
@@ -43,6 +54,25 @@ class Metrics
         // Fallback: scan the framework package itself
         self::$lastScanRoot = __DIR__;
         return __DIR__;
+    }
+
+    /**
+     * Return [directory to scan, scan mode] for any metrics producer.
+     *
+     * The CLI engine is language-agnostic and cannot know which directory holds a
+     * framework package, so root resolution and the "framework" label stay here.
+     * Mirrors resolve_scan_target() in the Python master.
+     *
+     * @param string $root Root directory to scan
+     * @return array{0: string, 1: string}
+     */
+    public static function resolveScanTarget(string $root = "src"): array
+    {
+        $resolved = self::resolveRoot($root);
+        $frameworkDir = __DIR__;
+        $resolvedReal = realpath($resolved) ?: $resolved;
+        $scanningFramework = $resolvedReal === $frameworkDir || str_starts_with($resolvedReal, $frameworkDir);
+        return [$resolved, $scanningFramework ? "framework" : "project"];
     }
 
     // ── Quick Metrics ──────────────────────────────────────────────
@@ -225,1150 +255,6 @@ class Metrics
         ];
     }
 
-    // ── Full Analysis (token-based) ─────────────────────────────────
-
-    /**
-     * Deep token-based analysis. Cached for 60 seconds.
-     *
-     * @param string $root Root directory to scan
-     * @return array
-     */
-    public static function fullAnalysis(string $root = "src"): array
-    {
-        $root = self::resolveRoot($root);
-        $currentHash = self::filesHash($root);
-        $now = microtime(true);
-
-        if (
-            self::$fullCache["hash"] === $currentHash &&
-            self::$fullCache["data"] !== null &&
-            ($now - self::$fullCache["time"]) < self::CACHE_TTL
-        ) {
-            return self::$fullCache["data"];
-        }
-
-        $rootPath = realpath($root);
-        if ($rootPath === false || !is_dir($rootPath)) {
-            return ["error" => "Directory not found: {$root}"];
-        }
-
-        $phpFiles = self::globRecursive($rootPath, "*.php");
-
-        $allFunctions = [];
-        $fileMetrics = [];
-        $importGraph = [];
-        $reverseGraph = [];
-
-        foreach ($phpFiles as $file) {
-            $source = @file_get_contents($file);
-            if ($source === false) {
-                continue;
-            }
-
-            $tokens = @token_get_all($source);
-            if (!is_array($tokens)) {
-                continue;
-            }
-
-            $relPath = self::relativePath($file, $rootPath);
-            $lines = explode("\n", $source);
-            $loc = 0;
-            foreach ($lines as $line) {
-                if (self::isCodeLine($line)) {
-                    $loc++;
-                }
-            }
-
-            // Extract imports for coupling analysis
-            $imports = self::extractImports($tokens);
-            $importGraph[$relPath] = $imports;
-
-            foreach ($imports as $imp) {
-                if (!isset($reverseGraph[$imp])) {
-                    $reverseGraph[$imp] = [];
-                }
-                $reverseGraph[$imp][] = $relPath;
-            }
-
-            // Analyze functions/methods
-            $fileComplexity = 0;
-            $fileFunctions = [];
-            $halstead = ["operators" => 0, "operands" => 0, "unique_operators" => [], "unique_operands" => []];
-
-            $parsed = self::parseFunctions($tokens, $lines);
-
-            foreach ($parsed as $func) {
-                $cc = $func["complexity"];
-                $funcInfo = [
-                    "name" => $func["name"],
-                    "file" => $relPath,
-                    "line" => $func["line"],
-                    "complexity" => $cc,
-                    "loc" => $func["loc"],
-                ];
-                $allFunctions[] = $funcInfo;
-                $fileFunctions[] = $funcInfo;
-                $fileComplexity += $cc;
-            }
-
-            // Halstead metrics for the entire file
-            self::countHalstead($tokens, $halstead);
-
-            $n1 = count(array_unique($halstead["unique_operators"]));
-            $n2 = count(array_unique($halstead["unique_operands"]));
-            $N1 = $halstead["operators"];
-            $N2 = $halstead["operands"];
-            $vocabulary = $n1 + $n2;
-            $length = $N1 + $N2;
-            $volume = $vocabulary > 0 ? $length * log($vocabulary, 2) : 0;
-
-            // Maintainability index
-            $avgCc = count($fileFunctions) > 0 ? $fileComplexity / count($fileFunctions) : 0;
-            $mi = self::maintainabilityIndex($volume, $avgCc, $loc);
-
-            // Coupling
-            $ce = count($imports); // efferent
-            $ca = count($reverseGraph[$relPath] ?? []); // afferent
-            $instability = ($ca + $ce) > 0 ? $ce / ($ca + $ce) : 0.0;
-
-            $fileMetrics[] = [
-                "path" => $relPath,
-                "loc" => $loc,
-                "complexity" => $fileComplexity,
-                "avg_complexity" => round($avgCc, 2),
-                "functions" => count($fileFunctions),
-                "maintainability" => round($mi, 1),
-                "halstead_volume" => round($volume, 1),
-                "coupling_afferent" => $ca,
-                "coupling_efferent" => $ce,
-                "instability" => round($instability, 3),
-                "has_tests" => self::hasMatchingTest($relPath),
-                "dep_count" => $ce,
-            ];
-        }
-
-        // Sort by complexity descending
-        usort($allFunctions, fn($a, $b) => $b["complexity"] - $a["complexity"]);
-        usort($fileMetrics, fn($a, $b) => $a["maintainability"] <=> $b["maintainability"]);
-
-        // Violations
-        $violations = self::detectViolations($allFunctions, $fileMetrics);
-
-        // Overall averages
-        $totalCc = array_sum(array_column($allFunctions, "complexity"));
-        $avgCc = count($allFunctions) > 0 ? $totalCc / count($allFunctions) : 0;
-        $totalMi = array_sum(array_column($fileMetrics, "maintainability"));
-        $avgMi = count($fileMetrics) > 0 ? $totalMi / count($fileMetrics) : 0;
-
-        // Detect if we're scanning framework or project
-        $frameworkDir = realpath(__DIR__);
-        $scanningFramework = ($rootPath === $frameworkDir || str_starts_with($rootPath, $frameworkDir . DIRECTORY_SEPARATOR));
-
-        $result = [
-            "files_analyzed" => count($fileMetrics),
-            "total_functions" => count($allFunctions),
-            "avg_complexity" => round($avgCc, 2),
-            "avg_maintainability" => round($avgMi, 1),
-            // Display-only: the top-15 for the "most complex functions" report.
-            // Do NOT source offenders / --fail-on from this — capping here silently
-            // hides the 16th+ over-threshold function from the gate. offenders()
-            // reads "all_functions" (below) instead.
-            "most_complex_functions" => array_slice($allFunctions, 0, 15),
-            // Full, uncapped, complexity-sorted list — offenders()/--fail-on use this
-            // so no function over the complexity threshold ever escapes the gate.
-            "all_functions" => $allFunctions,
-            "file_metrics" => $fileMetrics,
-            "violations" => $violations,
-            "dependency_graph" => $importGraph,
-            "scan_mode" => $scanningFramework ? "framework" : "project",
-            "scan_root" => $rootPath,
-        ];
-
-        self::$fullCache = ["hash" => $currentHash, "data" => $result, "time" => $now];
-        return $result;
-    }
-
-    // ── Top Offenders (CLI + dashboard) ───────────────────────────
-
-    /** Severity ranking for sorting (higher = more severe). */
-    private const SEVERITY_RANK = ["error" => 2, "warn" => 1, "info" => 0];
-
-    /**
-     * Rank the worst code-quality issues into a single "top offenders" list.
-     *
-     * Reuses fullAnalysis() (does NOT re-analyze — it's cached). Each offender:
-     *   ["file", "line", "kind", "severity", "score", "detail"]
-     *
-     * Rules (one offender per matching condition), SAME scoring as the master:
-     *   - function complexity > 10  → kind "complexity"
-     *         severity "error" if >20 else "warn"; score = complexity
-     *   - file loc > 500            → kind "large_file" (warn); score = loc/100
-     *   - file functions > 20       → kind "too_many_functions" (warn); score = functions/4
-     *   - file maintainability < 40 → kind "low_maintainability"
-     *         severity "error" if <20 else "warn"; score = (50 - mi)
-     *   - file has_tests false       → kind "untested" (info); score = loc/100
-     *
-     * Sorted by (severity rank, score) DESCENDING and truncated to $top.
-     *
-     * @param string $root Root directory to scan
-     * @param int    $top  Maximum offenders to return
-     * @return array{offenders: array, summary: array}
-     */
-    public static function offenders(string $root = "src", int $top = 20): array
-    {
-        $analysis = self::fullAnalysis($root);
-        if (isset($analysis["error"])) {
-            return ["offenders" => [], "summary" => ["error" => $analysis["error"]]];
-        }
-
-        $items = [];
-
-        // Function-level: cyclomatic complexity. Use the FULL function list (not the
-        // display-capped most_complex_functions[:15]) so a 16th+ over-threshold
-        // function is never silently dropped from the offenders list or --fail-on.
-        foreach ($analysis["all_functions"] ?? $analysis["most_complex_functions"] ?? [] as $fn) {
-            $cc = $fn["complexity"];
-            if ($cc > 10) {
-                $items[] = [
-                    "file" => $fn["file"],
-                    "line" => $fn["line"],
-                    "kind" => "complexity",
-                    "severity" => $cc > 20 ? "error" : "warn",
-                    "score" => (float)$cc,
-                    "detail" => "{$fn['name']} — cyclomatic complexity {$cc}",
-                ];
-            }
-        }
-
-        // File-level rules.
-        foreach ($analysis["file_metrics"] ?? [] as $fm) {
-            $path = $fm["path"];
-            $loc = $fm["loc"];
-            $funcs = $fm["functions"];
-            $mi = $fm["maintainability"];
-
-            if ($loc > 500) {
-                $items[] = [
-                    "file" => $path,
-                    "line" => 1,
-                    "kind" => "large_file",
-                    "severity" => "warn",
-                    "score" => $loc / 100,
-                    "detail" => "{$loc} LOC (max 500)",
-                ];
-            }
-
-            if ($funcs > 20) {
-                $items[] = [
-                    "file" => $path,
-                    "line" => 1,
-                    "kind" => "too_many_functions",
-                    "severity" => "warn",
-                    "score" => $funcs / 4,
-                    "detail" => "{$funcs} functions (max 20)",
-                ];
-            }
-
-            if ($mi < 40) {
-                $items[] = [
-                    "file" => $path,
-                    "line" => 1,
-                    "kind" => "low_maintainability",
-                    "severity" => $mi < 20 ? "error" : "warn",
-                    "score" => 50 - $mi,
-                    "detail" => "maintainability index {$mi} (min 40)",
-                ];
-            }
-
-            if (($fm["has_tests"] ?? true) === false) {
-                $items[] = [
-                    "file" => $path,
-                    "line" => 1,
-                    "kind" => "untested",
-                    "severity" => "info",
-                    "score" => $loc / 100,
-                    "detail" => "no referencing test",
-                ];
-            }
-        }
-
-        // Sort by (severity rank, score) DESC. Stable order is not required.
-        usort($items, function ($a, $b) {
-            $rankCmp = self::SEVERITY_RANK[$b["severity"]] <=> self::SEVERITY_RANK[$a["severity"]];
-            if ($rankCmp !== 0) {
-                return $rankCmp;
-            }
-            return $b["score"] <=> $a["score"];
-        });
-
-        $summary = [
-            "files_analyzed" => $analysis["files_analyzed"],
-            "total_functions" => $analysis["total_functions"],
-            "avg_complexity" => $analysis["avg_complexity"],
-            "avg_maintainability" => $analysis["avg_maintainability"],
-            "scan_mode" => $analysis["scan_mode"],
-            "scan_root" => $analysis["scan_root"],
-            "total_offenders" => count($items),
-        ];
-
-        return ["offenders" => array_slice($items, 0, $top), "summary" => $summary];
-    }
-
-    // ── File Detail ─────────────────────────────────────────────────
-
-    /**
-     * Detailed metrics for a single file.
-     *
-     * @param string $filePath Path to the file
-     * @return array
-     */
-    public static function fileDetail(string $filePath): array
-    {
-        // Ensure scan root is resolved (each PHP request is a fresh process)
-        if (self::$lastScanRoot === '') {
-            self::resolveRoot();
-        }
-
-        // Normalize path separators — paths coming from the browser are always
-        // forward-slash even on Windows, but the filesystem may need either.
-        $filePath = str_replace('\\', '/', $filePath);
-        if (!file_exists($filePath) && self::$lastScanRoot !== '') {
-            // Try resolving relative to the last scan root (framework mode)
-            $candidate = self::$lastScanRoot . '/' . $filePath;
-            if (file_exists($candidate)) {
-                $filePath = $candidate;
-            }
-        }
-        if (!file_exists($filePath)) {
-            // Also try with native directory separator as a fallback
-            $native = str_replace('/', DIRECTORY_SEPARATOR, $filePath);
-            if (!file_exists($native)) {
-                return ["error" => "File not found: {$filePath}"];
-            }
-            $filePath = $native;
-        }
-
-        $source = @file_get_contents($filePath);
-        if ($source === false) {
-            return ["error" => "Cannot read file: {$filePath}"];
-        }
-
-        $tokens = @token_get_all($source);
-        if (!is_array($tokens)) {
-            return ["error" => "Cannot parse file: {$filePath}"];
-        }
-
-        $lines = explode("\n", $source);
-        $loc = 0;
-        foreach ($lines as $line) {
-            $stripped = trim($line);
-            if ($stripped !== "" && !str_starts_with($stripped, "//") && !str_starts_with($stripped, "#")) {
-                $loc++;
-            }
-        }
-
-        $parsed = self::parseFunctions($tokens, $lines);
-        $functions = [];
-        foreach ($parsed as $func) {
-            $functions[] = [
-                "name" => $func["name"],
-                "line" => $func["line"],
-                "complexity" => $func["complexity"],
-                "loc" => $func["loc"],
-                "args" => $func["args"],
-            ];
-        }
-
-        // Sort by complexity descending
-        usort($functions, fn($a, $b) => $b["complexity"] - $a["complexity"]);
-
-        // Count classes and detect empty ones
-        $classes = 0;
-        $warnings = [];
-        $tokenCount = count($tokens);
-        for ($i = 0; $i < $tokenCount; $i++) {
-            if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_CLASS) {
-                continue;
-            }
-            $prev = self::findPrevMeaningfulToken($tokens, $i);
-            if ($prev !== null && is_array($prev) && $prev[0] === T_NEW) {
-                continue;
-            }
-            $classes++;
-            // Find opening brace of class body
-            $depth = 0;
-            $bodyStart = null;
-            $hasBody = false;
-            for ($j = $i + 1; $j < $tokenCount; $j++) {
-                $t = $tokens[$j];
-                if ($t === '{') {
-                    if ($depth === 0) {
-                        $bodyStart = $j;
-                    }
-                    $depth++;
-                } elseif ($t === '}') {
-                    $depth--;
-                    if ($depth === 0) {
-                        // Scan between bodyStart and $j for non-whitespace tokens
-                        for ($k = $bodyStart + 1; $k < $j; $k++) {
-                            if (is_array($tokens[$k]) && $tokens[$k][0] !== T_WHITESPACE && $tokens[$k][0] !== T_COMMENT && $tokens[$k][0] !== T_DOC_COMMENT) {
-                                $hasBody = true;
-                                break;
-                            }
-                        }
-                        if (!$hasBody) {
-                            $nameToken = self::findNextMeaningfulToken($tokens, $i);
-                            $className = is_array($nameToken) ? $nameToken[1] : '(anonymous)';
-                            $line = is_array($tokens[$i]) ? $tokens[$i][2] : 0;
-                            $warnings[] = ["type" => "empty_class", "message" => "Class '{$className}' has no body", "line" => $line];
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Warn on empty methods (loc === 0 or only braces)
-        foreach ($functions as $fn) {
-            if ($fn["loc"] <= 1) {
-                $warnings[] = ["type" => "empty_method", "message" => "Method '{$fn['name']}' appears to be empty", "line" => $fn["line"]];
-            }
-        }
-
-        // Extract imports
-        $imports = self::extractImports($tokens);
-
-        return [
-            "path" => $filePath,
-            "loc" => $loc,
-            "total_lines" => count($lines),
-            "classes" => $classes,
-            "functions" => $functions,
-            "imports" => $imports,
-            "warnings" => $warnings,
-        ];
-    }
-
-    // ── Token Helpers ────────────────────────────────────────────────
-
-    /**
-     * Parse all functions/methods from tokens and compute their complexity and LOC.
-     *
-     * @param array $tokens Token array from token_get_all()
-     * @param array $lines  Source lines
-     * @return array List of function info arrays
-     */
-    /**
-     * True for a line that counts toward LOC: not blank, not a comment.
-     *
-     * The single definition of the rule. Function LOC used to ignore it and
-     * return a raw line span while file LOC excluded blanks and comments, so
-     * `loc` meant two different things in one payload - the dashboard sized
-     * bubbles in one unit and printed the function table in the other.
-     */
-    private static function isCodeLine(string $line): bool
-    {
-        $stripped = trim($line);
-        return $stripped !== ""
-            && !str_starts_with($stripped, "//")
-            && !str_starts_with($stripped, "#");
-    }
-
-    private static function parseFunctions(array $tokens, array $lines): array
-    {
-        $results = [];
-        $tokenCount = count($tokens);
-        $classStack = []; // track current class name
-
-        for ($i = 0; $i < $tokenCount; $i++) {
-            $token = $tokens[$i];
-
-            if (!is_array($token)) {
-                continue;
-            }
-
-            // Track class names for method qualification
-            if ($token[0] === T_CLASS) {
-                $prev = self::findPrevMeaningfulToken($tokens, $i);
-                if ($prev !== null && is_array($prev) && $prev[0] === T_NEW) {
-                    continue;
-                }
-                $nameToken = self::findNextMeaningfulToken($tokens, $i);
-                if ($nameToken !== null && is_array($nameToken) && $nameToken[0] === T_STRING) {
-                    // Find the opening brace to track class scope
-                    $classStack[] = [
-                        "name" => $nameToken[1],
-                        "brace_depth" => null, // set when we find the opening brace
-                    ];
-                }
-            }
-
-            if ($token[0] !== T_FUNCTION) {
-                continue;
-            }
-
-            // Get function name. A real declaration is `function name(` (or the
-            // reference-return form `function &name(`). Step past a leading '&'
-            // so a by-reference method is still counted — its real branches must
-            // not be lost. A closure (`function (` / `function &(` / `fn(`) has
-            // no name token and is skipped.
-            $nameIndex = self::nextMeaningfulIndex($tokens, $i);
-            if ($nameIndex !== null && self::isAmpersand($tokens[$nameIndex])) {
-                $nameIndex = self::nextMeaningfulIndex($tokens, $nameIndex);
-            }
-            if ($nameIndex === null) {
-                continue;
-            }
-            $nameToken = $tokens[$nameIndex];
-
-            // Anonymous function (closure) — no name token, skip.
-            if (!is_array($nameToken) || $nameToken[0] !== T_STRING) {
-                continue;
-            }
-
-            $funcName = $nameToken[1];
-            $funcLine = $token[2];
-
-            // Qualify with class name if inside a class
-            $className = self::getCurrentClassName($tokens, $i);
-            if ($className !== null) {
-                $funcName = "{$className}.{$funcName}";
-            }
-
-            // Find function body boundaries (opening and closing braces)
-            $bodyStart = null;
-            $bodyEnd = null;
-            $braceDepth = 0;
-            $foundOpen = false;
-
-            // Collect argument names
-            $args = [];
-            $inArgs = false;
-            for ($j = $i + 1; $j < $tokenCount; $j++) {
-                $t = $tokens[$j];
-                if (!is_array($t) && $t === "(") {
-                    $inArgs = true;
-                    continue;
-                }
-                if (!is_array($t) && $t === ")" && $inArgs) {
-                    $inArgs = false;
-                    continue;
-                }
-                if ($inArgs && is_array($t) && $t[0] === T_VARIABLE) {
-                    $argName = ltrim($t[1], '$');
-                    if ($argName !== "this") {
-                        $args[] = $argName;
-                    }
-                }
-                if (!is_array($t) && $t === "{") {
-                    $bodyStart = $j;
-                    $braceDepth = 1;
-                    $foundOpen = true;
-                    break;
-                }
-            }
-
-            if (!$foundOpen) {
-                continue; // abstract or interface method
-            }
-
-            // Find closing brace
-            for ($j = $bodyStart + 1; $j < $tokenCount; $j++) {
-                $t = $tokens[$j];
-                if (!is_array($t)) {
-                    if ($t === "{") {
-                        $braceDepth++;
-                    } elseif ($t === "}") {
-                        $braceDepth--;
-                        if ($braceDepth === 0) {
-                            $bodyEnd = $j;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if ($bodyEnd === null) {
-                continue;
-            }
-
-            // Calculate LOC for the function
-            $startLine = $funcLine;
-            $endLine = $funcLine;
-            // Find the line number of the closing brace
-            for ($j = $bodyEnd; $j >= $bodyStart; $j--) {
-                if (is_array($tokens[$j]) && isset($tokens[$j][2])) {
-                    // A bare "}" is a string token with no line number, so the
-                    // walk back lands on the whitespace before it and the
-                    // function's last line was dropped. Add the newlines the
-                    // token itself spans to land on the closing brace.
-                    $endLine = $tokens[$j][2] + substr_count($tokens[$j][1], "\n");
-                    break;
-                }
-            }
-            // Code lines over the function's span, by the same rule as file LOC.
-            // Floor of 1: a one-line body must never report 0.
-            $funcLoc = 0;
-            for ($ln = $startLine; $ln <= $endLine; $ln++) {
-                if (isset($lines[$ln - 1]) && self::isCodeLine($lines[$ln - 1])) {
-                    $funcLoc++;
-                }
-            }
-            $funcLoc = max(1, $funcLoc);
-
-            // Calculate cyclomatic complexity for this function's tokens
-            $funcTokens = array_slice($tokens, $bodyStart, $bodyEnd - $bodyStart + 1);
-            $cc = self::cyclomaticComplexity($funcTokens);
-
-            $results[] = [
-                "name" => $funcName,
-                "line" => $funcLine,
-                "complexity" => $cc,
-                "loc" => $funcLoc,
-                "args" => $args,
-            ];
-        }
-
-        return self::chargeNestedComplexityToTheNestedFunction($results);
-    }
-
-    /**
-     * Stop a function being charged for the complexity of the functions nested
-     * inside it.
-     *
-     * Each function's raw score is measured over its whole span, so a branch
-     * inside a nested function landed on BOTH that function and every function
-     * enclosing it. The over-count compounded with depth: a wrapper around
-     * twenty inner handlers absorbed the entire file's complexity and topped the
-     * offenders list, hiding the genuine hot spots.
-     *
-     * The correction is exact. A raw score is 1 + every decision in the span, so
-     * (raw - 1) is the total decision count of a function's whole subtree.
-     * Subtracting that for each DIRECT child leaves the function's own branches:
-     *
-     *     own(F) = raw(F) - sum over direct children C of (raw(C) - 1)
-     *
-     * Anonymous closures are deliberately unaffected: they are not reported as
-     * functions of their own, so nothing subtracts them and their decisions stay
-     * with the function that contains them - moved, never lost.
-     *
-     * @param array $functions Functions from ONE file, each with line + loc
-     * @return array The same functions with corrected complexity
-     */
-    private static function chargeNestedComplexityToTheNestedFunction(array $functions): array
-    {
-        $count = count($functions);
-        if ($count < 2) {
-            return $functions;
-        }
-
-        $end = static function (array $f): int {
-            return $f["line"] + max(1, $f["loc"]) - 1;
-        };
-
-        $contains = static function (array $outer, array $inner) use ($end): bool {
-            return $inner["line"] > $outer["line"] && $end($inner) <= $end($outer);
-        };
-
-        $corrected = $functions;
-        for ($i = 0; $i < $count; $i++) {
-            $subtract = 0;
-            for ($j = 0; $j < $count; $j++) {
-                if ($i === $j || !$contains($functions[$i], $functions[$j])) {
-                    continue;
-                }
-                // Direct child only: skip it if another function sits between
-                // the two, or its complexity would be subtracted twice.
-                $isDirect = true;
-                for ($k = 0; $k < $count; $k++) {
-                    if ($k === $i || $k === $j) {
-                        continue;
-                    }
-                    if ($contains($functions[$i], $functions[$k])
-                        && $contains($functions[$k], $functions[$j])) {
-                        $isDirect = false;
-                        break;
-                    }
-                }
-                if ($isDirect) {
-                    $subtract += $functions[$j]["complexity"] - 1;
-                }
-            }
-            $corrected[$i]["complexity"] = max(1, $functions[$i]["complexity"] - $subtract);
-        }
-
-        return $corrected;
-    }
-
-    /**
-     * Calculate cyclomatic complexity from a slice of tokens.
-     *
-     * CC = 1 + count of: if, elseif, case, for, foreach, while, catch, &&, ||, and, or, ??, ternary ?
-     *
-     * Accuracy guarantee (mirrors the Python AST analyzer's intent): decision
-     * points are counted on CODE ONLY. String-literal content (single/double
-     * quoted, heredoc/nowdoc) and comments are neutralised first, so a method
-     * whose body merely MENTIONS `&&`/`||`/`if`/`? :` inside a string or comment
-     * scores complexity for its REAL branches only. (PHP's token_get_all()
-     * already classifies string/comment bodies as their own token types — we
-     * make that explicit by skipping them, rather than relying on it implicitly.)
-     *
-     * @param array $tokens Token slice
-     * @return int
-     */
-    private static function cyclomaticComplexity(array $tokens): int
-    {
-        $cc = 1;
-
-        for ($i = 0, $count = count($tokens); $i < $count; $i++) {
-            $token = $tokens[$i];
-
-            if (is_array($token)) {
-                // Neutralise string/comment content — never a decision point even
-                // if the text inside reads like one ("if ($x && $y) ? a : b").
-                if (self::isStringOrCommentToken($token[0])) {
-                    continue;
-                }
-                switch ($token[0]) {
-                    case T_IF:
-                    case T_ELSEIF:
-                    case T_CASE:
-                    case T_FOR:
-                    case T_FOREACH:
-                    case T_WHILE:
-                    case T_CATCH:
-                        $cc++;
-                        break;
-                    case T_BOOLEAN_AND: // &&
-                    case T_BOOLEAN_OR:  // ||
-                    case T_LOGICAL_AND: // and
-                    case T_LOGICAL_OR:  // or
-                        $cc++;
-                        break;
-                    case T_COALESCE: // ??
-                        $cc++;
-                        break;
-                }
-            } else {
-                // Ternary operator ?
-                if ($token === "?") {
-                    // Make sure it's not the null coalesce ?? (already handled)
-                    if ($i + 1 < $count) {
-                        $next = $tokens[$i + 1];
-                        if (!is_array($next) && $next === "?") {
-                            continue; // part of ?? which is handled by T_COALESCE
-                        }
-                    }
-                    // A real ternary needs a left operand. A nullable type hint
-                    // (?int $a, ?string, : ?bool, ?Foo|?Bar) sits where a TYPE —
-                    // not an expression — is expected: directly after '(', ',',
-                    // ':', '|' or '&'. In those positions the '?' is NOT a
-                    // ternary, so it must not add complexity.
-                    $prev = self::findPrevMeaningfulToken($tokens, $i);
-                    if (
-                        $prev !== null && !is_array($prev) &&
-                        ($prev === ":" || $prev === "(" || $prev === "," ||
-                            $prev === "|" || $prev === "&")
-                    ) {
-                        continue; // nullable type hint, not a ternary
-                    }
-                    $cc++;
-                }
-            }
-        }
-
-        return $cc;
-    }
-
-    /**
-     * True when a token id holds string-literal or comment text (whose contents
-     * must never be scanned for decision points or function declarations).
-     *
-     * Covers single/double-quoted strings, interpolation chunks, heredoc/nowdoc
-     * bodies and markers, and // # /* *\/ comments.
-     *
-     * @param int $tokenId Token type id from token_get_all()
-     * @return bool
-     */
-    private static function isStringOrCommentToken(int $tokenId): bool
-    {
-        static $ids = null;
-        if ($ids === null) {
-            $ids = [
-                T_CONSTANT_ENCAPSED_STRING => true, // '...' / "..." (no interpolation)
-                T_ENCAPSED_AND_WHITESPACE => true,  // text chunks inside "..." / heredoc
-                T_INLINE_HTML => true,              // text outside <?php ?\>
-                T_COMMENT => true,                  // // and # and /* */
-                T_DOC_COMMENT => true,              // /** */
-                T_START_HEREDOC => true,            // <<<EOT
-                T_END_HEREDOC => true,              // EOT
-            ];
-        }
-        return isset($ids[$tokenId]);
-    }
-
-    /**
-     * True when a token is an ampersand. PHP 8.1+ may emit '&' as one of the
-     * context-aware tokens (T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG /
-     * T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG); older PHP emits a bare "&" CHAR.
-     *
-     * @param mixed $token A token_get_all() entry (array or string)
-     * @return bool
-     */
-    private static function isAmpersand(mixed $token): bool
-    {
-        if (!is_array($token)) {
-            return $token === "&";
-        }
-        return (defined('T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG') && $token[0] === T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG)
-            || (defined('T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG') && $token[0] === T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG);
-    }
-
-    /**
-     * Count Halstead operators and operands from tokens.
-     *
-     * @param array $tokens All tokens
-     * @param array &$stats Stats accumulator
-     */
-    private static function countHalstead(array $tokens, array &$stats): void
-    {
-        $operatorTokens = [
-            T_PLUS_EQUAL, T_MINUS_EQUAL, T_MUL_EQUAL, T_DIV_EQUAL, T_MOD_EQUAL,
-            T_CONCAT_EQUAL, T_AND_EQUAL, T_OR_EQUAL, T_XOR_EQUAL,
-            T_SL_EQUAL, T_SR_EQUAL, T_POW_EQUAL, T_COALESCE_EQUAL,
-            T_BOOLEAN_AND, T_BOOLEAN_OR, T_LOGICAL_AND, T_LOGICAL_OR, T_LOGICAL_XOR,
-            T_IS_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_NOT_IDENTICAL,
-            T_IS_SMALLER_OR_EQUAL, T_IS_GREATER_OR_EQUAL, T_SPACESHIP,
-            T_SL, T_SR, T_POW, T_COALESCE, T_INC, T_DEC, T_DOUBLE_ARROW,
-            T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR,
-        ];
-
-        $operandTokens = [
-            T_VARIABLE, T_LNUMBER, T_DNUMBER, T_CONSTANT_ENCAPSED_STRING,
-            T_ENCAPSED_AND_WHITESPACE, T_STRING,
-        ];
-
-        $charOperators = ["+", "-", "*", "/", "%", ".", "=", "<", ">", "!", "~", "^", "&", "|"];
-
-        foreach ($tokens as $token) {
-            if (is_array($token)) {
-                if (in_array($token[0], $operatorTokens, true)) {
-                    $stats["operators"]++;
-                    $stats["unique_operators"][] = token_name($token[0]);
-                } elseif (in_array($token[0], $operandTokens, true)) {
-                    $stats["operands"]++;
-                    $value = substr($token[1], 0, 50);
-                    $stats["unique_operands"][] = $value;
-                }
-            } else {
-                if (in_array($token, $charOperators, true)) {
-                    $stats["operators"]++;
-                    $stats["unique_operators"][] = $token;
-                }
-            }
-        }
-    }
-
-    /**
-     * Calculate Maintainability Index (0-100 scale).
-     *
-     * MI = max(0, (171 - 5.2 * ln(V) - 0.23 * CC - 16.2 * ln(LOC)) * 100 / 171)
-     *
-     * @param float $halsteadVolume Halstead volume
-     * @param float $avgCc          Average cyclomatic complexity
-     * @param int   $loc            Lines of code
-     * @return float
-     */
-    private static function maintainabilityIndex(float $halsteadVolume, float $avgCc, int $loc): float
-    {
-        if ($loc <= 0) {
-            return 100.0;
-        }
-        $v = max($halsteadVolume, 1);
-        $mi = 171 - 5.2 * log($v) - 0.23 * $avgCc - 16.2 * log($loc);
-        return max(0.0, min(100.0, $mi * 100 / 171));
-    }
-
-    /**
-     * Detect code quality violations.
-     *
-     * @param array $functions  All function metrics
-     * @param array $fileMetrics All file metrics
-     * @return array
-     */
-    private static function detectViolations(array $functions, array $fileMetrics): array
-    {
-        $violations = [];
-
-        foreach ($functions as $f) {
-            if ($f["complexity"] > 20) {
-                $violations[] = [
-                    "type" => "error",
-                    "rule" => "high_complexity",
-                    "message" => "{$f['name']} has cyclomatic complexity {$f['complexity']} (max 20)",
-                    "file" => $f["file"],
-                    "line" => $f["line"],
-                ];
-            } elseif ($f["complexity"] > 10) {
-                $violations[] = [
-                    "type" => "warning",
-                    "rule" => "moderate_complexity",
-                    "message" => "{$f['name']} has cyclomatic complexity {$f['complexity']} (recommended max 10)",
-                    "file" => $f["file"],
-                    "line" => $f["line"],
-                ];
-            }
-        }
-
-        foreach ($fileMetrics as $fm) {
-            if ($fm["loc"] > 500) {
-                $violations[] = [
-                    "type" => "warning",
-                    "rule" => "large_file",
-                    "message" => "{$fm['path']} has {$fm['loc']} LOC (recommended max 500)",
-                    "file" => $fm["path"],
-                    "line" => 1,
-                ];
-            }
-            if ($fm["functions"] > 20) {
-                $violations[] = [
-                    "type" => "warning",
-                    "rule" => "too_many_functions",
-                    "message" => "{$fm['path']} has {$fm['functions']} functions (recommended max 20)",
-                    "file" => $fm["path"],
-                    "line" => 1,
-                ];
-            }
-            if ($fm["maintainability"] < 20) {
-                $violations[] = [
-                    "type" => "error",
-                    "rule" => "low_maintainability",
-                    "message" => "{$fm['path']} has maintainability index {$fm['maintainability']} (min 20)",
-                    "file" => $fm["path"],
-                    "line" => 1,
-                ];
-            } elseif ($fm["maintainability"] < 40) {
-                $violations[] = [
-                    "type" => "warning",
-                    "rule" => "moderate_maintainability",
-                    "message" => "{$fm['path']} has maintainability index {$fm['maintainability']} (recommended min 40)",
-                    "file" => $fm["path"],
-                    "line" => 1,
-                ];
-            }
-        }
-
-        // Sort: errors first, then by file
-        usort($violations, function ($a, $b) {
-            $typeOrder = ($a["type"] === "error" ? 0 : 1) - ($b["type"] === "error" ? 0 : 1);
-            if ($typeOrder !== 0) {
-                return $typeOrder;
-            }
-            return strcmp($a["file"], $b["file"]);
-        });
-
-        return $violations;
-    }
-
-    /**
-     * Extract import targets from tokens (use statements, require/include).
-     *
-     * @param array $tokens Token array
-     * @return array List of imported names/paths
-     */
-    private static function extractImports(array $tokens): array
-    {
-        $imports = [];
-        $tokenCount = count($tokens);
-
-        for ($i = 0; $i < $tokenCount; $i++) {
-            $token = $tokens[$i];
-            if (!is_array($token)) {
-                continue;
-            }
-
-            // use statements
-            if ($token[0] === T_USE) {
-                $name = "";
-                for ($j = $i + 1; $j < $tokenCount; $j++) {
-                    $t = $tokens[$j];
-                    if (!is_array($t)) {
-                        if ($t === ";" || $t === "{") {
-                            break;
-                        }
-                        if ($t === ",") {
-                            if (trim($name) !== "") {
-                                $imports[] = trim($name);
-                            }
-                            $name = "";
-                            continue;
-                        }
-                    }
-                    if (is_array($t)) {
-                        if ($t[0] === T_STRING || $t[0] === T_NAME_QUALIFIED || $t[0] === T_NAME_FULLY_QUALIFIED || $t[0] === T_NS_SEPARATOR) {
-                            $name .= $t[1];
-                        } elseif ($t[0] === T_AS) {
-                            // Stop collecting name at 'as'
-                            break;
-                        }
-                    }
-                }
-                $name = trim($name);
-                if ($name !== "") {
-                    $imports[] = $name;
-                }
-            }
-
-            // require, include, require_once, include_once
-            if (in_array($token[0], [T_REQUIRE, T_INCLUDE, T_REQUIRE_ONCE, T_INCLUDE_ONCE], true)) {
-                for ($j = $i + 1; $j < $tokenCount; $j++) {
-                    $t = $tokens[$j];
-                    if (is_array($t) && $t[0] === T_CONSTANT_ENCAPSED_STRING) {
-                        $imports[] = trim($t[1], "\"'");
-                        break;
-                    }
-                    if (!is_array($t) && $t === ";") {
-                        break;
-                    }
-                }
-            }
-
-            // new ClassName references for coupling analysis
-            if ($token[0] === T_NEW) {
-                $nameToken = self::findNextMeaningfulToken($tokens, $i);
-                if ($nameToken !== null && is_array($nameToken)) {
-                    if (in_array($nameToken[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
-                        $className = $nameToken[1];
-                        if ($className !== "self" && $className !== "static" && $className !== "parent") {
-                            $imports[] = $className;
-                        }
-                    }
-                }
-            }
-        }
-
-        return array_values(array_unique($imports));
-    }
-
-    /**
-     * Get the current class name at a given token position by walking backwards.
-     *
-     * @param array $tokens All tokens
-     * @param int   $pos    Current position
-     * @return string|null
-     */
-    private static function getCurrentClassName(array $tokens, int $pos): ?string
-    {
-        $braceDepth = 0;
-
-        for ($i = $pos - 1; $i >= 0; $i--) {
-            $t = $tokens[$i];
-            if (!is_array($t)) {
-                if ($t === "}") {
-                    $braceDepth++;
-                } elseif ($t === "{") {
-                    $braceDepth--;
-                    if ($braceDepth < 0) {
-                        // We've exited a scope — look for 'class' keyword before this brace
-                        for ($j = $i - 1; $j >= 0; $j--) {
-                            if (is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
-                                continue;
-                            }
-                            if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
-                                // Check if preceded by T_CLASS
-                                for ($k = $j - 1; $k >= 0; $k--) {
-                                    if (is_array($tokens[$k]) && $tokens[$k][0] === T_WHITESPACE) {
-                                        continue;
-                                    }
-                                    if (is_array($tokens[$k]) && $tokens[$k][0] === T_CLASS) {
-                                        return $tokens[$j][1];
-                                    }
-                                    break;
-                                }
-                                // Could be after implements/extends list — keep searching
-                                // Look for class keyword before the name
-                                for ($k = $j - 1; $k >= 0; $k--) {
-                                    if (is_array($tokens[$k]) && $tokens[$k][0] === T_CLASS) {
-                                        // Find the class name (next T_STRING after T_CLASS)
-                                        for ($m = $k + 1; $m < $i; $m++) {
-                                            if (is_array($tokens[$m]) && $tokens[$m][0] === T_STRING) {
-                                                return $tokens[$m][1];
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                        return null;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Find the previous meaningful (non-whitespace) token before position.
-     *
-     * @param array $tokens All tokens
-     * @param int   $pos    Current position
-     * @return mixed|null
-     */
-    private static function findPrevMeaningfulToken(array $tokens, int $pos): mixed
-    {
-        for ($i = $pos - 1; $i >= 0; $i--) {
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_WHITESPACE) {
-                continue;
-            }
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_COMMENT) {
-                continue;
-            }
-            if (is_array($tokens[$i]) && $tokens[$i][0] === T_DOC_COMMENT) {
-                continue;
-            }
-            return $tokens[$i];
-        }
-        return null;
-    }
-
-    /**
-     * Find the next meaningful (non-whitespace) token after position.
-     *
-     * @param array $tokens All tokens
-     * @param int   $pos    Current position
-     * @return mixed|null
-     */
-    private static function findNextMeaningfulToken(array $tokens, int $pos): mixed
-    {
-        $idx = self::nextMeaningfulIndex($tokens, $pos);
-        return $idx === null ? null : $tokens[$idx];
-    }
-
-    /**
-     * Index of the next meaningful (non-whitespace, non-comment) token after
-     * a position, or null if none. Lets callers step token-by-token (e.g. past
-     * a reference-return '&') without re-scanning from the value.
-     *
-     * @param array $tokens All tokens
-     * @param int   $pos    Current position
-     * @return int|null
-     */
-    private static function nextMeaningfulIndex(array $tokens, int $pos): ?int
-    {
-        $count = count($tokens);
-        for ($i = $pos + 1; $i < $count; $i++) {
-            if (is_array($tokens[$i]) && in_array($tokens[$i][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-            return $i;
-        }
-        return null;
-    }
-
-    // ── Filesystem Helpers ──────────────────────────────────────────
-
     /**
      * Recursively glob for files matching a pattern.
      *
@@ -1393,32 +279,6 @@ class Metrics
         sort($files);
         return $files;
     }
-
-    /**
-     * Hash of all file mtimes for cache invalidation.
-     *
-     * @param string $root Root directory
-     * @return string MD5 hash
-     */
-    private static function filesHash(string $root): string
-    {
-        $rootPath = realpath($root);
-        if ($rootPath === false || !is_dir($rootPath)) {
-            return md5("");
-        }
-
-        $parts = [];
-        $files = self::globRecursive($rootPath, "*.php");
-        foreach ($files as $file) {
-            $mtime = @filemtime($file);
-            if ($mtime !== false) {
-                $parts[] = "{$file}:{$mtime}";
-            }
-        }
-
-        return md5(implode("|", $parts));
-    }
-
     /**
      * Get a path relative to the given root directory.
      *
@@ -1438,232 +298,237 @@ class Metrics
         // Always use forward slashes so paths are consistent across platforms
         return str_replace('\\', '/', $rel);
     }
+    /**
+     * Find the previous meaningful (non-whitespace) token before position.
+     *
+     * @param array $tokens All tokens
+     * @param int   $pos    Current position
+     * @return mixed|null
+     */
+    private static function findPrevMeaningfulToken(array $tokens, int $pos): mixed
+    {
+        for ($i = $pos - 1; $i >= 0; $i--) {
+            if (is_array($tokens[$i]) && $tokens[$i][0] === T_WHITESPACE) {
+                continue;
+            }
+            if (is_array($tokens[$i]) && $tokens[$i][0] === T_COMMENT) {
+                continue;
+            }
+            if (is_array($tokens[$i]) && $tokens[$i][0] === T_DOC_COMMENT) {
+                continue;
+            }
+            return $tokens[$i];
+        }
+        return null;
+    }
+
+    // ── The native engine (ADR-0002) ────────────────────────────────
+
+    private const TIMEOUT_SECONDS = 60;
+
+    private const INSTALL_HINT = "the tina4 CLI provides the metrics engine (ADR-0002). "
+        . "Install it with\n  curl -fsSL https://tina4.com/install.sh | sh\nor see https://tina4.com/cli";
 
     /**
-     * Check whether a source file has a test that ACTUALLY exercises it.
-     *
-     * PRECISE detection (a bare word-mention is NOT enough — that over-reported
-     * badly: SQLite3Adapter.php looked "tested" because some test merely said
-     * "SQLite3Adapter" in passing, or because a parent-dir DatabaseTest.php
-     * existed):
-     *
-     *   1. Filename — a dedicated test file named for THIS exact module:
-     *      <Module>Test.php / test_<module>.php / <module>_test.php /
-     *      <module>_spec.php (NOT the parent directory — one DatabaseTest.php
-     *      must NOT mark every file under Database/ tested).
-     *   2. Import — a test that actually IMPORTS this file: a `use` of its
-     *      fully-qualified namespaced class (the path → namespace), or a
-     *      `new ClassName` / `ClassName::` reference to a class it DEFINES
-     *      (top-level, distinctive name > 3 chars). NO bare module-name word.
-     *
-     * Returns true only on a real, file-specific signal — so the "untested"
-     * offenders surfaced by `tina4php metrics` and the dashboard "T" badge are
-     * trustworthy. (If you wire real coverage data later, prefer it over this.)
-     *
-     * @param string $relPath Relative path (e.g. "Database/SQLite3Adapter.php")
-     * @return bool
+     * Fields the dashboard renders. Checking for the DATA is honest where checking
+     * a version string is not: a user may run any CLI build, and the payload is
+     * what tells us what that build can actually do.
      */
-    private static function hasMatchingTest(string $relPath): bool
+    private const SUMMARY_KEYS = ["files_analyzed", "total_functions", "avg_complexity", "avg_maintainability"];
+    private const FILE_KEYS = ["path", "loc", "avg_complexity", "maintainability", "has_tests"];
+    private const FUNCTION_KEYS = ["name", "file", "line", "complexity", "loc"];
+
+    /**
+     * Absolute path to the tina4 CLI binary, or null when it is not installed.
+     *
+     * @return string|null
+     */
+    public static function enginePath(): ?string
     {
-        $module = pathinfo($relPath, PATHINFO_FILENAME); // "SQLite3Adapter"
-        if ($module === '' || strtolower($module) === 'index') {
-            // Generic; fall through to symbol detection only.
+        $which = PHP_OS_FAMILY === "Windows" ? "where" : "command -v";
+        $out = @shell_exec("$which tina4 2>/dev/null");
+        if (!is_string($out)) {
+            return null;
         }
-
-        // Fully-qualified namespaced class for THIS file, derived from its path:
-        //   "Database/SQLite3Adapter.php" -> "Tina4\Database\SQLite3Adapter"
-        //   "Auth.php"                    -> "Tina4\Auth"
-        // Namespace is read from the file itself (authoritative), falling back to
-        // the path-derived form so detection still works for non-Tina4 sources.
-        $absFile = self::$lastScanRoot !== '' ? self::$lastScanRoot . '/' . $relPath : $relPath;
-        $absFile = str_replace('\\', '/', $absFile);
-        $source = file_exists($absFile) ? (@file_get_contents($absFile) ?: '') : '';
-
-        $fqcn = '';
-        $definedClasses = [];
-        if ($source !== '') {
-            $tokens = @token_get_all($source);
-            if (is_array($tokens)) {
-                $ns = self::extractNamespace($tokens);
-                $definedClasses = self::extractDefinedClasses($tokens);
-                // Prefer a class that matches the filename (PSR-4), else the first.
-                $primaryClass = in_array($module, $definedClasses, true)
-                    ? $module
-                    : ($definedClasses[0] ?? $module);
-                $fqcn = $ns !== '' ? $ns . '\\' . $primaryClass : $primaryClass;
-            }
-        }
-        if ($fqcn === '') {
-            // Path-derived fallback (no parseable namespace in the file).
-            $dir = pathinfo($relPath, PATHINFO_DIRNAME);
-            $nsParts = ($dir !== '' && $dir !== '.') ? explode('/', $dir) : [];
-            $nsParts[] = $module;
-            $fqcn = implode('\\', $nsParts);
-        }
-
-        // Defined classes worth matching by bare name: top-level, distinctive
-        // (>2 chars, not leading underscore). A test referencing one of these
-        // genuinely exercises this file. The gate is >2 (not >3) so 3-char
-        // class names like ORM/Api/Log/App/Job/Env/Raw still count — they are
-        // distinctive enough that a bare reference in a test is a real signal,
-        // and excluding them mislabelled heavily-tested core files as untested.
-        $matchClasses = array_values(array_filter(
-            $definedClasses,
-            fn($c) => strlen($c) > 2 && !str_starts_with($c, '_')
-        ));
-        // The filename module name itself counts as a distinctive class name
-        // only if the file actually defines it (already covered above) — we do
-        // NOT add the bare module word otherwise.
-
-        // ── Test directories to search ───────────────────────────────
-        // CWD first, then (in framework-fallback mode) walk up from the scan
-        // root to the repo that owns tests/.
-        $searchRoots = ['.'];
-        if (self::$lastScanRoot !== '') {
-            $scanRoot = self::$lastScanRoot;
-            for ($i = 0; $i < 5; $i++) {
-                foreach (['tests', 'test', 'spec'] as $d) {
-                    if (is_dir($scanRoot . '/' . $d)) {
-                        $searchRoots[] = $scanRoot;
-                        break 2;
-                    }
-                }
-                $parent = dirname($scanRoot);
-                if ($parent === $scanRoot) {
-                    break;
-                }
-                $scanRoot = $parent;
-            }
-        }
-        $searchRoots = array_values(array_unique($searchRoots));
-        $testDirs = ['tests', 'test', 'spec'];
-
-        // Stage 1: a dedicated test FILE named for THIS module (no parent-dir blanket).
-        if ($module !== '') {
-            foreach ($searchRoots as $root) {
-                foreach ($testDirs as $td) {
-                    $base = $root . '/' . $td;
-                    $candidates = [
-                        "{$base}/{$module}Test.php",
-                        "{$base}/{$module}sTest.php",
-                        "{$base}/test_{$module}.php",
-                        "{$base}/{$module}_test.php",
-                        "{$base}/{$module}_spec.php",
-                    ];
-                    foreach ($candidates as $c) {
-                        if (file_exists($c)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Stage 2: a test that actually IMPORTS this file's namespaced class
-        // (`use Tina4\Database\SQLite3Adapter`) or references a class it DEFINES
-        // (`new SQLite3Adapter` / `SQLite3Adapter::` / `use …\SQLite3Adapter`).
-        // NO bare module-name word match.
-        $patterns = [];
-        if ($fqcn !== '' && str_contains($fqcn, '\\')) {
-            // Match the exact FQCN as a use/import or fully-qualified reference.
-            $patterns[] = '/\\\\?' . preg_quote($fqcn, '/') . '\b/';
-        }
-        if (!empty($matchClasses)) {
-            $alt = implode('|', array_map(fn($c) => preg_quote($c, '/'), $matchClasses));
-            $patterns[] = '/\b(?:' . $alt . ')\b/';
-        }
-        if (empty($patterns)) {
-            return false;
-        }
-
-        foreach ($searchRoots as $root) {
-            foreach ($testDirs as $td) {
-                $base = $root . '/' . $td;
-                if (!is_dir($base)) {
-                    continue;
-                }
-                foreach (self::globRecursive($base, '*.php') as $testFile) {
-                    $content = @file_get_contents($testFile);
-                    if ($content === false) {
-                        continue;
-                    }
-                    foreach ($patterns as $pat) {
-                        if (preg_match($pat, $content)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        return false;
+        $first = trim(strtok($out, "\n") ?: "");
+        return $first !== "" ? $first : null;
     }
 
     /**
-     * Extract the (first) namespace declared in a token stream.
+     * Run `tina4 metrics --json` over a path and return the decoded payload.
      *
-     * @param array $tokens Token array from token_get_all()
-     * @return string Namespace (e.g. "Tina4\Database") or "" if none
+     * @param string $path Directory OR single file to scan
+     * @return array
+     * @throws MetricsEngineException When the binary is absent, the run fails, or the output is unreadable
      */
-    private static function extractNamespace(array $tokens): string
+    private static function runEngine(string $path): array
     {
-        $count = count($tokens);
-        for ($i = 0; $i < $count; $i++) {
-            if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_NAMESPACE) {
-                continue;
-            }
-            $name = '';
-            for ($j = $i + 1; $j < $count; $j++) {
-                $t = $tokens[$j];
-                if (!is_array($t)) {
-                    if ($t === ';' || $t === '{') {
-                        break;
-                    }
-                    continue;
-                }
-                if (in_array($t[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NS_SEPARATOR], true)) {
-                    $name .= $t[1];
-                }
-            }
-            $name = trim($name, '\\');
-            if ($name !== '') {
-                return $name;
-            }
+        $binary = self::enginePath();
+        if ($binary === null) {
+            throw new MetricsEngineException("tina4 not found on PATH - " . self::INSTALL_HINT);
         }
-        return '';
+
+        $cmd = escapeshellarg($binary) . " metrics --path " . escapeshellarg($path) . " --json";
+        $descriptors = [1 => ["pipe", "w"], 2 => ["pipe", "w"]];
+        $process = @proc_open($cmd, $descriptors, $pipes);
+        if (!is_resource($process)) {
+            throw new MetricsEngineException("could not run $binary");
+        }
+
+        $stdout = stream_get_contents($pipes[1]) ?: "";
+        $stderr = stream_get_contents($pipes[2]) ?: "";
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        if ($exitCode !== 0) {
+            $detail = trim($stderr !== "" ? $stderr : $stdout);
+            $first = $detail !== "" ? strtok($detail, "\n") : "exit code $exitCode";
+            throw new MetricsEngineException("tina4 metrics failed on $path: $first");
+        }
+        if (trim($stdout) === "") {
+            throw new MetricsEngineException("tina4 metrics produced no output for $path");
+        }
+
+        $payload = json_decode($stdout, true);
+        if (!is_array($payload)) {
+            throw new MetricsEngineException("tina4 metrics returned unreadable JSON: " . json_last_error_msg());
+        }
+        return $payload;
     }
 
     /**
-     * Extract names of top-level classes/interfaces/traits/enums DEFINED in a
-     * token stream (skips anonymous `new class`).
+     * Pull a key out of the payload or throw naming what the engine is missing.
      *
-     * @param array $tokens Token array from token_get_all()
-     * @return array<string> Class names in declaration order
+     * @param array  $payload Decoded engine payload
+     * @param string $key     Key the dashboard needs
+     * @return array
+     * @throws MetricsEngineException When the key is absent or not an array
      */
-    private static function extractDefinedClasses(array $tokens): array
+    private static function requireKey(array $payload, string $key): array
     {
-        $classes = [];
-        $count = count($tokens);
-        $defTokens = [T_CLASS, T_INTERFACE, T_TRAIT];
-        if (defined('T_ENUM')) {
-            $defTokens[] = T_ENUM;
+        if (!isset($payload[$key]) || !is_array($payload[$key])) {
+            throw new MetricsEngineException(
+                "engine payload has no usable '$key' - the installed tina4 CLI predates a field the "
+                . "dashboard renders. Update it: " . self::INSTALL_HINT
+            );
         }
-        for ($i = 0; $i < $count; $i++) {
-            if (!is_array($tokens[$i]) || !in_array($tokens[$i][0], $defTokens, true)) {
-                continue;
-            }
-            // Skip anonymous classes (preceded by `new`).
-            if ($tokens[$i][0] === T_CLASS) {
-                $prev = self::findPrevMeaningfulToken($tokens, $i);
-                if ($prev !== null && is_array($prev) && $prev[0] === T_NEW) {
-                    continue;
-                }
-            }
-            $nameToken = self::findNextMeaningfulToken($tokens, $i);
-            if ($nameToken !== null && is_array($nameToken) && $nameToken[0] === T_STRING) {
-                $classes[] = $nameToken[1];
+        return $payload[$key];
+    }
+
+    /**
+     * Full code analysis from the native engine, shaped for the dashboard.
+     *
+     * @param string $root Root directory to scan
+     * @return array
+     * @throws MetricsEngineException When the engine cannot supply a complete payload
+     */
+    public static function fullAnalysis(string $root = "src"): array
+    {
+        [$resolved, $scanMode] = self::resolveScanTarget($root);
+        $payload = self::runEngine($resolved);
+
+        $summary = self::requireKey($payload, "summary");
+        $fileMetrics = self::requireKey($payload, "file_metrics");
+        $functions = self::requireKey($payload, "most_complex_functions");
+
+        $missing = array_diff(self::SUMMARY_KEYS, array_keys($summary));
+        if ($missing !== []) {
+            throw new MetricsEngineException(
+                "engine summary is missing " . implode(", ", $missing) . " - update the CLI: " . self::INSTALL_HINT
+            );
+        }
+        if ($fileMetrics !== [] && ($absent = array_diff(self::FILE_KEYS, array_keys($fileMetrics[0]))) !== []) {
+            throw new MetricsEngineException("engine file_metrics is missing " . implode(", ", $absent));
+        }
+        if ($functions !== [] && ($absent = array_diff(self::FUNCTION_KEYS, array_keys($functions[0]))) !== []) {
+            throw new MetricsEngineException("engine function metrics are missing " . implode(", ", $absent));
+        }
+
+        $result = [];
+        foreach (self::SUMMARY_KEYS as $key) {
+            $result[$key] = $summary[$key];
+        }
+        $result["file_metrics"] = $fileMetrics;
+        // Display cap only. offenders() reads the engine's own uncapped list, so a
+        // 16th over-threshold function is never hidden from the gate.
+        $result["most_complex_functions"] = array_slice($functions, 0, 15);
+        $result["dependency_graph"] = $payload["dependency_graph"] ?? [];
+        // The framework owns these two: the engine always reports "project"
+        // because it cannot know which directory is a framework package.
+        $result["scan_mode"] = $scanMode;
+        $result["scan_root"] = realpath($resolved) ?: $resolved;
+        $result["engine"] = "tina4-cli";
+        return $result;
+    }
+
+    /**
+     * Top code-health offenders from the native engine.
+     *
+     * The engine ranks and severity-tags them, and its own --fail-on gate reads
+     * the same list, so the CLI and the dashboard can never disagree about what
+     * counts as an offender.
+     *
+     * @param string $root Root directory to scan
+     * @param int    $top  Maximum offenders to return
+     * @return array{offenders: array, summary: array}
+     * @throws MetricsEngineException When the engine cannot supply a payload
+     */
+    public static function offenders(string $root = "src", int $top = 20): array
+    {
+        [$resolved, $scanMode] = self::resolveScanTarget($root);
+        $payload = self::runEngine($resolved);
+
+        $found = self::requireKey($payload, "offenders");
+        $summary = self::requireKey($payload, "summary");
+        $summary["scan_mode"] = $scanMode;
+        $summary["scan_root"] = realpath($resolved) ?: $resolved;
+        $summary["engine"] = "tina4-cli";
+        $summary["total_offenders"] ??= count($found);
+
+        return ["offenders" => array_slice($found, 0, $top), "summary" => $summary];
+    }
+
+    /**
+     * Per-file metrics from the native engine.
+     *
+     * The engine accepts a single file for --path, so one code path serves both
+     * the whole-tree scan and one file.
+     *
+     * @param string $filePath Path to a single source file
+     * @return array
+     * @throws MetricsEngineException When the path is missing, is a directory, or the engine fails
+     */
+    public static function fileDetail(string $filePath): array
+    {
+        if ($filePath === "") {
+            throw new MetricsEngineException("fileDetail needs a path");
+        }
+
+        $target = $filePath;
+        if (!file_exists($target) && self::$lastScanRoot !== "") {
+            // Try it relative to whatever quickMetrics last resolved, so the
+            // dashboard can pass a path taken straight out of file_metrics.
+            $candidate = self::$lastScanRoot . DIRECTORY_SEPARATOR . $filePath;
+            if (file_exists($candidate)) {
+                $target = $candidate;
             }
         }
-        return $classes;
+        if (!file_exists($target)) {
+            throw new MetricsEngineException("no such file: $filePath");
+        }
+        if (is_dir($target)) {
+            throw new MetricsEngineException("not a file: $filePath");
+        }
+
+        $payload = self::runEngine($target);
+        $fileMetrics = self::requireKey($payload, "file_metrics");
+        if ($fileMetrics === []) {
+            throw new MetricsEngineException("engine reported no metrics for $filePath");
+        }
+
+        $detail = $fileMetrics[0];
+        $detail["engine"] = "tina4-cli";
+        return $detail;
     }
 }

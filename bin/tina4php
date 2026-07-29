@@ -1276,18 +1276,21 @@ DOCKERFILE;
             exit(2);
         }
 
-        $result = \Tina4\Metrics::offenders($path, $top);
-        $summary = $result['summary'];
-        $found = $result['offenders'];
-
-        if (isset($summary['error'])) {
-            fwrite(STDERR, "  metrics error: {$summary['error']}\n");
+        // ONE engine run. The 60-second analysis cache went with the hand-rolled
+        // analyzer, so a second offenders() call would now be a second ~1s
+        // subprocess. Ask for everything once, print the top-N from it, and read
+        // the exit code off the same full set.
+        try {
+            $result = \Tina4\Metrics::offenders($path, PHP_INT_MAX);
+        } catch (\Tina4\MetricsEngineException $e) {
+            fwrite(STDERR, "  metrics error: {$e->getMessage()}\n");
             exit(2);
         }
+        $summary = $result['summary'];
+        $allOffenders = $result['offenders'];
+        $found = array_slice($allOffenders, 0, $top);
 
         // Decide exit code from the FULL offender set, not just the printed top-N.
-        // offenders()/fullAnalysis() is cached, so this reuses the same analysis.
-        $allOffenders = \Tina4\Metrics::offenders($path, max(1, $summary['total_offenders']))['offenders'];
         $severities = array_column($allOffenders, 'severity');
         $exitCode = 0;
         if ($failOn === 'warn' && (in_array('warn', $severities, true) || in_array('error', $severities, true))) {

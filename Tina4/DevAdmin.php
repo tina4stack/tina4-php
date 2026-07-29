@@ -1128,9 +1128,17 @@ class DevAdmin
             return $response->json(Metrics::quickMetrics());
         });
 
-        // API: Metrics — full analysis
+        // API: Metrics — full analysis from the native engine (ADR-0002).
+        // One engine for every language, so a number here is comparable with the
+        // same number in Python, Ruby or Node. No local fallback: a second
+        // implementation is what made the four frameworks incomparable, so a
+        // missing or stale CLI returns 503 naming the fix.
         Router::get('/__dev/api/metrics/full', function (Request $request, Response $response) {
-            return $response->json(Metrics::fullAnalysis());
+            try {
+                return $response->json(Metrics::fullAnalysis());
+            } catch (MetricsEngineException $e) {
+                return $response->json(['error' => $e->getMessage(), 'engine' => 'tina4-cli'], 503);
+            }
         });
 
         // API: Metrics — file detail
@@ -1139,18 +1147,20 @@ class DevAdmin
             if ($path === '') {
                 return $response->json(['error' => 'Missing path parameter'], 400);
             }
-            // Python-parity: directory/missing file → 404 (not 500 from AST).
             $full = self::devAdminSafePath($path);
             if ($full === null) {
                 return $response->json(['error' => 'Path outside project'], 403);
             }
-            if (is_dir($full)) {
-                return $response->json(['error' => "Not a file: {$path}"], 404);
-            }
             try {
                 return $response->json(Metrics::fileDetail($path));
-            } catch (\Throwable $e) {
-                return $response->json(['error' => $e->getMessage()], 500);
+            } catch (MetricsEngineException $e) {
+                $message = $e->getMessage();
+                // A bad path is the caller's mistake (404); anything else is the
+                // engine being absent or stale (503). Same split as /metrics/full.
+                if (str_contains($message, 'no such file') || str_contains($message, 'not a file')) {
+                    return $response->json(['error' => $message], 404);
+                }
+                return $response->json(['error' => $message, 'engine' => 'tina4-cli'], 503);
             }
         });
 
