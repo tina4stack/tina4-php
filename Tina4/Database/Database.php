@@ -736,7 +736,7 @@ class Database implements DatabaseAdapter
                 $columns = $this->getColumns($table);
                 $this->pkCache[$table] = array_values(array_map(
                     static fn(array $c): string => (string)$c['name'],
-                    array_filter($columns, static fn(array $c): bool => !empty($c['primary']))
+                    array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey']))
                 ));
             } catch (\Throwable) {
                 $this->pkCache[$table] = [];

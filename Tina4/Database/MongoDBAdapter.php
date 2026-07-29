@@ -374,7 +374,7 @@ class MongoDBAdapter implements DatabaseAdapter
                     'type'     => $this->inferType($value),
                     'nullable' => true,
                     'default'  => null,
-                    'primary'  => $field === '_id',
+                    'primaryKey'  => $field === '_id',
                 ];
             }
             return $columns;

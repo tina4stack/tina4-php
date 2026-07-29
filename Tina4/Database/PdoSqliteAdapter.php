@@ -116,7 +116,7 @@ class PdoSqliteAdapter implements DatabaseAdapter
                 'type' => $row['type'],
                 'nullable' => (int) $row['notnull'] === 0,
                 'default' => $row['dflt_value'],
-                'primary' => (int) $row['pk'] > 0,
+                'primaryKey' => (int) $row['pk'] > 0,
             ];
         }
         return $columns;

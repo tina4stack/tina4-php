@@ -358,7 +358,7 @@ class DatabaseResultTest extends TestCase
             $this->assertNull($col['size']);
             $this->assertNull($col['decimals']);
             $this->assertTrue($col['nullable']);
-            $this->assertFalse($col['primary_key']);
+            $this->assertFalse($col['primaryKey']);
         }
     }
 

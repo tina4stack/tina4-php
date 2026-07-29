@@ -795,7 +795,7 @@ class GraphQL
             $colName = $col['name'];
             $colType = strtoupper($col['type'] ?? 'TEXT');
 
-            if ($col['primary'] ?? false) {
+            if ($col['primaryKey'] ?? false) {
                 $gqlType = 'ID';
             } elseif (str_contains($colType, 'INT')) {
                 $gqlType = 'Int';

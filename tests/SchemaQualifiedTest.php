@@ -88,7 +88,7 @@ class SchemaQualifiedTest extends TestCase
         $names = array_column($cols, 'name');
         $this->assertSame(['id', 'name', 'is_deleted'], $names);
         $idCol = array_values(array_filter($cols, fn($c) => $c['name'] === 'id'))[0];
-        $this->assertTrue((bool) $idCol['primary']);
+        $this->assertTrue((bool) $idCol['primaryKey']);
     }
 
     // ── Every SQL adapter must carry the normalizer trait (server-free) ──

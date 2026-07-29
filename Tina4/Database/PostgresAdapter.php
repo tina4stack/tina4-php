@@ -478,7 +478,7 @@ class PostgresAdapter implements DatabaseAdapter
                 'type' => $row['data_type'],
                 'nullable' => $row['is_nullable'] === 'YES',
                 'default' => $row['column_default'],
-                'primary' => ($row['is_primary'] ?? 'f') === 't' || ($row['is_primary'] ?? false) === true,
+                'primaryKey' => ($row['is_primary'] ?? 'f') === 't' || ($row['is_primary'] ?? false) === true,
             ];
         }
 

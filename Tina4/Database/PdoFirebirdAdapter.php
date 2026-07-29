@@ -214,7 +214,7 @@ class PdoFirebirdAdapter implements DatabaseAdapter
                 'type' => $typeMap[$fieldType] ?? "TYPE_{$fieldType}",
                 'nullable' => ($row['NULL_FLAG'] ?? $row['null_flag'] ?? null) === null,
                 'default' => $row['DEFAULT_SOURCE'] ?? $row['default_source'] ?? null,
-                'primary' => in_array($fieldName, $pkFields, true),
+                'primaryKey' => in_array($fieldName, $pkFields, true),
             ];
         }
         return $columns;

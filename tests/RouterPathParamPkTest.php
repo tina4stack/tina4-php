@@ -73,7 +73,7 @@ class RouterPathParamPkTest extends TestCase
         }
         $this->assertNotNull($idCol, 'users.id column must exist');
         $this->assertSame('INTEGER', strtoupper($idCol['type']));
-        $this->assertTrue($idCol['primary'], 'users.id must be the primary key');
+        $this->assertTrue($idCol['primaryKey'], 'users.id must be the primary key');
     }
 
     /**

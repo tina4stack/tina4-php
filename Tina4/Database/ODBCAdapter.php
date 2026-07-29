@@ -331,7 +331,7 @@ class ODBCAdapter implements DatabaseAdapter
                 'type'     => $row['DATA_TYPE']   ?? $row['data_type']   ?? '',
                 'nullable' => strtoupper($row['IS_NULLABLE'] ?? $row['is_nullable'] ?? 'YES') === 'YES',
                 'default'  => $row['COLUMN_DEFAULT'] ?? $row['column_default'] ?? null,
-                'primary'  => false, // INFORMATION_SCHEMA.COLUMNS does not expose PK directly
+                'primaryKey'  => false, // INFORMATION_SCHEMA.COLUMNS does not expose PK directly
             ], $rows);
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();

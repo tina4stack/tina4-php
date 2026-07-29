@@ -491,7 +491,7 @@ class MSSQLAdapter implements DatabaseAdapter
                 'type' => $row['DATA_TYPE'],
                 'nullable' => $row['IS_NULLABLE'] === 'YES',
                 'default' => $row['COLUMN_DEFAULT'],
-                'primary' => (int)$row['is_primary'] === 1,
+                'primaryKey' => (int)$row['is_primary'] === 1,
             ];
         }
 

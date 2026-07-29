@@ -106,7 +106,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
      * Lazy — only queries the database when explicitly called. Caches the
      * result so subsequent calls return immediately without re-querying.
      *
-     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primaryKey: bool}>
      */
     public function columnInfo(): array
     {
@@ -154,7 +154,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
     /**
      * Query the database adapter for column metadata.
      *
-     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primaryKey: bool}>
      */
     private function queryColumnMetadata(string $table): array
     {
@@ -173,7 +173,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
      * Normalize output from adapter->getColumns() to standard format.
      *
      * @param array<int, array> $rawCols
-     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primaryKey: bool}>
      */
     private function normalizeAdapterColumns(array $rawCols): array
     {
@@ -187,7 +187,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
                 'size'        => $size,
                 'decimals'    => $decimals,
                 'nullable'    => $col['nullable'] ?? true,
-                'primary_key' => $col['primary'] ?? $col['primary_key'] ?? false,
+                'primaryKey' => $col['primaryKey'] ?? false,
             ];
         }
         return $columns;
@@ -211,7 +211,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
     /**
      * Derive basic column info from record keys when no adapter is available.
      *
-     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primary_key: bool}>
+     * @return array<int, array{name: string, type: string, size: ?int, decimals: ?int, nullable: bool, primaryKey: bool}>
      */
     private function fallbackColumnInfo(): array
     {
@@ -229,7 +229,7 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
             'size'        => null,
             'decimals'    => null,
             'nullable'    => true,
-            'primary_key' => false,
+            'primaryKey' => false,
         ], $headers);
     }
 

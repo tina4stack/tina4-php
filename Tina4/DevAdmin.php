@@ -2529,7 +2529,7 @@ class DevAdmin
                 continue;
             }
             $colType = strtoupper((string) ($col['type'] ?? ''));
-            $isPk = !empty($col['primary']);
+            $isPk = !empty($col['primaryKey']);
             if ($isPk && (str_contains($colType, 'AUTO') || str_contains($colType, 'SERIAL') || strtolower($name) === 'id')) {
                 continue;
             }

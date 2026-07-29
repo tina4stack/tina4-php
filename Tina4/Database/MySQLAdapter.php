@@ -370,7 +370,7 @@ class MySQLAdapter implements DatabaseAdapter
                 'type' => $row['Type'],
                 'nullable' => $row['Null'] === 'YES',
                 'default' => $row['Default'],
-                'primary' => $row['Key'] === 'PRI',
+                'primaryKey' => $row['Key'] === 'PRI',
             ];
         }
 

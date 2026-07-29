@@ -165,7 +165,7 @@ class SQLite3AdapterTest extends TestCase
         // id is primary key
         $idCol = array_filter($columns, fn($c) => $c['name'] === 'id');
         $idCol = array_values($idCol)[0];
-        $this->assertTrue($idCol['primary']);
+        $this->assertTrue($idCol['primaryKey']);
     }
 
     // --- Last Insert ID ---

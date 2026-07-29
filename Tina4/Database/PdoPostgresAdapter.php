@@ -222,7 +222,7 @@ class PdoPostgresAdapter implements DatabaseAdapter
                 'type' => $row['data_type'],
                 'nullable' => $row['is_nullable'] === 'YES',
                 'default' => $row['column_default'],
-                'primary' => ($row['is_primary'] ?? false) === true || ($row['is_primary'] ?? 'f') === 't',
+                'primaryKey' => ($row['is_primary'] ?? false) === true || ($row['is_primary'] ?? 'f') === 't',
             ];
         }
         return $columns;
