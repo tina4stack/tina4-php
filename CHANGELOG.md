@@ -14,6 +14,21 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ### Changed
 
+- **Breaking: every ORM read path that takes a `$limit` now defaults to 100 rows.**
+  `select()`, `where()`, `withTrashed()`, `cached()` and a `scope()`-generated method
+  defaulted to 20; they now default to 100. `all()`, `find()` and `$db->fetch()` already
+  capped at 100 and are unchanged. Two methods differing only in how you spell the filter
+  used to return a fifth as many rows. Pagination is a default, so every read path that
+  advertises a limit now uses the same number.
+
+  Migration: pass the limit explicitly wherever you relied on the old 20, for example
+  `$model->select($sql, [], 20)`. Code that already passes a limit is unaffected.
+
+  `QueryBuilder::get()` and `fetchAll()` are deliberately UNCHANGED and stay uncapped.
+  Neither takes a `$limit`, so a cap there can only ever be silent, and that silent
+  `LIMIT 100` was the data-loss-on-read footgun removed in 3.13.39. The rule: a path that
+  advertises `$limit` caps at 100, a path without one never caps.
+
 - **Breaking: an unsupported `TINA4_JWT_ALGORITHM` now throws instead of silently
   signing HS256.** `Auth::getToken()`, `Auth::validToken()` and
   `Auth::authenticateRequest()` throw `\InvalidArgumentException` naming the
@@ -33,8 +48,8 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
   algorithm and never read the header to choose a verifier, so a token minted for
   a different algorithm produced a different signature and was already rejected,
   and rewriting a real token's header invalidates its signature because the
-  header is part of the signing input. What changes is that a mismatched `alg` —
-  including `alg: "none"` — is now refused up front, before any signature work,
+  header is part of the signing input. What changes is that a mismatched `alg`  -
+  including `alg: "none"`  - is now refused up front, before any signature work,
   instead of being caught incidentally by the comparison. The value is parity with
   the other three frameworks, early rejection, and a regression lock against a
   future refactor that trusts `header.alg`. Marked breaking because a token whose
@@ -51,7 +66,7 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
   A post-dated token is refused until its `nbf` passes, with 60 seconds of clock
   skew tolerated (`Auth::JWT_LEEWAY_SECONDS`). A token with no `nbf` claim is
   unaffected, so tokens already in circulation keep working. `getToken()` does not
-  stamp an `nbf` — parity with the Python and Node masters. Closes tina4-php#187.
+  stamp an `nbf`  - parity with the Python and Node masters. Closes tina4-php#187.
 
 - **Breaking: `\Tina4\SqlTranslation` is renamed to `\Tina4\SQLTranslator`.**
   The SQL dialect-translation class was the only one of the four frameworks not called
@@ -67,12 +82,12 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 - **`TINA4_JWT_ALGORITHM=HS384` / `HS512` were broken in both directions.**
   `Auth::sign()` hardcoded `sha256`, so a token advertising `HS512` in its header
-  carried an HMAC-SHA256 signature — a 32-byte digest where the header promised 64 —
+  carried an HMAC-SHA256 signature  - a 32-byte digest where the header promised 64  -
   which any RFC-conformant verifier rejects. Verification was worse: `validToken()`
   only knew `HS256` and `RS256`, so with `HS512` configured *every* token was
   invalid. The digest is now looked up from the algorithm, so the header always
   names the digest that actually signed, and the whole HMAC family verifies.
-  `RS256` (a PHP/Node-only extra — Python and Ruby cannot sign it without a
+  `RS256` (a PHP/Node-only extra  - Python and Ruby cannot sign it without a
   dependency) is unchanged and still works.
 
 - **`tina4 deploy docker` produced images that could not start.** Of the eight
