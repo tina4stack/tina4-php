@@ -30,6 +30,26 @@ on:
 #
 # The CLI image (ghcr.io/tina4stack/tina4-cli) stays on GHCR: it is published by
 # the tina4 repo's own CI and the deploy templates pin it there.
+#
+# PUBLISHING IS MANUAL, ON PURPOSE (owner decision, 2026-07-30). There is no
+# publish job here and no Docker Hub credential in this repo. Images are built
+# and pushed from the build host, which already holds the credential, using
+# tina4-documentation/scripts/publish-docker-images.sh -- it replicates the boot
+# gate below (run the container, require 200 on /health through the PUBLISHED
+# port, require it still alive, require /health to report a version MATCHING the
+# tag) and then gates the arm64 image pulled back from the published manifest.
+#
+# WHY NOT IN CI: a Docker Hub push token for the tina4stack namespace can
+# OVERWRITE `latest` on every published image -- it is a supply-chain write
+# primitive, not just a publish credential. Storing it in four repos would mean
+# four copies, readable by every third-party action in each workflow, with four
+# places to rotate. If this is ever automated, do it with an org-level secret
+# scoped to these repos behind a protected environment with a required reviewer,
+# or per-repository scoped Docker Hub tokens -- never one account-wide token
+# copied per repo.
+#
+# What DOES run here on every tag: the boot gate, plus an arm64 cross-build
+# check. Both are credential-free, so this workflow can never leak anything.
 env:
   IMAGE: docker.io/tina4stack/tina4-php
   APP_PORT: 7145
@@ -41,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image (single arch, for speed -- multi-arch happens on publish)
+      - name: Build image (native arch; arm64 is cross-built below)
         run: docker build -t "$IMAGE:ci" .
 
       # `docker image inspect -f '{{.Size}}'` LIES under the containerd snapshotter:
@@ -141,75 +161,13 @@ jobs:
         if: always()
         run: docker rm -f gate || true
 
-  publish:
-    name: Publish to Docker Hub
-    needs: boot-gate          # no path publishes an image the gate did not pass
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-
-      # Fail with the fix rather than a cryptic login error. Docker Hub needs a
-      # real credential; GITHUB_TOKEN only ever worked for GHCR.
-      - name: Require Docker Hub credentials
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Cross-compile arm64 as a BUILD check. Nothing is pushed and nothing is
+      # loaded (buildx cannot --load a foreign-arch result), so this needs no
+      # registry credential -- it only proves the Dockerfile is not arch-broken
+      # (wrong base image, a native module with no arm64 build, a bad binary).
+      # Without it, an arm64 break would not surface until someone published by
+      # hand, because the boot gate above runs on the native amd64 runner.
+      - name: Cross-build arm64 (compile only, no push)
         run: |
-          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
-            echo "::error::Docker Hub credentials are not configured. Add repository secrets DOCKERHUB_USERNAME (tina4stack) and DOCKERHUB_TOKEN (a Hub access token with Read/Write, https://hub.docker.com/settings/security)."
-            exit 1
-          fi
-
-      - uses: docker/login-action@v3
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Tags
-        id: meta
-        run: |
-          version="${GITHUB_REF#refs/tags/}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tags=$IMAGE:$version,$IMAGE:v3,$IMAGE:latest" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push (amd64 + arm64)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          provenance: true
-
-      # The gate above ran on a native amd64 runner, so amd64 is the ARCH THAT WAS
-      # ACTUALLY BOOTED and arm64 is the one only compiled. buildx cannot --load a
-      # multi-platform result, so arm64 could not be run before the push -- but once
-      # the manifest is in the registry each arch can be pulled individually. Pull
-      # arm64 under emulation and require the same 200, turning "compiled" into
-      # "executed".
-      #
-      # Emulation is not a real arm64 host: it proves the image is not arch-broken
-      # (wrong base, missing native module, bad binary), not that it performs.
-      - name: arm64 gate (emulated, from the published manifest)
-        run: |
-          docker rm -f arm >/dev/null 2>&1 || true
-          docker run -d --name arm --platform linux/arm64 -p 8081:$APP_PORT \
-            "$IMAGE:${{ steps.meta.outputs.version }}"
-          ok=0
-          for i in $(seq 1 60); do
-            if curl -fsS -m 2 -o /dev/null "http://127.0.0.1:8081/health"; then ok=1; break; fi
-            [ "$(docker inspect -f '{{.State.Running}}' arm)" = "true" ] || break
-            sleep 1
-          done
-          if [ "$ok" != "1" ]; then
-            echo "::error::the published arm64 layer does not serve -- the manifest is arch-broken"
-            docker logs arm 2>&1 | tail -30
-            docker rm -f arm || true
-            exit 1
-          fi
-          echo "arm64 served 200 (uname=$(docker exec arm uname -m))"
-          docker rm -f arm || true
+          docker buildx create --use --name ci-arm >/dev/null 2>&1 || docker buildx use ci-arm
+          docker buildx build --platform linux/arm64 -t "$IMAGE:arm64-check" .
