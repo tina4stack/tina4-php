@@ -14,6 +14,39 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ### Changed
 
+- **Breaking: the metrics payload is now the native engine's shape.** `fullAnalysis` no
+  longer returns a `violations` key. The ranked `offenders` list replaces it and
+  `--fail-on` reads that same list, so one concept has one name instead of two.
+  Verified before removal: zero consumers outside the tests.
+
+- **Breaking: `fileDetail` returns the engine's per-file shape.** It no longer returns
+  `total_lines`, `classes`, `imports` or `warnings`, and `functions` is now a COUNT rather
+  than a list. Anything reading those keys must move to the engine's fields, or call
+  `fullAnalysis` and read `most_complex_functions` for per-function detail.
+
+- **Breaking: the empty-class warning is gone and is not coming back.** The old
+  hand-rolled analyzer flagged `class Foo {}` with no members. An empty class is usually
+  CORRECT rather than a defect: marker classes, base exception types, DTO placeholders.
+  Tina4 itself ships `MetricsEngineError` as exactly that, so the check flagged the
+  framework's own correct code. A check that fires on correct code is noise, and noise is
+  why the offenders list went unread for months. The engine's vocabulary stays the four
+  things that are actionable: complexity, large file, low maintainability, untested.
+
+- **Breaking: the column-metadata primary-key flag is `primaryKey`.** PHP and Node use `primaryKey`; Python and Ruby use `primary_key`. Each follows its own
+  language's paradigm because this is framework API surface, not data. The COLUMN NAME
+  itself is unaffected and still mirrors the database verbatim.
+
+- **Breaking: metrics REQUIRE the `tina4` CLI on PATH, with no fallback.** All four
+  frameworks deleted their own hand-rolled analyzer, so `fullAnalysis`, `offenders` and
+  `fileDetail` now shell out to `tina4 metrics --json` (ADR-0002: one engine, so a number
+  measured in one language is comparable with the same number measured in another). A
+  missing or stale CLI raises and names the install command instead of quietly returning
+  worse numbers; the dev-admin endpoints answer 503, or 404 for an unknown file path.
+  Previously a failure fell back to the local analyzer, which is exactly how four
+  frameworks came to disagree about the same file. The file census behind the dashboard
+  (`quick_metrics`) stays in-process and needs no CLI: it is a glob-and-count, and the
+  engine is 8x to 37x slower on that path.
+
 - **Breaking: every ORM read path that takes a `$limit` now defaults to 100 rows.**
   `select()`, `where()`, `withTrashed()`, `cached()` and a `scope()`-generated method
   defaulted to 20; they now default to 100. `all()`, `find()` and `$db->fetch()` already
