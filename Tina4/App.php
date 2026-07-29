@@ -34,7 +34,7 @@ class App
      *
      * @var string
      */
-    public static string $VERSION = '3.13.93';
+    public static string $VERSION = '3.13.94';
 
     /**
      * Legacy env var names that v3.12 retired. Each maps to its new
