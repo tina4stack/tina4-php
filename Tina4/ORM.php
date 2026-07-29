@@ -1208,7 +1208,7 @@ abstract class ORM
      * @param int $offset Starting offset
      * @return array<int, static>
      */
-    public function select(string $sql, array $params = [], int $limit = 20, int $offset = 0, ?array $include = null): array
+    public function select(string $sql, array $params = [], int $limit = 100, int $offset = 0, ?array $include = null): array
     {
         $this->ensureDb();
         $result = $this->_db->fetch($sql, $params, $limit, $offset);
@@ -1266,7 +1266,7 @@ abstract class ORM
      * @param string|null $orderBy ORDER BY clause (e.g. "name ASC")
      * @return array<int, static>
      */
-    public function where(string $filterSql, array $params = [], int $limit = 20, int $offset = 0, ?array $include = null, ?string $orderBy = null): array
+    public function where(string $filterSql, array $params = [], int $limit = 100, int $offset = 0, ?array $include = null, ?string $orderBy = null): array
     {
         $this->ensureDb();
 
@@ -1400,7 +1400,7 @@ abstract class ORM
      * @param int $offset Starting offset
      * @return array<int, static>
      */
-    public function withTrashed(string $filterSql = '1=1', array $params = [], int $limit = 20, int $offset = 0): array
+    public function withTrashed(string $filterSql = '1=1', array $params = [], int $limit = 100, int $offset = 0): array
     {
         $this->ensureDb();
 
@@ -1466,7 +1466,7 @@ abstract class ORM
     {
         if (isset(static::$_scopes[$name])) {
             $scope = static::$_scopes[$name];
-            $limit = $arguments[0] ?? 20;
+            $limit = $arguments[0] ?? 100;
             $offset = $arguments[1] ?? 0;
             return (new static())->where($scope['filter'], $scope['params'], $limit, $offset);
         }
@@ -1943,7 +1943,7 @@ abstract class ORM
      * @param array|null $include Relationship names to eager-load
      * @return array<int, static>
      */
-    public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 20, int $offset = 0, ?array $include = null): array
+    public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 100, int $offset = 0, ?array $include = null): array
     {
         $cacheKey = static::class . ':' . SQLTranslator::queryKey($sql, $params) . ":{$limit}:{$offset}";
         $hit = SQLTranslator::cacheGet($cacheKey);
