@@ -351,29 +351,15 @@ class PostgresAdapter implements DatabaseAdapter
         }
 
         $cols = implode(', ', array_keys($data));
-        $placeholders = implode(', ', array_map(
-            fn(int $i) => '$' . ($i + 1),
-            array_keys(array_values($data))
-        ));
+        $placeholders = implode(', ', array_fill(0, count($data), '?'));
 
-        $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders}) RETURNING *";
-        $values = array_values($data);
+        // Route through execute(), which owns placeholder conversion, the
+        // pg_affected_rows read, the RETURNING-id capture and the fail-loud
+        // raise. Running pg_query_params here instead left affectedRows holding
+        // whatever the PREVIOUS statement set, so a write reported a row count
+        // belonging to an unrelated query.
+        $this->execute("INSERT INTO {$table} ({$cols}) VALUES ({$placeholders}) RETURNING *", array_values($data));
 
-        $result = @pg_query_params($this->db, $sql, $values);
-        if ($result === false) {
-            $this->lastError = pg_last_error($this->db);
-            return false;
-        }
-
-        $row = pg_fetch_assoc($result);
-        if ($row !== false) {
-            $first = reset($row);
-            if ($first !== false) {
-                $this->lastId = $first;
-            }
-        }
-
-        pg_free_result($result);
         return true;
     }
 
@@ -381,30 +367,27 @@ class PostgresAdapter implements DatabaseAdapter
     {
         $setParts = [];
         $params = [];
-        $i = 1;
 
         foreach ($data as $col => $val) {
-            $setParts[] = "{$col} = \${$i}";
+            $setParts[] = "{$col} = ?";
             $params[] = $val;
-            $i++;
         }
 
         $sql = "UPDATE {$table} SET " . implode(', ', $setParts);
 
         if ($where !== '') {
-            // Re-index where placeholders
-            $where = $this->reindexPlaceholders($where, $i);
-            $sql .= " WHERE {$where}";
+            // Normalise any $N the caller supplied to ?, so the whole statement
+            // is one left-to-right ? sequence that execute() numbers itself.
+            // That replaces the manual re-indexing this method used to do.
+            $sql .= ' WHERE ' . preg_replace('/\$\d+/', '?', $where);
             $params = array_merge($params, $this->flattenParams($whereParams));
         }
 
-        $result = @pg_query_params($this->db, $sql, $params);
-        if ($result === false) {
-            $this->lastError = pg_last_error($this->db);
-            return false;
-        }
+        // execute() sets affectedRows from pg_affected_rows and raises on error.
+        // Doing the query here instead is why update() reported 0 rows changed
+        // for an update that DID change a row.
+        $this->execute($sql, $params);
 
-        pg_free_result($result);
         return true;
     }
 
@@ -422,42 +405,22 @@ class PostgresAdapter implements DatabaseAdapter
         if (is_array($filter)) {
             $parts = [];
             $params = [];
-            $i = 1;
             foreach ($filter as $col => $val) {
-                $parts[] = "{$col} = \${$i}";
+                $parts[] = "{$col} = ?";
                 $params[] = $val;
-                $i++;
             }
-            $sql = "DELETE FROM {$table} WHERE " . implode(' AND ', $parts);
-            $result = @pg_query_params($this->db, $sql, $params);
-            if ($result === false) {
-                $this->lastError = pg_last_error($this->db);
-                return false;
-            }
-            pg_free_result($result);
+            $this->execute("DELETE FROM {$table} WHERE " . implode(' AND ', $parts), $params);
             return true;
         }
 
         // String filter
         $sql = "DELETE FROM {$table}";
         if ($filter !== '') {
-            $pgWhere = $this->convertPlaceholders($filter);
-            $sql .= " WHERE {$pgWhere}";
+            $sql .= ' WHERE ' . $filter;
         }
 
-        if (empty($whereParams)) {
-            $result = @pg_query($this->db, $sql);
-        } else {
-            $values = $this->flattenParams($whereParams);
-            $result = @pg_query_params($this->db, $sql, $values);
-        }
+        $this->execute($sql, $whereParams === [] ? [] : $this->flattenParams($whereParams));
 
-        if ($result === false) {
-            $this->lastError = pg_last_error($this->db);
-            return false;
-        }
-
-        pg_free_result($result);
         return true;
     }
 

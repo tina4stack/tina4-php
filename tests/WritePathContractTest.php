@@ -74,12 +74,13 @@ class WritePathContractTest extends TestCase
         $ddl = 'CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(80))';
         $this->db->execute(\Tina4\SQLTranslator::autoIncrementSyntax($ddl, $this->db->getAdapter()->getDatabaseType()));
 
-        // Explicit ids: this suite's assertions key on id 1 and 2 (they were
-        // written for feature 4's data-loss cases, which are about WHICH rows a
-        // write touches). Nothing here reads back a generated id, so the
-        // sequence is not exercised and seeding by hand is safe.
-        $this->db->insert('t', ['id' => 1, 'name' => 'one']);
-        $this->db->insert('t', ['id' => 2, 'name' => 'two']);
+        // Let the SEQUENCE assign the ids. The assertions key on id 1 and 2, and
+        // a fresh sequence yields exactly those in insertion order on every
+        // engine. Hand-seeding id => 1, 2 instead leaves a real sequence still
+        // pointing at 1, so the first insert that omits an id collides on the
+        // primary key - SQLite hides that because its rowid follows the max.
+        $this->db->insert('t', ['name' => 'one']);
+        $this->db->insert('t', ['name' => 'two']);
         $this->db->commit();
     }
 
