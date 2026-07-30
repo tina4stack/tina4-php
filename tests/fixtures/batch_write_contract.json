@@ -57,8 +57,23 @@
     "firebird": 0,
     "odbc": 0,
     "mongodb": 0,
-    "_zero_means": "0 = DO NOT COLLAPSE. Firebird has no multi-row VALUES syntax (it needs INSERT..SELECT..UNION ALL or EXECUTE BLOCK); ODBC's ceiling depends on the driver behind it and cannot be assumed; MongoDB is not SQL. All three keep the row-at-a-time loop.",
-    "_why_sqlite_999": "SQLITE_MAX_VARIABLE_NUMBER is 999 before SQLite 3.32 and 32766 after. 999 is the safe floor and still collapses 333 three-column rows into one statement.",
+    "_zero_means": "0 = DO NOT COLLAPSE. ODBC's ceiling depends on the driver behind it and cannot be assumed; MongoDB is not SQL; Firebird is its own case, below. All three keep the row-at-a-time loop.",
+    "_firebird": [
+      "VERIFIED against live Firebird 5.0.4 on the .99 host, not assumed:",
+      "  INSERT INTO t (a, b) VALUES (?, ?), (?, ?)          -> rejected, -104 Token unknown",
+      "  INSERT INTO t (a, b) SELECT ?, ? FROM RDB$DATABASE  -> rejected, -804 Data type unknown",
+      "So Firebird genuinely has no multi-row VALUES, and SQL rewriting is correctly ruled out here.",
+      "BUT THAT IS NOT THE WHOLE ANSWER, AND THE FIRST VERSION OF THIS NOTE WAS WRONG. It concluded Firebird could only be batched by a form that knows each column's TYPE (CAST(? AS INTEGER) per column, or EXECUTE BLOCK) and therefore needed schema introspection. That looked only at SQL syntax and never at how the DRIVER is used.",
+      "Measured against live Firebird 5.0.4, 300 rows, no SQL change of any kind:",
+      "    A. a new cursor per row (what the adapters do today)   3128 ms",
+      "    B. ONE cursor, reused across the batch                 1489 ms   2.1x",
+      "    C. the driver's own executemany()                      1729 ms   1.8x",
+      "    D. an explicit prepared statement, executed N times    1677 ms   1.9x",
+      "The adapters call conn.cursor() inside every execute(), so every row pays a fresh PREPARE. Reusing one cursor for the batch halves the time with no CAST, no EXECUTE BLOCK and no column types.",
+      "So Firebird stays at cap 0 - it must never emit multi-row VALUES - and gets its win from statement reuse instead. That is an adapter concern (how a driver is driven), not a SQL-building one, which is exactly why it does not belong in build_batch_inserts and why cap 0 is the right entry here.",
+      "Firebird remains the slowest engine on this path even after the 2.1x, at roughly 5ms per row against 0.07ms for a collapsed PostgreSQL batch."
+    ],
+    "_why_sqlite_999": "SQLITE_MAX_VARIABLE_NUMBER is 999 before SQLite 3.32 and 32766 after. 999 is the safe floor and still collapses 333 three-column rows into one statement. MEASURED, 5000 rows: chunk=1 5.56ms, chunk=333 (this cap) 1.99ms, chunk=10922 (a 32766 cap) 2.02ms. The conservative floor costs NOTHING - it already captures the whole win - so raising it would only add risk on pre-3.32 builds.",
     "_why_mssql_2100": "SQL Server's absolute parameter limit per statement is 2100. It is by far the tightest cap here, which is why chunking is mandatory rather than an optimisation."
   },
 
