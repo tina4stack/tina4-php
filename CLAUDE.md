@@ -159,9 +159,11 @@ Router::any(string $routePath, $function): Router
 
 ### Database — Database connection (v3)
 
-v3 uses `Database::create()` with standardised URL connection strings. Old aliases (`pgsql`, `mariadb`, `fdb`, `sqlite3`, `sqlsrv`) are removed.
+v3 uses `Database::create()` with standardised URL connection strings. The v2 aliases `mariadb`, `fdb` and `sqlsrv` are removed and raise.
 
-Supported schemes: `sqlite`, `postgres`, `postgresql`, `mysql`, `mssql`, `sqlserver`, `firebird`
+Supported schemes, verified against the code: `sqlite`, `sqlite3`, `postgres`, `postgresql`, `pgsql`, `mysql`, `mssql`, `sqlserver`, `firebird`.
+
+Each resolves to a canonical **engine** (`sqlite`, `postgres`, `mysql`, `mssql`, `firebird`), which is what `DatabaseUrl::$engine` holds. `sqlite3` is accepted because the driver is literally named sqlite3 in every framework, and `pgsql` because it is the PDO/Laravel/Doctrine spelling.
 
 ```php
 use Tina4\Database\Database;
