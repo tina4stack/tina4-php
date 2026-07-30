@@ -26,6 +26,21 @@
     "firebird": 3050
   },
 
+  "_alias_note": [
+    "sqlite3 IS an accepted alias and normalises to the `sqlite` engine (owner",
+    "decision, 2026-07-30). The driver is literally named sqlite3 in every",
+    "framework - Python's sqlite3 module, Ruby's sqlite3 gem, PHP's ext-sqlite3,",
+    "Node's node:sqlite - so a user typing the name of the thing they installed",
+    "must not hit an exception. The '3' is the file-format version, not a",
+    "different engine, so the canonical ENGINE name stays `sqlite` and only the",
+    "accepted INPUT is widened.",
+    "",
+    "This reverses PHP's v3 removal, which had a test asserting sqlite3:// raised",
+    "while Ruby accepted it happily - a divergence only cross-framework reading",
+    "exposes. tina4-php/CLAUDE.md still lists sqlite3 and pgsql as 'removed'; both",
+    "claims are now wrong and the page needs correcting."
+  ],
+
   "aliases": {
     "postgresql": "postgres",
     "pgsql": "postgres",

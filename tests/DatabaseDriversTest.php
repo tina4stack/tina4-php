@@ -613,7 +613,7 @@ class DatabaseDriversTest extends TestCase
     public function testDatabaseUrlPostgresql(): void
     {
         $url = new \Tina4\DatabaseUrl('postgresql://alice:secret@db.example.com:5433/myapp');
-        $this->assertEquals('postgresql', $url->scheme);
+        $this->assertEquals('postgres', $url->engine); // postgresql resolves to the canonical engine
         $this->assertEquals('db.example.com', $url->host);
         $this->assertEquals(5433, $url->port);
         $this->assertEquals('alice', $url->username);
@@ -624,7 +624,7 @@ class DatabaseDriversTest extends TestCase
     public function testDatabaseUrlMysql(): void
     {
         $url = new \Tina4\DatabaseUrl('mysql://root:pass123@mysql-server:3307/shop');
-        $this->assertEquals('mysql', $url->scheme);
+        $this->assertEquals('mysql', $url->engine);
         $this->assertEquals('mysql-server', $url->host);
         $this->assertEquals(3307, $url->port);
         $this->assertEquals('root', $url->username);
@@ -635,7 +635,7 @@ class DatabaseDriversTest extends TestCase
     public function testDatabaseUrlMssql(): void
     {
         $url = new \Tina4\DatabaseUrl('mssql://sa:MyPass@mssql-host:1434/warehouse');
-        $this->assertEquals('mssql', $url->scheme);
+        $this->assertEquals('mssql', $url->engine);
         $this->assertEquals('mssql-host', $url->host);
         $this->assertEquals(1434, $url->port);
         $this->assertEquals('sa', $url->username);
@@ -645,7 +645,7 @@ class DatabaseDriversTest extends TestCase
     public function testDatabaseUrlFirebird(): void
     {
         $url = new \Tina4\DatabaseUrl('firebird://SYSDBA:masterkey@fbhost:3050/var/lib/firebird/data/app.fdb');
-        $this->assertEquals('firebird', $url->scheme);
+        $this->assertEquals('firebird', $url->engine);
         $this->assertEquals('fbhost', $url->host);
         $this->assertEquals(3050, $url->port);
         $this->assertEquals('SYSDBA', $url->username);

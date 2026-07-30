@@ -22,25 +22,57 @@ namespace Tina4;
  */
 class DatabaseUrl
 {
-    /** @var array<string, string> Maps URL scheme to Tina4 driver class names */
-    private const DRIVER_MAP = [
+    /**
+     * @var array<string, string> URL scheme to CANONICAL engine name.
+     *
+     * Alias resolution happens ONCE, here, at parse time. Everything downstream
+     * sees the canonical name, so `postgresql://`, `pgsql://` and `postgres://`
+     * are the same connection as far as the rest of the framework is concerned.
+     */
+    private const ENGINE_ALIASES = [
+        'sqlite' => 'sqlite',
+        'sqlite3' => 'sqlite',
+        'postgres' => 'postgres',
+        'postgresql' => 'postgres',
+        'pgsql' => 'postgres',
+        'mysql' => 'mysql',
+        'mssql' => 'mssql',
+        'sqlserver' => 'mssql',
+        'firebird' => 'firebird',
+    ];
+
+    /** @var array<string, string> Canonical engine to Tina4 adapter class. */
+    private const ENGINE_DRIVER_CLASS = [
         'sqlite' => 'DataSQLite3',
         'postgres' => 'DataPostgresql',
-        'postgresql' => 'DataPostgresql',
-        'pgsql' => 'DataPostgresql',
         'mysql' => 'DataMySQL',
         'mssql' => 'DataMSSQL',
-        'sqlserver' => 'DataMSSQL',
         'firebird' => 'DataFirebird',
     ];
 
-    public readonly string $driver;
-    public readonly string $host;
-    public readonly int $port;
+    /**
+     * The canonical engine name: sqlite, postgres, mysql, mssql or firebird.
+     *
+     * Breaking (feature 5): replaces BOTH `$driver` and `$scheme`. `$driver` held
+     * an internal class name (`DataPostgresql`, `DataSQLite3`) on a public
+     * readonly property, leaking implementation into the value; `$scheme` held
+     * the RAW scheme, so `pgsql://` and `postgres://` compared unequal for the
+     * same connection. The adapter class is now looked up FROM the engine by
+     * getDriverClass(); a public property never holds a class name.
+     */
+    public readonly string $engine;
+
+    /** Null for sqlite - a file has no host. */
+    public readonly ?string $host;
+
+    /** Null for sqlite. Otherwise always set: the engine default applies at parse. */
+    public readonly ?int $port;
+
     public readonly string $database;
-    public readonly string $username;
-    public readonly string $password;
-    public readonly string $scheme;
+
+    /** Null when absent, never an empty string - absent and blank are different. */
+    public readonly ?string $username;
+    public readonly ?string $password;
 
     /**
      * Parse a DATABASE_URL string.
@@ -51,14 +83,22 @@ class DatabaseUrl
     public function __construct(string $url)
     {
         // Handle sqlite special cases — :memory: check must come first
+        // `sqlite3:` is accepted input and normalises to `sqlite:`. The driver is
+        // literally named sqlite3 in every framework (Python's sqlite3 module,
+        // Ruby's sqlite3 gem, PHP's ext-sqlite3, Node's node:sqlite), so people
+        // type it. The "3" is the file-format version, not a different engine, so
+        // the canonical ENGINE name stays `sqlite` and only the input is widened.
+        if (str_starts_with($url, 'sqlite3:')) {
+            $url = 'sqlite:' . substr($url, 8);
+        }
+
         if ($url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
-            $this->scheme = 'sqlite';
-            $this->driver = self::DRIVER_MAP['sqlite'];
-            $this->host = '';
-            $this->port = 0;
+            $this->engine = 'sqlite';
+            $this->host = null;
+            $this->port = null;
             $this->database = ':memory:';
-            $this->username = '';
-            $this->password = '';
+            $this->username = null;
+            $this->password = null;
             return;
         }
 
@@ -82,15 +122,14 @@ class DatabaseUrl
                 $rest = substr($url, 7); // "sqlite:"
             }
 
-            $this->scheme = 'sqlite';
-            $this->driver = self::DRIVER_MAP['sqlite'];
-            $this->host = '';
-            $this->port = 0;
+            $this->engine = 'sqlite';
+            $this->host = null;
+            $this->port = null;
             // Absolute vs relative is decided by the adapter at connect time
             // (a leading "/" or a Windows drive letter → absolute).
             $this->database = $rest;
-            $this->username = '';
-            $this->password = '';
+            $this->username = null;
+            $this->password = null;
             return;
         }
 
@@ -103,23 +142,29 @@ class DatabaseUrl
 
         $scheme = strtolower($parts['scheme']);
 
-        if (!isset(self::DRIVER_MAP[$scheme])) {
+        if (!isset(self::ENGINE_ALIASES[$scheme])) {
             throw new \InvalidArgumentException(
                 "DatabaseUrl: Unsupported database scheme '{$scheme}'. Supported: " .
-                implode(', ', array_keys(self::DRIVER_MAP))
+                implode(', ', array_keys(self::ENGINE_ALIASES))
             );
         }
 
-        $this->scheme = $scheme;
-        $this->driver = self::DRIVER_MAP[$scheme];
+        $this->engine = self::ENGINE_ALIASES[$scheme];
         $this->host = $parts['host'] ?? 'localhost';
-        $this->port = $parts['port'] ?? $this->defaultPort($scheme);
-        $this->username = isset($parts['user']) ? urldecode($parts['user']) : '';
-        $this->password = isset($parts['pass']) ? urldecode($parts['pass']) : '';
+        $this->port = $parts['port'] ?? $this->defaultPort($this->engine);
+        $this->username = isset($parts['user']) ? urldecode($parts['user']) : null;
+        $this->password = isset($parts['pass']) ? urldecode($parts['pass']) : null;
 
-        // Database name is the path without leading slash
+        // Strip EXACTLY ONE leading slash - the URL path separator - never all of
+        // them. `ltrim($path, '/')` ate every slash, which turned the documented
+        // absolute Firebird form `firebird://host:3050//var/lib/db.fdb` into the
+        // RELATIVE `var/lib/db.fdb`. Verified against live Firebird 5.0.4: the
+        // driver accepts one or two leading slashes and rejects a relative path
+        // outright, so the value we published would not open the database it
+        // claimed to name. PHP still connected because the adapter rebuilt the
+        // path downstream, which is exactly why nobody reported it.
         $path = $parts['path'] ?? '';
-        $this->database = ltrim($path, '/');
+        $this->database = str_starts_with($path, '/') ? substr($path, 1) : $path;
     }
 
     /**
@@ -145,7 +190,7 @@ class DatabaseUrl
      */
     public function getDriverClass(): string
     {
-        return 'Tina4\\' . $this->driver;
+        return 'Tina4\\' . self::ENGINE_DRIVER_CLASS[$this->engine];
     }
 
     /**
@@ -153,13 +198,13 @@ class DatabaseUrl
      */
     public function getDsn(): string
     {
-        if ($this->scheme === 'sqlite' || false /* sqlite3 alias removed */) {
+        if ($this->engine === 'sqlite') {
             return $this->database;
         }
 
-        $dsn = $this->host;
+        $dsn = (string) $this->host;
 
-        if ($this->port > 0) {
+        if ($this->port !== null) {
             $dsn .= ':' . $this->port;
         }
 
@@ -175,23 +220,23 @@ class DatabaseUrl
      */
     public function toSafeString(): string
     {
-        if ($this->scheme === 'sqlite' || false /* sqlite3 alias removed */) {
+        if ($this->engine === 'sqlite') {
             return "sqlite:///{$this->database}";
         }
 
-        $url = $this->scheme . '://';
+        $url = $this->engine . '://';
 
-        if ($this->username !== '') {
+        if ($this->username !== null) {
             $url .= $this->username;
-            if ($this->password !== '') {
+            if ($this->password !== null) {
                 $url .= ':***';
             }
             $url .= '@';
         }
 
-        $url .= $this->host;
+        $url .= (string) $this->host;
 
-        if ($this->port > 0) {
+        if ($this->port !== null) {
             $url .= ':' . $this->port;
         }
 
@@ -205,14 +250,14 @@ class DatabaseUrl
     /**
      * Get the default port for a database scheme.
      */
-    private function defaultPort(string $scheme): int
+    private function defaultPort(string $scheme): ?int
     {
         return match ($scheme) {
-            'postgres', 'postgresql' => 5432,
+            'postgres' => 5432,
             'mysql' => 3306,
-            'mssql', 'sqlserver' => 1433,
+            'mssql' => 1433,
             'firebird' => 3050,
-            default => 0,
+            default => null,
         };
     }
 }

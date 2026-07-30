@@ -32,8 +32,8 @@ class DatabaseUrlTest extends TestCase
         // Use sqlite:////X for absolute paths.
         $db = new DatabaseUrl('sqlite:///path/to/database.db');
 
-        $this->assertEquals('sqlite', $db->scheme);
-        $this->assertEquals('DataSQLite3', $db->driver);
+        $this->assertEquals('sqlite', $db->engine);
+        $this->assertEquals('Tina4\\DataSQLite3', $db->getDriverClass());
         $this->assertEquals('path/to/database.db', $db->database, 'three slashes = relative');
         $this->assertEquals('', $db->host);
         $this->assertEquals(0, $db->port);
@@ -45,7 +45,7 @@ class DatabaseUrlTest extends TestCase
     {
         // Four slashes = Unix absolute path.
         $db = new DatabaseUrl('sqlite:////var/data/app.db');
-        $this->assertEquals('sqlite', $db->scheme);
+        $this->assertEquals('sqlite', $db->engine);
         $this->assertEquals('/var/data/app.db', $db->database);
     }
 
@@ -53,7 +53,7 @@ class DatabaseUrlTest extends TestCase
     {
         // Windows drive letter = absolute.
         $db = new DatabaseUrl('sqlite:///C:/Users/app.db');
-        $this->assertEquals('sqlite', $db->scheme);
+        $this->assertEquals('sqlite', $db->engine);
         $this->assertEquals('C:/Users/app.db', $db->database);
     }
 
@@ -70,7 +70,7 @@ class DatabaseUrlTest extends TestCase
     {
         $db = new DatabaseUrl('sqlite::memory:');
 
-        $this->assertEquals('sqlite', $db->scheme);
+        $this->assertEquals('sqlite', $db->engine);
         $this->assertEquals(':memory:', $db->database);
     }
 
@@ -85,8 +85,8 @@ class DatabaseUrlTest extends TestCase
     {
         $db = new DatabaseUrl('postgres://admin:secret@db.example.com:5432/myapp');
 
-        $this->assertEquals('postgres', $db->scheme);
-        $this->assertEquals('DataPostgresql', $db->driver);
+        $this->assertEquals('postgres', $db->engine);
+        $this->assertEquals('Tina4\\DataPostgresql', $db->getDriverClass());
         $this->assertEquals('db.example.com', $db->host);
         $this->assertEquals(5432, $db->port);
         $this->assertEquals('myapp', $db->database);
@@ -98,7 +98,7 @@ class DatabaseUrlTest extends TestCase
     {
         $db = new DatabaseUrl('postgres://user:pass@host/db');
 
-        $this->assertEquals('DataPostgresql', $db->driver);
+        $this->assertEquals('Tina4\\DataPostgresql', $db->getDriverClass());
     }
 
     public function testParsePgsqlScheme(): void
@@ -106,8 +106,8 @@ class DatabaseUrlTest extends TestCase
         // pgsql:// is the PDO / Laravel / Doctrine scheme name (issue #58)
         $db = new DatabaseUrl('pgsql://user:pass@localhost:5432/mydb');
 
-        $this->assertEquals('pgsql', $db->scheme);
-        $this->assertEquals('DataPostgresql', $db->driver);
+        $this->assertEquals('postgres', $db->engine); // pgsql resolves to the canonical engine
+        $this->assertEquals('Tina4\\DataPostgresql', $db->getDriverClass());
         $this->assertEquals(5432, $db->port);
         $this->assertEquals('mydb', $db->database);
     }
@@ -116,8 +116,8 @@ class DatabaseUrlTest extends TestCase
     {
         $db = new DatabaseUrl('mysql://root:password@localhost:3306/shop');
 
-        $this->assertEquals('mysql', $db->scheme);
-        $this->assertEquals('DataMySQL', $db->driver);
+        $this->assertEquals('mysql', $db->engine);
+        $this->assertEquals('Tina4\\DataMySQL', $db->getDriverClass());
         $this->assertEquals('localhost', $db->host);
         $this->assertEquals(3306, $db->port);
         $this->assertEquals('shop', $db->database);
@@ -129,14 +129,14 @@ class DatabaseUrlTest extends TestCase
     {
         $db = new DatabaseUrl('mysql://user:pass@host/db');
 
-        $this->assertEquals('DataMySQL', $db->driver);
+        $this->assertEquals('Tina4\\DataMySQL', $db->getDriverClass());
     }
 
     public function testParseMssql(): void
     {
         $db = new DatabaseUrl('mssql://sa:P%40ssw0rd@sqlserver:1433/enterprise');
 
-        $this->assertEquals('DataMSSQL', $db->driver);
+        $this->assertEquals('Tina4\\DataMSSQL', $db->getDriverClass());
         $this->assertEquals('sqlserver', $db->host);
         $this->assertEquals(1433, $db->port);
         $this->assertEquals('enterprise', $db->database);
@@ -148,7 +148,7 @@ class DatabaseUrlTest extends TestCase
     {
         $db = new DatabaseUrl('firebird://sysdba:masterkey@localhost:3050/opt/firebird/data.fdb');
 
-        $this->assertEquals('DataFirebird', $db->driver);
+        $this->assertEquals('Tina4\\DataFirebird', $db->getDriverClass());
         $this->assertEquals('localhost', $db->host);
         $this->assertEquals(3050, $db->port);
         $this->assertEquals('opt/firebird/data.fdb', $db->database);
@@ -242,7 +242,7 @@ class DatabaseUrlTest extends TestCase
         $result = DatabaseUrl::fromEnv();
 
         $this->assertNotNull($result);
-        $this->assertEquals('sqlite', $result->scheme);
+        $this->assertEquals('sqlite', $result->engine);
     }
 
     public function testUrlEncodedCredentials(): void
@@ -427,10 +427,22 @@ class DatabaseUrlTest extends TestCase
 
     // --- DatabaseUrl Additional Alias Tests ---
 
-    public function testSqlite3AliasRemoved(): void
+    /**
+     * `sqlite3://` is ACCEPTED and normalises to the `sqlite` engine.
+     *
+     * v3 removed it and this test used to assert it raised. That was wrong in a
+     * way only cross-framework reading exposes: Ruby has always accepted it, the
+     * driver is literally named sqlite3 in every framework (Python's sqlite3
+     * module, Ruby's sqlite3 gem, PHP's ext-sqlite3, Node's node:sqlite), so a
+     * user typing the name of the thing they installed hit an exception here and
+     * a working connection in Ruby. The "3" is the file-format version, not a
+     * different engine, so the canonical engine name stays `sqlite`.
+     */
+    public function testSqlite3IsAcceptedAndNormalisesToSqlite(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        new DatabaseUrl('sqlite3:///tmp/test.db');
+        $db = new DatabaseUrl('sqlite3:///tmp/test.db');
+        $this->assertEquals('sqlite', $db->engine);
+        $this->assertEquals('tmp/test.db', $db->database);
     }
 
     public function testSqlsrvAliasRemoved(): void

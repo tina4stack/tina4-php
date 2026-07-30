@@ -63,7 +63,7 @@ class SqliteAbsolutePathParityTest extends TestCase
         // Parse: the scheme is stripped on the raw string, the single leading
         // slash is preserved, so the path stays ABSOLUTE.
         $parsed = new DatabaseUrl($url);
-        $this->assertSame('sqlite', $parsed->scheme);
+        $this->assertSame('sqlite', $parsed->engine);
         $this->assertSame($absPath, $parsed->database, 'single-slash absolute path preserved verbatim');
         $this->assertSame($absPath, $parsed->getDsn());
 
