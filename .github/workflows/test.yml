@@ -16,6 +16,15 @@ jobs:
     # the job fails if one never comes up. Ports mirror the local docker harness
     # (/tmp/tina4_infra_up.sh) so the same TINA4_TEST_* values work locally and here.
     services:
+      # GreenMail: real SMTP 3025 + IMAP 3143 for the Messenger round-trip
+      # tests. auth.disabled is REQUIRED, not laziness: every suite uses a unique
+      # random recipient per test so each mailbox is created on FIRST ACCESS,
+      # which cannot work against a server demanding pre-registered users.
+      greenmail:
+        image: greenmail/standalone:2.1.3
+        ports: ['3025:3025', '3143:3143']
+        env:
+          GREENMAIL_OPTS: '-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled'
       # Cache backend services — mirror the local docker harness ports so the
       # CacheBackendsTest network backends run for real in CI.
       redis:
@@ -166,6 +175,25 @@ jobs:
       TINA4_REQUIRE_SERVICES: '1'
 
     steps:
+      # The greenmail/standalone image is a bare JRE with no nc/curl, so a
+      # container --health-cmd cannot run -- and a probe that cannot run looks
+      # exactly like a broken service. Wait from the RUNNER instead and FAIL the
+      # job if it never listens: the require-services gate now treats a
+      # "greenmail not reachable" skip as fatal, so a silent no-show must be loud
+      # here rather than surfacing as a confusing gate failure later.
+      # shell: bash is mandatory -- /dev/tcp is a bash feature, absent in sh.
+      - name: Wait for GreenMail (SMTP 3025 / IMAP 3143)
+        shell: bash
+        run: |
+          for i in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/3025) 2>/dev/null \
+               && (exec 4<>/dev/tcp/127.0.0.1/3143) 2>/dev/null; then
+              echo "GreenMail ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "GreenMail did not become ready in 60s"; exit 1
+
       - uses: actions/checkout@v4
 
       - uses: shivammathur/setup-php@v2
@@ -178,7 +206,7 @@ jobs:
           # MSSQL adapter would pick the sqlsrv backend and fail on the absent
           # Microsoft ODBC driver. Disable them (:ext) so the adapter uses the
           # pdo_dblib (FreeTDS) backend the live MSSQL tests rely on.
-          extensions: pdo_pgsql, pgsql, mysqli, pdo_mysql, pdo_dblib, mongodb, sockets, sqlite3, pdo_sqlite, :sqlsrv, :pdo_sqlsrv
+          extensions: pdo_pgsql, pgsql, mysqli, pdo_mysql, pdo_dblib, mongodb, sockets, sqlite3, pdo_sqlite, imap, :sqlsrv, :pdo_sqlsrv
 
       # The postgres service only creates POSTGRES_DB (tina4_php). The two-database
       # routing test needs tina4_rb, and the UUID-PK test connects to tina4 — create

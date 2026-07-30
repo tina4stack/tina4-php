@@ -10,136 +10,40 @@
  *   inbox()/read()/unread()/search()/folders() must LOG and RAISE
  *   (MessengerConnectionError) on a connection/auth/protocol failure — they may
  *   NOT swallow it into an empty result. A SUCCESSFUL fetch that simply has no
- *   messages still returns empty ([] / null / 0 / {}) normally — that is NOT an
+ *   messages still returns empty ([] / null / 0) normally — that is NOT an
  *   error.
  *
- * The IMAP layer is exercised two ways:
- *   1. Live: a Messenger pointed at a refused host (127.0.0.1:1) — imap_open
- *      fails fast, so inbox()/read()/unread()/search()/folders() must RAISE.
- *   2. Stubbed: the imap_* globals are overridden inside the Tina4 namespace
- *      (PHP resolves an unqualified imap_* call to the namespaced function
- *      first) so we can drive the empty-mailbox and protocol-failure code paths
- *      deterministically without a real server. The stubs are transparent by
- *      default and only divert when $GLOBALS['__tina4_imap_stub'] is set.
+ * Every failure here is a REAL refused TCP connection to 127.0.0.1:1. Nothing
+ * on this box listens on port 1, so imap_open genuinely fails and the raise is
+ * the framework's own, not a scripted one.
+ *
+ * This file previously declared namespaced imap_open/imap_errors/imap_close/
+ * imap_check/imap_fetch_overview/imap_msgno/imap_headerinfo/imap_setflag_full
+ * stubs, diverted by $GLOBALS['__tina4_imap_stub'], to drive the empty-mailbox
+ * and "server said no" paths without a server. Those were test doubles for a
+ * real dependency, which the no-mock rule forbids outright, and they cost real
+ * coverage: not one of them ever proved a message could be SENT and read back,
+ * because a stub returns whatever the test told it to. The empty-mailbox and
+ * protocol-failure paths now run against a real GreenMail in
+ * MessengerImapGreenMailTest. The stubs also leaked: being declared in the
+ * Tina4 namespace, they shadowed imap_* for EVERY test in the same process.
+ *
+ * @see MessengerImapGreenMailTest for the real-server round-trip coverage.
  */
 
 namespace Tina4;
-
-// ── Namespaced imap_* stubs ──────────────────────────────────────────────
-// Unqualified imap_* calls inside Tina4\Messenger resolve to these first.
-// When the stub flag is unset, they delegate to the real global functions so
-// the live refused-connection tests (and any other Messenger test) are
-// unaffected.
-
-if (!function_exists(__NAMESPACE__ . '\\imap_open')) {
-    function imap_open(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['open'] ?? 'STUB_IMAP';
-        }
-        return \imap_open(...$args);
-    }
-
-    function imap_errors(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['errors'] ?? [];
-        }
-        return \imap_errors(...$args);
-    }
-
-    function imap_close(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return true;
-        }
-        return \imap_close(...$args);
-    }
-
-    function imap_check(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['check'] ?? false;
-        }
-        return \imap_check(...$args);
-    }
-
-    function imap_fetch_overview(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['overview'] ?? [];
-        }
-        return \imap_fetch_overview(...$args);
-    }
-
-    function imap_msgno(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['msgno'] ?? 0;
-        }
-        return \imap_msgno(...$args);
-    }
-
-    function imap_headerinfo(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['header'] ?? false;
-        }
-        return \imap_headerinfo(...$args);
-    }
-
-    function imap_fetchstructure(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['structure'] ?? false;
-        }
-        return \imap_fetchstructure(...$args);
-    }
-
-    function imap_status(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['status'] ?? false;
-        }
-        return \imap_status(...$args);
-    }
-
-    function imap_search(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['search'] ?? false;
-        }
-        return \imap_search(...$args);
-    }
-
-    function imap_list(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return $GLOBALS['__tina4_imap']['list'] ?? false;
-        }
-        return \imap_list(...$args);
-    }
-
-    function imap_setflag_full(...$args)
-    {
-        if (!empty($GLOBALS['__tina4_imap_stub'])) {
-            return true;
-        }
-        return \imap_setflag_full(...$args);
-    }
-}
 
 use PHPUnit\Framework\TestCase;
 
 class MessengerImapFailLoudTest extends TestCase
 {
-    protected function tearDown(): void
-    {
-        // Always disable the stub so other test files keep hitting real imap_*.
-        unset($GLOBALS['__tina4_imap_stub'], $GLOBALS['__tina4_imap']);
-    }
-
-    /** A Messenger pointed at a refused host — imap_open fails fast. */
+    /**
+     * A Messenger pointed at a refused port — imap_open fails fast.
+     *
+     * Port 1 (tcpmux) is privileged and unused; a connect() to it is refused
+     * immediately rather than hanging until a timeout, which keeps these tests
+     * fast without a stub.
+     */
     private function refusedMessenger(): Messenger
     {
         return new Messenger(
@@ -148,13 +52,6 @@ class MessengerImapFailLoudTest extends TestCase
             username: 'u',
             password: 'p',
         );
-    }
-
-    /** Enable the imap_* stub with a canned return-value map. */
-    private function stub(array $map): void
-    {
-        $GLOBALS['__tina4_imap_stub'] = true;
-        $GLOBALS['__tina4_imap'] = array_merge(['open' => 'STUB_IMAP'], $map);
     }
 
     // ── Connection failure must RAISE (not return empty) ─────────────────
@@ -201,83 +98,35 @@ class MessengerImapFailLoudTest extends TestCase
         }
     }
 
+    /**
+     * The raise must NOT be a silent empty result.
+     *
+     * The negative half of the contract: it is not enough that inbox() throws
+     * SOMETHING — the whole point of the fail-loud change was that it used to
+     * return [] and callers could not tell "no mail" from "server down". Assert
+     * the message names the cause so a future refactor cannot regress to an
+     * empty-result swallow that happens to also throw somewhere else.
+     */
+    public function testConnectionFailureMessageNamesTheCause(): void
+    {
+        try {
+            $this->refusedMessenger()->inbox();
+            $this->fail('expected MessengerConnectionError');
+        } catch (MessengerConnectionError $e) {
+            $this->assertStringContainsStringIgnoringCase(
+                'imap',
+                $e->getMessage(),
+                'the error should name the failing subsystem, got: ' . $e->getMessage(),
+            );
+        }
+    }
+
     public function testMissingImapHostRaises(): void
     {
         // No IMAP host configured at all — also a connection failure, fail loud.
         $m = new Messenger(host: 'smtp.example.com', port: 587, imapHost: null);
+
         $this->expectException(MessengerConnectionError::class);
         $m->inbox();
-    }
-
-    // ── Successful-but-empty fetch returns empty (NOT an error) ──────────
-
-    public function testInboxEmptyMailboxReturnsEmpty(): void
-    {
-        // Connected fine, mailbox genuinely has 0 messages -> [].
-        $info = new \stdClass();
-        $info->Nmsgs = 0;
-        $this->stub(['check' => $info]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->assertSame([], $m->inbox());
-    }
-
-    public function testUnreadZeroReturnsZero(): void
-    {
-        $status = new \stdClass();
-        $status->unseen = 0;
-        $this->stub(['status' => $status]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->assertSame(0, $m->unread());
-    }
-
-    public function testSearchNoMatchesReturnsEmpty(): void
-    {
-        // imap_search returns false when nothing matches — empty, not an error.
-        $this->stub(['search' => false]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->assertSame([], $m->search(subject: 'no-such-subject'));
-    }
-
-    public function testReadMissingUidReturnsNull(): void
-    {
-        // UID not found -> imap_msgno returns 0 -> read() returns null (Python {}).
-        $this->stub(['msgno' => 0]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->assertNull($m->read(99999));
-    }
-
-    // ── Non-OK / protocol failure mid-fetch must RAISE ───────────────────
-
-    public function testInboxRaisesWhenCheckFails(): void
-    {
-        // Connected, but imap_check fails (false) -> protocol failure -> RAISE.
-        $this->stub(['check' => false]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->expectException(MessengerConnectionError::class);
-        $m->inbox();
-    }
-
-    public function testUnreadRaisesWhenStatusFails(): void
-    {
-        $this->stub(['status' => false]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->expectException(MessengerConnectionError::class);
-        $m->unread();
-    }
-
-    public function testFoldersRaisesWhenListFails(): void
-    {
-        // A connected server always exposes at least INBOX — false is a failure.
-        $this->stub(['list' => false]);
-
-        $m = new Messenger(imapHost: 'imap.example.com', imapPort: 993, username: 'u', password: 'p');
-        $this->expectException(MessengerConnectionError::class);
-        $m->folders();
     }
 }

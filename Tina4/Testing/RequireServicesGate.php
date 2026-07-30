@@ -55,6 +55,10 @@ final class RequireServicesGate
         'rabbit', 'amqp',
         'kafka',          // also matches "rdkafka" / "confluent-kafka"
         'mqtt', 'mosquitto',  // Mosquitto (+ EMQX) for the MQTT tests
+        // GreenMail (real SMTP 3025 / IMAP 3143) for the Messenger round-trip
+        // tests, plus ext-imap which those tests require. No mail keyword
+        // existed here before, so a "not reachable" mail skip passed green.
+        'greenmail', 'smtp', 'imap',
     ];
 
     /** Phrases that mean "the provisioned thing is not there right now". */
