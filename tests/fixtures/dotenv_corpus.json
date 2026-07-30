@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "SHARED FIXTURE - identical bytes in all four frameworks.",
+    "  tina4-python/tests/fixtures/dotenv_corpus.json",
+    "  tina4-php/tests/fixtures/dotenv_corpus.json",
+    "  tina4-ruby/spec/fixtures/dotenv_corpus.json",
+    "  tina4-nodejs/test/fixtures/dotenv_corpus.json",
+    "",
+    "One answer key for feature 1 of the feature audit (the .env parser).",
+    "",
+    "The .env CONTENT lives here too, as `env_file`, rather than in a sibling",
+    "file. One file means one thing to keep in sync: a fixture whose input and",
+    "expectations can drift apart is not an answer key. Each suite writes it to a",
+    "temp directory and loads it for real - a .env is a file, so the real",
+    "dependency is trivially available and there is nothing to mock.",
+    "",
+    "Three of these lines were silent bugs in Ruby before this row: an export",
+    "prefix dropped the variable entirely, a trailing comment stayed in the value,",
+    "and ${VAR} never expanded anywhere but PHP."
+  ],
+
+  "env_file": "PLAIN=hello\nexport EXPORTED=shellstyle\nQUOTED=\"double quoted\"\nSINGLE='single quoted'\nHOST=example.com\nINTERP=${HOST}/api\nDQ_INTERP=\"${HOST}/v2\"\nLITERAL='${HOST}/api'\nWITH_HASH=value # trailing comment\nQUOTED_HASH=\"a # b\"\nUNKNOWN=${NOPE}/x\nEMPTY=\nESCAPES=\"line1\\nline2\\ttabbed\"\nSPACED_KEY = spaced\nno_equals_sign\n1BAD=invalid key\n",
+
+  "expected": {
+    "PLAIN": "hello",
+    "EXPORTED": "shellstyle",
+    "QUOTED": "double quoted",
+    "SINGLE": "single quoted",
+    "HOST": "example.com",
+    "INTERP": "example.com/api",
+    "DQ_INTERP": "example.com/v2",
+    "LITERAL": "${HOST}/api",
+    "WITH_HASH": "value",
+    "QUOTED_HASH": "a # b",
+    "UNKNOWN": "${NOPE}/x",
+    "EMPTY": "",
+    "ESCAPES": "line1\nline2\ttabbed",
+    "SPACED_KEY": "spaced"
+  },
+
+  "_never_set": {
+    "_note": "Keys that must NOT exist after loading. A malformed line is skipped with a warning, never guessed at, and one bad line never stops the rest of the file.",
+    "keys": ["no_equals_sign", "1BAD"]
+  },
+
+  "_rules": {
+    "export_prefix": "A shell-style `export FOO=bar` is valid input. Ruby dropped these lines entirely and said nothing, so a .env copied out of a shell profile lost keys and the failure surfaced somewhere unrelated.",
+    "trailing_comment": "An unquoted value ends at the first SPACE-HASH. Ruby kept the whole line, so `value # note` became 'value # note' - a wrong value rather than an absent one, which is the harder kind to notice.",
+    "quoted_hash": "A `#` inside quotes is part of the value, not a comment.",
+    "interpolation": "${VAR} expands in unquoted and double-quoted values against keys already loaded plus the real environment. It was PHP-only, so a .env written against PHP produced a broken literal in the other three.",
+    "single_quotes_are_verbatim": "No escapes, no expansion. This is the documented way to keep a literal ${...} and the migration path for the breaking half of the change.",
+    "unresolved_reference": "Left LITERAL and warned about once per name, never resolved to an empty string. PHP emptied it, so `URL=${DB_HOST}/db` with a typo silently became '/db'.",
+    "empty_value": "`EMPTY=` sets the empty string. It does not unset and it is not absent.",
+    "escapes": "A double-quoted value processes \\n, \\t and \\\\. A single-quoted one does not.",
+    "spaced_key": "Whitespace around the key is trimmed."
+  },
+
+  "precedence": {
+    "_note": "real environment > .env.local > .env, first-wins. A stray gitignored .env.local must never clobber an explicitly-set production variable.",
+    "env": "PRECEDENCE_KEY=from_env\nSHARED_KEY=from_env\n",
+    "env_local": "PRECEDENCE_KEY=from_env_local\n",
+    "expected_without_real_env": {
+      "PRECEDENCE_KEY": "from_env_local",
+      "SHARED_KEY": "from_env"
+    },
+    "real_env_wins": {
+      "key": "PRECEDENCE_KEY",
+      "value": "from_real_environment"
+    }
+  }
+}

@@ -57,14 +57,15 @@ class DotEnv
             throw new \RuntimeException("DotEnv: Cannot read file '{$path}'");
         }
 
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $lines = file($path, FILE_IGNORE_NEW_LINES);
 
         if ($lines === false) {
             throw new \RuntimeException("DotEnv: Failed to read file '{$path}'");
         }
 
-        foreach ($lines as $line) {
-            $line = trim($line);
+        foreach ($lines as $index => $rawLine) {
+            $lineNo = $index + 1;
+            $line = trim($rawLine);
 
             // Skip empty lines and comments
             if ($line === '' || str_starts_with($line, '#')) {
@@ -81,17 +82,23 @@ class DotEnv
                 $line = substr($line, 7);
             }
 
-            // Find the first = sign
+            // Find the first = sign. A line that sets nothing is warned about
+            // by line number rather than dropped in silence.
             $eqPos = strpos($line, '=');
             if ($eqPos === false) {
+                self::warnEnv(sprintf('%s:%d: no \'=\' in "%s", line skipped', $path, $lineNo, $line));
                 continue;
             }
 
             $key = trim(substr($line, 0, $eqPos));
             $value = trim(substr($line, $eqPos + 1));
 
-            // Skip invalid keys
-            if ($key === '') {
+            // A key that is not a valid identifier is skipped, by name and line.
+            // PHP used to accept anything non-empty, so `1BAD=x` set a variable
+            // named `1BAD` that no shell could ever export and no other
+            // framework would have created - caught by the shared corpus.
+            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key)) {
+                self::warnEnv(sprintf('%s:%d: invalid key "%s", line skipped', $path, $lineNo, $key));
                 continue;
             }
 
