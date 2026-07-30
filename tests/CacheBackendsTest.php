@@ -294,4 +294,102 @@ class CacheBackendsTest extends TestCase
         $db1->cacheClear();
         @unlink($path);
     }
+
+    /**
+     * Regression: `size` reported the WHOLE SERVER's item count.
+     *
+     * Memcached was the only backend of the seven that leaked: it read the
+     * global `curr_items` from `stats`, so cacheStats()['size'] counted every
+     * key written by every other application sharing that server. Every other
+     * backend is scoped.
+     *
+     * NO MOCK: a second REAL client writes to the same REAL server, which is
+     * exactly the shared-tenant situation being asserted about.
+     */
+    public function testNegativeMemcachedSizeIgnoresAnotherTenantsKeys(): void
+    {
+        $this->skipUnlessMemcached();
+        $b = new \Tina4\Cache\MemcachedBackend('memcached://127.0.0.1:11211');
+        $b->clear();
+        $this->assertSame(0, $b->stats()['size']);
+
+        $sock = $this->rawMemcached();
+        for ($i = 0; $i < 6; $i++) {
+            fwrite($sock, "set other:tenant:{$i} 0 60 5\r\nhello\r\n");
+            fgets($sock);
+        }
+        fclose($sock);
+
+        $this->assertSame(0, $b->stats()['size'], 'size must count OUR entries, not the server\'s');
+
+        $b->set('mine', ['a' => 1], 60);
+        $this->assertSame(1, $b->stats()['size'], 'our own entry must be counted');
+        $b->clear();
+    }
+
+    /**
+     * Regression: `clear()` sent `flush_all` and wiped the WHOLE server.
+     *
+     * cacheClear() is public API. On memcached it destroyed every key on the
+     * instance, including every other application sharing it. A shared
+     * memcached is the normal deployment, so this was data loss for anyone else
+     * on the box.
+     */
+    public function testNegativeMemcachedClearDoesNotWipeAnotherTenantsKeys(): void
+    {
+        $this->skipUnlessMemcached();
+        $b = new \Tina4\Cache\MemcachedBackend('memcached://127.0.0.1:11211');
+        $b->clear();
+        $b->set('ours', ['a' => 1], 60);
+
+        $sock = $this->rawMemcached();
+        fwrite($sock, "set other:survivor 0 60 5\r\nhello\r\n");
+        fgets($sock);
+        fclose($sock);
+
+        $b->clear();
+
+        $this->assertNull($b->get('ours'));
+        $this->assertSame(0, $b->stats()['size']);
+
+        $sock = $this->rawMemcached();
+        fwrite($sock, "get other:survivor\r\n");
+        $resp = '';
+        while (!str_contains($resp, "END\r\n")) {
+            $line = fgets($sock);
+            if ($line === false) {
+                break;
+            }
+            $resp .= $line;
+        }
+        fclose($sock);
+        $this->assertStringContainsString('hello', $resp, "clear() destroyed another tenant's key");
+
+        $sock = $this->rawMemcached();
+        fwrite($sock, "delete other:survivor\r\n");
+        fgets($sock);
+        fclose($sock);
+    }
+
+    /** A raw second client on the same server — deliberately NOT the backend. */
+    private function rawMemcached()
+    {
+        $sock = @fsockopen('127.0.0.1', 11211, $e, $s, 3);
+        if ($sock === false) {
+            $this->markTestSkipped('memcached not reachable');
+        }
+        return $sock;
+    }
+
+    private function skipUnlessMemcached(): void
+    {
+        $probe = @fsockopen('127.0.0.1', 11211, $e, $s, 2);
+        if ($probe === false) {
+            if (getenv('TINA4_REQUIRE_SERVICES')) {
+                $this->fail('TINA4_REQUIRE_SERVICES is set but memcached is unreachable');
+            }
+            $this->markTestSkipped('memcached not reachable at 127.0.0.1:11211');
+        }
+        fclose($probe);
+    }
 }
