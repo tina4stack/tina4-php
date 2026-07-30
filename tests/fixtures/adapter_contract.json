@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "SHARED FIXTURE - identical bytes in all four frameworks.",
+    "  tina4-python/tests/fixtures/adapter_contract.json",
+    "  tina4-php/tests/fixtures/adapter_contract.json",
+    "  tina4-ruby/spec/fixtures/adapter_contract.json",
+    "  tina4-nodejs/test/fixtures/adapter_contract.json",
+    "",
+    "The database adapter contract - feature 3 of the feature audit.",
+    "",
+    "This is the list every adapter in every framework must implement, in full.",
+    "It is data rather than four hand-maintained interface declarations, because",
+    "four declarations are exactly how the frameworks ended up with four different",
+    "answers to 'implement the Tina4 adapter interface'.",
+    "",
+    "EVERY METHOD IS REQUIRED. There are no optional members. Node declared",
+    "getTableColumns? and addColumn? optional, which forces the facade to",
+    "feature-detect at every call site - the same pattern as Ruby's respond_to?",
+    "guards, written in TypeScript. An optional method on a contract is not a",
+    "contract.",
+    "",
+    "SQL DIALECT TRANSLATION IS NOT HERE, deliberately. Python's adapter base",
+    "declares eight translation methods (limit_to_rows, limit_to_top, ...) beside",
+    "the connection and CRUD contract, so 'how do I talk to this engine' and 'how",
+    "do I rewrite SQL for this dialect' are one abstraction. The other three keep",
+    "translation in its own unit. An adapter declares its dialect; the translator",
+    "does the rewriting."
+  ],
+
+  "methods": [
+    { "name": "open", "note": "connect and become usable" },
+    { "name": "close", "note": "release the connection" },
+    { "name": "execute", "note": "write; RAISES on error, never returns false" },
+    { "name": "executeMany", "note": "batch write in one transaction" },
+    { "name": "fetch", "note": "read many -> DatabaseResult" },
+    { "name": "fetchOne", "note": "read one -> row or null" },
+    { "name": "insert", "note": "-> write result" },
+    { "name": "update", "note": "-> write result" },
+    { "name": "delete", "note": "-> write result" },
+    { "name": "startTransaction", "note": "begin" },
+    { "name": "commit", "note": "commit" },
+    { "name": "rollback", "note": "rollback" },
+    { "name": "getTables", "note": "-> list of table names. NOT tables()" },
+    { "name": "getColumns", "note": "-> list of column descriptors. NOT columns()" },
+    { "name": "tableExists", "note": "-> bool" },
+    { "name": "createTable", "note": "-> bool. Required: every engine can do it" },
+    { "name": "addColumn", "note": "-> bool. Required: every engine can do it" },
+    { "name": "lastInsertId", "note": "-> id or null" },
+    { "name": "error", "note": "-> last error message or null" },
+    { "name": "autocommit", "note": "set per-statement commit" }
+  ],
+
+  "naming": {
+    "_note": "Same concept, same name, idiomatic casing. The table below is the source of truth for what a caller types in each framework.",
+    "python": "snake_case: open, close, execute, execute_many, fetch, fetch_one, insert, update, delete, start_transaction, commit, rollback, get_tables, get_columns, table_exists, create_table, add_column, last_insert_id, error, autocommit",
+    "php": "camelCase: open, close, execute, executeMany, fetch, fetchOne, insert, update, delete, startTransaction, commit, rollback, getTables, getColumns, tableExists, createTable, addColumn, lastInsertId, error, autocommit",
+    "ruby": "snake_case, same as python",
+    "node": "camelCase, same as php"
+  },
+
+  "dropped": {
+    "query": "PHP and Node declare it, Python does not, and nothing in the framework needs a second read path beside fetch/fetchOne. Dropped rather than added to two more frameworks.",
+    "sql_translation": "Python's eight dialect methods (limit_to_rows, limit_to_top, concat_pipes_to_func, boolean_to_int, ilike_to_like, placeholder_style, auto_increment_syntax, quote_identifier) move to the SQLTranslator unit that PHP, Ruby and Node already have."
+  },
+
+  "renames": {
+    "tables -> getTables": "node. The majority and the get- prefix convention win.",
+    "columns -> getColumns": "node. Same.",
+    "getTableColumns? -> getColumns": "node. It was an optional duplicate of getColumns."
+  }
+}
