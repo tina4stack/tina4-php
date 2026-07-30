@@ -39,6 +39,9 @@ class DotEnv
      */
     public static function loadEnv(string $path = '.env', bool $overwrite = false): void
     {
+        // One warning per unresolved name PER LOAD, not per process.
+        self::$warnedRefs = [];
+
         // Allow operators to redirect the default '.env' lookup via the
         // TINA4_ENV_FILE process-level env var (only when caller didn't
         // pass an explicit, non-default path). Lets containers point at
@@ -166,13 +169,44 @@ class DotEnv
     }
 
     /**
+     * Names already warned about as unresolved, so one typo warns once per load.
+     *
+     * @var array<string, bool>
+     */
+    private static array $warnedRefs = [];
+
+    /**
      * Interpolate ${VAR} references in a value string.
+     *
+     * An UNRESOLVED name is left LITERAL and warned about once. It used to
+     * resolve to the empty string, so `URL=${DB_HOST}/db` with a typo'd or
+     * unset DB_HOST silently became `/db` - a plausible-looking wrong value
+     * that reaches a connection attempt before failing, rather than a visible
+     * one. This is the cross-framework behaviour table (feature 1 of the
+     * feature audit); the other three leave it literal.
      */
     private static function interpolate(string $value): string
     {
         return preg_replace_callback('/\$\{([A-Za-z_][A-Za-z0-9_]*)}/', function (array $matches): string {
-            return self::getEnv($matches[1], '');
+            $name = $matches[1];
+            $resolved = self::getEnv($name, null);
+            if ($resolved !== null) {
+                return $resolved;
+            }
+            if (!isset(self::$warnedRefs[$name])) {
+                self::$warnedRefs[$name] = true;
+                self::warnEnv("\${{$name}} is not set, left as-is");
+            }
+            return $matches[0];
         }, $value) ?? $value;
+    }
+
+    /**
+     * Emit a parse warning. DotEnv loads before the logger exists, so stderr.
+     */
+    private static function warnEnv(string $message): void
+    {
+        fwrite(STDERR, "[tina4] {$message}\n");
     }
 
     /**
