@@ -19,6 +19,15 @@
 use PHPUnit\Framework\TestCase;
 use Tina4\Metrics;
 
+/**
+ * @group metrics
+ *
+ * Metrics is measured by the NATIVE engine in the tina4 Rust CLI (ADR-0002),
+ * with no in-framework fallback, so every case here needs `tina4` on PATH. CI
+ * excludes this group (--exclude-group metrics) because the engine is tested
+ * where it lives - tina4stack/tina4 src/metrics.rs, under `cargo test` in its
+ * own pipeline. Run these locally with the CLI installed.
+ */
 class MetricsCliTest extends TestCase
 {
     private string $tempDir;
