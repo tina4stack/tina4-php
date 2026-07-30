@@ -279,6 +279,48 @@ class BatchWriteContractTest extends TestCase
     }
 
     /**
+     * Regression: collapsing a batch silently changed lastId on MySQL.
+     *
+     * MySQL's LAST_INSERT_ID() reports the FIRST generated id of a multi-row
+     * INSERT, not the last (verified live: a 3-row insert into a fresh table
+     * reports 1 while MAX(id) is 3). A row-at-a-time batch reported the LAST
+     * row's id simply because the last statement inserted the last row, so the
+     * collapse quietly redefined the contract.
+     */
+    public function testACollapsedBatchStillReportsTheLastRowsIdOnMysql(): void
+    {
+        $this->assertSame(3, SQLTranslator::batchLastId(1, 3, 'mysql'));
+        $this->assertSame(14, SQLTranslator::batchLastId(10, 5, 'mariadb'));
+    }
+
+    /**
+     * Only the engines that need it are adjusted. SQLite, PostgreSQL and MSSQL
+     * already report the LAST id — adding the offset there would push lastId
+     * PAST the real row.
+     */
+    public function testNegativeEnginesThatAlreadyReportTheLastIdAreLeftAlone(): void
+    {
+        foreach (['sqlite', 'postgres', 'postgresql', 'mssql'] as $engine) {
+            $this->assertSame(7, SQLTranslator::batchLastId(7, 3, $engine), $engine);
+        }
+    }
+
+    /** first + 1 - 1 == first: a one-row chunk must be untouched everywhere. */
+    public function testNegativeASingleRowChunkNeverShiftsTheId(): void
+    {
+        foreach (['mysql', 'sqlite', 'postgres', 'mssql'] as $engine) {
+            $this->assertSame(42, SQLTranslator::batchLastId(42, 1, $engine), $engine);
+        }
+    }
+
+    /** A UUID/ULID primary key has no arithmetic successor. */
+    public function testNegativeANonNumericLastIdIsPassedThroughUnchanged(): void
+    {
+        $this->assertSame('018f-2b7c-uuid', SQLTranslator::batchLastId('018f-2b7c-uuid', 3, 'mysql'));
+        $this->assertNull(SQLTranslator::batchLastId(null, 3, 'mysql'));
+    }
+
+    /**
      * The exact value PHP's own adapter returns. getDatabaseType() returns
      * "postgresql", so this is the spelling that actually reaches
      * buildBatchInserts in production. If it stops collapsing, every PostgreSQL

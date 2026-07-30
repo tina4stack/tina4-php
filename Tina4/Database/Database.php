@@ -653,6 +653,15 @@ class Database implements DatabaseAdapter
         // the (now committed) connection's last insert id where the engine
         // exposes it (SERIAL/AUTOINCREMENT/IDENTITY). Engines without a usable
         // last-id concept simply report whatever lastInsertId() returns.
+        //
+        // lastId must stay the LAST inserted row's id. MySQL's LAST_INSERT_ID()
+        // reports the FIRST id of a multi-row INSERT, so a COLLAPSED batch would
+        // silently start reporting the first id instead of the last. Only the
+        // final chunk's rows matter — that chunk produced the reported id.
+        // The LAST row's id, not the first: the MySQL adapter normalises that
+        // itself at write time (it is the only place that knows both the first
+        // id and the statement's row count), so getLastId() and this result
+        // always agree.
         $this->affectedRows = $count;
         return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: $count, lastId: $this->getLastId(), error: null);
     }

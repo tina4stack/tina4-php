@@ -477,6 +477,7 @@ class Session
             'redis' => 'RedisSessionHandler',
             'valkey' => 'ValkeySessionHandler',
             'mongodb', 'mongo' => 'MongoSessionHandler',
+            'memcached', 'memcache' => 'MemcachedSessionHandler',
             'database', 'db' => 'DatabaseSessionHandler',
             default => 'FileSessionHandler',
         };
@@ -501,6 +502,7 @@ class Session
             'redis' => $this->loadFromRedis(),
             'valkey' => $this->loadFromValkey(),
             'mongodb', 'mongo' => $this->loadFromMongo(),
+            'memcached', 'memcache' => $this->loadFromMemcached(),
             'database', 'db' => $this->loadFromDatabase(),
             default => $this->loadFromFile(),
         };
@@ -532,6 +534,7 @@ class Session
             'redis' => $this->saveToRedis(),
             'valkey' => $this->saveToValkey(),
             'mongodb', 'mongo' => $this->saveToMongo(),
+            'memcached', 'memcache' => $this->saveToMemcached(),
             'database', 'db' => $this->saveToDatabase(),
             default => $this->saveToFile(),
         };
@@ -554,6 +557,7 @@ class Session
             'redis' => $this->removeFromRedis(),
             'valkey' => $this->removeFromValkey(),
             'mongodb', 'mongo' => $this->removeFromMongo(),
+            'memcached', 'memcache' => $this->removeFromMemcached(),
             'database', 'db' => $this->removeFromDatabase(),
             default => $this->removeFromFile(),
         };
@@ -764,6 +768,35 @@ class Session
     private function removeFromValkey(): void
     {
         $this->getValkeyHandler()->destroy($this->sessionId);
+    }
+
+    // ── Memcached Backend (delegates to MemcachedSessionHandler) ──
+
+    private ?Session\MemcachedSessionHandler $memcachedHandler = null;
+
+    private function getMemcachedHandler(): Session\MemcachedSessionHandler
+    {
+        if ($this->memcachedHandler === null) {
+            $this->memcachedHandler = new Session\MemcachedSessionHandler();
+        }
+        return $this->memcachedHandler;
+    }
+
+    private function loadFromMemcached(): void
+    {
+        $data = $this->getMemcachedHandler()->read($this->sessionId);
+        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
+        $this->data['_meta']['last_accessed'] = time();
+    }
+
+    private function saveToMemcached(): void
+    {
+        $this->getMemcachedHandler()->write($this->sessionId, $this->data);
+    }
+
+    private function removeFromMemcached(): void
+    {
+        $this->getMemcachedHandler()->destroy($this->sessionId);
     }
 
     // ── MongoDB Backend (delegates to MongoSessionHandler) ────────

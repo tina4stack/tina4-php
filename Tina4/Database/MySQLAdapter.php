@@ -270,7 +270,14 @@ class MySQLAdapter implements DatabaseAdapter
                 // — mysqli_stmt::$insert_id reflects the row this prepared INSERT
                 // just created. (See note in lastInsertId().)
                 if ($success !== false && $stmt->insert_id > 0) {
-                    $this->lastId = $stmt->insert_id;
+                    // MySQL reports the FIRST generated id of a MULTI-ROW INSERT,
+                    // not the last (verified live: a 3-row insert into a fresh
+                    // table reports 1 while MAX(id) is 3). Every other engine
+                    // reports the last, and callers — getLastId(), ORM::save(),
+                    // the batch DatabaseResult — all expect the last. The ids in
+                    // one statement are consecutive, so normalise here, where
+                    // both the first id and the row count are known.
+                    $this->lastId = (int)$stmt->insert_id + max((int)$stmt->affected_rows, 1) - 1;
                 }
                 // Affected rows for the prepared write, before close() drops it.
                 if ($success !== false) {
@@ -300,7 +307,9 @@ class MySQLAdapter implements DatabaseAdapter
             // applies to the non-prepared (no-params) path; insert_id is 0 for any
             // non-INSERT statement, so this never clobbers a real id with a stale 0.
             if (empty($params) && $this->db->insert_id > 0) {
-                $this->lastId = $this->db->insert_id;
+                // Same normalisation as the prepared path above: MySQL reports
+                // the FIRST id of a multi-row INSERT, callers expect the last.
+                $this->lastId = (int)$this->db->insert_id + max((int)$this->db->affected_rows, 1) - 1;
             }
 
             return true;
