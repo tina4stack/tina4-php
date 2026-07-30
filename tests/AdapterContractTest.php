@@ -25,10 +25,10 @@ use PHPUnit\Framework\TestCase;
 class AdapterContractTest extends TestCase
 {
     /** Measured 2026-07-30. Raise when you implement; never lower. */
-    // 17 -> 18: autocommit landed via AutocommitTrait (feature 3).
-    // getDatabaseType() also landed - the prerequisite for createTable/addColumn -
-    // but it is not one of the 20 contract methods, so the floor is unchanged.
-    private const FLOOR = 18;
+    // Against the REDESIGNED 14-method contract. Under the old 20-method list
+    // these read 17/20 and the gap looked like three holes; against a contract of
+    // only what genuinely differs per engine there is no gap at all.
+    private const FLOOR = 14;
 
     /** @var array<string, mixed> */
     private static array $contract;
@@ -64,17 +64,44 @@ class AdapterContractTest extends TestCase
     private function implementedCount(ReflectionClass $rc): int
     {
         $count = 0;
-        foreach (self::$contract['methods'] as $method) {
-            if ($rc->hasMethod($method['name'])) {
+        foreach (self::contractMethods() as $name) {
+            if ($rc->hasMethod($name)) {
                 $count++;
             }
         }
         return $count;
     }
 
-    public function testTheFixtureDeclaresTwentyMethods(): void
+    /** @return string[] The 14 methods, flattened from the five contracts. */
+    private static function contractMethods(): array
     {
-        $this->assertCount(20, self::$contract['methods']);
+        $names = [];
+        foreach (self::$contract['contracts'] as $group) {
+            foreach ($group['methods'] as $m) {
+                $names[] = $m['name'];
+            }
+        }
+        return $names;
+    }
+
+    public function testTheFixtureDeclaresFiveContractsAndFourteenMethods(): void
+    {
+        $this->assertCount(5, self::$contract['contracts']);
+        $this->assertCount(14, self::contractMethods());
+    }
+
+    /**
+     * The redesign's central claim, pinned. CRUD and DDL are composable above
+     * the adapter and were duplicated per adapter in three of four frameworks -
+     * PHP's 5823 LOC against Ruby's 1335 for the same job is largely them.
+     */
+    public function testCrudAndDdlAreNotOnTheAdapterContract(): void
+    {
+        $names = self::contractMethods();
+        foreach (['insert', 'update', 'delete', 'createTable', 'addColumn', 'executeMany', 'fetchOne', 'query'] as $gone) {
+            $this->assertNotContains($gone, $names, "{$gone} is back on the adapter contract");
+            $this->assertArrayHasKey($gone, self::$contract['not_on_the_adapter'], "{$gone} left without a recorded reason");
+        }
     }
 
     public function testEveryAdapterMeetsItsRecordedFloor(): void
@@ -118,12 +145,14 @@ class AdapterContractTest extends TestCase
     {
         $rc = new ReflectionClass(\Tina4\Database\SQLite3Adapter::class);
         $missing = [];
-        foreach (self::$contract['methods'] as $method) {
-            if (!$rc->hasMethod($method['name'])) {
-                $missing[] = $method['name'];
+        foreach (self::contractMethods() as $name) {
+            if (!$rc->hasMethod($name)) {
+                $missing[] = $name;
             }
         }
         sort($missing);
-        $this->assertSame(['addColumn', 'createTable'], $missing);
+        // Nothing. The three that were "missing" under the old list were DDL and
+        // autocommit; autocommit landed, and DDL was never an adapter concern.
+        $this->assertSame([], $missing);
     }
 }

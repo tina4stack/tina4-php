@@ -8,64 +8,88 @@
     "",
     "The database adapter contract - feature 3 of the feature audit.",
     "",
-    "This is the list every adapter in every framework must implement, in full.",
-    "It is data rather than four hand-maintained interface declarations, because",
-    "four declarations are exactly how the frameworks ended up with four different",
-    "answers to 'implement the Tina4 adapter interface'.",
+    "VERDICT: REDESIGN. This replaces a 20-method list assembled from PHP's and",
+    "Node's existing interfaces. That list was wrong in a way none of the four",
+    "frameworks could show on its own, and only implementing it surfaced why:",
     "",
-    "EVERY METHOD IS REQUIRED. There are no optional members. Node declared",
-    "getTableColumns? and addColumn? optional, which forces the facade to",
-    "feature-detect at every call site - the same pattern as Ruby's respond_to?",
-    "guards, written in TypeScript. An optional method on a contract is not a",
-    "contract.",
+    "  - DDL was never an adapter concern. PHP builds CREATE TABLE in ORM.php,",
+    "    Node in migration.ts, Python in model.py. createTable/addColumn were",
+    "    about to be added to fifteen adapters for a job all four already do",
+    "    ABOVE the adapter.",
+    "  - CRUD is not engine-specific, and duplicating it costs 4.3x. Measured:",
+    "    Ruby 1335 LOC / 142 functions against PHP 5823 / 438, same job, seven",
+    "    drivers against ten adapters.",
+    "  - Dialect translation already lives outside the adapter in all four.",
     "",
-    "SQL DIALECT TRANSLATION IS NOT HERE, deliberately. Python's adapter base",
-    "declares eight translation methods (limit_to_rows, limit_to_top, ...) beside",
-    "the connection and CRUD contract, so 'how do I talk to this engine' and 'how",
-    "do I rewrite SQL for this dialect' are one abstraction. The other three keep",
-    "translation in its own unit. An adapter declares its dialect; the translator",
-    "does the rewriting."
+    "AN ADAPTER IS ONLY WHAT GENUINELY DIFFERS PER ENGINE. Everything else - SQL",
+    "building, DDL, pagination, filters, translation - lives above it, once.",
+    "",
+    "EVERY METHOD IS REQUIRED. There are no optional members. An optional method",
+    "forces the caller to feature-detect, which is Node's `?` and Ruby's",
+    "respond_to? - and both turn a missing method into a SILENT SKIP, which is",
+    "worse than a crash."
   ],
 
-  "methods": [
-    { "name": "open", "note": "connect and become usable" },
-    { "name": "close", "note": "release the connection" },
-    { "name": "execute", "note": "write; RAISES on error, never returns false" },
-    { "name": "executeMany", "note": "batch write in one transaction" },
-    { "name": "fetch", "note": "read many -> DatabaseResult" },
-    { "name": "fetchOne", "note": "read one -> row or null" },
-    { "name": "insert", "note": "-> write result" },
-    { "name": "update", "note": "-> write result" },
-    { "name": "delete", "note": "-> write result" },
-    { "name": "startTransaction", "note": "begin" },
-    { "name": "commit", "note": "commit" },
-    { "name": "rollback", "note": "rollback" },
-    { "name": "getTables", "note": "-> list of table names. NOT tables()" },
-    { "name": "getColumns", "note": "-> list of column descriptors. NOT columns()" },
-    { "name": "tableExists", "note": "-> bool" },
-    { "name": "createTable", "note": "-> bool. Required: every engine can do it" },
-    { "name": "addColumn", "note": "-> bool. Required: every engine can do it" },
-    { "name": "lastInsertId", "note": "-> id or null" },
-    { "name": "error", "note": "-> last error message or null" },
-    { "name": "autocommit", "note": "set per-statement commit" }
-  ],
+  "contracts": {
+    "connection": {
+      "why": "Driver handshake, and an engine must be able to name itself. Nothing could, so callers type-checked the concrete adapter class (ORM::detectDialect) - a caller depending on the implementation rather than the contract.",
+      "methods": [
+        { "name": "open", "note": "connect and become usable" },
+        { "name": "close", "note": "release the connection" },
+        { "name": "getDatabaseType", "note": "-> canonical engine name; what the translator dispatches on" }
+      ]
+    },
+    "execution": {
+      "why": "Placeholder style, cursor handling and result shape differ per driver. Everything else that runs SQL is composed from these two.",
+      "methods": [
+        { "name": "execute", "note": "run a statement; RAISES on error, never returns false" },
+        { "name": "fetch", "note": "read rows -> DatabaseResult" }
+      ]
+    },
+    "transaction": {
+      "why": "Genuinely per-driver, including whether a standalone write commits on its own.",
+      "methods": [
+        { "name": "startTransaction", "note": "begin" },
+        { "name": "commit", "note": "commit" },
+        { "name": "rollback", "note": "rollback" },
+        { "name": "autocommit", "note": "on for a standalone write, suppressed inside an explicit transaction" }
+      ]
+    },
+    "introspection": {
+      "why": "System catalogs differ entirely between engines - PRAGMA, information_schema, RDB$RELATION_FIELDS.",
+      "methods": [
+        { "name": "getTables", "note": "-> list of table names" },
+        { "name": "getColumns", "note": "-> list of column descriptors" },
+        { "name": "tableExists", "note": "-> bool" }
+      ]
+    },
+    "diagnostics": {
+      "why": "Retrieving the last id and the last error is driver-specific and cannot be composed.",
+      "methods": [
+        { "name": "lastInsertId", "note": "-> id or null" },
+        { "name": "error", "note": "-> last error message or null" }
+      ]
+    }
+  },
+
+  "not_on_the_adapter": {
+    "_note": "Each of these is composable ABOVE the adapter from execute + fetch + getDatabaseType, and each is currently duplicated per adapter in three of the four frameworks. Removing them is the bulk of the 4.3x.",
+    "insert": "SQL building. Ruby already does it once in the facade; the other three do it in every adapter.",
+    "update": "SQL building, plus the no-filter-is-an-error rule from feature 4 which the facade owns.",
+    "delete": "SQL building, same rule.",
+    "executeMany": "a loop over execute inside one transaction.",
+    "fetchOne": "fetch with a limit of one.",
+    "createTable": "DDL. Already built above the adapter in all four (ORM.php, migration.ts, model.py).",
+    "addColumn": "DDL. Same.",
+    "query": "a second read path nothing needs beside fetch.",
+    "sql_translation": "the SQLTranslator unit all four already have. An adapter declares its dialect; the translator rewrites."
+  },
 
   "naming": {
-    "_note": "Same concept, same name, idiomatic casing. The table below is the source of truth for what a caller types in each framework.",
-    "python": "snake_case: open, close, execute, execute_many, fetch, fetch_one, insert, update, delete, start_transaction, commit, rollback, get_tables, get_columns, table_exists, create_table, add_column, last_insert_id, error, autocommit",
-    "php": "camelCase: open, close, execute, executeMany, fetch, fetchOne, insert, update, delete, startTransaction, commit, rollback, getTables, getColumns, tableExists, createTable, addColumn, lastInsertId, error, autocommit",
+    "_note": "Same concept, same name, idiomatic casing.",
+    "python": "snake_case: open, close, get_database_type, execute, fetch, start_transaction, commit, rollback, autocommit, get_tables, get_columns, table_exists, last_insert_id, error",
+    "php": "camelCase: open, close, getDatabaseType, execute, fetch, startTransaction, commit, rollback, autocommit, getTables, getColumns, tableExists, lastInsertId, error",
     "ruby": "snake_case, same as python",
     "node": "camelCase, same as php"
-  },
-
-  "dropped": {
-    "query": "PHP and Node declare it, Python does not, and nothing in the framework needs a second read path beside fetch/fetchOne. Dropped rather than added to two more frameworks.",
-    "sql_translation": "Python's eight dialect methods (limit_to_rows, limit_to_top, concat_pipes_to_func, boolean_to_int, ilike_to_like, placeholder_style, auto_increment_syntax, quote_identifier) move to the SQLTranslator unit that PHP, Ruby and Node already have."
-  },
-
-  "renames": {
-    "tables -> getTables": "node. The majority and the get- prefix convention win.",
-    "columns -> getColumns": "node. Same.",
-    "getTableColumns? -> getColumns": "node. It was an optional duplicate of getColumns."
   }
 }
