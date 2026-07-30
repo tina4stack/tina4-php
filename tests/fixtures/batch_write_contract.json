@@ -1,0 +1,219 @@
+{
+  "_comment": [
+    "SHARED FIXTURE - identical bytes in all four frameworks.",
+    "  tina4-python/tests/fixtures/batch_write_contract.json",
+    "  tina4-php/tests/fixtures/batch_write_contract.json",
+    "  tina4-ruby/spec/fixtures/batch_write_contract.json",
+    "  tina4-nodejs/test/fixtures/batch_write_contract.json",
+    "",
+    "BATCH WRITES COST ONE ROUND-TRIP PER ROW. Feature 3 of the feature audit.",
+    "",
+    "All four frameworks loop execute() once per row inside executeMany:",
+    "  python  for params in rows:            self.execute(sql, params)",
+    "  php     foreach ($paramsList as $p)    $this->execute($sql, $p)",
+    "  ruby    params_list.each { |params|    drv.execute(sql, params) }",
+    "  node    for (const params of sets)     await adapterExecute(...)",
+    "",
+    "Identical shape, identical defect. On a networked engine that is N round",
+    "trips for N rows, and the round-trip IS the cost of the write - not SQL",
+    "building, not placeholder conversion. MEASURED, 500 rows, .99 host, from a",
+    "macOS workstation (PHP 8.5.7):",
+    "",
+    "    engine        row-at-a-time      one multi-row VALUES     speedup",
+    "    PostgreSQL         9848 ms                   15.8 ms        625x",
+    "    MySQL              4816 ms                   22.3 ms        216x",
+    "    MSSQL              2594 ms                   21.4 ms        121x",
+    "    SQLite (WAL)          1.3 ms                  0.4 ms        3.5x",
+    "",
+    "A 500-row seed costs TEN SECONDS on PostgreSQL and should cost sixteen",
+    "milliseconds. FakeData::seedTable/seedOrm and any bulk import pay this.",
+    "",
+    "THE COLLAPSE LIVES ABOVE THE ADAPTER. A multi-row VALUES list is SQL",
+    "building, which adapter_contract.json deliberately keeps off the adapter",
+    "(executeMany is on its not_on_the_adapter list). One implementation per",
+    "framework in the SQL translator - the unit all four already have above the",
+    "adapter - instead of the same edit in six Python, ten PHP, seven Ruby and",
+    "seven Node adapters, which is exactly the 4.3x this row exists to remove.",
+    "",
+    "No mocks. The speedups above are re-measured against live engines by each",
+    "framework's runner; the pure chunking rules below are checked without one."
+  ],
+
+  "function": {
+    "_note": "Same concept, same name, idiomatic casing. A PURE function: SQL + parameter sets + engine name in, a list of (sql, params) statements out. It performs no I/O, so its rules are checkable without a database - the live engines then prove the speedup is real.",
+    "python": "build_batch_inserts(sql, params_list, engine)",
+    "php": "SQLTranslator::buildBatchInserts(string $sql, array $paramsList, string $engine)",
+    "ruby": "Tina4::SQLTranslator.build_batch_inserts(sql, params_list, engine)",
+    "node": "buildBatchInserts(sql, paramSets, engine)",
+    "returns": "A list of [sql, params] statements to run in place of the row-at-a-time loop. An EMPTY list means 'not collapsible - keep looping', which is always correct and is the required fallback for every case the rules below do not accept."
+  },
+
+  "max_bind_params": {
+    "_note": "The hard per-statement bind-parameter ceiling of each engine. Chunk size is derived from it, never guessed: chunk_rows = max(1, floor(cap / columns)). Exceeding a cap is a runtime error on a real engine, so these are conservative floors, not aspirations.",
+    "sqlite": 999,
+    "postgres": 65535,
+    "mysql": 65535,
+    "mssql": 2100,
+    "firebird": 0,
+    "odbc": 0,
+    "mongodb": 0,
+    "_zero_means": "0 = DO NOT COLLAPSE. Firebird has no multi-row VALUES syntax (it needs INSERT..SELECT..UNION ALL or EXECUTE BLOCK); ODBC's ceiling depends on the driver behind it and cannot be assumed; MongoDB is not SQL. All three keep the row-at-a-time loop.",
+    "_why_sqlite_999": "SQLITE_MAX_VARIABLE_NUMBER is 999 before SQLite 3.32 and 32766 after. 999 is the safe floor and still collapses 333 three-column rows into one statement.",
+    "_why_mssql_2100": "SQL Server's absolute parameter limit per statement is 2100. It is by far the tightest cap here, which is why chunking is mandatory rather than an optimisation."
+  },
+
+  "engine_aliases": {
+    "_note": [
+      "The four frameworks DO NOT agree on what an engine calls itself, so the cap lookup must normalise before it reads the table above. Measured 2026-07-30:",
+      "  python  get_database_type() -> 'postgresql'",
+      "  php     getDatabaseType()   -> 'postgresql'",
+      "  ruby    get_database_type() -> 'postgres'",
+      "  node    dbType              -> 'postgres'",
+      "This is real drift and it is exactly the kind a shared fixture exists to catch: without normalising, the collapse silently does nothing on PostgreSQL in two of the four frameworks - the engine with the largest measured win. It was caught here by a live run showing PostgreSQL still taking 10.2s while MySQL and MSSQL had dropped to milliseconds.",
+      "Normalising here is deliberate and narrow. Renaming what the adapters report would be a breaking contract change touching migration, ORM DDL and dialect dispatch in all four; that belongs in its own row of the audit, not smuggled into an optimisation."
+    ],
+    "postgresql": "postgres",
+    "pgsql": "postgres",
+    "sqlite3": "sqlite",
+    "sqlserver": "mssql",
+    "sqlsrv": "mssql",
+    "mariadb": "mysql"
+  },
+
+  "collapsible": {
+    "_note": "EVERY condition must hold. Anything else returns empty and loops - a batch that silently writes the wrong rows is far worse than a slow one.",
+    "conditions": [
+      "the statement is a single-row INSERT INTO <table> (<cols>) VALUES (<placeholders>)",
+      "its VALUES list contains ONLY positional placeholders - no literals, no expressions, no nested function calls",
+      "there are at least 2 parameter sets",
+      "every parameter set has the same length, and that length equals the placeholder count",
+      "the engine's max_bind_params is greater than 0",
+      "the derived chunk size is at least 2 rows"
+    ],
+    "rejected": {
+      "_note": "Each of these MUST return empty (loop). They are listed so every framework rejects the same things for the same reasons.",
+      "RETURNING": "the caller expects one row back per statement; a collapsed statement returns N and would misreport last_id",
+      "ON CONFLICT": "PostgreSQL upsert - conflict arbitration differs once rows are batched together in one statement",
+      "ON DUPLICATE KEY": "the MySQL spelling of the same hazard",
+      "not_an_insert": "UPDATE/DELETE/DDL have no multi-row VALUES form",
+      "literal_in_values": "INSERT INTO t (a, b) VALUES (?, now()) - repeating a non-placeholder per row is not a parameter substitution",
+      "ragged_params": "parameter sets of differing length cannot share one column list",
+      "single_row": "one row is already one round-trip; collapsing buys nothing"
+    }
+  },
+
+  "semantics": {
+    "_note": "The collapse is an OPTIMISATION and must be invisible. These four properties are what the runners assert against live engines, because a faster batch that changes behaviour is a bug.",
+    "affected_rows": "unchanged - the TOTAL number of rows written, not the number of statements run",
+    "last_id": "unchanged - the id of the LAST row inserted",
+    "atomicity": "unchanged - the whole batch stays inside one transaction on one pinned connection, and one bad row still rolls back every row, including rows in already-executed chunks",
+    "ordering": "unchanged - rows are written in the order supplied, and chunk boundaries never reorder them"
+  },
+
+  "cases": [
+    {
+      "name": "a_three_column_insert_collapses_into_one_statement",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?)",
+      "rows": 4,
+      "columns": 3,
+      "engine": "postgres",
+      "expect": { "statements": 1, "rows_in_first": 4, "params_in_first": 12 }
+    },
+    {
+      "name": "mssql_chunks_at_its_2100_parameter_ceiling",
+      "_note": "700 three-column rows is 2100 parameters exactly - the cap. The next row must start a second statement.",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?)",
+      "rows": 701,
+      "columns": 3,
+      "engine": "mssql",
+      "expect": { "statements": 2, "rows_in_first": 700, "params_in_first": 2100 }
+    },
+    {
+      "name": "sqlite_chunks_at_its_999_parameter_ceiling",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?)",
+      "rows": 400,
+      "columns": 3,
+      "engine": "sqlite",
+      "expect": { "statements": 2, "rows_in_first": 333, "params_in_first": 999 }
+    },
+    {
+      "name": "postgres_holds_a_large_batch_in_one_statement",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?)",
+      "rows": 5000,
+      "columns": 3,
+      "engine": "postgres",
+      "expect": { "statements": 1, "rows_in_first": 5000, "params_in_first": 15000 }
+    },
+    {
+      "name": "firebird_never_collapses",
+      "_note": "No multi-row VALUES syntax. It must keep looping rather than emit SQL the engine cannot parse.",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?)",
+      "rows": 100,
+      "columns": 3,
+      "engine": "firebird",
+      "expect": { "statements": 0 }
+    },
+    {
+      "name": "a_single_row_is_left_alone",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?)",
+      "rows": 1,
+      "columns": 3,
+      "engine": "postgres",
+      "expect": { "statements": 0 }
+    },
+    {
+      "name": "a_returning_insert_is_never_collapsed",
+      "sql": "INSERT INTO t (id, name, qty) VALUES (?, ?, ?) RETURNING *",
+      "rows": 10,
+      "columns": 3,
+      "engine": "postgres",
+      "expect": { "statements": 0 }
+    },
+    {
+      "name": "an_upsert_is_never_collapsed",
+      "sql": "INSERT INTO t (id, name) VALUES (?, ?) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+      "rows": 10,
+      "columns": 2,
+      "engine": "postgres",
+      "expect": { "statements": 0 }
+    },
+    {
+      "name": "a_non_placeholder_in_the_values_list_is_never_collapsed",
+      "_note": "now() is evaluated per statement, not per row - repeating it inside one collapsed statement is not the same write.",
+      "sql": "INSERT INTO t (id, created) VALUES (?, now())",
+      "rows": 10,
+      "columns": 1,
+      "engine": "postgres",
+      "expect": { "statements": 0 }
+    },
+    {
+      "name": "an_update_is_never_collapsed",
+      "sql": "UPDATE t SET qty = ? WHERE id = ?",
+      "rows": 10,
+      "columns": 2,
+      "engine": "postgres",
+      "expect": { "statements": 0 }
+    }
+  ],
+
+  "live_engine_cases": [
+    {
+      "name": "a_collapsed_batch_writes_every_row_in_order",
+      "_note": "The property that matters most. Run against every live engine.",
+      "rows": 500,
+      "expect": { "rows_after": 500, "order_preserved": true }
+    },
+    {
+      "name": "a_collapsed_batch_reports_the_total_row_count",
+      "rows": 500,
+      "expect": { "affected_rows": 500 }
+    },
+    {
+      "name": "a_bad_row_rolls_back_the_whole_batch_including_earlier_chunks",
+      "_note": "Sharpest case. With MSSQL's 2100-parameter cap a 1000-row batch spans MULTIPLE statements, so the failing row lands in a LATER chunk than rows already executed. If chunk 1 survives a failure in chunk 2 the batch is no longer atomic and this optimisation has broken the write path.",
+      "rows": 1000,
+      "bad_row_at": 900,
+      "expect": { "raises": true, "rows_after": 0 }
+    }
+  ]
+}
