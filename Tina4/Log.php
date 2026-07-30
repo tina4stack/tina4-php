@@ -50,6 +50,9 @@ class Log
      */
     private static string $errorFile = 'error.log';
 
+    /** @var bool Append to the log file (default) or overwrite it at startup. */
+    private static bool $append = true;
+
     /** @var bool Whether to output to stdout */
     private static bool $stdout = false;
 
@@ -87,29 +90,65 @@ class Log
      * @param string $minLevel Minimum log level to record
      */
     public static function configure(
-        string $logDir = 'logs',
+        ?string $logDir = 'logs',
         bool $development = false,
         string $minLevel = self::LEVEL_INFO,
     ): void {
-        // Directory: env override > caller arg
+        // Directory: env override > caller arg. A null argument means "use the
+        // default", not "use an empty path" -- configure(null, true) used to
+        // resolve to an empty directory and silently write NO log files at all.
         $envDir = DotEnv::getEnv('TINA4_LOG_DIR');
-        self::$logDir = rtrim($envDir !== null && $envDir !== '' ? $envDir : $logDir, '/');
+        $chosen = $envDir !== null && $envDir !== '' ? $envDir : ($logDir ?? 'logs');
+        if ($chosen === '') {
+            $chosen = 'logs';
+        }
+
+        // The target accepts a DIRECTORY or a FILE PATH. Identical rule in all
+        // four: an existing directory is a directory; otherwise a basename with
+        // an extension is a file (feature 2 of the feature audit).
+        $targetFile = null;
+        if (self::targetIsFile($chosen)) {
+            $targetFile = basename($chosen);
+            $chosen = dirname($chosen);
+        }
+        self::$logDir = rtrim($chosen, '/');
 
         // File: TINA4_LOG_FILE may be a relative filename (joined with dir) or
         // an absolute path (split into dir + filename). Empty/null => default.
         // An explicit path is a hard opt-in to file output (explicit always
         // wins — even in production), so track it for the default-output branch.
         $envFile = DotEnv::getEnv('TINA4_LOG_FILE');
-        $explicitLogFile = $envFile !== null && $envFile !== '';
-        if ($explicitLogFile) {
+        $explicitLogFile = ($envFile !== null && $envFile !== '') || $targetFile !== null;
+        if ($envFile !== null && $envFile !== '') {
             if (str_contains($envFile, DIRECTORY_SEPARATOR) || str_contains($envFile, '/')) {
                 self::$logDir = rtrim(dirname($envFile), '/');
                 self::$logFile = basename($envFile);
             } else {
                 self::$logFile = $envFile;
             }
+        } elseif ($targetFile !== null) {
+            // A file path passed straight to configure().
+            self::$logFile = $targetFile;
         } else {
             self::$logFile = 'tina4.log';
+        }
+
+        // TINA4_LOG_APPEND — append (default) or overwrite on startup.
+        //
+        // APPEND IS THE DEFAULT: a log you can lose by restarting the process is
+        // not a log. Set it false for one file per run (a short CLI, a test
+        // fixture, a container shipping logs elsewhere); the file is truncated
+        // once here at configure time, never per line.
+        $appendEnv = DotEnv::getEnv('TINA4_LOG_APPEND');
+        self::$append = $appendEnv === null
+            || in_array(strtolower(trim((string) $appendEnv)), ['1', 'true', 'yes', 'on', 'y', 't'], true);
+        if (!self::$append) {
+            foreach ([self::$logFile, self::$errorFile] as $name) {
+                $path = self::$logDir . DIRECTORY_SEPARATOR . $name;
+                if (file_exists($path)) {
+                    @file_put_contents($path, '');
+                }
+            }
         }
 
         self::$minLevel = strtoupper($minLevel);
@@ -210,7 +249,7 @@ class Log
     /**
      * Log a debug message.
      */
-    public static function debug(string $message, array $context = []): void
+    public static function debug(mixed $message, array $context = []): void
     {
         self::log(self::LEVEL_DEBUG, $message, $context);
     }
@@ -218,7 +257,7 @@ class Log
     /**
      * Log an info message.
      */
-    public static function info(string $message, array $context = []): void
+    public static function info(mixed $message, array $context = []): void
     {
         self::log(self::LEVEL_INFO, $message, $context);
     }
@@ -226,7 +265,7 @@ class Log
     /**
      * Log a warning message.
      */
-    public static function warning(string $message, array $context = []): void
+    public static function warning(mixed $message, array $context = []): void
     {
         self::log(self::LEVEL_WARNING, $message, $context);
     }
@@ -234,7 +273,7 @@ class Log
     /**
      * Log an error message.
      */
-    public static function error(string $message, array $context = []): void
+    public static function error(mixed $message, array $context = []): void
     {
         self::log(self::LEVEL_ERROR, $message, $context);
     }
@@ -246,7 +285,7 @@ class Log
      * log (CRITICAL 4 >= WARNING 2). Use it for unrecoverable, alert-worthy
      * failures.
      */
-    public static function critical(string $message, array $context = []): void
+    public static function critical(mixed $message, array $context = []): void
     {
         self::log(self::LEVEL_CRITICAL, $message, $context);
     }
@@ -306,9 +345,12 @@ class Log
         return preg_replace('/\033\[[0-9;]*m/', '', $text) ?? $text;
     }
 
-    private static function log(string $level, string $message, array $context = []): void
+    private static function log(string $level, mixed $message, array $context = []): void
     {
-        $entry = self::buildEntry($level, $message, $context);
+        // Coerce FIRST. Anything can arrive as a message: an array from a
+        // handler, a binary payload off a socket, a 10MB string. See
+        // coerceMessage.
+        $entry = self::buildEntry($level, self::coerceMessage($message), $context);
 
         if (self::$humanReadable) {
             $formatted = self::formatHumanReadable($entry);
@@ -319,8 +361,10 @@ class Log
         $line = $formatted . PHP_EOL;
 
         // Console output respects TINA4_LOG_LEVEL
+        // Truncate on the CONSOLE only. The file keeps the full line so a
+        // consumer parsing it loses nothing; a terminal does not need 10MB.
         if (self::$stdout && self::shouldLog($level)) {
-            self::writeStdout($level, $line);
+            self::writeStdout($level, self::truncateForStdout($formatted) . PHP_EOL);
         }
 
         // File output is gated by TINA4_LOG_OUTPUT (default: enabled).
@@ -437,11 +481,75 @@ class Log
     /**
      * Format a log entry for human-readable output.
      */
+    /**
+     * Maximum characters written to the CONSOLE for one line. The file keeps
+     * the whole thing; a terminal does not need 10MB. Same number in all four.
+     */
+    private const STDOUT_MAX_CHARS = 2000;
+
+    /**
+     * Turn anything into a single safe line of text.
+     *
+     * A valid UTF-8 string passes through. Binary is described rather than
+     * dumped: raw bytes at a terminal garble it and can emit escape sequences.
+     * An array or object becomes JSON, because an array rendered as text is the
+     * whole reason the caller logged it. The logger must never be surprised by
+     * what it is handed, and must never be the reason a request dies.
+     */
+    private static function coerceMessage(mixed $message): string
+    {
+        if (is_string($message)) {
+            if (!mb_check_encoding($message, 'UTF-8')) {
+                return '<binary ' . strlen($message) . ' bytes>';
+            }
+            $text = $message;
+        } elseif ($message === null) {
+            $text = '';
+        } elseif (is_scalar($message)) {
+            $text = (string) $message;
+        } else {
+            $encoded = json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $text = $encoded === false ? print_r($message, true) : $encoded;
+        }
+        // Strip control characters so nothing can drive the terminal.
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $text) ?? $text;
+    }
+
+    /** Cap a console line. The file keeps the full line. */
+    private static function truncateForStdout(string $line): string
+    {
+        $len = mb_strlen($line);
+        if ($len <= self::STDOUT_MAX_CHARS) {
+            return $line;
+        }
+        return mb_substr($line, 0, self::STDOUT_MAX_CHARS) . "... (truncated, {$len} chars)";
+    }
+
+    /**
+     * Is this target a FILE PATH or a DIRECTORY?
+     *
+     * An existing directory is always a directory, extension or not. Otherwise
+     * a basename with an extension (app.log, app.txt) is a file and anything
+     * else is a directory to create, so the path need not exist yet. Identical
+     * rule in all four frameworks.
+     */
+    private static function targetIsFile(string $path): bool
+    {
+        if (is_dir($path)) {
+            return false;
+        }
+        $base = basename($path);
+        return str_contains($base, '.') && !str_starts_with($base, '.');
+    }
+
     private static function formatHumanReadable(array $entry): string
     {
         $parts = [
             $entry['timestamp'],
-            '[' . str_pad($entry['level'], 7) . ']',
+            // Pad to 8, not 7: CRITICAL is eight characters, so a 7-wide column
+            // was broken by our own highest level. 8 is the only width that fits
+            // every level name. Cross-framework format table (feature 2).
+            '[' . str_pad($entry['level'], 8) . ']',
         ];
 
         if (isset($entry['request_id'])) {

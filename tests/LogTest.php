@@ -213,8 +213,9 @@ class LogTest extends TestCase
         $logFile = $this->tempDir . '/tina4.log';
         $content = file_get_contents($logFile);
 
-        // Human-readable format should contain [INFO   ] padded
-        $this->assertStringContainsString('[INFO   ]', $content);
+        // Human-readable format pads the level to 8, the only width that fits
+        // CRITICAL without breaking the column (feature 2 of the feature audit).
+        $this->assertStringContainsString('[INFO    ]', $content);
         $this->assertStringContainsString('Human readable test', $content);
     }
 
@@ -414,7 +415,7 @@ class LogTest extends TestCase
 
         $logFile = $this->tempDir . '/tina4.log';
         $content = file_get_contents($logFile);
-        $this->assertStringContainsString('[INFO   ]', $content);
+        $this->assertStringContainsString('[INFO    ]', $content);
         $this->assertStringContainsString('login', $content);
     }
 
