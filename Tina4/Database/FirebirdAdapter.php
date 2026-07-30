@@ -21,6 +21,8 @@ namespace Tina4\Database;
  */
 class FirebirdAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     use SqlNormalizerTrait;
 
     /** @var resource|null */

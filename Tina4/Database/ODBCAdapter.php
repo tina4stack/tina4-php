@@ -21,6 +21,8 @@ namespace Tina4\Database;
  */
 class ODBCAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     private ?\PDO $pdo = null;
     private ?string $lastError = null;
     private bool $autoCommit;

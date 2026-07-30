@@ -34,6 +34,8 @@ namespace Tina4\Database;
  */
 class MongoDBAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     /** @var \MongoDB\Client|null */
     private ?object $client = null;
 

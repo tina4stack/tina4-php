@@ -14,6 +14,26 @@ namespace Tina4\Database;
  */
 class MySQLAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
+    /**
+     * MySQL is told the setting at connect time (`$this->db->autocommit(...)`),
+     * so changing the flag afterwards has to reach the driver as well or the
+     * connection keeps the old behaviour. The trait's accessor alone would set a
+     * flag nothing acts on.
+     */
+    public function autocommit(?bool $on = null): bool
+    {
+        if ($on !== null) {
+            $this->autoCommit = $on;
+            if (isset($this->db) && $this->db !== null) {
+                @$this->db->autocommit($on);
+            }
+        }
+
+        return $this->autoCommit;
+    }
+
     use SqlNormalizerTrait;
 
     private ?\mysqli $db = null;

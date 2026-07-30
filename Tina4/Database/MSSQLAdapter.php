@@ -24,6 +24,8 @@ namespace Tina4\Database;
  */
 class MSSQLAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     use SqlNormalizerTrait;
 
     /** @var resource|\PDO|null sqlsrv connection resource OR a PDO handle. */

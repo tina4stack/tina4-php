@@ -14,6 +14,8 @@ namespace Tina4\Database;
  */
 class PostgresAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     // Provides stripTrailingSemicolons() (v3.13.12) and splitSchema() (v3.13.14 #48).
     // This adapter referenced both helpers but never mixed the trait in, so every
     // fetch()/fetchOne()/getColumns() fatalled on PostgreSQL — undetected because

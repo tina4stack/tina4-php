@@ -14,6 +14,8 @@ namespace Tina4\Database;
  */
 class SQLite3Adapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     use SqlNormalizerTrait;
 
     private ?\SQLite3 $db = null;

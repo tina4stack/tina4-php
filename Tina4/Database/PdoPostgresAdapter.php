@@ -23,6 +23,8 @@ namespace Tina4\Database;
  */
 class PdoPostgresAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     use SqlNormalizerTrait;
     use PdoAdapterTrait;
 

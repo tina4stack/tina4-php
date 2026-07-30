@@ -25,7 +25,8 @@ use PHPUnit\Framework\TestCase;
 class AdapterContractTest extends TestCase
 {
     /** Measured 2026-07-30. Raise when you implement; never lower. */
-    private const FLOOR = 17;
+    // 17 -> 18: autocommit landed via AutocommitTrait (feature 3).
+    private const FLOOR = 18;
 
     /** @var array<string, mixed> */
     private static array $contract;
@@ -121,6 +122,6 @@ class AdapterContractTest extends TestCase
             }
         }
         sort($missing);
-        $this->assertSame(['addColumn', 'autocommit', 'createTable'], $missing);
+        $this->assertSame(['addColumn', 'createTable'], $missing);
     }
 }

@@ -20,6 +20,8 @@ namespace Tina4\Database;
  */
 class PdoSqliteAdapter implements DatabaseAdapter
 {
+    use AutocommitTrait;
+
     use SqlNormalizerTrait;
     use PdoAdapterTrait;
 
