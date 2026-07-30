@@ -292,4 +292,48 @@ class RouteDiscoveryReloadTest extends TestCase
         }
         return $count;
     }
+
+    /**
+     * Adding route files ONE AT A TIME, each followed by a rescan, must
+     * register every one of them.
+     *
+     * Parity with tina4-python's
+     * test_every_new_route_file_is_seen_by_a_later_discover. The Python
+     * framework had a real intermittent bug here: importlib served a cached
+     * directory listing, so a file created after a prior discover warmed that
+     * cache was invisible to the importer and its route silently never
+     * registered (~50% of the time). PHP's analogue is the per-request stat
+     * cache, which RouteDiscovery::scan() already defeats with
+     * clearstatcache(). This test proves that holds under repetition -- a
+     * single add-then-rescan would pass half the time on a broken
+     * implementation and hide the bug, which is exactly how it hid in Python.
+     */
+    public function testEveryNewRouteFileIsSeenByALaterRescan(): void
+    {
+        $newFiles = 12;
+
+        // rescan() is a documented no-op until scan() has run once, so seed the
+        // first scan the way a booting server would.
+        $this->writeRoute('seed.php', '<?php Tina4\\Router::get("/seed", function ($req, $res) { return $res->json(["ok" => true]); });');
+        RouteDiscovery::scan($this->tempDir . '/src/routes');
+        $this->assertContains('/seed', array_map(static fn ($r) => $r['path'], Router::getRoutes()));
+
+        for ($i = 0; $i < $newFiles; $i++) {
+            $this->writeRoute("route{$i}.php", '<?php Tina4\\Router::get("/added-' . $i . '", function ($req, $res) { return $res->json(["ok" => true]); });');
+            RouteDiscovery::rescan();
+
+            $paths = array_map(static fn ($r) => $r['path'], Router::getRoutes());
+            $this->assertContains(
+                "/added-{$i}",
+                $paths,
+                "iteration {$i}: the new route file was written to disk but its route never registered"
+            );
+        }
+
+        // Every route from every iteration is still registered at the end.
+        $paths = array_map(static fn ($r) => $r['path'], Router::getRoutes());
+        for ($i = 0; $i < $newFiles; $i++) {
+            $this->assertContains("/added-{$i}", $paths, "route /added-{$i} was lost by a later rescan");
+        }
+    }
 }
