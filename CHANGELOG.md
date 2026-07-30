@@ -14,6 +14,27 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ### Changed
 
+- **Breaking: the Messenger IMAP `uid` is a STRING, not an int.** `inbox()`,
+  `read()` and `search()` emitted `uid` as an int, so the same endpoint answered
+  `{"uid": 1}` in PHP and `{"uid": "1"}` in Python and Node. The Python master
+  sets `"uid": uid.decode() if isinstance(uid, bytes) else str(uid)` -- a string --
+  and identical API responses across the four frameworks is a project rule, not
+  a preference. `read()` and `markRead()` now accept `string|int` so existing
+  int-passing callers keep working; only the value you READ BACK changed type.
+
+  Migration -- a strict comparison against an int no longer matches:
+
+  ```php
+  // before
+  if ($envelope['uid'] === 1) { ... }
+  // after
+  if ($envelope['uid'] === '1') { ... }   // or (int)$envelope['uid'] === 1
+  ```
+
+  A loose `==` comparison, string interpolation, and passing the uid straight
+  back into `read()` / `markRead()` are all unaffected. JSON consumers that
+  decoded `uid` into an int-typed field must widen it to a string.
+
 - **Breaking: the metrics payload is now the native engine's shape.** `fullAnalysis` no
   longer returns a `violations` key. The ranked `offenders` list replaces it and
   `--fail-on` reads that same list, so one concept has one name instead of two.

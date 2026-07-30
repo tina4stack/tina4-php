@@ -381,7 +381,11 @@ class Messenger
 
             foreach ($overview as $msg) {
                 $messages[] = [
-                    'uid' => $msg->uid ?? 0,
+                    // A STRING, matching the Python master
+                    // ("uid": uid.decode() ... else str(uid)) and Node. An int here
+                    // changed the JSON shape ("uid": 1 vs "uid": "1") between
+                    // frameworks, which the same-API-responses rule forbids.
+                    'uid' => (string)($msg->uid ?? ''),
                     'msgno' => $msg->msgno ?? 0,
                     'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
                     'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
@@ -403,12 +407,12 @@ class Messenger
     /**
      * Read a single message by UID.
      *
-     * @param int    $uid      Message UID
+     * @param string|int $uid  Message UID
      * @param string $folder   Folder name
      * @param bool   $markRead Whether to mark as read
      * @return array|null Message data or null if not found
      */
-    public function read(int $uid, string $folder = 'INBOX', bool $markRead = true): ?array
+    public function read(string|int $uid, string $folder = 'INBOX', bool $markRead = true): ?array
     {
         try {
             $imap = $this->imapConnect($folder);
@@ -437,7 +441,7 @@ class Messenger
             }
 
             return [
-                'uid' => $uid,
+                'uid' => (string)$uid,
                 'msgno' => $msgno,
                 'subject' => $this->decodeMimeHeader($header->subject ?? ''),
                 'from' => $this->formatAddress($header->from ?? []),
@@ -560,7 +564,7 @@ class Messenger
 
                 $msg = $overview[0];
                 $messages[] = [
-                    'uid' => $uid,
+                    'uid' => (string)$uid,
                     'msgno' => $msg->msgno ?? 0,
                     'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
                     'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
@@ -620,10 +624,10 @@ class Messenger
     /**
      * Mark a message as read (set \Seen flag).
      *
-     * @param int    $uid    Message UID
+     * @param string|int $uid Message UID
      * @param string $folder IMAP folder name
      */
-    public function markRead(int $uid, string $folder = 'INBOX'): void
+    public function markRead(string|int $uid, string $folder = 'INBOX'): void
     {
         $imap = $this->imapConnect($folder);
         if ($imap === null) {
