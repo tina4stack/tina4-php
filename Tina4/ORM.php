@@ -30,8 +30,26 @@ abstract class ORM
     /** @var string Table name — must be set by subclass */
     public string $tableName = '';
 
-    /** @var string Primary key column name */
+    /** @var string Primary key column name (single-column keys) */
     public string $primaryKey = 'id';
+
+    /**
+     * A COMPOSITE primary key, as an ordered list of property names:
+     *
+     *     public array $primaryKeys = ['tenant', 'code'];
+     *
+     * ADDITIVE ON PURPOSE. Widening `$primaryKey` itself to `string|array` was
+     * tried first and is NOT backward compatible: PHP requires a subclass to
+     * redeclare an inherited typed property with the SAME type, so every
+     * existing model carrying `public string $primaryKey` fataled with
+     * "Type of X::$primaryKey must be array|string". A separate array property
+     * costs one field and breaks nothing.
+     *
+     * Empty (the default) means the key is `$primaryKey`, exactly as before.
+     *
+     * @var array<int, string>
+     */
+    public array $primaryKeys = [];
 
     /** @var array<string, string> Map DB column names to PHP property names */
     public array $fieldMapping = [];
@@ -781,7 +799,7 @@ abstract class ORM
             if ($pkValue === null) {
                 return false;
             }
-            $pkColumn = $this->getDbColumn($this->primaryKey);
+            $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
             $sql .= " WHERE {$pkColumn} = ?";
             $params = [$pkValue];
         } else {
@@ -828,17 +846,19 @@ abstract class ORM
             return false;
         }
 
-        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
 
         if ($this->softDelete) {
-            $sql = "UPDATE {$this->tableName} SET is_deleted = 1 WHERE {$pkColumn} = :id";
+            [$whereSql, $whereParams] = $this->pkWhere('id');
+            $sql = "UPDATE {$this->tableName} SET is_deleted = 1 WHERE {$whereSql}";
         } else {
-            $sql = "DELETE FROM {$this->tableName} WHERE {$pkColumn} = :id";
+            [$whereSql, $whereParams] = $this->pkWhere('id');
+            $sql = "DELETE FROM {$this->tableName} WHERE {$whereSql}";
         }
 
         $this->_db->startTransaction();
         try {
-            $result = $this->_db->execute($sql, [':id' => $pkValue]);
+            $result = $this->_db->execute($sql, $whereParams);
             if ($result === false) {
                 // A bound raw adapter's exec() returns false on a bad statement
                 // (the facade RAISES — caught below). Roll back the started
@@ -1131,10 +1151,46 @@ abstract class ORM
     /**
      * Check whether a record with the given primary key value exists in the database.
      */
+    /**
+     * EVERY primary-key property name, in declaration order.
+     *
+     * A key may span several columns. Anything that ADDRESSES a row must use
+     * this: keying on one column of a composite key matches every row sharing
+     * that value, which is the data-loss shape feature 4 removed from the raw
+     * write path below this layer.
+     *
+     * @return array<int, string>
+     */
+    public function getPrimaryKeys(): array
+    {
+        $keys = $this->primaryKeys !== [] ? $this->primaryKeys : [$this->primaryKey];
+        $keys = array_values(array_filter($keys, static fn($k): bool => is_string($k) && $k !== ''));
+        return $keys === [] ? ['id'] : $keys;
+    }
+
+    /**
+     * A WHERE clause naming EVERY primary-key column, plus its bound params.
+     *
+     * @param string $prefix Prefix for the generated named placeholders
+     * @return array{0: string, 1: array<string, mixed>} [sql, params]
+     */
+    public function pkWhere(string $prefix = 'pk'): array
+    {
+        $clauses = [];
+        $params = [];
+        foreach (array_values($this->getPrimaryKeys()) as $i => $property) {
+            $column = $this->getDbColumn($property);
+            $placeholder = ':' . $prefix . $i;
+            $clauses[] = "{$column} = {$placeholder}";
+            $params[$placeholder] = $this->{$property} ?? null;
+        }
+        return [implode(' AND ', $clauses), $params];
+    }
+
     public function exists(int|string $pkValue): bool
     {
         $db = static::resolveDbFor($this);
-        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
         $sql = "SELECT 1 FROM {$this->tableName} WHERE {$pkColumn} = ?";
         if ($this->softDelete) {
             $sql .= " AND is_deleted = 0";
@@ -1147,8 +1203,13 @@ abstract class ORM
      */
     public function getPrimaryKeyValue(): int|string|null
     {
-        // Read directly from the property (declared or dynamic)
-        return $this->{$this->primaryKey} ?? null;
+        // Read directly from the property (declared or dynamic). With a
+        // COMPOSITE key this returns the FIRST column's value - it is used by
+        // the auto-increment paths and by "is the key set?" checks, both of
+        // which are single-column questions. Anything ADDRESSING a row uses
+        // pkWhere(), which names every column.
+        $first = $this->getPrimaryKeys()[0];
+        return $this->{$first} ?? null;
     }
 
     /**
@@ -1338,7 +1399,7 @@ abstract class ORM
             return false;
         }
 
-        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
         $sql = "DELETE FROM {$this->tableName} WHERE {$pkColumn} = :id";
 
         // v3.13.39: wrap exec()+commit() in a started transaction. Previously
@@ -1346,7 +1407,7 @@ abstract class ORM
         // ambient/implicit transaction happened to be open (or nothing at all).
         $this->_db->startTransaction();
         try {
-            $result = $this->_db->execute($sql, [':id' => $pkValue]);
+            $result = $this->_db->execute($sql, $whereParams);
             if ($result === false) {
                 $this->_db->rollback();
                 return false;
@@ -1378,15 +1439,16 @@ abstract class ORM
             return false;
         }
 
-        $pkColumn = $this->getDbColumn($this->primaryKey);
-        $sql = "UPDATE {$this->tableName} SET is_deleted = 0 WHERE {$pkColumn} = :id";
+        // Keyed on the WHOLE primary key, like every other write path.
+        [$whereSql, $whereParams] = $this->pkWhere('id');
+        $sql = "UPDATE {$this->tableName} SET is_deleted = 0 WHERE {$whereSql}";
 
         // v3.13.39: wrap exec()+commit() in a started transaction. Previously
         // commit() was called with NO startTransaction() — committing whatever
         // ambient/implicit transaction happened to be open (or nothing at all).
         $this->_db->startTransaction();
         try {
-            $result = $this->_db->execute($sql, [':id' => $pkValue]);
+            $result = $this->_db->execute($sql, $whereParams);
             if ($result === false) {
                 $this->_db->rollback();
                 return false;
@@ -1638,7 +1700,7 @@ abstract class ORM
             default      => 'TEXT',
         };
 
-        $pkProperty = $this->primaryKey;
+        $pkProperty = $this->getPrimaryKeys()[0];
         $colDefs = [];
 
         foreach ($this->getColumnDefinitions() as $name => $def) {
@@ -1662,7 +1724,13 @@ abstract class ORM
                 // caller-supplied — it must NOT be forced to an autoincrement
                 // INTEGER column (which silently coerces "GC-100" to 0). It
                 // gets its real type + PRIMARY KEY and no AUTOINCREMENT.
-                if ($type === 'int') {
+                // A COMPOSITE key is declared ONCE, at table level (below). An
+                // inline PRIMARY KEY per column is invalid DDL - SQLite,
+                // PostgreSQL and MySQL all reject two of them in one table, so
+                // a composite-key model could not create its own table at all.
+                if (count($this->getPrimaryKeys()) > 1) {
+                    $colDefs[] = implode(' ', [$colName, $sqlType]);
+                } elseif ($type === 'int') {
                     $colDefs[] = implode(' ', [$colName, 'INTEGER', 'PRIMARY KEY', 'AUTOINCREMENT']);
                 } else {
                     $colDefs[] = implode(' ', [$colName, $sqlType, 'PRIMARY KEY']);
@@ -1692,6 +1760,15 @@ abstract class ORM
         if (empty($colDefs)) {
             $pkColumn = $this->resolveDbColumn($pkProperty);
             $colDefs[] = "{$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT";
+        }
+
+        // A COMPOSITE key is declared ONCE, at table level; the per-column inline
+        // form above is suppressed for it, because two inline primary keys is
+        // invalid DDL on every engine.
+        $pkProperties = $this->getPrimaryKeys();
+        if (count($pkProperties) > 1) {
+            $pkCols = array_map(fn(string $prop): string => $this->resolveDbColumn($prop), $pkProperties);
+            $colDefs[] = 'PRIMARY KEY (' . implode(', ', $pkCols) . ')';
         }
 
         $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
@@ -1765,7 +1842,7 @@ abstract class ORM
         $defs = [];
         foreach ($this->getColumnDefinitions() as $name => $def) {
             $column = $this->resolveDbColumn($name);
-            $isPk = ($name === $this->primaryKey) || ($column === $this->primaryKey);
+            $isPk = in_array($name, $this->getPrimaryKeys(), true) || in_array($column, $this->getPrimaryKeys(), true);
             // Auto-increment heuristic: an integer primary key is treated as
             // database-generated (skipped by the seeder), matching Python's
             // auto_increment PK skip and createTable()'s AUTOINCREMENT PK.
@@ -1847,8 +1924,8 @@ abstract class ORM
         }
 
         // The primary key must always be a column even if undeclared.
-        if (!isset($columns[$this->primaryKey])) {
-            $columns = [$this->primaryKey => ['type' => 'int', 'hasDefault' => false, 'default' => null]] + $columns;
+        if (!isset($columns[$this->getPrimaryKeys()[0]])) {
+            $columns = [$this->getPrimaryKeys()[0] => ['type' => 'int', 'hasDefault' => false, 'default' => null]] + $columns;
         }
 
         return $columns;
@@ -2022,7 +2099,7 @@ abstract class ORM
         // and produces `INSERT INTO t (id, ...) VALUES (0, ...)` — SQLite stores
         // id=0 literally, auto-increment never fires, lastInsertId() returns 0,
         // and the property never syncs back. (See issue #102.)
-        $pkColumn = $this->getDbColumn($this->primaryKey);
+        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
         if (array_key_exists($pkColumn, $data) && ($data[$pkColumn] === null || $data[$pkColumn] === 0 || $data[$pkColumn] === '')) {
             unset($data[$pkColumn]);
         }
@@ -2159,11 +2236,12 @@ abstract class ORM
     private function update(): bool
     {
         $data = $this->getDbData();
-        $pkColumn = $this->getDbColumn($this->primaryKey);
         $pkValue = $this->getPrimaryKeyValue();
 
-        // Remove primary key from update data
-        unset($data[$pkColumn]);
+        // Never SET a key column - it is what ADDRESSES the row.
+        foreach ($this->getPrimaryKeys() as $keyProperty) {
+            unset($data[$this->getDbColumn($keyProperty)]);
+        }
 
         if (empty($data)) {
             return true; // Nothing to update
@@ -2177,9 +2255,12 @@ abstract class ORM
             $params[":{$col}"] = $value;
         }
 
-        $params[':pk_id'] = $pkValue;
+        // Keyed on the WHOLE primary key: one column of a composite key matches
+        // every row sharing that value.
+        [$whereSql, $whereParams] = $this->pkWhere('pk_id');
+        $params = array_merge($params, $whereParams);
 
-        $sql = "UPDATE {$this->tableName} SET " . implode(', ', $setClauses) . " WHERE {$pkColumn} = :pk_id";
+        $sql = "UPDATE {$this->tableName} SET " . implode(', ', $setClauses) . " WHERE {$whereSql}";
 
         return $this->_db->exec($sql, $params);
     }
@@ -2336,7 +2417,19 @@ abstract class ORM
      */
     private function recordExists(int|string $id): bool
     {
-        $pkColumn = $this->getDbColumn($this->primaryKey);
+        // This tested only the FIRST key column. On a composite key that is true
+        // for ANY row sharing it, so inserting a genuinely NEW row was decided
+        // to be an UPDATE and silently OVERWROTE a different row: saving
+        // (acme, a2) rewrote (acme, a1). The probe has to name the whole key,
+        // exactly like the write that follows it.
+        if (count($this->getPrimaryKeys()) > 1) {
+            [$whereSql, $whereParams] = $this->pkWhere('ex');
+            $sql = "SELECT COUNT(*) as cnt FROM {$this->tableName} WHERE {$whereSql}";
+            $rows = $this->_db->query($sql, $whereParams);
+            return !empty($rows) && (int)(array_change_key_case($rows[0])['cnt'] ?? 0) > 0;
+        }
+
+        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
         $sql = "SELECT COUNT(*) as cnt FROM {$this->tableName} WHERE {$pkColumn} = :id";
         $rows = $this->_db->query($sql, [':id' => $id]);
         // Case-insensitive read: Firebird returns the alias as CNT (see count()).

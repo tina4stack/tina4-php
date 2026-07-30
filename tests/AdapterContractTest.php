@@ -155,4 +155,42 @@ class AdapterContractTest extends TestCase
         // autocommit; autocommit landed, and DDL was never an adapter concern.
         $this->assertSame([], $missing);
     }
+
+    /**
+     * getColumns() names its primary-key flag the SAME way in every adapter.
+     *
+     * Feature 4 parked this as "converge PHP's `getColumns()` key 'primary' on
+     * primary_key". Re-measured 2026-07-31: PHP already emits `primaryKey` in
+     * all twelve places and no consumer reads `'primary'`, so the drift the plan
+     * described is gone. `primaryKey` is also the RIGHT name here - the shared
+     * adapter contract says same concept, same name, idiomatic casing, so
+     * camelCase in PHP/Node and snake_case in Python/Ruby is the convention
+     * being followed, not a divergence.
+     *
+     * This pins it. A column descriptor whose flag is spelled differently in one
+     * adapter breaks every caller that reads it - ORM primary-key resolution,
+     * GraphQL type generation, the dev-admin table browser - and does so
+     * silently, because a missing array key reads as false rather than raising.
+     */
+    public function testEveryAdapterNamesThePrimaryKeyFlagIdentically(): void
+    {
+        $wrong = [];
+        foreach (glob(__DIR__ . '/../Tina4/Database/*.php') as $file) {
+            $src = file_get_contents($file);
+            // The old spelling, as a produced array key.
+            if (preg_match("/'primary'\s*=>/", $src)) {
+                $wrong[] = basename($file) . " emits 'primary'";
+            }
+            // ...or read back by a consumer.
+            if (preg_match("/\['primary'\]/", $src)) {
+                $wrong[] = basename($file) . " reads ['primary']";
+            }
+        }
+        $this->assertSame([], $wrong, "primary-key flag must be 'primaryKey' everywhere:\n" . implode("\n", $wrong));
+
+        // And the flag is actually produced, not just absent.
+        $rc = new ReflectionClass(\Tina4\Database\SQLite3Adapter::class);
+        $src = file_get_contents($rc->getFileName());
+        $this->assertMatchesRegularExpression("/'primaryKey'\s*=>/", $src);
+    }
 }
