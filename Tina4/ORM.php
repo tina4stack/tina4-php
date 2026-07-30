@@ -1927,6 +1927,18 @@ abstract class ORM
             $adapter = $next;
         }
 
+        // Ask the adapter what it is. The instanceof chain below stays as a
+        // fallback for anything that predates getDatabaseType() on the contract
+        // - but a NEW adapter is now visible here without editing this match
+        // block, which is the point: a caller should depend on the contract,
+        // not on the concrete class.
+        if (method_exists($adapter, 'getDatabaseType')) {
+            $declared = $adapter->getDatabaseType();
+            if (is_string($declared) && $declared !== '') {
+                return $declared;
+            }
+        }
+
         return match (true) {
             $adapter instanceof \Tina4\Database\PostgresAdapter,
             $adapter instanceof \Tina4\Database\PdoPostgresAdapter => 'postgresql',

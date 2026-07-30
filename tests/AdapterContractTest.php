@@ -26,6 +26,8 @@ class AdapterContractTest extends TestCase
 {
     /** Measured 2026-07-30. Raise when you implement; never lower. */
     // 17 -> 18: autocommit landed via AutocommitTrait (feature 3).
+    // getDatabaseType() also landed - the prerequisite for createTable/addColumn -
+    // but it is not one of the 20 contract methods, so the floor is unchanged.
     private const FLOOR = 18;
 
     /** @var array<string, mixed> */

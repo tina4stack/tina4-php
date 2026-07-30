@@ -22,6 +22,23 @@ class PdoSqliteAdapter implements DatabaseAdapter
 {
     use AutocommitTrait;
 
+    /**
+     * The SQL dialect this adapter speaks.
+     *
+     * An adapter has to be able to NAME its engine before anything can build
+     * DDL for it. Until now the only way to find out was ORM::detectDialect(),
+     * a private instanceof chain that type-checks the adapter from outside -
+     * so a caller depended on the concrete class rather than the contract, and
+     * a new adapter was invisible to it until someone edited that match block.
+     *
+     * This is the prerequisite for createTable() and addColumn() on the
+     * adapter, which is why those two are the last of the contract to land.
+     */
+    public function getDatabaseType(): string
+    {
+        return 'sqlite';
+    }
+
     use SqlNormalizerTrait;
     use PdoAdapterTrait;
 
