@@ -27,14 +27,60 @@ class WritePathContractTest extends TestCase
     private string $dir;
     private Database $db;
 
+    /**
+     * The engine under test.
+     *
+     * TINA4_TEST_WRITE_PATH_URL points this whole class at a real engine, with
+     * TINA4_TEST_WRITE_PATH_USERNAME / _PASSWORD for its login; unset, it runs
+     * on SQLite as before. CI runs the class once per engine.
+     *
+     * This suite pinned the write path for feature 4 and has only ever run on
+     * SQLite - which is the one engine that shares nothing with the others on
+     * the axes that matter here: placeholder style, RETURNING support,
+     * identifier quoting and sequence behaviour. It could not gate the feature-3
+     * refactor (moving insert/update/delete out of ten adapters into one
+     * builder) while that was true.
+     */
+    private static function engineUrl(): ?string
+    {
+        $url = trim((string) (getenv('TINA4_TEST_WRITE_PATH_URL') ?: ''));
+        return $url === '' ? null : $url;
+    }
+
     protected function setUp(): void
     {
         $this->dir = sys_get_temp_dir() . '/tina4-writepath-' . bin2hex(random_bytes(6));
         mkdir($this->dir, 0777, true);
-        $this->db = Database::create('sqlite:///' . $this->dir . '/contract.db');
-        $this->db->execute('CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)');
+
+        $url = self::engineUrl();
+        $this->db = $url === null
+            ? Database::create('sqlite:///' . $this->dir . '/contract.db')
+            : Database::create(
+                $url,
+                username: (string) (getenv('TINA4_TEST_WRITE_PATH_USERNAME') ?: ''),
+                password: (string) (getenv('TINA4_TEST_WRITE_PATH_PASSWORD') ?: '')
+            );
+
+        try {
+            $this->db->execute('DROP TABLE t');
+        } catch (\Throwable) {
+            // first run against this engine
+        }
+
+        // AUTOINCREMENT is SQLite's spelling; SQLTranslator rewrites it per
+        // engine. `id INTEGER PRIMARY KEY` self-increments on SQLite and is a
+        // plain NOT NULL column everywhere else - writing it by hand is how a
+        // suite silently stays SQLite-only.
+        $ddl = 'CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(80))';
+        $this->db->execute(\Tina4\SQLTranslator::autoIncrementSyntax($ddl, $this->db->getAdapter()->getDatabaseType()));
+
+        // Explicit ids: this suite's assertions key on id 1 and 2 (they were
+        // written for feature 4's data-loss cases, which are about WHICH rows a
+        // write touches). Nothing here reads back a generated id, so the
+        // sequence is not exercised and seeding by hand is safe.
         $this->db->insert('t', ['id' => 1, 'name' => 'one']);
         $this->db->insert('t', ['id' => 2, 'name' => 'two']);
+        $this->db->commit();
     }
 
     protected function tearDown(): void
