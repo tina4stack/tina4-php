@@ -452,7 +452,10 @@ class MiddlewareEventsTest extends TestCase
         );
         $this->assertSame(403, $response->getStatusCode());
 
-        // The dispatcher calls runAfter() unconditionally after before/handler.
+        // The dispatcher runs the after pass on every request that MATCHED a
+        // route, short-circuited or not - proven end to end by
+        // MiddlewarePipelineCharacterisationTest ("after hooks still run when a
+        // before hook short circuits"). This is the orchestrator half.
         [$request, $response] = Middleware::runAfter([MwGateThenAudit::class], $request, $response);
 
         $this->assertSame(['after'], MwGateThenAudit::$ran, 'after_* must run on a 4xx short-circuit');

@@ -14,8 +14,26 @@ namespace Tina4;
  * Middleware classes follow a simple convention:
  *   - Static methods named `before*` run BEFORE the route handler
  *   - Static methods named `after*` run AFTER the route handler
- *   - Each method receives ($request, $response) and returns [$request, $response]
- *   - If a before method returns a response with status >= 400, the handler is skipped (short-circuit)
+ *   - Each method receives ($request, $response)
+ *
+ * RETURN-VALUE TABLE — every before* / after* hook, at every scope (global and
+ * per-route), and both entry points (this orchestrator and Router::dispatch)
+ * read a hook's return value the same way:
+ *
+ *   | a Response object              | SHORT-CIRCUIT. That object IS the response, at ANY
+ *   |                                | status - the only rule that can express a 302.
+ *   | the [$request, $response] pair | rebind both, continue
+ *   | false                          | SHORT-CIRCUIT. Send the response as set; a response
+ *   |                                | still at its default 200/empty becomes a 403.
+ *   | null (or anything else)        | continue
+ *
+ * Plus a retained legacy compatibility path on the BEFORE pass only: a status
+ * >= 400 left on the response short-circuits even when the hook returned null.
+ * It cannot express a 3xx redirect, which is why the Response rule above is the
+ * primary mechanism and this one is kept only so pre-existing middleware that
+ * signals by status alone keeps working. It is deliberately NOT applied to the
+ * after pass, where a 4xx response is the normal case an after* hook exists to
+ * decorate.
  *
  * Ordering rule (deterministic — never alphabetical):
  *
@@ -23,9 +41,10 @@ namespace Tina4;
  *     attached via Middleware::use() / ->middleware() / Router::group(). This
  *     is just the natural iteration of the middleware list (unchanged).
  *   - Within a single CLASS: DEFINITION order — before* / after* methods run in
- *     the order they appear in the class body. PHP's get_class_methods()
- *     already returns methods in declaration order, so discoverMethods() keeps
- *     that order and does NOT sort (pre-3.13.38 it sort()ed alphabetically).
+ *     the order they appear in the class body.
+ *   - Across a class HIERARCHY: BASE FIRST, then the subclass's own hooks, so a
+ *     base class's setup cannot be preceded by the subclass code that depends
+ *     on it (see {@see discoverMethods()}).
  *
  * before* always runs before the route handler, after* after.
  *
@@ -61,12 +80,15 @@ class Middleware
     /**
      * Run all `before*` methods from the given middleware classes.
      *
-     * Methods run in DEFINITION order within a class and REGISTRATION order
-     * across classes (see {@see discoverMethods()}); before* always runs
-     * before the route handler.
+     * Methods run in DEFINITION order within a class, BASE class first across a
+     * hierarchy, and REGISTRATION order across classes (see
+     * {@see discoverMethods()}); before* always runs before the route handler.
      *
-     * If any before method sets the response status to >= 400, execution
-     * stops immediately (short-circuit) and the current state is returned.
+     * Return values are read per the table on this class: a Response ends the
+     * chain at any status, a [$request, $response] pair rebinds and continues,
+     * `false` ends it with the response as set (403 when still default), and
+     * null continues. A status >= 400 left behind by a hook that returned null
+     * also ends the chain — the legacy compatibility path.
      *
      * A before* method that THROWS is caught, LOGGED, and converted to a
      * clean 500 (see {@see middleware500()}) — it never crashes the worker /
@@ -76,7 +98,12 @@ class Middleware
      * @param array<string> $middlewareClasses Fully-qualified class names
      * @param Request $request
      * @param Response $response
-     * @return array{0: Request, 1: Response} The (possibly modified) request and response
+     * @return array{0: Request, 1: Response, 2: Response|null} The (possibly
+     *         replaced) request and response, plus the response that ended the
+     *         chain — null when every hook ran. A caller destructuring
+     *         `[$request, $response]` is unaffected; the dispatcher reads the
+     *         third element because a 302 or a plain 200 Response is a
+     *         short-circuit no status check could recognise.
      */
     public static function runBefore(array $middlewareClasses, Request $request, Response $response): array
     {
@@ -89,34 +116,45 @@ class Middleware
                 } catch (\Throwable $error) {
                     // Throwing before* → logged clean 500, short-circuit.
                     $response = self::middleware500($response, $class, $method, $error);
-                    return [$request, $response];
+                    return [$request, $response, $response];
                 }
 
-                if (is_array($result) && count($result) >= 2) {
-                    [$request, $response] = $result;
+                $shortCircuit = self::applyHookResult($result, $request, $response);
+                if ($shortCircuit !== null) {
+                    return [$request, $shortCircuit, $shortCircuit];
                 }
 
-                // Short-circuit: if response has an error status, stop processing
+                // LEGACY COMPATIBILITY PATH, not the main mechanism: a hook that
+                // returned null but left an error status still ends the chain,
+                // so middleware written before the Response rule existed keeps
+                // working. It cannot express a 3xx — return the Response for that.
                 if ($response->getStatusCode() >= 400) {
-                    return [$request, $response];
+                    return [$request, $response, $response];
                 }
             }
         }
 
-        return [$request, $response];
+        return [$request, $response, null];
     }
 
     /**
      * Run all `after*` methods from the given middleware classes.
      *
-     * Methods run in DEFINITION order within a class and REGISTRATION order
-     * across classes; after* always runs after the route handler.
+     * Methods run in DEFINITION order within a class, BASE class first across a
+     * hierarchy, and REGISTRATION order across classes; after* always runs
+     * after the route handler.
      *
      * AFTER-ON-4xx RULE (documented + consistent across all 4 frameworks):
      * after* methods ALWAYS run, even when a before* short-circuited with
      * status >= 400 and the handler was skipped — so after-middleware can
-     * still add headers / logging on error responses. The dispatcher calls
-     * runAfter() unconditionally after the before/handler block.
+     * still add headers / logging on error responses. Every dispatch path that
+     * matched a route finishes through the after pass, short-circuited or not.
+     * The legacy ">= 400 ends the chain" path is deliberately NOT applied here:
+     * a 4xx response is precisely what an after* hook exists to decorate.
+     *
+     * Return values are read per the table on this class, so an after* hook can
+     * still replace the response outright by returning one — that ends the
+     * after pass, because the returned object IS the response.
      *
      * An after* method that THROWS is caught, LOGGED, and converted to a
      * clean 500; the remaining after* methods STILL run (they may add
@@ -125,7 +163,9 @@ class Middleware
      * @param array<string> $middlewareClasses Fully-qualified class names
      * @param Request $request
      * @param Response $response
-     * @return array{0: Request, 1: Response} The (possibly modified) request and response
+     * @return array{0: Request, 1: Response, 2: Response|null} The (possibly
+     *         replaced) request and response, plus the response that ended the
+     *         pass — null when every hook ran.
      */
     public static function runAfter(array $middlewareClasses, Request $request, Response $response): array
     {
@@ -141,23 +181,72 @@ class Middleware
                     continue;
                 }
 
-                if (is_array($result) && count($result) >= 2) {
-                    [$request, $response] = $result;
+                $shortCircuit = self::applyHookResult($result, $request, $response);
+                if ($shortCircuit !== null) {
+                    return [$request, $shortCircuit, $shortCircuit];
                 }
             }
         }
 
-        return [$request, $response];
+        return [$request, $response, null];
+    }
+
+    /**
+     * Apply the return-value table to one hook's result.
+     *
+     * The single place the table on this class is implemented, so the
+     * orchestrator above and the Router's own middleware dispatch can never
+     * drift into reading a hook's return value two different ways.
+     *
+     * $request and $response are BY REFERENCE because the pair form rebinds
+     * both and the caller must see the replacement.
+     *
+     * @param mixed         $result          Whatever the hook returned
+     * @param Request       $request         Rebound by the [$request, $response] form
+     * @param Response      $response        Rebound by the [$request, $response] form
+     * @param callable|null $renderForbidden Builds the fallback 403 as
+     *        fn(Request, Response): Response. The Router passes its own error
+     *        renderer so a middleware 403 looks like every other error page;
+     *        the default is the canonical JSON envelope.
+     * @return Response|null The response that ends the chain, or null to continue
+     */
+    public static function applyHookResult(
+        mixed $result,
+        Request &$request,
+        Response &$response,
+        ?callable $renderForbidden = null
+    ): ?Response {
+        if ($result instanceof Response) {
+            return $result;
+        }
+
+        if ($result === false) {
+            // "Send the response as set." A hook that only said no, without
+            // saying what to send, gets the 403 it meant.
+            if ($response->getStatusCode() === 200 && $response->getBody() === '') {
+                return $renderForbidden !== null
+                    ? $renderForbidden($request, $response)
+                    : $response->json(['error' => 'Forbidden', 'status' => 403], 403);
+            }
+            return $response;
+        }
+
+        if (is_array($result) && count($result) >= 2) {
+            [$request, $response] = $result;
+        }
+
+        return null;
     }
 
     /**
      * Produce the deterministic, logged clean 500 for a middleware that threw.
      *
-     * Mirrors Python's _middleware_500: logs via Log::error with the class +
-     * method + error type/message, then returns a 500 JSON response with the
-     * canonical body shape ``{"error":"Internal Server Error","status":500}``
-     * so all 4 frameworks emit identical output. Public so the Router's
-     * per-route middleware dispatch shares the exact same 500 contract.
+     * Logs via Log::error with the class + method + error type/message, then
+     * returns a 500 JSON response with the canonical body shape
+     * ``{"error":"Internal Server Error","status":500}`` so all 4 frameworks
+     * emit identical output (Python's Middleware.middleware_500 is the twin).
+     * Public so the Router's per-route middleware dispatch shares the exact
+     * same 500 contract.
      *
      * @param string $class Middleware class name (or a short label like "Closure")
      * @param string $method The before* / after* method that threw
@@ -240,24 +329,31 @@ class Middleware
     }
 
     /**
-     * Discover static methods on a class that match the given prefix, in
-     * source DEFINITION order (NOT alphabetical).
+     * Discover public static methods matching the prefix, BASE class first and
+     * in source DEFINITION order within each class (never alphabetical).
      *
-     * PHP's get_class_methods() returns method names in declaration order
-     * (parent methods first, then the class's own, each in source order), so
-     * iterating it preserves the order the developer wrote the before* / after*
-     * methods in. We deliberately do NOT sort — pre-3.13.38 this sort()ed
-     * alphabetically, which made cross-method order surprising and diverged
-     * from registration intent. A reflection check keeps only public static
-     * methods matching the prefix.
+     * A hook a class inherits runs BEFORE the hooks that class adds, so a base
+     * class can establish what its subclasses build on. `get_class_methods()`
+     * alone cannot give that order: it lists the class's OWN methods first and
+     * the inherited ones after (verified on PHP 8.5.7), which is derived-first
+     * — the reverse. The class hierarchy is therefore walked from the most
+     * distant ancestor down to the class itself, taking only the methods each
+     * class DECLARES, so declaration order survives within a class and the
+     * inheritance order is explicit rather than assumed. An override keeps the
+     * position of the base declaration it replaces.
+     *
+     * Sorting is deliberately absent — pre-3.13.38 this sort()ed alphabetically,
+     * which made cross-method order surprising and diverged from the order the
+     * developer wrote.
      *
      * Public so the live dispatcher, the orchestrator, and the regression
      * tests all share ONE ordering rule (parity with Python's
-     * Middleware._discover_methods).
+     * Middleware._discover_methods, which walks a reversed MRO for the same
+     * reason).
      *
      * @param string $class Fully-qualified class name
      * @param string $prefix Method name prefix ("before" or "after")
-     * @return array<string> Method names in definition order
+     * @return array<string> Method names, base class first, definition order within each
      */
     public static function discoverMethods(string $class, string $prefix): array
     {
@@ -265,18 +361,25 @@ class Middleware
             return [];
         }
 
-        $reflection = new \ReflectionClass($class);
-        $methods = [];
+        $hierarchy = [];
+        for ($ancestor = new \ReflectionClass($class); $ancestor !== false; $ancestor = $ancestor->getParentClass()) {
+            array_unshift($hierarchy, $ancestor);
+        }
 
-        // get_class_methods() preserves declaration order (base -> derived,
-        // source order within each). Filter to public static prefixed methods.
-        foreach (get_class_methods($class) as $name) {
-            if (!str_starts_with($name, $prefix)) {
-                continue;
-            }
-            $method = $reflection->getMethod($name);
-            if ($method->isPublic() && $method->isStatic()) {
-                $methods[] = $name;
+        $methods = [];
+        foreach ($hierarchy as $ancestor) {
+            foreach (get_class_methods($ancestor->getName()) as $name) {
+                if (!str_starts_with($name, $prefix) || in_array($name, $methods, true)) {
+                    continue;
+                }
+                $method = $ancestor->getMethod($name);
+                if (
+                    $method->isPublic()
+                    && $method->isStatic()
+                    && $method->getDeclaringClass()->getName() === $ancestor->getName()
+                ) {
+                    $methods[] = $name;
+                }
             }
         }
 

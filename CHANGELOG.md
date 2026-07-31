@@ -12,6 +12,86 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ## Unreleased
 
+### One middleware return-value contract, both entry points
+
+`Middleware::runBefore()` / `runAfter()` (the orchestrator) and
+`Router::dispatch()` (the real dispatcher) read a hook's return value from the
+same table now, at every scope - global and per-route:
+
+| A hook returns | The pipeline does |
+|---|---|
+| a `Response` object | SHORT-CIRCUIT. That object IS the response, at ANY status |
+| the `[$request, $response]` pair | rebind both, continue |
+| `false` | SHORT-CIRCUIT. The response as set; 403 when still default |
+| `null` | continue |
+
+The Response rule is the primary one because it is the only rule that can
+express a 302: a hook returning `$response->redirect('/login')` now ends the
+chain instead of falling through to the handler. The pre-existing
+"status >= 400 also short-circuits the before pass" rule is RETAINED as a legacy
+compatibility path so middleware that signals by status alone keeps working.
+
+`Middleware::runBefore()` / `runAfter()` return a THIRD element - the response
+that ended the chain, or `null`. Existing callers destructuring
+`[$request, $response]` are unaffected (list assignment ignores extra elements);
+the dispatcher needs it because a 302 or a plain 200 `Response` is a
+short-circuit no status check can recognise. The table itself lives in one
+place, `Middleware::applyHookResult()` (parity with the Python master's
+`Middleware.apply_hook_result`).
+
+**Breaking:** a `before*` / `after*` hook that returned a `Response` object
+where it meant "carry on" now ends the chain. Hooks that return
+`[$request, $response]`, `null`, or nothing are unaffected - that is every
+built-in middleware and the documented convention. PHP's fluent `Response`
+methods return `$this`, so the shape to check for is a hook whose last statement
+is `return $response->header(...)` or similar; change it to
+`return [$request, $response];`.
+
+**Breaking:** `false` no longer renders 403 unconditionally. A hook that set a
+status or body before returning `false` now sends what it set (a deliberate 402
+stays a 402); a hook that returned `false` against an untouched response still
+gets the 403 it meant.
+
+### Fixed: per-route middleware never ran its `after*` hooks
+
+A middleware class attached with `->middleware([Audit::class])` ran its
+`before*` hooks and nothing else - `Router::runClassMiddlewareHooks()` looped
+only over `before`, and the dispatcher's single `runAfter()` call was passed the
+GLOBAL set. The route's own `after*` methods were unreachable code. The same
+class registered globally ran both, so whether a hook fired depended on how it
+was attached. Python and Ruby both run the route-level after pass.
+
+**Breaking (PHP only):** an `after*` method on a class attached per route is
+currently INERT and will start executing. Audit the `after*` hooks on any class
+used with `->middleware()` / `Router::group()` before upgrading - code that has
+never run once will now run on every request through that route. The migration
+risk differs per framework: in Ruby the equivalent call raises `NoMethodError`
+today, so there it is broken-to-working rather than inert-to-live.
+
+The after pass now runs on every request that MATCHED a route, including one a
+middleware short-circuited - the dispatcher used to return the short-circuit
+directly and skip the after pass entirely, which contradicted the documented
+"after* always run, even on a 4xx" rule. An unmatched path (404) still has no
+after pass. Order is the global set followed by the route's classes, mirroring
+the before pass.
+
+### Fixed: inherited middleware hooks ran before the base class they inherit from
+
+`Middleware::discoverMethods()` trusted `get_class_methods()` to return
+"parent methods first, then the class's own". It does the opposite - a class's
+OWN methods come first and inherited ones after (verified on PHP 8.5.7) - so a
+subclass's hooks ran BEFORE the base hooks they build on, the reverse of Python
+and Ruby. Discovery now walks the class hierarchy explicitly, most distant
+ancestor first, taking only the methods each class declares, so definition order
+survives within a class and an override keeps the position of the base
+declaration it replaces.
+
+**Breaking:** a middleware class that extends another now runs `beforeBase`
+before `beforeSub` (and the same for `after*`). A subclass hook that relied on
+running first will need reordering.
+
+The docblock asserting the old, false claim about `get_class_methods()` is gone.
+
 ### CORS preflight responses now carry `Allow`
 
 A CORS preflight (`OPTIONS` with an `Origin`) returned 204 with the
