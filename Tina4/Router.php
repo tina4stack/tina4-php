@@ -747,6 +747,111 @@ class Router
 
 
     /**
+     * TINA4_TRAILING_SLASH_REDIRECT: 301 `/foo/` to `/foo`, keeping the query.
+     *
+     * The bare `/` is skipped so the homepage still works. Dropping the query
+     * on the redirect would silently lose the user's filters, which is why it
+     * is rebuilt onto the target.
+     *
+     * @param Request  $request  The incoming request
+     * @param Response $response Used to build the redirect
+     * @return Response|null The 301, or null when the feature is off or N/A
+     */
+    private static function trailingSlashRedirect(Request $request, Response $response): ?Response
+    {
+        // TINA4_TRAILING_SLASH_REDIRECT — when truthy, any path with a trailing
+        // slash (other than the bare "/") redirects 301 to the slash-stripped
+        // form. Lets operators normalize URLs without per-route boilerplate.
+        if (
+            $request->path !== '/'
+            && str_ends_with($request->path, '/')
+            && DotEnv::isTruthy(DotEnv::getEnv('TINA4_TRAILING_SLASH_REDIRECT', 'false'))
+        ) {
+            $target = rtrim($request->path, '/');
+            // Preserve query string when present
+            if (!empty($request->query)) {
+                $target .= '?' . http_build_query($request->query);
+            }
+            return $response->redirect($target, 301);
+        }
+
+        return null;
+    }
+
+    /**
+     * Run the global after-hooks and the two injectors, in that order.
+     *
+     * The dev toolbar goes first and the feedback widget second, so the
+     * widget's <script> sits next to the toolbar's marker tags. Both target the
+     * LAST </body> independently and are idempotent, so the order is about
+     * placement rather than correctness. Both are no-ops when their feature
+     * flags are unset.
+     *
+     * @param Request    $request          Rebound by the after-hooks
+     * @param Response   $finalResponse    The response to finish
+     * @param array      $globalMiddleware The global set, for its after hooks
+     * @param array|null $result           The match result, for the toolbar's pattern label
+     * @return Response The finished response
+     */
+    private static function finaliseResponse(
+        Request $request,
+        Response $finalResponse,
+        array $globalMiddleware,
+        ?array $result
+    ): Response {
+        if (!empty($globalMiddleware)) {
+            [$request, $finalResponse] = Middleware::runAfter($globalMiddleware, $request, $finalResponse);
+        }
+
+        $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
+        $finalResponse = self::injectDevToolbar($request, $finalResponse, $matchedPattern);
+
+        return self::injectFeedbackWidget($request, $finalResponse);
+    }
+
+    /**
+     * Run ONE already-normalised, non-continuation middleware.
+     *
+     * By the time this is called the caller has resolved any string spec and
+     * peeled off the function-style set, so `$mw` is either a class name or a
+     * plain callable.
+     *
+     *   - a resolvable class name runs its `before*` hooks;
+     *   - a callable is invoked directly;
+     *   - a string that is neither is logged and skipped, because a typo in a
+     *     middleware name should be visible without taking the request down.
+     *
+     * @param Request  $request  Rebound when a middleware returns a new pair
+     * @param Response $response Rebound when a middleware returns a new pair
+     * @param mixed    $mw       A class-name string or a callable
+     * @return Response|null A response to send immediately, or null to continue
+     */
+    private static function runOneRouteMiddleware(Request &$request, Response &$response, mixed $mw): ?Response
+    {
+        if (is_string($mw)) {
+            $className = self::resolveMiddlewareClass($mw);
+            if ($className !== null) {
+                // Returns null on success, which means "carry on" - the same
+                // as the `continue` this replaced.
+                return self::runClassMiddlewareHooks($request, $response, $className);
+            }
+            if (!is_callable($mw)) {
+                Log::warning("Middleware not found: {$mw}");
+                return null;
+            }
+        } elseif (!is_callable($mw)) {
+            return null;
+        }
+
+        $mwResult = self::runCallableMiddleware($request, $response, $mw, $short);
+        if ($short !== null) {
+            return $short;
+        }
+
+        return self::middlewareResultToResponse($mwResult, $request, $response);
+    }
+
+    /**
      * Invoke a callable middleware and unwrap the outcome.
      *
      * Thin wrapper over {@see invokeCallableMiddleware()} so both call sites
@@ -1288,38 +1393,7 @@ class Router
                 $functionMiddlewares[] = $mw;
                 continue;
             }
-            // Resolve middleware: string class name → call before() methods (Python parity)
-            if (is_string($mw)) {
-                $className = self::resolveMiddlewareClass($mw);
-
-                if ($className !== null) {
-                    $shortCircuit = self::runClassMiddlewareHooks($request, $response, $className);
-                    if ($shortCircuit !== null) {
-                        return $shortCircuit;
-                    }
-                    continue;
-                }
-
-                // Fallback: try as callable function name
-                if (is_callable($mw)) {
-                    $mwResult = self::runCallableMiddleware($request, $response, $mw, $short);
-                    if ($short !== null) {
-                        return $short;
-                    }
-                } else {
-                    Log::warning("Middleware not found: {$mw}");
-                    continue;
-                }
-            } elseif (is_callable($mw)) {
-                $mwResult = self::runCallableMiddleware($request, $response, $mw, $short);
-                if ($short !== null) {
-                    return $short;
-                }
-            } else {
-                continue;
-            }
-
-            $short = self::middlewareResultToResponse($mwResult, $request, $response);
+            $short = self::runOneRouteMiddleware($request, $response, $mw);
             if ($short !== null) {
                 return $short;
             }
@@ -1489,20 +1563,9 @@ class Router
 
     private static function dispatchInner(Request $request, Response $response): Response
     {
-        // TINA4_TRAILING_SLASH_REDIRECT — when truthy, any path with a trailing
-        // slash (other than the bare "/") redirects 301 to the slash-stripped
-        // form. Lets operators normalize URLs without per-route boilerplate.
-        if (
-            $request->path !== '/'
-            && str_ends_with($request->path, '/')
-            && DotEnv::isTruthy(DotEnv::getEnv('TINA4_TRAILING_SLASH_REDIRECT', 'false'))
-        ) {
-            $target = rtrim($request->path, '/');
-            // Preserve query string when present
-            if (!empty($request->query)) {
-                $target .= '?' . http_build_query($request->query);
-            }
-            return $response->redirect($target, 301);
+        $redirect = self::trailingSlashRedirect($request, $response);
+        if ($redirect !== null) {
+            return $redirect;
         }
 
         // PRE-MATCH global middleware: runs before a route is looked up, so its
@@ -1578,22 +1641,19 @@ class Router
         $handlerResult = self::invokeRouteHandler($request, $response, $route, $functionMiddlewares);
         $finalResponse = self::handlerResultToResponse($handlerResult, $response);
 
-        // Run global middleware "after" hooks
-        if (!empty($globalMiddleware)) {
-            [$request, $finalResponse] = Middleware::runAfter($globalMiddleware, $request, $finalResponse);
-        }
+        // The AFTER hooks run for the WHOLE global set - both the pre-match and
+        // post-match groups. Splitting the BEFORE pass by dependency (ADR-0012)
+        // says nothing about the after pass: an after_* hook adds headers or
+        // logging and needs no route metadata either way.
+        //
+        // REGRESSION GUARD: this assignment went missing when the pre/post
+        // split landed (538cf99f) - the read below survived but nothing set the
+        // variable, so `!empty(null)` was false and NO global after_* hook ran
+        // at all. It was silent because PHP treats an undefined variable in
+        // empty() as empty. Locked by GlobalAfterMiddlewareTest.
+        $globalMiddleware = Middleware::getGlobal();
 
-        // Dev toolbar injection — also covers 404 / 403 / 500 paths via
-        // injectDevToolbar() helper called from those return sites above.
-        $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
-        $finalResponse = self::injectDevToolbar($request, $finalResponse, $matchedPattern);
-
-        // Tier 4: customer feedback widget injection. Runs AFTER the dev
-        // toolbar so its <script> sits next to the toolbar's marker tags —
-        // both target the LAST </body> independently and are idempotent.
-        // No-op when TINA4_ENABLE_FEEDBACK / TINA4_FEEDBACK_WHITELIST aren't
-        // both set, or when the requesting user isn't on the list.
-        return self::injectFeedbackWidget($request, $finalResponse);
+        return self::finaliseResponse($request, $finalResponse, $globalMiddleware, $result);
     }
 
     /**
