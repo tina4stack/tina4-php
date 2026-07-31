@@ -354,6 +354,93 @@ class GracefulShutdownTest extends TestCase
         );
     }
 
+    /**
+     * an embedded App without an event loop is still killable by SIGTERM
+     *
+     * The severest case in this file, and the reason App::registerSignalHandlers()
+     * was deleted rather than merely bypassed. A handler installed at App
+     * CONSTRUCTION suppresses the default terminate action, but its PHP callback
+     * only ever runs from pcntl_signal_dispatch() — which the server event loop
+     * calls and an embedder does not. The result was a process that IGNORED
+     * SIGTERM outright: `kill` and `docker stop` became no-ops with no workaround
+     * available to the embedder.
+     *
+     * This is the documented integration shape (App::__invoke for Swoole /
+     * RoadRunner / FrankenPHP / ReactPHP) and the shape of the scaffolded
+     * index.php, so it is not a hypothetical. Server::start() is the ONLY place
+     * allowed to trap signals; anything that registers one earlier has to keep
+     * this green.
+     */
+    public function testAnEmbeddedAppWithoutAnEventLoopIsStillKillableBySigterm(): void
+    {
+        $this->startEmbeddedApp();
+
+        $started = microtime(true);
+        $this->signalServer(SIGTERM);
+        $status = $this->awaitExit(8.0, 'an embedded App with no event loop');
+        $elapsed = microtime(true) - $started;
+
+        $this->assertTrue(
+            (bool)$status['signaled'],
+            'an App with no event loop must still die on SIGTERM — it exited with code '
+            . var_export($status['exitcode'], true)
+            . ', which means a handler swallowed the signal and the process ran on'
+        );
+        $this->assertSame(
+            SIGTERM,
+            $status['termsig'],
+            'the process must be terminated by SIGTERM itself'
+        );
+        $this->assertStringNotContainsString(
+            'SURVIVED-SIGTERM',
+            $this->readState(),
+            'the embedded App outlived a SIGTERM and finished its loop — the process was unkillable'
+        );
+        $this->assertLessThan(
+            3.0,
+            $elapsed,
+            "SIGTERM must take effect at once; the process lingered {$elapsed}s"
+        );
+    }
+
+    /**
+     * TINA4_DEFAULT_WEBSERVER is accepted and changes nothing in PHP.
+     *
+     * The env surface is uniform across all four frameworks, but this one only
+     * SWITCHES anything where there is a third-party server to hand off to
+     * (Python -> uvicorn, Ruby -> Puma). PHP always serves from its own built-in
+     * server, so the setting is a genuine no-op here — and "no-op" has to mean
+     * boots and serves exactly as before, not "ignored because boot failed".
+     *
+     * Lives with the server-lifecycle harness because it needs a REAL booted
+     * Tina4 server, and this file owns the only one; duplicating the spawn/reap
+     * machinery into an env-only test file would be the worse trade.
+     */
+    public function testDefaultWebserverEnvIsAcceptedAndStillServes(): void
+    {
+        // startServer() only returns once the real server has answered /ping,
+        // so reaching this line already proves the setting did not break boot.
+        $this->startServer(env: ['TINA4_DEFAULT_WEBSERVER' => 'TRUE']);
+
+        $probe = @stream_socket_client("tcp://127.0.0.1:{$this->serverPort}", $errno, $errstr, 2.0);
+        $this->assertIsResource($probe, "the server must still accept: {$errstr} ({$errno})");
+        fwrite($probe, "GET /ping HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+        $answer = $this->readUntilClose($probe, 3.0);
+        @fclose($probe);
+
+        $this->assertStringContainsString('pong', $answer, 'the built-in server must serve exactly as before');
+
+        $this->signalServer(SIGTERM);
+        $status = $this->awaitExit();
+
+        $this->assertSame(0, $status['exitcode'], 'shutdown is unaffected too');
+        $this->assertStringNotContainsString(
+            'TINA4_DEFAULT_WEBSERVER',
+            $this->readLog(),
+            'the setting must be accepted silently — never warned about or rejected as unknown'
+        );
+    }
+
     // ── shared assertions ──────────────────────────────────────────────────
 
     /** A request already being served must run to completion and write its whole response. */
@@ -426,44 +513,11 @@ class GracefulShutdownTest extends TestCase
     {
         $this->serverPort = self::freePort();
         self::$portsUsed[] = $this->serverPort;
-        $command = [
-            PHP_BINARY,
-            __DIR__ . '/fixtures/graceful_shutdown_server.php',
-            (string)$this->serverPort,
-            $this->stateFile,
-            (string)$slowSeconds,
-            implode(',', $flags),
-        ];
-
-        $environment = $env + [
-            'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
-            'HOME' => getenv('HOME') ?: sys_get_temp_dir(),
-            // Boot the server directly (no tina4 CLI in a test), keep it quiet,
-            // and keep migrations and the AI port out of the picture.
-            'TINA4_OVERRIDE_CLIENT' => 'true',
-            'TINA4_SUPPRESS' => 'true',
-            'TINA4_AUTO_MIGRATE' => 'false',
-            'TINA4_DEBUG' => 'false',
-        ];
-
-        // fd 1 and 2 -> a real FILE. Never a pipe nobody reads (the server would
-        // block once the 64KB buffer filled) and never the runner's own fds.
-        $this->process = proc_open(
-            $command,
-            [
-                0 => ['file', '/dev/null', 'r'],
-                1 => ['file', $this->logFile, 'a'],
-                2 => ['file', $this->logFile, 'a'],
-            ],
-            $pipes,
-            dirname(__DIR__),
-            $environment
+        $this->spawnFixture(
+            'graceful_shutdown_server.php',
+            [(string)$this->serverPort, $this->stateFile, (string)$slowSeconds, implode(',', $flags)],
+            $env
         );
-        $this->assertIsResource($this->process, 'the fixture server process must start');
-
-        $status = proc_get_status($this->process);
-        $this->serverPid = (int)($status['pid'] ?? 0);
-        $this->assertGreaterThan(0, $this->serverPid, 'the fixture server must report a pid');
 
         for ($attempt = 0; $attempt < 200; $attempt++) {
             $probe = @stream_socket_client("tcp://127.0.0.1:{$this->serverPort}", $errno, $errstr, 0.2);
@@ -481,6 +535,71 @@ class GracefulShutdownTest extends TestCase
         $this->fail(
             "the real Tina4 server never served /ping on port {$this->serverPort}; log: " . $this->readLog()
         );
+    }
+
+    /**
+     * Spawn a real App with NO server and NO event loop, and wait until it is up.
+     *
+     * No port is involved — the process under test never listens; the whole point
+     * is that nothing ever pumps the signal queue.
+     */
+    private function startEmbeddedApp(): void
+    {
+        $this->spawnFixture('embedded_app_no_loop.php', [$this->stateFile, '10.0']);
+
+        for ($attempt = 0; $attempt < 400; $attempt++) {
+            if (str_contains($this->readState(), 'embedded-app-ready')) {
+                return;
+            }
+            usleep(25000);
+        }
+
+        $this->fail('the embedded App never reached its loop; log: ' . $this->readLog());
+    }
+
+    /**
+     * proc_open a fixture as a real child process, recording its pid.
+     *
+     * ARRAY form on purpose: it execs php directly with no `sh -c` layer, so
+     * proc_get_status()['pid'] IS the php process and the signal really reaches
+     * it. With the string form, sh is the child and signalling it can leave the
+     * real process orphaned.
+     *
+     * @param string                $fixture Filename under tests/fixtures/.
+     * @param list<string>          $args    Arguments passed after the script.
+     * @param array<string, string> $env     Extra environment for the child.
+     */
+    private function spawnFixture(string $fixture, array $args, array $env = []): void
+    {
+        $environment = $env + [
+            'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
+            'HOME' => getenv('HOME') ?: sys_get_temp_dir(),
+            // Boot directly (no tina4 CLI in a test), keep it quiet, and keep
+            // migrations and the AI port out of the picture.
+            'TINA4_OVERRIDE_CLIENT' => 'true',
+            'TINA4_SUPPRESS' => 'true',
+            'TINA4_AUTO_MIGRATE' => 'false',
+            'TINA4_DEBUG' => 'false',
+        ];
+
+        // fd 1 and 2 -> a real FILE. Never a pipe nobody reads (the child would
+        // block once the 64KB buffer filled) and never the runner's own fds.
+        $this->process = proc_open(
+            array_merge([PHP_BINARY, __DIR__ . '/fixtures/' . $fixture], $args),
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $this->logFile, 'a'],
+                2 => ['file', $this->logFile, 'a'],
+            ],
+            $pipes,
+            dirname(__DIR__),
+            $environment
+        );
+        $this->assertIsResource($this->process, "the {$fixture} process must start");
+
+        $status = proc_get_status($this->process);
+        $this->serverPid = (int)($status['pid'] ?? 0);
+        $this->assertGreaterThan(0, $this->serverPid, "{$fixture} must report a pid");
     }
 
     /** Open a socket and write the slow request, leaving the response unread. */
@@ -625,8 +744,10 @@ class GracefulShutdownTest extends TestCase
      *
      * @return array<string, mixed>
      */
-    private function awaitExit(float $timeoutSeconds = self::EXIT_WAIT_SECONDS): array
-    {
+    private function awaitExit(
+        float $timeoutSeconds = self::EXIT_WAIT_SECONDS,
+        string $what = 'the server'
+    ): array {
         $deadline = microtime(true) + $timeoutSeconds;
         while (microtime(true) < $deadline) {
             $status = proc_get_status($this->process);
@@ -638,7 +759,8 @@ class GracefulShutdownTest extends TestCase
         }
 
         $this->fail(
-            "the server did not exit within {$timeoutSeconds}s of the signal; log: " . $this->readLog()
+            "{$what} did not exit within {$timeoutSeconds}s of the signal — the signal was swallowed; log: "
+            . $this->readLog()
         );
     }
 
