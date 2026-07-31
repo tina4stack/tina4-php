@@ -44,6 +44,59 @@ class Router
     /** @var array<callable> Current group middleware */
     private static array $groupMiddleware = [];
 
+    // ── The dispatch pipeline ────────────────────────────────────
+    //
+    // dispatchInner was 440 lines at cyclomatic complexity 73 - the largest
+    // function in the family. Its concerns are named below as DATA, so the
+    // pipeline can be read, tested and compared across the four frameworks
+    // without reading an implementation.
+    //
+    // Four groups, matching the shape of tina4-ruby's dispatch_pipeline.rb:
+    //
+    //   PROLOGUE_STAGES  run in dispatch(), before dispatchInner is entered.
+    //   REQUEST_STAGES   run until one RETURNS a Response; that response is
+    //                    the answer. dispatchNoMatch is terminal.
+    //   ROUTE_STAGES     run for a matched route, in this order; each returns
+    //                    a Response to short-circuit or null to continue.
+    //   RESPONSE_STAGES  run over the finished Response on the way out.
+    //
+    // Ordering is BEHAVIOUR, not taste, and each entry is decided:
+    // ADR-0010 (static resolves inside dispatchNoMatch, after matching),
+    // ADR-0012 (post-match globals -> auth gate -> the route's own middleware).
+    //
+    // The methods NOT listed here - extractAuthToken, bindHandlerArgs,
+    // runOneRouteMiddleware, runClassMiddlewareHooks, runCallableMiddleware,
+    // invokeCallableMiddleware, resolveMiddlewareClass,
+    // middlewareResultToResponse, handlerResultToResponse,
+    // runGlobalMiddlewarePass - are HELPERS a stage calls, not pipeline steps.
+    // The distinction matters: only a stage's position is a contract.
+
+    /** @var array<int, string> Stages run by dispatch() before dispatchInner. */
+    public const PROLOGUE_STAGES = [
+        'startNativeSession',
+    ];
+
+    /** @var array<int, string> Stages run until one returns a Response. */
+    public const REQUEST_STAGES = [
+        'trailingSlashRedirect',
+        'dispatchNoMatch',
+    ];
+
+    /** @var array<int, string> Stages run for a matched route, in order. */
+    public const ROUTE_STAGES = [
+        'enforceRouteAuth',
+        'runRouteMiddleware',
+        'invokeRouteHandler',
+    ];
+
+    /** @var array<int, string> Stages run over the finished Response. */
+    public const RESPONSE_STAGES = [
+        'finaliseResponse',
+        'saveSessionAndSetCookie',
+        'stripHeadBody',
+        'logRequest',
+    ];
+
     /** @var string Base path for static file serving */
     public static string $basePath = '.';
 
@@ -984,21 +1037,7 @@ class Router
     private static function startNativeSession(): void
     {
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-            // Router::$basePath is set by App::__construct, so falling
-            // back to getcwd() is defensive for code paths that use
-            // Router::dispatch() directly in tests without booting an
-            // App instance first.
-            $basePath = self::$basePath !== '.' ? self::$basePath : getcwd();
-            $sessionPath = getenv('TINA4_PHP_SESSION_PATH')
-                ?: ($basePath . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'sessions-php');
-            if (!is_dir($sessionPath)) {
-                @mkdir($sessionPath, 0755, true);
-            }
-            if (is_writable($sessionPath)) {
-                session_save_path($sessionPath);
-            }
-            $sessionName = getenv('TINA4_PHP_SESSION_NAME') ?: 'PHPSESSID';
-            session_name($sessionName);
+            self::configureNativeSessionStorage();
 
             // Harden the cookie BEFORE session_start() emits it. PHP's ini
             // defaults (session.cookie_httponly=0, cookie_samesite="",
@@ -1026,6 +1065,44 @@ class Router
             ]);
             @session_start();
         }
+    }
+
+    /**
+     * Point PHP's native session at a writable, predictable directory.
+     *
+     * Defaults to `data/sessions-php/` under the project root rather than
+     * /tmp, so a shared-hosting /tmp quota does not surprise anyone. Override
+     * with TINA4_PHP_SESSION_PATH; the cookie name with
+     * TINA4_PHP_SESSION_NAME (default PHPSESSID, PHP's own).
+     *
+     * The directory is created if missing and only used when it is actually
+     * writable - otherwise PHP's default is left alone rather than pointing
+     * sessions at a path that silently fails to persist.
+     *
+     * NOTE the $basePath resolution is INSIDE this method. A first attempt at
+     * this split left it in the caller, so $basePath was undefined here and
+     * the save path became a bare "/data/sessions-php" - unwritable, so
+     * session_save_path was never applied and sessions stopped persisting.
+     * Two SessionCookieName resume tests caught it. PHP does not error on an
+     * undefined variable in a string concatenation, so nothing else would have.
+     */
+    private static function configureNativeSessionStorage(): void
+    {
+            // Router::$basePath is set by App::__construct, so falling
+            // back to getcwd() is defensive for code paths that use
+            // Router::dispatch() directly in tests without booting an
+            // App instance first.
+            $basePath = self::$basePath !== '.' ? self::$basePath : getcwd();
+            $sessionPath = getenv('TINA4_PHP_SESSION_PATH')
+                ?: ($basePath . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'sessions-php');
+            if (!is_dir($sessionPath)) {
+                @mkdir($sessionPath, 0755, true);
+            }
+            if (is_writable($sessionPath)) {
+                session_save_path($sessionPath);
+            }
+            $sessionName = getenv('TINA4_PHP_SESSION_NAME') ?: 'PHPSESSID';
+            session_name($sessionName);
     }
 
     /**
@@ -1059,6 +1136,28 @@ class Router
         }
         $sid = $session->getSessionId();
         if ($sid && $sid !== $sessionCookie) {
+            self::emitSessionCookie($sid, $sessionCookieName, $result);
+        }
+    }
+
+    /**
+     * Emit the Tina4 session cookie, by whichever route the SAPI allows.
+     *
+     * Two paths, and the choice is forced rather than stylistic: once headers
+     * are sent PHP's setcookie() is a no-op with a warning, so the built-in
+     * server path writes a Set-Cookie header onto the Response instead.
+     * Apache/nginx/FPM use the native call so PHP owns the encoding.
+     *
+     * TINA4_SESSION_TTL, _SAMESITE and _SECURE are all honoured here. Secure is
+     * forced on when SameSite=None, because browsers reject `SameSite=None`
+     * without it and the cookie would be silently dropped.
+     *
+     * @param string   $sid                The session id to write
+     * @param string   $sessionCookieName  The configured cookie name
+     * @param Response $result             Response a Set-Cookie is added to on the header path
+     */
+    private static function emitSessionCookie(string $sid, string $sessionCookieName, Response $result): void
+    {
             $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
             $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
             // Same rule as the native PHPSESSID cookie above: explicit opt-in,
@@ -1088,7 +1187,6 @@ class Router
                     'secure' => $secure,
                 ]);
             }
-        }
     }
 
     /**
