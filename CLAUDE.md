@@ -169,8 +169,16 @@ Each resolves to a canonical **engine** (`sqlite`, `postgres`, `mysql`, `mssql`,
 use Tina4\Database\Database;
 
 // Create from URL — driver://host:port/database
-$db = Database::create('sqlite:///path/to/app.db');
+// SQLite slash count decides relative vs absolute (the SQLAlchemy convention,
+// identical in all four frameworks). Three slashes is RELATIVE to the working
+// directory; an absolute path needs FOUR.
+$db = Database::create('sqlite:///app.db');            // relative: ./app.db
+$db = Database::create('sqlite:////var/data/app.db');  // absolute: /var/data/app.db
+$db = Database::create('sqlite:/var/data/app.db');     // absolute (one slash) too
 $db = Database::create('sqlite::memory:');
+// FOOTGUN: 'sqlite://' . $absolutePath yields THREE slashes, so the file is
+// created UNDER the working directory and a stray ./var/data/ tree appears.
+// Concatenate onto 'sqlite:///' instead.
 $db = Database::create('postgres://localhost:5432/mydb', username: 'user', password: 'pass');
 $db = Database::create('mysql://localhost:3306/mydb', username: 'root', password: 'secret');
 $db = Database::create('mssql://localhost:1433/mydb', username: 'sa', password: 'pass');
@@ -270,7 +278,9 @@ connection throws a clear error. `bindDatabase` is the only binder — there is 
 use Tina4\DatabaseUrl;
 
 $url = new DatabaseUrl('postgres://user:pass@host:5432/mydb');
-$url->scheme;    // 'postgres'
+$url->engine;    // 'postgres' — the CANONICAL engine, not the raw scheme.
+                 // There is no ->scheme property; a scheme alias such as
+                 // 'postgresql' or 'pgsql' resolves to the engine 'postgres'.
 $url->host;      // 'host'
 $url->port;      // 5432
 $url->database;  // 'mydb'

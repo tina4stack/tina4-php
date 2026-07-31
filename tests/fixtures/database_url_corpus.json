@@ -18,14 +18,12 @@
     "It round-trips, which is what makes it safe to put in a log line - the only",
     "form of a connection URL allowed in a log or an error message."
   ],
-
   "default_ports": {
     "postgres": 5432,
     "mysql": 3306,
     "mssql": 1433,
     "firebird": 3050
   },
-
   "_alias_note": [
     "sqlite3 IS an accepted alias and normalises to the `sqlite` engine (owner",
     "decision, 2026-07-30). The driver is literally named sqlite3 in every",
@@ -40,137 +38,214 @@
     "exposes. tina4-php/CLAUDE.md still lists sqlite3 and pgsql as 'removed'; both",
     "claims are now wrong and the page needs correcting."
   ],
-
   "aliases": {
     "postgresql": "postgres",
     "pgsql": "postgres",
     "sqlserver": "mssql",
     "sqlite3": "sqlite"
   },
-
   "cases": [
     {
       "name": "sqlite_file_url_populates_database",
       "url": "sqlite:///app.db",
-      "engine": "sqlite", "host": null, "port": null,
-      "database": "app.db", "username": null, "password": null,
+      "engine": "sqlite",
+      "host": null,
+      "port": null,
+      "database": "app.db",
+      "username": null,
+      "password": null,
       "safe": "sqlite:///app.db"
     },
     {
       "name": "sqlite_absolute_file",
       "url": "sqlite:////var/data/app.db",
-      "engine": "sqlite", "host": null, "port": null,
-      "database": "/var/data/app.db", "username": null, "password": null,
+      "engine": "sqlite",
+      "host": null,
+      "port": null,
+      "database": "/var/data/app.db",
+      "username": null,
+      "password": null,
       "safe": "sqlite:////var/data/app.db"
+    },
+    {
+      "name": "sqlite_three_slashes_with_an_absolute_looking_path_is_still_relative",
+      "_why": "THE FOOTGUN, pinned deliberately. `sqlite://` + an absolute path yields THREE slashes, which is the RELATIVE form, so the file is created under the working directory and a stray tree like ./var/data/ appears. This is the SQLAlchemy convention and it is correct - four slashes is absolute. Do NOT 'fix' this case; the spelling for an absolute path is sqlite:/// + /abs/path.",
+      "url": "sqlite:///var/data/app.db",
+      "engine": "sqlite",
+      "host": null,
+      "port": null,
+      "database": "var/data/app.db",
+      "username": null,
+      "password": null,
+      "safe": "sqlite:///var/data/app.db"
     },
     {
       "name": "sqlite_memory_short_form",
       "url": "sqlite::memory:",
-      "engine": "sqlite", "host": null, "port": null,
-      "database": ":memory:", "username": null, "password": null,
+      "engine": "sqlite",
+      "host": null,
+      "port": null,
+      "database": ":memory:",
+      "username": null,
+      "password": null,
       "safe": "sqlite:///:memory:"
     },
     {
       "name": "sqlite_memory_path_form",
       "url": "sqlite:///:memory:",
-      "engine": "sqlite", "host": null, "port": null,
-      "database": ":memory:", "username": null, "password": null,
+      "engine": "sqlite",
+      "host": null,
+      "port": null,
+      "database": ":memory:",
+      "username": null,
+      "password": null,
       "safe": "sqlite:///:memory:"
     },
     {
       "name": "postgres_full_credentials_and_port",
       "url": "postgres://user:pass@localhost:5432/mydb",
-      "engine": "postgres", "host": "localhost", "port": 5432,
-      "database": "mydb", "username": "user", "password": "pass",
+      "engine": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "mydb",
+      "username": "user",
+      "password": "pass",
       "safe": "postgres://user:***@localhost:5432/mydb"
     },
     {
       "name": "a_url_without_a_port_gets_the_engine_default",
       "url": "postgresql://localhost/mydb",
-      "engine": "postgres", "host": "localhost", "port": 5432,
-      "database": "mydb", "username": null, "password": null,
+      "engine": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "mydb",
+      "username": null,
+      "password": null,
       "safe": "postgres://localhost:5432/mydb"
     },
     {
       "name": "pgsql_alias_resolves_to_postgres",
       "url": "pgsql://localhost:5432/mydb",
-      "engine": "postgres", "host": "localhost", "port": 5432,
-      "database": "mydb", "username": null, "password": null,
+      "engine": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "mydb",
+      "username": null,
+      "password": null,
       "safe": "postgres://localhost:5432/mydb"
     },
     {
       "name": "mysql_full",
       "url": "mysql://root:secret@localhost:3306/db",
-      "engine": "mysql", "host": "localhost", "port": 3306,
-      "database": "db", "username": "root", "password": "secret",
+      "engine": "mysql",
+      "host": "localhost",
+      "port": 3306,
+      "database": "db",
+      "username": "root",
+      "password": "secret",
       "safe": "mysql://root:***@localhost:3306/db"
     },
     {
       "name": "mysql_default_port",
       "url": "mysql://localhost/db",
-      "engine": "mysql", "host": "localhost", "port": 3306,
-      "database": "db", "username": null, "password": null,
+      "engine": "mysql",
+      "host": "localhost",
+      "port": 3306,
+      "database": "db",
+      "username": null,
+      "password": null,
       "safe": "mysql://localhost:3306/db"
     },
     {
       "name": "mssql_full",
       "url": "mssql://sa:pw@localhost:1433/db",
-      "engine": "mssql", "host": "localhost", "port": 1433,
-      "database": "db", "username": "sa", "password": "pw",
+      "engine": "mssql",
+      "host": "localhost",
+      "port": 1433,
+      "database": "db",
+      "username": "sa",
+      "password": "pw",
       "safe": "mssql://sa:***@localhost:1433/db"
     },
     {
       "name": "sqlserver_alias_resolves_to_mssql",
       "url": "sqlserver://localhost/db",
-      "engine": "mssql", "host": "localhost", "port": 1433,
-      "database": "db", "username": null, "password": null,
+      "engine": "mssql",
+      "host": "localhost",
+      "port": 1433,
+      "database": "db",
+      "username": null,
+      "password": null,
       "safe": "mssql://localhost:1433/db"
     },
     {
       "name": "firebird_double_slash_yields_the_agreed_absolute_path",
       "_note": "D3, settled 2026-07-30 against live Firebird 5.0.4 on the .99 host. The driver accepts one OR two leading slashes and rejects a relative path outright; exactly one is what the user wrote and the only form that is true as a standalone value. PHP used to eat both slashes, Node kept both.",
       "url": "firebird://localhost:3050//var/lib/firebird/data/tina4test.fdb",
-      "engine": "firebird", "host": "localhost", "port": 3050,
-      "database": "/var/lib/firebird/data/tina4test.fdb", "username": null, "password": null,
+      "engine": "firebird",
+      "host": "localhost",
+      "port": 3050,
+      "database": "/var/lib/firebird/data/tina4test.fdb",
+      "username": null,
+      "password": null,
       "safe": "firebird://localhost:3050//var/lib/firebird/data/tina4test.fdb"
     },
     {
       "name": "firebird_relative_path_stays_relative",
       "url": "firebird://localhost:3050/data/app.fdb",
-      "engine": "firebird", "host": "localhost", "port": 3050,
-      "database": "data/app.fdb", "username": null, "password": null,
+      "engine": "firebird",
+      "host": "localhost",
+      "port": 3050,
+      "database": "data/app.fdb",
+      "username": null,
+      "password": null,
       "safe": "firebird://localhost:3050/data/app.fdb"
     },
     {
       "name": "firebird_default_port",
       "url": "firebird://localhost//var/lib/app.fdb",
-      "engine": "firebird", "host": "localhost", "port": 3050,
-      "database": "/var/lib/app.fdb", "username": null, "password": null,
+      "engine": "firebird",
+      "host": "localhost",
+      "port": 3050,
+      "database": "/var/lib/app.fdb",
+      "username": null,
+      "password": null,
       "safe": "firebird://localhost:3050//var/lib/app.fdb"
     },
     {
       "name": "percent_encoded_password_is_decoded",
       "url": "postgres://u:p%40ss@localhost:5432/db",
-      "engine": "postgres", "host": "localhost", "port": 5432,
-      "database": "db", "username": "u", "password": "p@ss",
+      "engine": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "db",
+      "username": "u",
+      "password": "p@ss",
       "safe": "postgres://u:***@localhost:5432/db"
     },
     {
       "name": "percent_encoded_username_is_decoded",
       "url": "postgres://user%40corp:pw@localhost:5432/db",
-      "engine": "postgres", "host": "localhost", "port": 5432,
-      "database": "db", "username": "user@corp", "password": "pw",
+      "engine": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "db",
+      "username": "user@corp",
+      "password": "pw",
       "safe": "postgres://user@corp:***@localhost:5432/db"
     },
     {
       "name": "username_without_a_password",
       "url": "postgres://readonly@localhost:5432/db",
-      "engine": "postgres", "host": "localhost", "port": 5432,
-      "database": "db", "username": "readonly", "password": null,
+      "engine": "postgres",
+      "host": "localhost",
+      "port": 5432,
+      "database": "db",
+      "username": "readonly",
+      "password": null,
       "safe": "postgres://readonly@localhost:5432/db"
     }
   ],
-
   "errors": [
     {
       "name": "an_unknown_scheme_raises_a_named_error",
