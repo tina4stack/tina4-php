@@ -289,8 +289,14 @@ class App
         // Register the Frond live-block re-render endpoint (always on)
         $this->registerLiveEndpoint();
 
-        // Register signal handlers for graceful shutdown
-        $this->registerSignalHandlers();
+        // NOTE: no signal handlers are registered here. Server::start() owns
+        // SIGTERM/SIGINT (PHP keeps exactly ONE handler per signal, and the
+        // server registers last, so a pair installed here would be replaced and
+        // never run). Worse, on any path that never reaches the event loop
+        // nothing calls pcntl_signal_dispatch(), so an installed-but-never-
+        // dispatched handler leaves the process IGNORING SIGTERM entirely —
+        // `kill` and `docker stop` become no-ops. run() wires shutdown() onto
+        // the process exit path instead, which fires on every exit route.
     }
 
     public function __destruct()
@@ -1264,6 +1270,15 @@ HTML;
 
         $suppressBanner = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SUPPRESS', 'false'));
 
+        // Run the app's own graceful shutdown (and every onShutdown() callback)
+        // on the way out. The server owns the signal handlers, so this is what
+        // makes a trapped SIGTERM actually reach shutdown() — and it fires on
+        // every exit route: the loop returning, the shutdown timeout's exit(0),
+        // and a fatal error.
+        register_shutdown_function(function (): void {
+            $this->shutdown();
+        });
+
         try {
             $server = new Server($host, $port);
             // Keep the reference so stopBackground() can reach the live loop.
@@ -1475,26 +1490,33 @@ HTML;
     }
 
     /**
-     * Register POSIX signal handlers for graceful shutdown.
+     * Close the shared database connection opened for this process.
+     *
+     * Called from the server's shutdown path so the engine sees a clean
+     * disconnect instead of reaping an abandoned session. Resilient by design:
+     * a driver that fails to close is logged and never aborts the shutdown, and
+     * a process that never opened a connection is a silent no-op. Safe to call
+     * twice.
+     *
+     * Does NOT go through getDatabase() — that would OPEN a connection from
+     * TINA4_DATABASE_URL just to close it.
      */
-    private function registerSignalHandlers(): void
+    public static function closeDatabase(): void
     {
-        if (!function_exists('pcntl_signal')) {
-            return;
+        $connections = [];
+        foreach ([self::$database, ORM::getGlobalDb()] as $connection) {
+            if ($connection !== null && !in_array($connection, $connections, true)) {
+                $connections[] = $connection;
+            }
         }
+        self::$database = null;
 
-        if (defined('SIGTERM')) {
-            pcntl_signal(SIGTERM, function () {
-                Log::info('Received SIGTERM');
-                $this->shutdown();
-            });
-        }
-
-        if (defined('SIGINT')) {
-            pcntl_signal(SIGINT, function () {
-                Log::info('Received SIGINT');
-                $this->shutdown();
-            });
+        foreach ($connections as $connection) {
+            try {
+                $connection->close();
+            } catch (\Throwable $e) {
+                Log::warning('Could not close the database on shutdown: ' . $e->getMessage());
+            }
         }
     }
 
