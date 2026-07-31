@@ -28,6 +28,16 @@ class Server
      */
     private const WRITE_STALL_TIMEOUT = 5;
 
+    /**
+     * Seconds a graceful shutdown may take before whatever is still in flight
+     * is force-closed, when TINA4_SHUTDOWN_TIMEOUT says nothing usable.
+     *
+     * 30 is the same number as Kubernetes' default terminationGracePeriodSeconds
+     * and gunicorn's graceful_timeout, and is the same default under the same
+     * env var name in all four Tina4 frameworks.
+     */
+    private const DEFAULT_SHUTDOWN_TIMEOUT = 30;
+
     /** @var resource|null Server socket */
     private $socket = null;
 
@@ -83,6 +93,12 @@ class Server
 
     /** @var bool Server running flag */
     private bool $running = false;
+
+    /** @var bool True once a shutdown has begun — makes stop() idempotent under a repeated signal */
+    private bool $shuttingDown = false;
+
+    /** @var int Seconds the current drain may take, resolved from TINA4_SHUTDOWN_TIMEOUT */
+    private int $shutdownTimeout = self::DEFAULT_SHUTDOWN_TIMEOUT;
 
     /** @var bool Cached debug mode flag (avoid parsing env on every request) */
     private bool $isDebug = false;
@@ -300,16 +316,38 @@ class Server
             $this->detectFileChanges();
         }
 
-        // Register signal handlers for graceful shutdown
+        // Register signal handlers for graceful shutdown.
+        //
+        // SIGHUP is deliberately NOT trapped: the Rust CLI owns file watching
+        // and production logs go to stdout, so neither Puma's log-reopen nor
+        // gunicorn's config-reload use for SIGHUP is a Tina4 need.
         if (function_exists('pcntl_signal')) {
+            // Deliver the handler at the next VM instruction boundary instead of
+            // at the top of the accept loop. That is what lets the LISTENING
+            // socket close WHILE a slow request is still being served: with
+            // top-of-loop dispatch the listener stayed open for the rest of the
+            // in-flight request, so every connection arriving in that window was
+            // accepted into the kernel backlog and then RESET when the socket
+            // finally closed — a transport error the client cannot tell apart
+            // from a network fault. The request handler itself consults neither
+            // flag, so it still runs to completion.
+            if (function_exists('pcntl_async_signals')) {
+                pcntl_async_signals(true);
+            }
             if (defined('SIGTERM')) {
                 pcntl_signal(SIGTERM, function () {
-                    $this->stop();
+                    $this->stop('SIGTERM');
                 });
             }
             if (defined('SIGINT')) {
                 pcntl_signal(SIGINT, function () {
-                    $this->stop();
+                    $this->stop('SIGINT');
+                });
+            }
+            // Armed by stop() to bound the drain — see forceShutdown().
+            if (defined('SIGALRM')) {
+                pcntl_signal(SIGALRM, function () {
+                    $this->forceShutdown();
                 });
             }
         }
@@ -361,6 +399,12 @@ class Server
             }
 
             foreach ($read as $socket) {
+                // A shutdown signal closes the listeners mid-sweep (see stop()),
+                // and a handler can close its own client, so a handle chosen by
+                // stream_select may already be gone by the time we reach it.
+                if (!is_resource($socket)) {
+                    continue;
+                }
                 if ($socket === $this->socket) {
                     // Accept new connection
                     $client = @stream_socket_accept($this->socket, 0, $peerName);
@@ -406,11 +450,112 @@ class Server
     }
 
     /**
-     * Stop the server gracefully.
+     * Begin a graceful shutdown.
+     *
+     * Stops ACCEPTING first: the listening sockets close here rather than at the
+     * end in cleanup(), so a connection arriving after this point gets a clean
+     * CONNECTION REFUSED instead of being accepted into the kernel backlog and
+     * then reset. Sockets that were already accepted are untouched, so a request
+     * being served runs to completion and writes its whole response.
+     *
+     * The drain that follows is bounded by TINA4_SHUTDOWN_TIMEOUT seconds via
+     * SIGALRM — see forceShutdown().
+     *
+     * Idempotent: a second signal while a shutdown is already under way is a
+     * no-op, so an impatient `kill` cannot re-arm the alarm or double-close.
+     *
+     * @param string $reason What asked for the shutdown, named in the log line.
      */
-    public function stop(): void
+    public function stop(string $reason = 'stop()'): void
     {
+        if ($this->shuttingDown) {
+            return;
+        }
+        $this->shuttingDown = true;
         $this->running = false;
+        $this->shutdownTimeout = self::resolveShutdownTimeout();
+
+        $this->closeListeners();
+
+        Log::info(sprintf(
+            'Graceful shutdown started (%s) — not accepting new connections, draining for up to %ds',
+            $reason,
+            $this->shutdownTimeout
+        ));
+
+        if (function_exists('pcntl_alarm') && defined('SIGALRM')) {
+            pcntl_alarm($this->shutdownTimeout);
+        }
+    }
+
+    /**
+     * Close the listening sockets so the OS stops accepting on our ports.
+     *
+     * Split out of cleanup() because it has to happen the instant a shutdown
+     * signal is handled, while requests are still draining. Idempotent —
+     * cleanup() calls it again and finds nothing left to close.
+     */
+    private function closeListeners(): void
+    {
+        if ($this->socket !== null) {
+            @fclose($this->socket);
+            $this->socket = null;
+        }
+        if ($this->aiSocket !== null) {
+            @fclose($this->aiSocket);
+            $this->aiSocket = null;
+        }
+    }
+
+    /**
+     * Force-close whatever is still in flight when the drain runs out of time.
+     *
+     * Runs from the SIGALRM handler armed by stop(), so it fires even while a
+     * request handler is still blocking: PHP serves a request synchronously, so
+     * there is no point at which a running handler could be asked to stop
+     * cooperatively. Exits 0 — the signal was handled, not fatal.
+     */
+    private function forceShutdown(): void
+    {
+        Log::warning(sprintf(
+            'Graceful shutdown exceeded TINA4_SHUTDOWN_TIMEOUT=%ds — force-closing %d connection(s) still open',
+            $this->shutdownTimeout,
+            count($this->clients)
+        ));
+
+        $this->cleanup();
+        exit(0);
+    }
+
+    /**
+     * Seconds the drain may take, read from TINA4_SHUTDOWN_TIMEOUT.
+     *
+     * A value that is not a positive whole number of seconds is a configuration
+     * mistake, so it warns and falls back to the default rather than silently
+     * becoming 0 — pcntl_alarm(0) CANCELS the alarm, which would leave the drain
+     * unbounded, the exact opposite of what the setting asked for.
+     *
+     * @return int Seconds, always >= 1.
+     */
+    private static function resolveShutdownTimeout(): int
+    {
+        $configured = DotEnv::getEnv('TINA4_SHUTDOWN_TIMEOUT');
+        if ($configured === null || trim($configured) === '') {
+            return self::DEFAULT_SHUTDOWN_TIMEOUT;
+        }
+
+        $seconds = filter_var(trim($configured), FILTER_VALIDATE_INT);
+        if ($seconds === false || $seconds < 1) {
+            Log::warning(sprintf(
+                'TINA4_SHUTDOWN_TIMEOUT=%s is not a positive number of seconds — using %ds',
+                $configured,
+                self::DEFAULT_SHUTDOWN_TIMEOUT
+            ));
+
+            return self::DEFAULT_SHUTDOWN_TIMEOUT;
+        }
+
+        return $seconds;
     }
 
     /**
@@ -1126,13 +1271,7 @@ class Server
             }
         }
         foreach ($stale as $id) {
-            $closeFrame = WebSocket::buildFrame(
-                pack('n', WebSocket::CLOSE_GOING_AWAY) . 'idle timeout',
-                WebSocket::OP_CLOSE
-            );
-            if (isset($this->wsClients[$id])) {
-                @fwrite($this->wsClients[$id]['socket'], $closeFrame);
-            }
+            $this->sendWebSocketGoingAway($id, 'idle timeout');
             $this->removeWebSocketClient($id);
         }
         if (!empty($stale)) {
@@ -1236,6 +1375,30 @@ class Server
             }
         }
         return $connections;
+    }
+
+    /**
+     * Send RFC 6455 close code 1001 ("going away") to a live WebSocket client.
+     *
+     * The peer then knows the server is leaving and can reconnect deliberately,
+     * instead of seeing the socket vanish as an abrupt transport error. Best
+     * effort by design — a peer that has already gone must never abort the sweep
+     * that is closing it.
+     *
+     * @param string $connectionId Connection to notify.
+     * @param string $reason       Close reason carried in the frame payload.
+     */
+    private function sendWebSocketGoingAway(string $connectionId, string $reason): void
+    {
+        $socket = $this->wsClients[$connectionId]['socket'] ?? null;
+        if (!is_resource($socket)) {
+            return;
+        }
+
+        @fwrite($socket, WebSocket::buildFrame(
+            pack('n', WebSocket::CLOSE_GOING_AWAY) . $reason,
+            WebSocket::OP_CLOSE
+        ));
     }
 
     /**
@@ -1565,35 +1728,48 @@ class Server
 
     /**
      * Clean up all connections and close the server socket.
+     *
+     * Safe to call after stop() has already closed the listeners, and safe to
+     * call twice — every step is guarded, so the timeout path (forceShutdown)
+     * and the normal end-of-loop path share it.
      */
     private function cleanup(): void
     {
-        // Close all WebSocket clients
+        // The drain is over; a pending alarm must not fire into a process that
+        // has already finished shutting down.
+        if (function_exists('pcntl_alarm')) {
+            pcntl_alarm(0);
+        }
+
+        // Tell every live WebSocket it is going away (RFC 6455 close code 1001)
+        // before its socket disappears.
         foreach (array_keys($this->wsClients) as $id) {
+            $this->sendWebSocketGoingAway($id, 'server shutting down');
             $this->removeWebSocketClient($id);
         }
 
         // Close all HTTP clients
         foreach ($this->clients as $client) {
-            @fclose($client);
+            if (is_resource($client)) {
+                @fclose($client);
+            }
         }
         $this->clients = [];
         $this->buffers = [];
+        $this->peerNames = [];
+        $this->aiPortConnections = [];
 
-        // Close server socket
-        if ($this->socket) {
-            @fclose($this->socket);
-            $this->socket = null;
-        }
-
-        // Close AI port socket
-        if ($this->aiSocket) {
-            @fclose($this->aiSocket);
-            $this->aiSocket = null;
-        }
+        // Normally already closed by stop(); this covers the paths that reach
+        // cleanup() without a signal.
+        $this->closeListeners();
 
         // Tear down the WS backplane subscription, if any.
         $this->wsBackplane?->close();
+
+        // Release the database connection so the engine sees a clean
+        // disconnect instead of reaping an abandoned session. Resilient — a
+        // driver that fails to close is logged, never fatal.
+        App::closeDatabase();
 
         if (self::$instance === $this) {
             self::$instance = null;
