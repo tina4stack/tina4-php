@@ -199,13 +199,6 @@ final class TestServer
     /** Reserve a free localhost TCP port. */
     private static function freePort(): int
     {
-        $sock = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        if ($sock === false) {
-            throw new \RuntimeException("could not reserve a port: {$errstr}");
-        }
-        $name = (string)stream_socket_get_name($sock, false);
-        fclose($sock);
-
-        return (int)substr($name, strrpos($name, ':') + 1);
+        return \FreePort::get();
     }
 }

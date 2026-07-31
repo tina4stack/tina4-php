@@ -57,7 +57,7 @@ class Issue33MalformedPathTest extends TestCase
         \$app->handle();
         PHP);
 
-        $this->port = 7300 + (getmypid() % 600);
+        $this->port = \FreePort::get();
         $descriptors = [
             0 => ['pipe', 'r'],
             1 => ['file', '/dev/null', 'w'],

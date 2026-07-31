@@ -66,14 +66,11 @@ class WebSapiEntryTest extends TestCase
     /** Pick a port nothing is listening on. */
     private function freePort(): int
     {
-        for ($port = 7960; $port < 8010; $port++) {
-            $probe = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.3);
-            if ($probe === false) {
-                return $port;
-            }
-            fclose($probe);
-        }
-        $this->markTestSkipped('no free port in 7960-8010 for the php -S probe');
+        // Was a scan of 7960-8010 using fsockopen: a refused connection only
+        // proves nothing was LISTENING at that instant, and the port can be
+        // taken between the probe and the real bind. Asking the OS is both
+        // simpler and stronger, and it cannot run out and skip the test.
+        return \FreePort::get();
     }
 
     /**

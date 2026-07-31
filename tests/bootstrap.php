@@ -31,4 +31,5 @@ require __DIR__ . '/../vendor/autoload.php';
 // releases a Tina4\App's global error/exception handlers inside a test boundary.
 require __DIR__ . '/PgTestEnv.php';
 require __DIR__ . '/AppTestSupport.php';
+require __DIR__ . '/FreePort.php';
 require __DIR__ . '/TestServer.php';

@@ -189,10 +189,7 @@ class ModelDiscoveryTest extends TestCase
     /** Reserve a free localhost TCP port by binding :0 and reading it back. */
     private static function freePort(): int
     {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        $name = stream_socket_get_name($socket, false);
-        fclose($socket);
-        return (int)substr($name, strrpos($name, ':') + 1);
+        return \FreePort::get();
     }
 
     /**

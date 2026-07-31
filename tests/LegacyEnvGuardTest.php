@@ -299,7 +299,7 @@ class LegacyEnvGuardTest extends TestCase
         echo 'REACHED_AFTER_GUARD'; // must never run
         PHP);
 
-        $port = 7100 + (getmypid() % 800);
+        $port = \FreePort::get();
         $descriptors = [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],

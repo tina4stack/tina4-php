@@ -71,11 +71,7 @@ class BackgroundOverlapTest extends TestCase
     /** Reserve a free localhost TCP port. */
     private static function freePort(): int
     {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        $name = stream_socket_get_name($socket, false);
-        $port = (int)substr($name, strrpos($name, ':') + 1);
-        fclose($socket);
-        return $port;
+        return \FreePort::get();
     }
 
     /**
