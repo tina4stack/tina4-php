@@ -13,7 +13,7 @@ class CorsTest extends TestCase
 {
     public function testDefaultIsDeny(): void
     {
-        // BREAKING (ADR-0014): the default was '*' (allow every origin). It is
+        // BREAKING (ADR-0018): the default was '*' (allow every origin). It is
         // now empty = deny, and '*' has to be asked for explicitly.
         $cors = new CorsMiddleware();
 

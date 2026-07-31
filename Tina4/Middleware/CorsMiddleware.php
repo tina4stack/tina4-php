@@ -23,7 +23,7 @@ use Tina4\Response;
  *   TINA4_CORS_MAX_AGE  — preflight cache duration in seconds (default: "86400")
  *   TINA4_CORS_CREDENTIALS — allow credentials (default: "false"); never sent with a wildcard origin
  *
- * DENY BY DEFAULT (ADR-0014). With TINA4_CORS_ORIGINS unset, NO
+ * DENY BY DEFAULT (ADR-0018). With TINA4_CORS_ORIGINS unset, NO
  * Access-Control-Allow-Origin is emitted and the browser's own CORS check
  * blocks the cross-origin request. "*" still works, it just has to be asked
  * for. Breaking change from the old permissive default.
@@ -71,7 +71,7 @@ class CorsMiddleware
         ?int $maxAge = null,
         ?bool $credentials = null,
     ) {
-        // Default is EMPTY, not "*" — deny by default (ADR-0014).
+        // Default is EMPTY, not "*" — deny by default (ADR-0018).
         $this->allowedOrigins = $origins ?? DotEnv::getEnv('TINA4_CORS_ORIGINS', '');
         $this->allowedMethods = $methods ?? DotEnv::getEnv('TINA4_CORS_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         $this->allowedHeaders = $headers ?? DotEnv::getEnv('TINA4_CORS_HEADERS', 'Content-Type,Authorization,X-Request-ID');
