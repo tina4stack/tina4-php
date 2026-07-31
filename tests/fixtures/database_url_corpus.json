@@ -80,6 +80,18 @@
       "safe": "sqlite:///var/data/app.db"
     },
     {
+      "name": "sqlite3_alias_strips_the_scheme_not_just_sqlite",
+      "_why": "`sqlite3:` is a documented alias for `sqlite:`. Every framework's CONNECTION path used to test only `sqlite:`, so `sqlite3:app.db` fell past the strip and the whole URL became the FILENAME - a real file called 'sqlite3:app.db'. A colon is illegal in a Windows filename, so the documented alias was unusable there. Node was the only one correct.",
+      "url": "sqlite3:app.db",
+      "engine": "sqlite",
+      "host": null,
+      "port": null,
+      "database": "app.db",
+      "username": null,
+      "password": null,
+      "safe": "sqlite:///app.db"
+    },
+    {
       "name": "sqlite_memory_short_form",
       "url": "sqlite::memory:",
       "engine": "sqlite",

@@ -1819,6 +1819,21 @@ class Database implements DatabaseAdapter
      */
     private static function createAdapter(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): DatabaseAdapter
     {
+        // `sqlite3:` is a documented alias for `sqlite:`. Normalise it FIRST:
+        // the guards below all test `sqlite:`, which is FALSE for `sqlite3:`,
+        // so the URL fell straight past this whole block and was taken as a
+        // literal filename - producing a database file named "sqlite3:app.db".
+        // Not merely ugly: a colon is an illegal filename character on Windows,
+        // so the documented alias was unusable there.
+        //
+        // DatabaseUrl::parse already normalises it (DatabaseUrl.php:91). This
+        // method re-implements the strip rather than calling it, which is
+        // exactly how the two drifted apart. Collapsing them is filed as
+        // follow-on work.
+        if (str_starts_with($url, 'sqlite3:')) {
+            $url = 'sqlite:' . substr($url, 8);
+        }
+
         // Handle SQLite special cases
         if ($url === ':memory:' || $url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
             return self::makeSqlite(':memory:', $autoCommit);
