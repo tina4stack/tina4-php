@@ -11,9 +11,20 @@ use Tina4\Middleware\CorsMiddleware;
 
 class CorsTest extends TestCase
 {
-    public function testDefaultWildcardOrigin(): void
+    public function testDefaultIsDeny(): void
     {
+        // BREAKING (ADR-0018): the default was '*' (allow every origin). It is
+        // now empty = deny, and '*' has to be asked for explicitly.
         $cors = new CorsMiddleware();
+
+        $this->assertFalse($cors->isConfigured());
+        $this->assertSame([], $cors->getHeaders('http://example.com'));
+    }
+
+    public function testExplicitWildcardOrigin(): void
+    {
+        // The capability is unchanged — only the DEFAULT moved.
+        $cors = new CorsMiddleware(origins: '*');
 
         $headers = $cors->getHeaders('http://example.com');
 
@@ -22,7 +33,7 @@ class CorsTest extends TestCase
 
     public function testDefaultAllowedMethods(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
 
         $headers = $cors->getHeaders();
 
@@ -31,7 +42,7 @@ class CorsTest extends TestCase
 
     public function testDefaultAllowedHeaders(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
 
         $headers = $cors->getHeaders();
 
@@ -58,7 +69,7 @@ class CorsTest extends TestCase
 
     public function testPreflightDetection(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
 
         $this->assertTrue($cors->isPreflight('OPTIONS'));
         $this->assertTrue($cors->isPreflight('options'));
@@ -68,7 +79,7 @@ class CorsTest extends TestCase
 
     public function testHandleReturnsHeadersAndPreflightFlag(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
 
         $result = $cors->handle('OPTIONS', 'http://example.com');
 
@@ -78,7 +89,7 @@ class CorsTest extends TestCase
 
     public function testHandleNonPreflight(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
 
         $result = $cors->handle('GET', 'http://example.com');
 
@@ -88,7 +99,7 @@ class CorsTest extends TestCase
 
     public function testMaxAgeHeader(): void
     {
-        $cors = new CorsMiddleware(maxAge: 3600);
+        $cors = new CorsMiddleware(origins: '*', maxAge: 3600);
 
         $headers = $cors->getHeaders();
 
@@ -107,7 +118,7 @@ class CorsTest extends TestCase
 
     public function testNoVaryHeaderForWildcard(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
 
         $headers = $cors->getHeaders('http://example.com');
 
@@ -116,14 +127,14 @@ class CorsTest extends TestCase
 
     public function testCustomMethods(): void
     {
-        $cors = new CorsMiddleware(methods: 'GET,POST');
+        $cors = new CorsMiddleware(origins: '*', methods: 'GET,POST');
 
         $this->assertEquals('GET,POST', $cors->getAllowedMethods());
     }
 
     public function testCustomHeaders(): void
     {
-        $cors = new CorsMiddleware(headers: 'X-Custom-Header');
+        $cors = new CorsMiddleware(origins: '*', headers: 'X-Custom-Header');
 
         $this->assertEquals('X-Custom-Header', $cors->getAllowedHeaders());
     }
@@ -158,7 +169,7 @@ class CorsTest extends TestCase
 
     public function testNoCredentialsHeaderForWildcard(): void
     {
-        $cors = new CorsMiddleware(credentials: true);
+        $cors = new CorsMiddleware(origins: '*', credentials: true);
 
         $headers = $cors->getHeaders('http://example.com');
 
@@ -183,7 +194,7 @@ class CorsTest extends TestCase
 
     public function testPreflightCaseInsensitive(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
         $this->assertTrue($cors->isPreflight('OPTIONS'));
         $this->assertTrue($cors->isPreflight('Options'));
         $this->assertTrue($cors->isPreflight('options'));
@@ -193,7 +204,7 @@ class CorsTest extends TestCase
 
     public function testDefaultMaxAge(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
         $headers = $cors->getHeaders();
         $this->assertArrayHasKey('Access-Control-Max-Age', $headers);
     }
@@ -202,7 +213,7 @@ class CorsTest extends TestCase
 
     public function testMaxAgeZero(): void
     {
-        $cors = new CorsMiddleware(maxAge: 0);
+        $cors = new CorsMiddleware(origins: '*', maxAge: 0);
         $headers = $cors->getHeaders();
         $this->assertEquals('0', $headers['Access-Control-Max-Age']);
     }
@@ -211,7 +222,7 @@ class CorsTest extends TestCase
 
     public function testDefaultHeadersIncludeXRequestId(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
         $headers = $cors->getHeaders();
         $this->assertStringContainsString('X-Request-ID', $headers['Access-Control-Allow-Headers']);
     }
@@ -220,7 +231,7 @@ class CorsTest extends TestCase
 
     public function testHandlePreflightStructure(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
         $result = $cors->handle('OPTIONS', 'http://example.com');
 
         $this->assertArrayHasKey('preflight', $result);
@@ -235,7 +246,7 @@ class CorsTest extends TestCase
 
     public function testHandleNonPreflightIncludesOrigin(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
         $result = $cors->handle('POST', 'http://example.com');
 
         $this->assertFalse($result['preflight']);
@@ -246,7 +257,7 @@ class CorsTest extends TestCase
 
     public function testWildcardOriginWithAnyRequestOrigin(): void
     {
-        $cors = new CorsMiddleware();
+        $cors = new CorsMiddleware(origins: '*');
         $this->assertEquals('*', $cors->getHeaders('https://anything.example.com')['Access-Control-Allow-Origin']);
         $this->assertEquals('*', $cors->getHeaders('http://localhost:3000')['Access-Control-Allow-Origin']);
     }

@@ -41,12 +41,20 @@ class CorsIntegrationTest extends TestCase
 {
     protected function setUp(): void
     {
+        // ADR-0018 made the CORS default deny. This suite is about CORS POLICY
+        // headers, so it now declares the policy it used to inherit from the old
+        // permissive default. No assertion below was changed.
+        putenv('TINA4_CORS_ORIGINS=*');
+        $_ENV['TINA4_CORS_ORIGINS'] = '*';
+        \Tina4\Middleware\CorsMiddleware::resetWarnings();
         Router::clear();
         Middleware::reset();
     }
 
     protected function tearDown(): void
     {
+        putenv('TINA4_CORS_ORIGINS');
+        unset($_ENV['TINA4_CORS_ORIGINS']);
         Router::clear();
         Middleware::reset();
     }

@@ -320,10 +320,16 @@ class SmokeTest extends TestCase
 
     public function testCorsMiddleware(): void
     {
-        $cors = new CorsMiddleware();
+        // ADR-0018 made the CORS default deny. This asserts what getHeaders()
+        // EMITS for an allowed origin, which did not change, so it declares the
+        // wildcard policy it used to inherit from the old permissive default.
+        $cors = new CorsMiddleware(origins: '*');
 
         $headers = $cors->getHeaders('http://example.com');
         $this->assertSame('*', $headers['Access-Control-Allow-Origin']);
+
+        // ADR-0018: with NO policy configured, nothing is allowed.
+        $this->assertSame([], (new CorsMiddleware())->getHeaders('http://example.com'));
         $this->assertStringContainsString('GET', $headers['Access-Control-Allow-Methods']);
 
         $this->assertTrue($cors->isPreflight('OPTIONS'));
