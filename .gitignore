@@ -122,3 +122,9 @@ tests/logs/*.log
 /data/
 /nonexistent_path/
 .tina4/
+
+# Test/scratch artifacts. tmp/tina4-mx-php.db was COMMITTED, which made
+# SqliteAbsolutePathParityTest unpassable on Linux: the test asserts no
+# cwd-relative shadow directory was created, and on Linux sys_get_temp_dir()
+# is /tmp, so the first path segment it checks is exactly this directory.
+tmp/

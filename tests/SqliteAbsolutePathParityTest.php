@@ -28,6 +28,22 @@ class SqliteAbsolutePathParityTest extends TestCase
     /** @var string[] Absolute DB files created during a test, removed in tearDown. */
     private array $createdPaths = [];
 
+    /**
+     * Assert the cwd-relative shadow directory was not created by this test.
+     *
+     * @param bool   $existedBefore Whether the directory was already present
+     * @param string $path          Absolute path to the first cwd-relative segment
+     * @param string $message       Assertion message
+     */
+    private function assertDirectoryWasNotCreated(bool $existedBefore, string $path, string $message): void
+    {
+        if ($existedBefore) {
+            $this->addToAssertionCount(1);
+            return;
+        }
+        $this->assertDirectoryDoesNotExist($path, $message);
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->createdPaths as $path) {
@@ -54,6 +70,10 @@ class SqliteAbsolutePathParityTest extends TestCase
         $this->assertDirectoryExists($tmpDir);
 
         $absPath = $tmpDir . '/tina4_abs_' . uniqid('', true) . '.db';
+        // Snapshot BEFORE anything runs: the assertion below must catch a
+        // directory this test CREATED, not one that was already there.
+        $firstSegment = getcwd() . DIRECTORY_SEPARATOR . explode('/', ltrim($absPath, '/'))[0];
+        $firstSegmentExisted = is_dir($firstSegment);
         $this->createdPaths[] = $absPath;
 
         $url = 'sqlite:' . $absPath; // ONE leading slash after the scheme
@@ -82,8 +102,13 @@ class SqliteAbsolutePathParityTest extends TestCase
         // ...and NO cwd-relative shadow was created.
         $this->assertFileDoesNotExist($shadowPath, 'no cwd-relative shadow DB was created');
         // Defensive: the buggy path would also mkdir the first path segment under cwd.
-        $firstSegment = getcwd() . DIRECTORY_SEPARATOR . explode('/', ltrim($absPath, '/'))[0];
-        $this->assertDirectoryDoesNotExist($firstSegment, 'no cwd-relative shadow directory tree was created');
+        // Asserted only when the directory did NOT already exist: the segment
+        // is derived from sys_get_temp_dir() and can collide with a real repo
+        // directory. On Linux it is literally `tmp`, so a `<repo>/tmp` left by
+        // anything made this unpassable - while macOS (/var/folders/...) checks
+        // `<repo>/var` and stayed green. A test that can only pass on one
+        // platform is not a gate.
+        $this->assertDirectoryWasNotCreated($firstSegmentExisted, $firstSegment, 'no cwd-relative shadow directory tree was created');
 
         // Reopen the same absolute path and read the row back — data persisted.
         $reopen = new SQLite3Adapter((new DatabaseUrl($url))->database);
@@ -168,6 +193,10 @@ class SqliteAbsolutePathParityTest extends TestCase
     {
         $tmpDir = rtrim(sys_get_temp_dir(), '/');
         $absPath = $tmpDir . '/tina4_real_' . uniqid('', true) . '.db';
+        // Snapshot BEFORE anything runs: the assertion below must catch a
+        // directory this test CREATED, not one that was already there.
+        $firstSegment = getcwd() . DIRECTORY_SEPARATOR . explode('/', ltrim($absPath, '/'))[0];
+        $firstSegmentExisted = is_dir($firstSegment);
         $this->createdPaths[] = $absPath;
 
         // naive one-slash absolute, through the REAL Database constructor
@@ -175,8 +204,13 @@ class SqliteAbsolutePathParityTest extends TestCase
         $db->execute('CREATE TABLE r (id INTEGER PRIMARY KEY, v TEXT)');
         $db->execute("INSERT INTO r (v) VALUES ('real')");
         $this->assertFileExists($absPath, 'real Database() created the DB at the absolute path');
-        $firstSegment = getcwd() . DIRECTORY_SEPARATOR . explode('/', ltrim($absPath, '/'))[0];
-        $this->assertDirectoryDoesNotExist($firstSegment, 'no cwd-relative shadow from the real Database() path');
+        // Asserted only when the directory did NOT already exist: the segment
+        // is derived from sys_get_temp_dir() and can collide with a real repo
+        // directory. On Linux it is literally `tmp`, so a `<repo>/tmp` left by
+        // anything made this unpassable - while macOS (/var/folders/...) checks
+        // `<repo>/var` and stayed green. A test that can only pass on one
+        // platform is not a gate.
+        $this->assertDirectoryWasNotCreated($firstSegmentExisted, $firstSegment, 'no cwd-relative shadow from the real Database() path');
 
         // documented relative form must CONNECT (this threw before the createAdapter fix)
         $relRel = 'data/tina4_real_rel_' . uniqid('', true) . '.db';
