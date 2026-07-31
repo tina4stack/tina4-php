@@ -35,6 +35,7 @@ class GlobalAfterMiddlewareTest extends TestCase
         Middleware::reset();
         AfterStampMw::$ran = 0;
         PreMatchAfterStampMw::$ran = 0;
+        PreMatchAfterStampMw::$inFlight = 0;
     }
 
     protected function tearDown(): void
@@ -79,6 +80,30 @@ class GlobalAfterMiddlewareTest extends TestCase
         );
     }
 
+    /**
+     * The implication, asserted directly: a before/after pair must not leak.
+     *
+     * This is what made the bug serious rather than cosmetic in Node and
+     * Python - the imbalance grew by one per request, without bound, and
+     * nothing errored. Counting hook invocations alone would have missed it.
+     */
+    public function testAnAcquireReleasePairStaysBalanced(): void
+    {
+        Middleware::use(PreMatchAfterStampMw::class);
+        Router::get('/hello', fn($q, $s) => $s->json(['ok' => true]));
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->dispatch('GET', '/hello');
+        }
+
+        $this->assertSame(5, PreMatchAfterStampMw::$ran);
+        $this->assertSame(
+            0,
+            PreMatchAfterStampMw::$inFlight,
+            'acquire/release leaked ' . PreMatchAfterStampMw::$inFlight . ' slots over 5 requests'
+        );
+    }
+
     /** NEGATIVE: it must not fire when no route matched. */
     public function testAGlobalAfterHookDoesNotRunOnAnUnmatchedPath(): void
     {
@@ -111,9 +136,18 @@ class PreMatchAfterStampMw
 {
     public static bool $preMatch = true;
     public static int $ran = 0;
+    /** Acquired in before, released in after - the pair that leaked elsewhere. */
+    public static int $inFlight = 0;
+
+    public static function beforeAcquire($request, $response): array
+    {
+        self::$inFlight++;
+        return [$request, $response];
+    }
 
     public static function afterStamp($request, $response): array
     {
+        self::$inFlight--;
         self::$ran++;
         return [$request, $response];
     }
