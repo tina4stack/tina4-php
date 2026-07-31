@@ -23,6 +23,13 @@ use Tina4\Response;
  */
 class CorsMiddleware
 {
+    /**
+     * CORS runs BEFORE route matching so its headers survive a short-circuited
+     * 401/403. A browser shown a 401 without them reports a CORS error, and the
+     * real status never reaches the developer debugging it.
+     */
+    public static bool $preMatch = true;
+
     private readonly string $allowedOrigins;
     private readonly string $allowedMethods;
     private readonly string $allowedHeaders;

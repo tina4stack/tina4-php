@@ -751,22 +751,20 @@ class Router
             return $response->redirect($target, 301);
         }
 
-        // Run global middleware "before" hooks.
-        // CORS middleware runs first (separate pass) so CORS headers are always present —
-        // even on short-circuited 4xx responses. This is required by the CORS spec: browsers
-        // must see CORS headers on 401/403 responses or they report a CORS error instead.
-        $globalMiddleware = Middleware::getGlobal();
-        if (!empty($globalMiddleware)) {
-            $corsMiddleware = array_filter($globalMiddleware, fn($c) => is_a($c, \Tina4\Middleware\CorsMiddleware::class, true));
-            $otherMiddleware = array_filter($globalMiddleware, fn($c) => !is_a($c, \Tina4\Middleware\CorsMiddleware::class, true));
-
-            if (!empty($corsMiddleware)) {
-                [$request, $response] = Middleware::runBefore(array_values($corsMiddleware), $request, $response);
-            }
-
-            if (!empty($otherMiddleware)) {
-                [$request, $response] = Middleware::runBefore(array_values($otherMiddleware), $request, $response);
-            }
+        // PRE-MATCH global middleware: runs before a route is looked up, so its
+        // headers survive a short-circuited 401/403. CORS opts in with
+        // `public static bool $preMatch = true`.
+        //
+        // This REPLACES a hardcoded is_a(CorsMiddleware) check that ran the
+        // WHOLE global set before matching and singled CORS out by class name.
+        // Running everything pre-match only ever worked here because PHP's
+        // CsrfMiddleware is attached per-route rather than globally; the other
+        // three register it globally and read the matched route's metadata, so
+        // the same ordering would break them. The flag says what each
+        // middleware actually depends on instead of hardcoding one class.
+        $preMatchMiddleware = Middleware::getPreMatch();
+        if (!empty($preMatchMiddleware)) {
+            [$request, $response] = Middleware::runBefore($preMatchMiddleware, $request, $response);
 
             // Short-circuit if a global middleware set a non-default status.
             // Covers both error responses (4xx/5xx) and CORS preflight (204).
@@ -844,6 +842,26 @@ class Router
         // real dispatch — a @noauth POST guarded by CsrfMiddleware would be
         // wrongly blocked with 403 (tina4-python parity: request._handler).
         $request->handler = $route;
+
+        // POST-MATCH global middleware: the default group. It runs after
+        // $request->handler is assigned, so CSRF can read the matched route's
+        // ->noAuth() flag, and BEFORE the auth gate below.
+        //
+        // That order is the mainstream one, not an internal accident: Django
+        // ships CsrfViewMiddleware ahead of AuthenticationMiddleware and
+        // enforces auth in a view decorator after all middleware; Laravel runs
+        // the `web` group (VerifyCsrfToken) before the `auth` route middleware;
+        // ASP.NET puts UseAuthorization last before the endpoint. Middleware
+        // that ran only after the gate could not throttle a brute-force login
+        // or log a 401 - both real operational bugs.
+        $postMatchMiddleware = Middleware::getPostMatch();
+        if (!empty($postMatchMiddleware)) {
+            [$request, $response] = Middleware::runBefore($postMatchMiddleware, $request, $response);
+            $statusCode = $response->getStatusCode();
+            if ($statusCode >= 400 || $statusCode === 204) {
+                return $response;
+            }
+        }
 
         // ── Auth enforcement ──────────────────────────────────────
         // Dev admin routes (/__dev/) are always public — no auth required.

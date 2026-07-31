@@ -193,6 +193,45 @@ class Middleware
     }
 
     /**
+     * Global middleware that runs BEFORE route matching.
+     *
+     * A middleware opts in with `public static bool $preMatch = true`.
+     * Everything else runs AFTER matching, where the matched route's metadata
+     * is readable.
+     *
+     * This REPLACES a hardcoded `is_a(..., CorsMiddleware::class)` check in the
+     * dispatcher, which ran the whole global set before matching and singled
+     * CORS out by class name. That only ever worked here because PHP's
+     * CsrfMiddleware is attached per-route rather than globally - a placement
+     * difference nobody had written down, and one the other three do not share.
+     *
+     * NOT named `$beforeMatch` - hook discovery treats every `before*` member
+     * as a middleware hook.
+     *
+     * @return array<int, class-string> Middleware to run before matching
+     */
+    public static function getPreMatch(): array
+    {
+        return array_values(array_filter(
+            self::$globalMiddleware,
+            static fn($c) => (bool) (new \ReflectionClass($c))->getStaticPropertyValue('preMatch', false)
+        ));
+    }
+
+    /**
+     * Global middleware that runs AFTER matching. This is the default.
+     *
+     * @return array<int, class-string> Middleware to run after matching
+     */
+    public static function getPostMatch(): array
+    {
+        return array_values(array_filter(
+            self::$globalMiddleware,
+            static fn($c) => !(bool) (new \ReflectionClass($c))->getStaticPropertyValue('preMatch', false)
+        ));
+    }
+
+    /**
      * Reset all global middleware (for testing).
      */
     public static function reset(): void
