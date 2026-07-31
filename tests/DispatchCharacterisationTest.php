@@ -131,25 +131,42 @@ class DispatchCharacterisationTest extends TestCase
         }
     }
 
-    // ── 6. Static assets: a RUNTIME GIFT, not a stage ────────────
+    // ── 6. A static asset answers a conditional request cheaply ──
     //
-    // PHP has NO static stage at all, and that is correct rather than a gap
-    // (audit category 1): `php -S` and nginx serve a real file before
-    // index.php is ever reached, so the dispatcher never sees the request.
-    // Pinned so the extraction does not "helpfully" add a static stage that
-    // would shadow a route - the exact hazard ADR-0010 removed elsewhere.
+    // PHP DOES have a static stage (StaticFiles::tryServe), in the not-found
+    // fallback - after matching, per ADR-0010. The plan's enumeration table
+    // recorded "php: none - SAPI serves it", which is WRONG: the SAPI does
+    // serve a real file first in production, but the dispatcher has its own
+    // lookup and that is what a Tina4 test, the built-in server and any
+    // front-controller deployment actually hit.
+    //
+    // It is also the only framework besides Ruby that honours a conditional
+    // request: PHP and Ruby answer 304, Python re-sends the whole body with a
+    // 200 (recorded as a gap in the Python suite).
+    //
+    // The base path must be pointed at the fixture. An earlier version of this
+    // case left it at the default '.', so the file was never found, the 404 it
+    // asserted was a MISS rather than a policy, and the case passed while
+    // claiming something false.
 
     public function testDispatchStaticAssetReturns304OnMatchingValidator(): void
     {
+        $previous = Router::$basePath;
+        Router::$basePath = $this->tmpDir;
         file_put_contents($this->tmpDir . '/src/public/char.css', 'body { color: red; }');
 
-        $response = $this->call('GET', '/char.css');
-        $this->assertSame(
-            404,
-            $response->getStatusCode(),
-            'PHP grew a static stage. The SAPI serves files before index.php runs, '
-            . 'so a dispatcher-level static lookup is both redundant and a route-shadowing hazard.'
-        );
+        try {
+            $response = $this->call('GET', '/char.css');
+            $this->assertSame(200, $response->getStatusCode(), 'the static asset was not served at all');
+
+            $etag = $this->header($response, 'ETag');
+            $this->assertNotNull($etag, 'static assets no longer carry a validator');
+
+            $again = $this->call('GET', '/char.css', ['if-none-match' => $etag]);
+            $this->assertSame(304, $again->getStatusCode());
+        } finally {
+            Router::$basePath = $previous;
+        }
     }
 
     // ── 7. HEAD behaves like GET on a template route ─────────────
@@ -232,11 +249,15 @@ class DispatchCharacterisationTest extends TestCase
 
     // ── ADR-0010: routes beat files ──────────────────────────────
     //
-    // PHP has no static stage, so a route ALWAYS wins by construction. Pinned
-    // anyway: the extraction must not introduce one.
+    // PHP resolves static in the NOT-FOUND fallback, so a route wins because
+    // the static lookup is never reached - the same ordering Ruby and Node
+    // moved to. Pinned so the extraction cannot hoist static ahead of
+    // matching, which is exactly the hazard ADR-0010 removed.
 
     public function testARouteWinsOverAFileAtTheSamePath(): void
     {
+        $previous = Router::$basePath;
+        Router::$basePath = $this->tmpDir;
         file_put_contents($this->tmpDir . '/src/public/clash.json', '{"from":"file"}');
         Router::get('/clash.json', fn($q, $s) => $s->json(['from' => 'route']));
 
@@ -247,14 +268,24 @@ class DispatchCharacterisationTest extends TestCase
         $this->assertStringContainsString('"from"', $response->getBody());
         $this->assertStringContainsString('route', $response->getBody());
         $this->assertStringNotContainsString('{"from":"file"}', $response->getBody());
+        Router::$basePath = $previous;
     }
 
+    /** NEGATIVE: route-first must not stop files being served at all. */
     public function testAFileIsStillServedWhenNoRouteMatches(): void
     {
-        // The SAPI's job, not the dispatcher's - see case 6.
+        $previous = Router::$basePath;
+        Router::$basePath = $this->tmpDir;
         file_put_contents($this->tmpDir . '/src/public/plain.json', '{"from":"file"}');
 
-        $this->assertSame(404, $this->call('GET', '/plain.json')->getStatusCode());
+        try {
+            $response = $this->call('GET', '/plain.json');
+            $this->assertSame(200, $response->getStatusCode(),
+                'moving static after matching stopped files being served');
+            $this->assertStringContainsString('{"from":"file"}', $response->getBody());
+        } finally {
+            Router::$basePath = $previous;
+        }
     }
 
     public function testAnApiPathNeedsNoSpecialCaseNowThatRoutesWin(): void
