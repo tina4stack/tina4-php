@@ -32,13 +32,20 @@ class DotEnv
      * - empty lines
      * - interpolation of ${VAR} references within double-quoted values
      *
-     * @param string $path Path to the .env file
+     * @param string $path A root DIRECTORY (canonical) or a path to one .env file
      * @param bool $overwrite Whether to overwrite existing env vars
-     * @return void
-     * @throws \RuntimeException If the file cannot be read
+     * @return array<string,string> Keys the file(s) declared, mapped to the value
+     *         that WON - not the value the file declared. The two differ exactly
+     *         when the real environment beat the file, which is the case an
+     *         operator most needs to see: reporting the file's value there would
+     *         return "from_local" while the process runs on the real env var.
+     * @throws \RuntimeException If a NAMED file cannot be read (the directory
+     *         form tolerates an absent file)
      */
-    public static function loadEnv(string $path = '.env', bool $overwrite = false): void
+    public static function loadEnv(string $path = '.env', bool $overwrite = false): array
     {
+        $effective = [];
+
         // One warning per unresolved name PER LOAD, not per process.
         self::$warnedRefs = [];
 
@@ -51,6 +58,26 @@ class DotEnv
             if ($envOverride !== false && $envOverride !== '') {
                 $path = $envOverride;
             }
+        }
+
+        // A ROOT DIRECTORY is the canonical form in all four frameworks: it loads
+        // <dir>/.env.local and then <dir>/.env, both first-wins, which IS the
+        // documented precedence real-env > .env.local > .env.
+        //
+        // That ordering used to be the caller's job here and it was duplicated at
+        // the boot site. Get it wrong (overwrite=true on .env.local) and a stray
+        // gitignored file silently beats an explicitly-set production variable.
+        //
+        // The directory form TOLERATES a missing file - a fresh checkout has no
+        // .env.local, and reading it unconditionally is the point. The file form
+        // below still throws, because naming a file that is not there is a
+        // caller error rather than an ordinary state.
+        if (is_dir($path)) {
+            $dir = rtrim($path, DIRECTORY_SEPARATOR);
+            $local = self::loadIfPresent($dir . DIRECTORY_SEPARATOR . '.env.local', $overwrite);
+            $main = self::loadIfPresent($dir . DIRECTORY_SEPARATOR . '.env', $overwrite);
+            // .env.local wins on a duplicate key, so it is merged last.
+            return array_merge($main, $local);
         }
 
         if (!is_file($path) || !is_readable($path)) {
@@ -122,9 +149,32 @@ class DotEnv
                     self::$variables[$key] = (string) $existing;
                 }
             }
+
+            // The value in effect: the registry already holds the winner (the
+            // file's value when it was applied, the real env's when it was not).
+            $effective[$key] = self::$variables[$key] ?? $value;
         }
 
         self::$loaded = true;
+        return $effective;
+    }
+
+    /**
+     * Load one .env file only if it is there, for the directory form.
+     *
+     * A fresh checkout has no .env.local, and the directory form reads it
+     * unconditionally, so absence is ordinary rather than a caller error.
+     *
+     * @param string $file      Absolute or relative path to a candidate .env file
+     * @param bool   $overwrite Whether to overwrite existing env vars
+     * @return array<string,string> Empty when the file is absent
+     */
+    private static function loadIfPresent(string $file, bool $overwrite): array
+    {
+        if (is_file($file) && is_readable($file)) {
+            return self::loadEnv($file, $overwrite);
+        }
+        return [];
     }
 
     /**
@@ -261,15 +311,39 @@ class DotEnv
      * @return string The value
      * @throws \RuntimeException If the variable is not set
      */
-    public static function requireEnv(string $key): string
+    /**
+     * Validate that required environment variables exist, and return them.
+     *
+     * Takes VARARGS and returns a map, matching Python, Ruby and Node. It used
+     * to take one key and return that value, so checking five variables meant
+     * five calls that each failed on the first problem - an operator fixing a
+     * deployment got one name per restart instead of the whole list.
+     *
+     * @param string ...$keys Variable names that must be set
+     * @return array<string,string> Every requested key mapped to its value
+     * @throws \RuntimeException If any are missing, naming ALL of them
+     */
+    public static function requireEnv(string ...$keys): array
     {
-        $value = self::getEnv($key);
+        $missing = [];
+        $found = [];
 
-        if ($value === null) {
-            throw new \RuntimeException("DotEnv: Required environment variable '{$key}' is not set");
+        foreach ($keys as $key) {
+            $value = self::getEnv($key);
+            if ($value === null) {
+                $missing[] = $key;
+                continue;
+            }
+            $found[$key] = $value;
         }
 
-        return $value;
+        if ($missing !== []) {
+            throw new \RuntimeException(
+                'DotEnv: Missing required environment variables: ' . implode(', ', $missing)
+            );
+        }
+
+        return $found;
     }
 
     /**

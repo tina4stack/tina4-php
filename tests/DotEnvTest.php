@@ -157,7 +157,7 @@ class DotEnvTest extends TestCase
     public function testRequireThrowsWhenMissing(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage("Required environment variable 'REQUIRED_KEY' is not set");
+        $this->expectExceptionMessage('Missing required environment variables: REQUIRED_KEY');
 
         DotEnv::requireEnv('REQUIRED_KEY');
     }
@@ -169,7 +169,21 @@ class DotEnvTest extends TestCase
 
         DotEnv::loadEnv($envFile);
 
-        $this->assertEquals('present', DotEnv::requireEnv('REQUIRED_KEY'));
+        // Returns a MAP now, and takes varargs - parity with Python, Ruby, Node.
+        $this->assertEquals(['REQUIRED_KEY' => 'present'], DotEnv::requireEnv('REQUIRED_KEY'));
+    }
+
+    public function testRequireNamesEveryMissingVarInOneThrow(): void
+    {
+        // An operator fixing a deployment wants the whole list, not one name
+        // per restart. The old single-key signature could not express this.
+        try {
+            DotEnv::requireEnv('MISSING_X_1', 'MISSING_Y_2');
+            $this->fail('requireEnv did not throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('MISSING_X_1', $e->getMessage());
+            $this->assertStringContainsString('MISSING_Y_2', $e->getMessage());
+        }
     }
 
     public function testHas(): void
