@@ -844,7 +844,7 @@ class Router
     }
 
     /**
-     * Run the global after-hooks and the two injectors, in that order.
+     * Run the after-hooks and the two injectors, in that order.
      *
      * The dev toolbar goes first and the feedback widget second, so the
      * widget's <script> sits next to the toolbar's marker tags. Both target the
@@ -852,20 +852,27 @@ class Router
      * placement rather than correctness. Both are no-ops when their feature
      * flags are unset.
      *
-     * @param Request    $request          Rebound by the after-hooks
-     * @param Response   $finalResponse    The response to finish
-     * @param array      $globalMiddleware The global set, for its after hooks
-     * @param array|null $result           The match result, for the toolbar's pattern label
+     * $afterMiddleware is the global set followed by the classes attached to
+     * the matched route, so the after pass mirrors the order the before pass
+     * ran in. Every dispatch that MATCHED a route ends here - including one a
+     * middleware short-circuited - which is what makes the after pass reliable
+     * enough to audit or add headers from. An unmatched path (404) has no
+     * route and no after pass.
+     *
+     * @param Request    $request         Rebound by the after-hooks
+     * @param Response   $finalResponse   The response to finish
+     * @param array      $afterMiddleware Classes whose after* hooks are owed
+     * @param array|null $result          The match result, for the toolbar's pattern label
      * @return Response The finished response
      */
     private static function finaliseResponse(
         Request $request,
         Response $finalResponse,
-        array $globalMiddleware,
+        array $afterMiddleware,
         ?array $result
     ): Response {
-        if (!empty($globalMiddleware)) {
-            [$request, $finalResponse] = Middleware::runAfter($globalMiddleware, $request, $finalResponse);
+        if (!empty($afterMiddleware)) {
+            [$request, $finalResponse] = Middleware::runAfter($afterMiddleware, $request, $finalResponse);
         }
 
         $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
@@ -886,16 +893,26 @@ class Router
      *   - a string that is neither is logged and skipped, because a typo in a
      *     middleware name should be visible without taking the request down.
      *
-     * @param Request  $request  Rebound when a middleware returns a new pair
-     * @param Response $response Rebound when a middleware returns a new pair
-     * @param mixed    $mw       A class-name string or a callable
+     * @param Request  $request         Rebound when a middleware returns a new pair
+     * @param Response $response        Rebound when a middleware returns a new pair
+     * @param mixed    $mw              A class-name string or a callable
+     * @param array    $classMiddleware Collects each resolved class, for the after pass
      * @return Response|null A response to send immediately, or null to continue
      */
-    private static function runOneRouteMiddleware(Request &$request, Response &$response, mixed $mw): ?Response
-    {
+    private static function runOneRouteMiddleware(
+        Request &$request,
+        Response &$response,
+        mixed $mw,
+        array &$classMiddleware
+    ): ?Response {
         if (is_string($mw)) {
             $className = self::resolveMiddlewareClass($mw);
             if ($className !== null) {
+                // Recorded BEFORE the hooks run: a class whose before* hook
+                // short-circuits still owes its after* hooks (the after pass
+                // runs on a 4xx, which is exactly when audit/header hooks
+                // matter most).
+                $classMiddleware[] = $className;
                 // Returns null on success, which means "carry on" - the same
                 // as the `continue` this replaced.
                 return self::runClassMiddlewareHooks($request, $response, $className);
@@ -945,38 +962,38 @@ class Router
     }
 
     /**
-     * Interpret what a middleware returned.
+     * Interpret what a callable middleware returned.
      *
-     * A Response is sent as is. `false` means "forbidden" and becomes a 403.
-     * Anything else - including a replaced [$request, $response] pair already
-     * applied by the caller - means "carry on".
+     * The same return-value table the class-style hooks obey, so a closure and
+     * a middleware class attached to the same route cannot mean different
+     * things by the same return value.
      *
      * @param mixed    $mwResult What the middleware returned
-     * @param Request  $request  Used for the 403's path
-     * @param Response $response Used to build the 403
+     * @param Request  $request  Rebound when the middleware returns a new pair
+     * @param Response $response Rebound when the middleware returns a new pair
      * @return Response|null A response to send immediately, or null to continue
      */
     private static function middlewareResultToResponse(
         mixed $mwResult,
-        Request $request,
-        Response $response
+        Request &$request,
+        Response &$response
     ): ?Response {
-        if ($mwResult instanceof Response) {
-            return $mwResult;
-        }
-        if ($mwResult === false) {
-            $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
-            return self::injectDevToolbar($request, $errorResp, 'error');
-        }
-        return null;
+        return Middleware::applyHookResult(
+            $mwResult,
+            $request,
+            $response,
+            self::renderForbidden(...)
+        );
     }
 
     /**
      * Run one global-middleware pass.
      *
      * The pre-match and post-match passes had identical bodies; this is that
-     * body, once. A pass short-circuits when it leaves a non-default status -
-     * an error (4xx/5xx) or a CORS preflight (204).
+     * body, once. The pass short-circuits when a hook ENDED it - it returned a
+     * Response (at any status, which is how a redirect gets out) or `false` -
+     * or when it leaves a non-default status: an error (4xx/5xx) or a CORS
+     * preflight (204).
      *
      * $request and $response are BY REFERENCE because runBefore returns a
      * replaced pair, and the caller must see the replacement.
@@ -995,10 +1012,15 @@ class Router
             return null;
         }
 
-        [$request, $response] = Middleware::runBefore($middleware, $request, $response);
+        [$request, $response, $shortCircuit] = Middleware::runBefore($middleware, $request, $response);
+        if ($shortCircuit !== null) {
+            return $shortCircuit;
+        }
 
-        $statusCode = $response->getStatusCode();
-        return ($statusCode >= 400 || $statusCode === 204) ? $response : null;
+        // A 204 is the CORS preflight answer: complete, and not an error, so
+        // the status check still has one job the short-circuit signal does not
+        // cover - a hook that sets 204 and returns the pair.
+        return $response->getStatusCode() === 204 ? $response : null;
     }
 
     /**
@@ -1358,12 +1380,14 @@ class Router
     /**
      * Run every `before*` static hook on a class-style middleware.
      *
-     * Definition order is preserved - get_class_methods() returns declaration
-     * order, never alphabetical - so hooks fire in the order they were written.
+     * Discovery and return-value handling both come from {@see Middleware},
+     * so a class attached to a route behaves exactly as the same class
+     * registered globally: base-class hooks first, definition order within a
+     * class, and the one return-value table (Response ends it at any status,
+     * a pair rebinds, `false` ends it, null continues).
      *
      * Each invocation is wrapped (M2): a throwing before* is logged and
-     * converted to a clean 500 rather than an unhandled crash. A hook may also
-     * return a Response to answer immediately, or `false` to forbid.
+     * converted to a clean 500 rather than an unhandled crash.
      *
      * @param Request  $request   Rebound when a hook returns a new pair
      * @param Response $response  Rebound when a hook returns a new pair
@@ -1375,34 +1399,47 @@ class Router
         Response &$response,
         string $className
     ): ?Response {
-                    // Call all before_* / before static methods. Definition
-                    // order is preserved (get_class_methods returns declaration
-                    // order) — never alphabetical. Each invocation is wrapped:
-                    // a throwing before* is logged + converted to a clean 500
-                    // (M2), never an unhandled crash.
-                    $methods = get_class_methods($className);
-                    foreach ($methods as $method) {
-                        if (str_starts_with($method, 'before')) {
-                            try {
-                                $mwResult = $className::$method($request, $response);
-                            } catch (\Throwable $error) {
-                                return Middleware::middleware500($response, $className, $method, $error);
-                            }
-                            if ($mwResult instanceof Response) {
-                                return $mwResult;
-                            }
-                            if ($mwResult === false) {
-                                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
-                                return self::injectDevToolbar($request, $errorResp, 'error');
-                            }
-                            // If middleware returns [request, response], update them
-                            if (is_array($mwResult) && count($mwResult) === 2) {
-                                [$request, $response] = $mwResult;
-                            }
-                        }
-                    }
+        foreach (Middleware::discoverMethods($className, 'before') as $method) {
+            try {
+                $mwResult = $className::$method($request, $response);
+            } catch (\Throwable $error) {
+                return Middleware::middleware500($response, $className, $method, $error);
+            }
+
+            $shortCircuit = Middleware::applyHookResult(
+                $mwResult,
+                $request,
+                $response,
+                self::renderForbidden(...)
+            );
+            if ($shortCircuit !== null) {
+                return $shortCircuit;
+            }
+
+            // LEGACY COMPATIBILITY PATH, not the main mechanism: a hook that
+            // returned null but left an error status still ends the chain.
+            if ($response->getStatusCode() >= 400) {
+                return $response;
+            }
+        }
 
         return null;
+    }
+
+    /**
+     * Build the 403 a middleware gets when it says no without saying what to send.
+     *
+     * Routed through the normal error renderer so a middleware refusal looks
+     * like every other error page - a user template if the app ships one, the
+     * framework's 403 template otherwise, JSON as the last resort.
+     *
+     * @param Request  $request  Read for the path shown on the error page
+     * @param Response $response The response being built
+     * @return Response The 403
+     */
+    private static function renderForbidden(Request $request, Response $response): Response
+    {
+        return self::renderError($response, 403, 'Forbidden', $request->path);
     }
 
     /**
@@ -1463,17 +1500,23 @@ class Router
      * $request and $response are BY REFERENCE because a middleware may return
      * a replaced pair, and the caller must see the replacement.
      *
+     * The class-style names are also COLLECTED into $classMiddlewares, because
+     * their `after*` hooks belong to the response pass rather than to this one
+     * - see {@see finaliseResponse()}.
+     *
      * @param Request  $request              Rebound when a middleware returns a new pair
      * @param Response $response             Rebound when a middleware returns a new pair
      * @param array    $route                The matched route, read for its middleware list
      * @param array    $functionMiddlewares  Filled with the continuation-style middleware
+     * @param array    $classMiddlewares     Filled with the class-style middleware
      * @return Response|null A response to send immediately, or null to continue
      */
     private static function runRouteMiddleware(
         Request &$request,
         Response &$response,
         array $route,
-        array &$functionMiddlewares
+        array &$functionMiddlewares,
+        array &$classMiddlewares
     ): ?Response {
         // Split middleware into two groups:
         //   - class-style (string class names) → before_*/before static
@@ -1503,7 +1546,7 @@ class Router
                 $functionMiddlewares[] = $mw;
                 continue;
             }
-            $short = self::runOneRouteMiddleware($request, $response, $mw);
+            $short = self::runOneRouteMiddleware($request, $response, $mw, $classMiddlewares);
             if ($short !== null) {
                 return $short;
             }
@@ -1725,9 +1768,27 @@ class Router
         // ASP.NET puts UseAuthorization last before the endpoint. Middleware
         // that ran only after the gate could not throttle a brute-force login
         // or log a 401 - both real operational bugs.
+
+        // What the after pass will owe, gathered up front because EVERY exit
+        // from here on - short-circuit included - finishes through
+        // finaliseResponse(). The AFTER hooks run for the WHOLE global set,
+        // both the pre-match and post-match groups, followed by the classes the
+        // route itself attaches (filled in by runRouteMiddleware below).
+        // Splitting the BEFORE pass by dependency (ADR-0012) says nothing about
+        // the after pass: an after_* hook adds headers or logging and needs no
+        // route metadata either way.
+        //
+        // REGRESSION GUARD: this assignment went missing when the pre/post
+        // split landed (538cf99f) - the read survived but nothing set the
+        // variable, so `!empty(null)` was false and NO global after_* hook ran
+        // at all. It was silent because PHP treats an undefined variable in
+        // empty() as empty. Locked by GlobalAfterMiddlewareTest.
+        $globalMiddleware = Middleware::getGlobal();
+        $classMiddlewares = [];
+
         $shortCircuit = self::runGlobalMiddlewarePass(Middleware::getPostMatch(), $request, $response);
         if ($shortCircuit !== null) {
-            return $shortCircuit;
+            return self::finaliseResponse($request, $shortCircuit, $globalMiddleware, $result);
         }
 
         // Auth gate. Returns a 401 to send, or null to continue.
@@ -1737,12 +1798,12 @@ class Router
         }
 
         // Per-route middleware. Fills $functionMiddlewares for the handler
-        // wrap below, and returns a Response when a class-style middleware
-        // short-circuits.
+        // wrap below and $classMiddlewares for the after pass, and returns a
+        // Response when a class-style middleware short-circuits.
         $functionMiddlewares = [];
-        $shortCircuit = self::runRouteMiddleware($request, $response, $route, $functionMiddlewares);
+        $shortCircuit = self::runRouteMiddleware($request, $response, $route, $functionMiddlewares, $classMiddlewares);
         if ($shortCircuit !== null) {
-            return $shortCircuit;
+            return self::finaliseResponse($request, $shortCircuit, [...$globalMiddleware, ...$classMiddlewares], $result);
         }
 
         // Invoke the handler, wrapped in any function-style middleware.
@@ -1751,19 +1812,7 @@ class Router
         $handlerResult = self::invokeRouteHandler($request, $response, $route, $functionMiddlewares);
         $finalResponse = self::handlerResultToResponse($handlerResult, $response);
 
-        // The AFTER hooks run for the WHOLE global set - both the pre-match and
-        // post-match groups. Splitting the BEFORE pass by dependency (ADR-0012)
-        // says nothing about the after pass: an after_* hook adds headers or
-        // logging and needs no route metadata either way.
-        //
-        // REGRESSION GUARD: this assignment went missing when the pre/post
-        // split landed (538cf99f) - the read below survived but nothing set the
-        // variable, so `!empty(null)` was false and NO global after_* hook ran
-        // at all. It was silent because PHP treats an undefined variable in
-        // empty() as empty. Locked by GlobalAfterMiddlewareTest.
-        $globalMiddleware = Middleware::getGlobal();
-
-        return self::finaliseResponse($request, $finalResponse, $globalMiddleware, $result);
+        return self::finaliseResponse($request, $finalResponse, [...$globalMiddleware, ...$classMiddlewares], $result);
     }
 
     /**
