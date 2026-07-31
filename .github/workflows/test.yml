@@ -137,8 +137,8 @@ jobs:
       TINA4_TEST_POSTGRES_URL: postgres://tina4:tina4@localhost:55432/tina4_php
       TINA4_TEST_PG_HOST: localhost
       TINA4_TEST_PG_PORT: '55432'
-      TINA4_TEST_PG_USER: tina4
-      TINA4_TEST_PG_PASS: tina4
+      TINA4_TEST_PG_USERNAME: tina4
+      TINA4_TEST_PG_PASSWORD: tina4
       TINA4_TEST_PG_DB: tina4_php
       TINA4_TEST_RABBITMQ_URL: amqp://guest:guest@localhost:5672
       TINA4_MONGO_URI: mongodb://localhost:27017
@@ -156,15 +156,15 @@ jobs:
       # Live MySQL (#262) — matches the mysql:8 service container above.
       TINA4_TEST_MYSQL_HOST: localhost
       TINA4_TEST_MYSQL_PORT: '3306'
-      TINA4_TEST_MYSQL_USER: tina4
-      TINA4_TEST_MYSQL_PASS: tina4
+      TINA4_TEST_MYSQL_USERNAME: tina4
+      TINA4_TEST_MYSQL_PASSWORD: tina4
       TINA4_TEST_MYSQL_DB: tina4_test
       TINA4_TEST_MYSQL_URL: mysql://tina4:tina4@localhost:3306/tina4_test
       # Live MSSQL (#262) — matches the mssql:2022 service container above.
       TINA4_TEST_MSSQL_HOST: localhost
       TINA4_TEST_MSSQL_PORT: '1433'
-      TINA4_TEST_MSSQL_USER: sa
-      TINA4_TEST_MSSQL_PASS: 'TinaSQL123!Secure'
+      TINA4_TEST_MSSQL_USERNAME: sa
+      TINA4_TEST_MSSQL_PASSWORD: 'TinaSQL123!Secure'
       TINA4_TEST_MSSQL_DB: tina4_test
       TINA4_TEST_MSSQL_URL: mssql://sa:TinaSQL123%21Secure@localhost:1433/tina4_test
       # Turn a missing provisioned service into a hard failure (no green skips).

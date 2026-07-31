@@ -459,8 +459,8 @@ class BatchInsertTest extends TestCase
         if (!self::tcpReachable($host, $port)) {
             return null;
         }
-        $user = self::testHost('TINA4_TEST_MYSQL_USER', 'tina4');
-        $pass = self::testHost('TINA4_TEST_MYSQL_PASS', 'tina4');
+        $user = self::testHost('TINA4_TEST_MYSQL_USERNAME', 'tina4');
+        $pass = self::testHost('TINA4_TEST_MYSQL_PASSWORD', 'tina4');
         $db = self::testHost('TINA4_TEST_MYSQL_DB', 'tina4_test');
 
         return sprintf('mysql://%s:%s@%s:%d/%s', $user, $pass, $host, $port, $db);
@@ -478,8 +478,8 @@ class BatchInsertTest extends TestCase
         if (!self::tcpReachable($host, $port)) {
             return null;
         }
-        $user = self::testHost('TINA4_TEST_MSSQL_USER', 'sa');
-        $pass = self::testHost('TINA4_TEST_MSSQL_PASS', 'TinaSQL123!Secure');
+        $user = self::testHost('TINA4_TEST_MSSQL_USERNAME', 'sa');
+        $pass = self::testHost('TINA4_TEST_MSSQL_PASSWORD', 'TinaSQL123!Secure');
         $db = self::testHost('TINA4_TEST_MSSQL_DB', 'tina4_test');
 
         return sprintf('mssql://%s:%s@%s:%d/%s', rawurlencode($user), rawurlencode($pass), $host, $port, $db);

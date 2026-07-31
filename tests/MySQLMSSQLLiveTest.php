@@ -55,12 +55,12 @@ class MySQLMSSQLLiveTest extends TestCase
 
     private static function mysqlUser(): string
     {
-        return getenv('TINA4_TEST_MYSQL_USER') ?: 'tina4';
+        return getenv('TINA4_TEST_MYSQL_USERNAME') ?: 'tina4';
     }
 
     private static function mysqlPass(): string
     {
-        $p = getenv('TINA4_TEST_MYSQL_PASS');
+        $p = getenv('TINA4_TEST_MYSQL_PASSWORD');
         return $p !== false ? $p : 'tina4';
     }
 
@@ -81,12 +81,12 @@ class MySQLMSSQLLiveTest extends TestCase
 
     private static function mssqlUser(): string
     {
-        return getenv('TINA4_TEST_MSSQL_USER') ?: 'sa';
+        return getenv('TINA4_TEST_MSSQL_USERNAME') ?: 'sa';
     }
 
     private static function mssqlPass(): string
     {
-        $p = getenv('TINA4_TEST_MSSQL_PASS');
+        $p = getenv('TINA4_TEST_MSSQL_PASSWORD');
         return $p !== false ? $p : 'TinaSQL123!Secure';
     }
 
