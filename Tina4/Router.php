@@ -744,320 +744,31 @@ class Router
     /**
      * Inner dispatch — handles route matching, middleware, and handler invocation.
      */
-    private static function dispatchInner(Request $request, Response $response): Response
-    {
-        // TINA4_TRAILING_SLASH_REDIRECT — when truthy, any path with a trailing
-        // slash (other than the bare "/") redirects 301 to the slash-stripped
-        // form. Lets operators normalize URLs without per-route boilerplate.
-        if (
-            $request->path !== '/'
-            && str_ends_with($request->path, '/')
-            && DotEnv::isTruthy(DotEnv::getEnv('TINA4_TRAILING_SLASH_REDIRECT', 'false'))
-        ) {
-            $target = rtrim($request->path, '/');
-            // Preserve query string when present
-            if (!empty($request->query)) {
-                $target .= '?' . http_build_query($request->query);
-            }
-            return $response->redirect($target, 301);
-        }
-
-        // PRE-MATCH global middleware: runs before a route is looked up, so its
-        // headers survive a short-circuited 401/403. CORS opts in with
-        // `public static bool $preMatch = true`.
-        //
-        // This REPLACES a hardcoded is_a(CorsMiddleware) check that ran the
-        // WHOLE global set before matching and singled CORS out by class name.
-        // Running everything pre-match only ever worked here because PHP's
-        // CsrfMiddleware is attached per-route rather than globally; the other
-        // three register it globally and read the matched route's metadata, so
-        // the same ordering would break them. The flag says what each
-        // middleware actually depends on instead of hardcoding one class.
-        $preMatchMiddleware = Middleware::getPreMatch();
-        if (!empty($preMatchMiddleware)) {
-            [$request, $response] = Middleware::runBefore($preMatchMiddleware, $request, $response);
-
-            // Short-circuit if a global middleware set a non-default status.
-            // Covers both error responses (4xx/5xx) and CORS preflight (204).
-            $statusCode = $response->getStatusCode();
-            if ($statusCode >= 400 || $statusCode === 204) {
-                return $response;
-            }
-        }
-
-        $result = self::match($request->method, $request->path);
-
-        if ($result === null) {
-            // RFC 9110 conformance — if the path itself has registered methods
-            // but the request's method isn't one of them, we owe the client
-            // 405 (not 404) with an Allow header. §15.5.6 + §10.2.1.
-            //
-            // OPTIONS gets special handling: §9.3.7 says an OPTIONS request to
-            // an existing resource returns 204 No Content with the same Allow
-            // header. We treat it as a 204-shaped 405 — same scan, different
-            // status — so the client can discover the resource's method set.
-            //
-            // TRACE and CONNECT (and any other unknown methods like PROPFIND)
-            // fall into this path naturally when the resource exists — they
-            // get 405, never 200, because the framework deliberately doesn't
-            // ship handlers for them.
-            $allowedMethods = self::methodsAllowedForPath($request->path);
-            if (!empty($allowedMethods)) {
-                $allowHeader = implode(', ', $allowedMethods);
-                if (strtoupper($request->method) === 'OPTIONS') {
-                    $response->header('Allow', $allowHeader);
-                    // 204 No Content — OPTIONS responses have no body by
-                    // convention. Use status setter, not the JSON helper,
-                    // so body stays empty.
-                    return $response->status(204);
-                }
-                $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request->path);
-                $errorResp->header('Allow', $allowHeader);
-                return self::injectDevToolbar($request, $errorResp, 'error');
-            }
-
-            // Path is genuinely unknown — try static file before 404.
-            // Pass the conditional-request headers so a matching validator is
-            // answered with a cheap 304 instead of re-streaming the asset.
-            $staticResponse = StaticFiles::tryServe(
-                $request->path,
-                self::$basePath,
-                $request->headers['if-none-match'] ?? null,
-                $request->headers['if-modified-since'] ?? null
-            );
-            if ($staticResponse !== null) {
-                return $staticResponse;
-            }
-
-            // Try serving a template file (e.g. /hello -> src/templates/hello.twig or hello.html)
-            // HEAD on a template path falls back here too, matching GET's behaviour.
-            if ($request->method === 'GET' || $request->method === 'HEAD') {
-                $tplFile = self::resolveTemplate($request->path);
-                if ($tplFile !== null) {
-                    return $response->render($tplFile, []);
-                }
-            }
-
-            $errorResp = self::renderError($response, 404, 'Not Found', $request->path);
-            return self::injectDevToolbar($request, $errorResp, 'error');
-        }
-
-        $route = $result['route'];
-        $request->params = $result['params'];
-
-        // Expose the matched route's metadata on the request BEFORE any
-        // middleware runs, so a middleware can read handler-level flags such
-        // as `noAuth`. CsrfMiddleware skips a route marked ->noAuth() / @noauth
-        // by reading `$request->handler['noAuth']`; without this assignment
-        // `$request->handler` stayed null and that bypass was DEAD CODE on a
-        // real dispatch — a @noauth POST guarded by CsrfMiddleware would be
-        // wrongly blocked with 403 (tina4-python parity: request._handler).
-        $request->handler = $route;
-
-        // POST-MATCH global middleware: the default group. It runs after
-        // $request->handler is assigned, so CSRF can read the matched route's
-        // ->noAuth() flag, and BEFORE the auth gate below.
-        //
-        // That order is the mainstream one, not an internal accident: Django
-        // ships CsrfViewMiddleware ahead of AuthenticationMiddleware and
-        // enforces auth in a view decorator after all middleware; Laravel runs
-        // the `web` group (VerifyCsrfToken) before the `auth` route middleware;
-        // ASP.NET puts UseAuthorization last before the endpoint. Middleware
-        // that ran only after the gate could not throttle a brute-force login
-        // or log a 401 - both real operational bugs.
-        $postMatchMiddleware = Middleware::getPostMatch();
-        if (!empty($postMatchMiddleware)) {
-            [$request, $response] = Middleware::runBefore($postMatchMiddleware, $request, $response);
-            $statusCode = $response->getStatusCode();
-            if ($statusCode >= 400 || $statusCode === 204) {
-                return $response;
-            }
-        }
-
-        // ── Auth enforcement ──────────────────────────────────────
-        // Dev admin routes (/__dev/) are always public — no auth required.
-        // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
-        // Use ->noAuth() or @noauth to opt out.
-        // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
-        //
-        // Note: presence of custom middleware does NOT relax this gate
-        // (tina4-book#141 PY-10-02 parity fix). Pre-3.13.2 PHP silently
-        // opened write routes the moment any logging/CORS middleware was
-        // attached. Middleware is now purely additive — developers
-        // explicitly open routes with ->noAuth() and lock GETs with
-        // ->secure().
-        // Match on $request->path (the path portion, e.g. "/__dev/api/reload"),
-        // NOT $request->url (the full "scheme://host/path" — which never starts
-        // with "/__dev" so the bypass silently never fired and write routes
-        // under /__dev returned 401). The trailing-slash redirect branch above
-        // already uses $request->path; this aligns with it.
-        $isDevAdmin = str_starts_with($request->path, '/__dev') || str_starts_with($request->path, '/api/gallery/') || str_starts_with($request->path, '/gallery/');
-        $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
-        $requiresAuth = false;
-
-        if ($isDevAdmin) {
-            // Dev admin routes never require auth
-            $requiresAuth = false;
-        } elseif ($isWriteMethod) {
-            // Write routes require auth unless ->noAuth()
-            $requiresAuth = empty($route['noAuth']);
-        } else {
-            // Read routes require auth only when explicitly marked secure
-            $requiresAuth = !empty($route['secure']);
-        }
-
-        if ($requiresAuth) {
-            $token = null;
-            $tokenSource = null;
-
-            // Priority 1: Authorization Bearer header
-            $bearerToken = $request->bearerToken();
-            if ($bearerToken !== null) {
-                $token = $bearerToken;
-                $tokenSource = 'header';
-            }
-
-            // Priority 2: formToken in request body
-            if ($token === null && is_array($request->body) && !empty($request->body['formToken'])) {
-                $token = $request->body['formToken'];
-                $tokenSource = 'body';
-            }
-
-            // Priority 3: Session token
-            if ($token === null && $request->session !== null && $request->session->has('token')) {
-                $token = $request->session->get('token');
-                $tokenSource = 'session';
-            }
-
-            if ($token === null) {
-                return $response->json(['error' => 'Unauthorized'], 401);
-            }
-
-            // Pass token only — Auth::validToken resolves SECRET consistently
-            // ($_ENV first, then getenv). Pre-resolving here with `getenv()` only
-            // would mismatch Auth::getToken's resolution and reject valid tokens
-            // whenever $_ENV['SECRET'] differs from getenv('SECRET') (e.g. when
-            // .env loads SECRET into $_ENV but a test or runtime override calls
-            // putenv with a different value).
-            if (!Auth::validToken($token)) {
-                return $response->json(['error' => 'Unauthorized'], 401);
-            }
-
-            // Attach decoded JWT payload to the request for downstream use
-            $request->user = Auth::getPayload($token);
-
-            // When body formToken validates, return a FreshToken header so
-            // frond.js can use the Authorization header on subsequent requests
-            if ($tokenSource === 'body') {
-                $freshToken = Auth::refreshToken($token);
-                if ($freshToken !== null) {
-                    $response->header('FreshToken', $freshToken);
-                }
-            }
-        }
-
-        // Split middleware into two groups:
-        //   - class-style (string class names) → before_*/before static
-        //     methods run inline before the handler. Two-arg closures
-        //     ($req, $resp) are also treated as "filter" style here.
-        //   - function-style continuation middleware (closures/callables
-        //     declaring 3+ parameters: $req, $resp, $next). These wrap
-        //     the route handler Express-style — each one calls $next to
-        //     descend, or returns early to short-circuit. This is the
-        //     pattern documented in chapter 10 for 8+ examples; pre-3.13.2
-        //     PHP silently ignored the $next argument and ran them as
-        //     two-arg filters, which made the example bodies dead code.
-        //     tina4-book#141 PY-10-01 parity fix.
-        $functionMiddlewares = [];
-        foreach ($route['middleware'] as $mw) {
-            // String specs for known instance middleware ("ResponseCache",
-            // "ResponseCache:300") resolve to an Express-style continuation
-            // that runs the instance's before/after hooks around the handler.
-            // Parity with Python's _resolve_string_middleware registry. Returns
-            // null for plain class strings (handled by the before_* loop below).
-            if (is_string($mw)) {
-                $resolved = self::resolveStringMiddleware($mw);
-                if ($resolved !== null) {
-                    $mw = $resolved;
-                }
-            }
-            if (self::isFunctionMiddleware($mw)) {
-                $functionMiddlewares[] = $mw;
-                continue;
-            }
-            // Resolve middleware: string class name → call before() methods (Python parity)
-            if (is_string($mw)) {
-                // Try as class name (exact, PascalCase, or ucfirst)
-                $className = null;
-                foreach ([$mw, ucfirst($mw)] as $candidate) {
-                    if (class_exists($candidate)) {
-                        $className = $candidate;
-                        break;
-                    }
-                }
-
-                if ($className !== null) {
-                    // Call all before_* / before static methods. Definition
-                    // order is preserved (get_class_methods returns declaration
-                    // order) — never alphabetical. Each invocation is wrapped:
-                    // a throwing before* is logged + converted to a clean 500
-                    // (M2), never an unhandled crash.
-                    $methods = get_class_methods($className);
-                    foreach ($methods as $method) {
-                        if (str_starts_with($method, 'before')) {
-                            try {
-                                $mwResult = $className::$method($request, $response);
-                            } catch (\Throwable $error) {
-                                return Middleware::middleware500($response, $className, $method, $error);
-                            }
-                            if ($mwResult instanceof Response) {
-                                return $mwResult;
-                            }
-                            if ($mwResult === false) {
-                                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
-                                return self::injectDevToolbar($request, $errorResp, 'error');
-                            }
-                            // If middleware returns [request, response], update them
-                            if (is_array($mwResult) && count($mwResult) === 2) {
-                                [$request, $response] = $mwResult;
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                // Fallback: try as callable function name
-                if (is_callable($mw)) {
-                    try {
-                        $mwResult = $mw($request, $response);
-                    } catch (\Throwable $error) {
-                        return Middleware::middleware500($response, 'Closure', '__invoke', $error);
-                    }
-                } else {
-                    Log::warning("Middleware not found: {$mw}");
-                    continue;
-                }
-            } elseif (is_callable($mw)) {
-                try {
-                    $mwResult = $mw($request, $response);
-                } catch (\Throwable $error) {
-                    return Middleware::middleware500($response, 'Closure', '__invoke', $error);
-                }
-            } else {
-                continue;
-            }
-
-            // If middleware returns a Response, short-circuit
-            if ($mwResult instanceof Response) {
-                return $mwResult;
-            }
-            // If middleware returns false, stop processing
-            if ($mwResult === false) {
-                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
-                return self::injectDevToolbar($request, $errorResp, 'error');
-            }
-        }
-
+    /**
+     * Invoke the route handler, wrapped in any function-style middleware.
+     *
+     * The call is built as a closure so continuation middleware can wrap it
+     * Express-style: each entry in $functionMiddlewares receives a $next that
+     * descends to the next layer, or it returns early to short-circuit. First
+     * declared is the OUTERMOST layer.
+     *
+     * A throwing handler is caught here: the trace goes to Log::error and to
+     * any listener, the dev overlay renders it, and production gets the
+     * generic page plus a request id. SECURITY (CWE-209): the production body
+     * must NOT carry the stack trace.
+     *
+     * @param Request  $request             Rebound when middleware returns a new pair
+     * @param Response $response            Rebound when middleware returns a new pair
+     * @param array    $route               The matched route
+     * @param array    $functionMiddlewares Continuation-style middleware, outermost first
+     * @return mixed The handler's result, or a Response when it short-circuited or threw
+     */
+    private static function invokeRouteHandler(
+        Request &$request,
+        Response &$response,
+        array $route,
+        array $functionMiddlewares
+    ): mixed {
         // Build the route handler invocation as a closure so function-style
         // middleware can wrap it Express-style. Each middleware in
         // $functionMiddlewares is given a $next continuation that either
@@ -1158,6 +869,469 @@ class Router
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
 
+
+        return $handlerResult;
+    }
+
+    /**
+     * Run every `before*` static hook on a class-style middleware.
+     *
+     * Definition order is preserved - get_class_methods() returns declaration
+     * order, never alphabetical - so hooks fire in the order they were written.
+     *
+     * Each invocation is wrapped (M2): a throwing before* is logged and
+     * converted to a clean 500 rather than an unhandled crash. A hook may also
+     * return a Response to answer immediately, or `false` to forbid.
+     *
+     * @param Request  $request   Rebound when a hook returns a new pair
+     * @param Response $response  Rebound when a hook returns a new pair
+     * @param string   $className The middleware class to run
+     * @return Response|null A response to send immediately, or null to continue
+     */
+    private static function runClassMiddlewareHooks(
+        Request &$request,
+        Response &$response,
+        string $className
+    ): ?Response {
+                    // Call all before_* / before static methods. Definition
+                    // order is preserved (get_class_methods returns declaration
+                    // order) — never alphabetical. Each invocation is wrapped:
+                    // a throwing before* is logged + converted to a clean 500
+                    // (M2), never an unhandled crash.
+                    $methods = get_class_methods($className);
+                    foreach ($methods as $method) {
+                        if (str_starts_with($method, 'before')) {
+                            try {
+                                $mwResult = $className::$method($request, $response);
+                            } catch (\Throwable $error) {
+                                return Middleware::middleware500($response, $className, $method, $error);
+                            }
+                            if ($mwResult instanceof Response) {
+                                return $mwResult;
+                            }
+                            if ($mwResult === false) {
+                                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
+                                return self::injectDevToolbar($request, $errorResp, 'error');
+                            }
+                            // If middleware returns [request, response], update them
+                            if (is_array($mwResult) && count($mwResult) === 2) {
+                                [$request, $response] = $mwResult;
+                            }
+                        }
+                    }
+
+        return null;
+    }
+
+    /**
+     * Find the request's auth token, in priority order.
+     *
+     * Three transports, and the ORDER is the contract: an explicit
+     * Authorization header beats a form token, which beats a session token.
+     * The source is returned alongside because a body formToken earns a
+     * FreshToken response header, and the other two do not.
+     *
+     * @param Request $request The incoming request
+     * @return array{0: string|null, 1: string|null} [token, source] - both null when absent
+     */
+    private static function extractAuthToken(Request $request): array
+    {
+        $token = null;
+        $tokenSource = null;
+
+            // Priority 1: Authorization Bearer header
+            $bearerToken = $request->bearerToken();
+            if ($bearerToken !== null) {
+                $token = $bearerToken;
+                $tokenSource = 'header';
+            }
+
+            // Priority 2: formToken in request body
+            if ($token === null && is_array($request->body) && !empty($request->body['formToken'])) {
+                $token = $request->body['formToken'];
+                $tokenSource = 'body';
+            }
+
+            // Priority 3: Session token
+            if ($token === null && $request->session !== null && $request->session->has('token')) {
+                $token = $request->session->get('token');
+                $tokenSource = 'session';
+            }
+
+        return [$token, $tokenSource];
+    }
+
+    /**
+     * Run a route's own middleware, splitting it into two groups.
+     *
+     *   - class-style (string class names) run their `before*` static methods
+     *     INLINE here, before the handler. Two-arg closures ($req, $resp) are
+     *     treated as "filter" style and run here too.
+     *   - function-style continuation middleware (closures/callables declaring
+     *     3+ parameters: $req, $resp, $next) are COLLECTED into
+     *     $functionMiddlewares and wrap the handler Express-style, each calling
+     *     $next to descend or returning early to short-circuit. That is the
+     *     pattern documented in chapter 10 for 8+ examples; pre-3.13.2 PHP
+     *     silently ignored the $next argument and ran them as two-arg filters,
+     *     which made the example bodies dead code (tina4-book#141 PY-10-01).
+     *
+     * Collecting the function-style set rather than running it here is not a
+     * reordering: those middlewares were always deferred to the handler wrap.
+     *
+     * $request and $response are BY REFERENCE because a middleware may return
+     * a replaced pair, and the caller must see the replacement.
+     *
+     * @param Request  $request              Rebound when a middleware returns a new pair
+     * @param Response $response             Rebound when a middleware returns a new pair
+     * @param array    $route                The matched route, read for its middleware list
+     * @param array    $functionMiddlewares  Filled with the continuation-style middleware
+     * @return Response|null A response to send immediately, or null to continue
+     */
+    private static function runRouteMiddleware(
+        Request &$request,
+        Response &$response,
+        array $route,
+        array &$functionMiddlewares
+    ): ?Response {
+        // Split middleware into two groups:
+        //   - class-style (string class names) → before_*/before static
+        //     methods run inline before the handler. Two-arg closures
+        //     ($req, $resp) are also treated as "filter" style here.
+        //   - function-style continuation middleware (closures/callables
+        //     declaring 3+ parameters: $req, $resp, $next). These wrap
+        //     the route handler Express-style — each one calls $next to
+        //     descend, or returns early to short-circuit. This is the
+        //     pattern documented in chapter 10 for 8+ examples; pre-3.13.2
+        //     PHP silently ignored the $next argument and ran them as
+        //     two-arg filters, which made the example bodies dead code.
+        //     tina4-book#141 PY-10-01 parity fix.
+        foreach ($route['middleware'] as $mw) {
+            // String specs for known instance middleware ("ResponseCache",
+            // "ResponseCache:300") resolve to an Express-style continuation
+            // that runs the instance's before/after hooks around the handler.
+            // Parity with Python's _resolve_string_middleware registry. Returns
+            // null for plain class strings (handled by the before_* loop below).
+            if (is_string($mw)) {
+                $resolved = self::resolveStringMiddleware($mw);
+                if ($resolved !== null) {
+                    $mw = $resolved;
+                }
+            }
+            if (self::isFunctionMiddleware($mw)) {
+                $functionMiddlewares[] = $mw;
+                continue;
+            }
+            // Resolve middleware: string class name → call before() methods (Python parity)
+            if (is_string($mw)) {
+                // Try as class name (exact, PascalCase, or ucfirst)
+                $className = null;
+                foreach ([$mw, ucfirst($mw)] as $candidate) {
+                    if (class_exists($candidate)) {
+                        $className = $candidate;
+                        break;
+                    }
+                }
+
+                if ($className !== null) {
+                    $shortCircuit = self::runClassMiddlewareHooks($request, $response, $className);
+                    if ($shortCircuit !== null) {
+                        return $shortCircuit;
+                    }
+                    continue;
+                }
+
+                // Fallback: try as callable function name
+                if (is_callable($mw)) {
+                    try {
+                        $mwResult = $mw($request, $response);
+                    } catch (\Throwable $error) {
+                        return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+                    }
+                } else {
+                    Log::warning("Middleware not found: {$mw}");
+                    continue;
+                }
+            } elseif (is_callable($mw)) {
+                try {
+                    $mwResult = $mw($request, $response);
+                } catch (\Throwable $error) {
+                    return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+                }
+            } else {
+                continue;
+            }
+
+            // If middleware returns a Response, short-circuit
+            if ($mwResult instanceof Response) {
+                return $mwResult;
+            }
+            // If middleware returns false, stop processing
+            if ($mwResult === false) {
+                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
+                return self::injectDevToolbar($request, $errorResp, 'error');
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Enforce the secure-by-default auth gate for a matched route.
+     *
+     * Dev admin routes (/__dev/) are always public. Write routes
+     * (POST/PUT/PATCH/DELETE) are secure by default - use ->noAuth() or
+     * @noauth to opt out. GET/HEAD/OPTIONS are open by default - use
+     * ->secure() or @secured to require a token.
+     *
+     * The presence of custom middleware does NOT relax this gate
+     * (tina4-book#141 PY-10-02 parity fix). Pre-3.13.2 PHP silently opened
+     * write routes the moment any logging or CORS middleware was attached;
+     * middleware is now purely additive.
+     *
+     * @param Request  $request  The incoming request; $request->user is set on success
+     * @param Response $response The response being built; may gain a FreshToken header
+     * @param array    $route    The matched route, read for noAuth / secure flags
+     * @return Response|null A 401 to send, or null when the request may proceed
+     */
+    private static function enforceRouteAuth(Request $request, Response $response, array $route): ?Response
+    {
+        // ── Auth enforcement ──────────────────────────────────────
+        // Dev admin routes (/__dev/) are always public — no auth required.
+        // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
+        // Use ->noAuth() or @noauth to opt out.
+        // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
+        //
+        // Note: presence of custom middleware does NOT relax this gate
+        // (tina4-book#141 PY-10-02 parity fix). Pre-3.13.2 PHP silently
+        // opened write routes the moment any logging/CORS middleware was
+        // attached. Middleware is now purely additive — developers
+        // explicitly open routes with ->noAuth() and lock GETs with
+        // ->secure().
+        // Match on $request->path (the path portion, e.g. "/__dev/api/reload"),
+        // NOT $request->url (the full "scheme://host/path" — which never starts
+        // with "/__dev" so the bypass silently never fired and write routes
+        // under /__dev returned 401). The trailing-slash redirect branch above
+        // already uses $request->path; this aligns with it.
+        $isDevAdmin = str_starts_with($request->path, '/__dev') || str_starts_with($request->path, '/api/gallery/') || str_starts_with($request->path, '/gallery/');
+        $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
+        $requiresAuth = false;
+
+        if ($isDevAdmin) {
+            // Dev admin routes never require auth
+            $requiresAuth = false;
+        } elseif ($isWriteMethod) {
+            // Write routes require auth unless ->noAuth()
+            $requiresAuth = empty($route['noAuth']);
+        } else {
+            // Read routes require auth only when explicitly marked secure
+            $requiresAuth = !empty($route['secure']);
+        }
+
+        if ($requiresAuth) {
+            $token = null;
+            $tokenSource = null;
+
+            [$token, $tokenSource] = self::extractAuthToken($request);
+
+            if ($token === null) {
+                return $response->json(['error' => 'Unauthorized'], 401);
+            }
+
+            // Pass token only — Auth::validToken resolves SECRET consistently
+            // ($_ENV first, then getenv). Pre-resolving here with `getenv()` only
+            // would mismatch Auth::getToken's resolution and reject valid tokens
+            // whenever $_ENV['SECRET'] differs from getenv('SECRET') (e.g. when
+            // .env loads SECRET into $_ENV but a test or runtime override calls
+            // putenv with a different value).
+            if (!Auth::validToken($token)) {
+                return $response->json(['error' => 'Unauthorized'], 401);
+            }
+
+            // Attach decoded JWT payload to the request for downstream use
+            $request->user = Auth::getPayload($token);
+
+            // When body formToken validates, return a FreshToken header so
+            // frond.js can use the Authorization header on subsequent requests
+            if ($tokenSource === 'body') {
+                $freshToken = Auth::refreshToken($token);
+                if ($freshToken !== null) {
+                    $response->header('FreshToken', $freshToken);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Nothing matched the path: 405/OPTIONS, then static, then a template, then 404.
+     *
+     * Order is BEHAVIOUR. The RFC 9110 method scan runs FIRST, so a known path
+     * with the wrong method is a 405 rather than being mistaken for a missing
+     * file. Static resolution happens HERE - in the not-found fallback, after
+     * matching - which is the ADR-0010 position: a file arriving from a build
+     * step, an upload directory or a careless deploy must never shadow a
+     * reviewed route.
+     *
+     * @param Request  $request  The incoming request
+     * @param Response $response The response being built
+     * @return Response The 204, 405, static asset, rendered template, or 404
+     */
+    private static function dispatchNoMatch(Request $request, Response $response): Response
+    {
+        // RFC 9110 conformance — if the path itself has registered methods but
+        // the request's method isn't one of them, we owe the client 405 (not
+        // 404) with an Allow header. §15.5.6 + §10.2.1.
+        //
+        // OPTIONS gets special handling: §9.3.7 says an OPTIONS request to an
+        // existing resource returns 204 No Content with the same Allow header.
+        // We treat it as a 204-shaped 405 — same scan, different status — so
+        // the client can discover the resource's method set.
+        //
+        // TRACE and CONNECT (and any other unknown method like PROPFIND) fall
+        // into this path naturally when the resource exists — they get 405,
+        // never 200, because the framework deliberately ships no handlers.
+        $allowedMethods = self::methodsAllowedForPath($request->path);
+        if (!empty($allowedMethods)) {
+            $allowHeader = implode(', ', $allowedMethods);
+            if (strtoupper($request->method) === 'OPTIONS') {
+                $response->header('Allow', $allowHeader);
+                // 204 No Content — OPTIONS responses have no body by
+                // convention. Use the status setter, not the JSON helper, so
+                // the body stays empty.
+                return $response->status(204);
+            }
+            $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request->path);
+            $errorResp->header('Allow', $allowHeader);
+            return self::injectDevToolbar($request, $errorResp, 'error');
+        }
+
+        // Path is genuinely unknown — try a static file before 404. The
+        // conditional-request headers are passed through so a matching
+        // validator is answered with a cheap 304 instead of re-streaming the
+        // asset.
+        $staticResponse = StaticFiles::tryServe(
+            $request->path,
+            self::$basePath,
+            $request->headers['if-none-match'] ?? null,
+            $request->headers['if-modified-since'] ?? null
+        );
+        if ($staticResponse !== null) {
+            return $staticResponse;
+        }
+
+        // Try serving a template file (e.g. /hello -> src/templates/hello.twig
+        // or hello.html). HEAD on a template path falls back here too,
+        // matching GET's behaviour.
+        if ($request->method === 'GET' || $request->method === 'HEAD') {
+            $tplFile = self::resolveTemplate($request->path);
+            if ($tplFile !== null) {
+                return $response->render($tplFile, []);
+            }
+        }
+
+        $errorResp = self::renderError($response, 404, 'Not Found', $request->path);
+        return self::injectDevToolbar($request, $errorResp, 'error');
+    }
+
+    private static function dispatchInner(Request $request, Response $response): Response
+    {
+        // TINA4_TRAILING_SLASH_REDIRECT — when truthy, any path with a trailing
+        // slash (other than the bare "/") redirects 301 to the slash-stripped
+        // form. Lets operators normalize URLs without per-route boilerplate.
+        if (
+            $request->path !== '/'
+            && str_ends_with($request->path, '/')
+            && DotEnv::isTruthy(DotEnv::getEnv('TINA4_TRAILING_SLASH_REDIRECT', 'false'))
+        ) {
+            $target = rtrim($request->path, '/');
+            // Preserve query string when present
+            if (!empty($request->query)) {
+                $target .= '?' . http_build_query($request->query);
+            }
+            return $response->redirect($target, 301);
+        }
+
+        // PRE-MATCH global middleware: runs before a route is looked up, so its
+        // headers survive a short-circuited 401/403. CORS opts in with
+        // `public static bool $preMatch = true`.
+        //
+        // This REPLACES a hardcoded is_a(CorsMiddleware) check that ran the
+        // WHOLE global set before matching and singled CORS out by class name.
+        // Running everything pre-match only ever worked here because PHP's
+        // CsrfMiddleware is attached per-route rather than globally; the other
+        // three register it globally and read the matched route's metadata, so
+        // the same ordering would break them. The flag says what each
+        // middleware actually depends on instead of hardcoding one class.
+        $preMatchMiddleware = Middleware::getPreMatch();
+        if (!empty($preMatchMiddleware)) {
+            [$request, $response] = Middleware::runBefore($preMatchMiddleware, $request, $response);
+
+            // Short-circuit if a global middleware set a non-default status.
+            // Covers both error responses (4xx/5xx) and CORS preflight (204).
+            $statusCode = $response->getStatusCode();
+            if ($statusCode >= 400 || $statusCode === 204) {
+                return $response;
+            }
+        }
+
+        $result = self::match($request->method, $request->path);
+
+        if ($result === null) {
+            return self::dispatchNoMatch($request, $response);
+        }
+
+        $route = $result['route'];
+        $request->params = $result['params'];
+
+        // Expose the matched route's metadata on the request BEFORE any
+        // middleware runs, so a middleware can read handler-level flags such
+        // as `noAuth`. CsrfMiddleware skips a route marked ->noAuth() / @noauth
+        // by reading `$request->handler['noAuth']`; without this assignment
+        // `$request->handler` stayed null and that bypass was DEAD CODE on a
+        // real dispatch — a @noauth POST guarded by CsrfMiddleware would be
+        // wrongly blocked with 403 (tina4-python parity: request._handler).
+        $request->handler = $route;
+
+        // POST-MATCH global middleware: the default group. It runs after
+        // $request->handler is assigned, so CSRF can read the matched route's
+        // ->noAuth() flag, and BEFORE the auth gate below.
+        //
+        // That order is the mainstream one, not an internal accident: Django
+        // ships CsrfViewMiddleware ahead of AuthenticationMiddleware and
+        // enforces auth in a view decorator after all middleware; Laravel runs
+        // the `web` group (VerifyCsrfToken) before the `auth` route middleware;
+        // ASP.NET puts UseAuthorization last before the endpoint. Middleware
+        // that ran only after the gate could not throttle a brute-force login
+        // or log a 401 - both real operational bugs.
+        $postMatchMiddleware = Middleware::getPostMatch();
+        if (!empty($postMatchMiddleware)) {
+            [$request, $response] = Middleware::runBefore($postMatchMiddleware, $request, $response);
+            $statusCode = $response->getStatusCode();
+            if ($statusCode >= 400 || $statusCode === 204) {
+                return $response;
+            }
+        }
+
+        // Auth gate. Returns a 401 to send, or null to continue.
+        $unauthorized = self::enforceRouteAuth($request, $response, $route);
+        if ($unauthorized !== null) {
+            return $unauthorized;
+        }
+
+        // Per-route middleware. Fills $functionMiddlewares for the handler
+        // wrap below, and returns a Response when a class-style middleware
+        // short-circuits.
+        $functionMiddlewares = [];
+        $shortCircuit = self::runRouteMiddleware($request, $response, $route, $functionMiddlewares);
+        if ($shortCircuit !== null) {
+            return $shortCircuit;
+        }
+
+        // Invoke the handler, wrapped in any function-style middleware.
+        // Returns either the handler's raw result, or a Response when the
+        // invocation short-circuited or threw.
+        $handlerResult = self::invokeRouteHandler($request, $response, $route, $functionMiddlewares);
         if ($handlerResult instanceof Response) {
             $finalResponse = $handlerResult;
         } elseif (is_array($handlerResult)) {
