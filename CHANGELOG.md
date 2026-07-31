@@ -12,6 +12,29 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ## Unreleased
 
+### Global middleware split into pre-match and post-match passes
+
+Dispatch order is now identical in all four frameworks:
+
+```
+pre-match globals -> match -> post-match globals -> auth gate -> route middleware -> handler
+```
+
+PHP ran the WHOLE global set before route matching, singling CORS out with a
+hardcoded `is_a(CorsMiddleware::class)` check. That check is gone: a middleware
+now opts into the pre-match pass with `public static bool $preMatch = true`, and
+`CorsMiddleware` declares it, so CORS behaviour is unchanged. See ADR-0012.
+
+**Migration:** global middleware that does NOT declare `$preMatch` now runs
+after route matching rather than before. That is what makes
+`$request->handler` readable to it (how `CsrfMiddleware` honours a route marked
+`->noAuth()`). Middleware that must run even when NO route matched - CORS, a
+rate limiter, an access log - needs `public static bool $preMatch = true`.
+
+The auth gate is unchanged: it still runs after the global passes and before
+route middleware, so a global rate limiter or access log still sees 401s.
+
+
 ### Changed
 
 - **Breaking: the Messenger IMAP `uid` is a STRING, not an int.** `inbox()`,
