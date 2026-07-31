@@ -489,7 +489,9 @@ $session->getSessionId(): string
 $session->gc(): void
 ```
 
-Backends: file, redis, valkey, mongodb, database.
+Backends: file, redis, valkey, mongodb, memcached, database.
+
+**An unrecognised backend name RAISES at startup**, naming the bad value and the valid ones. It used to fall through to the file backend silently, so a typo in `TINA4_SESSION_BACKEND` produced a running app writing sessions to local disk while the operator believed they were in Redis. The name is normalised (trimmed + lowercased), so ` Redis ` resolves; unset or blank still means file. Aliases: `filesystem`, `mongo`, `memcache`, `db`.
 
 **Backend-failure policy (all 4 frameworks): log-loud + degrade.** A backend (Redis/Valkey/Mongo/DB) that becomes unreachable mid-request is logged via `\Tina4\Log::error` and degraded rather than crashing the app or losing data silently: a read failure yields an empty session (the request still serves), and `save()` returns `false` (best-effort, dirty flag retained for a later retry). A genuinely empty session (no data yet) is NOT an error and is never logged. Set `TINA4_SESSION_STRICT=true` to re-throw instead. Call `regenerate()` right after a successful login or privilege change to defeat session fixation. The `DatabaseSessionHandler` binds every query (parameterised) — the `session_id` cookie value can never be SQL-injected.
 

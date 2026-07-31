@@ -24,7 +24,24 @@ namespace Tina4;
  */
 class Session
 {
-    /** @var string Session handler type ('file', 'redis', 'valkey', 'mongodb', or 'database') */
+    /**
+     * Every accepted backend name, aliases included. Byte-identical membership in
+     * all four frameworks. This is the one place the list is written in PHP, so
+     * the five match() statements below and the error message cannot disagree.
+     */
+    public const VALID_BACKENDS = [
+        'file', 'filesystem',
+        'redis',
+        'valkey',
+        'mongodb', 'mongo',
+        'memcached', 'memcache',
+        'database', 'db',
+    ];
+
+    /** Canonical name of each backend, for the error message (aliases omitted for brevity). */
+    public const CANONICAL_BACKENDS = ['file', 'redis', 'valkey', 'mongodb', 'memcached', 'database'];
+
+    /** @var string Session handler type — always a normalised member of VALID_BACKENDS */
     private string $backend;
 
     /** @var string Current session ID */
@@ -57,7 +74,9 @@ class Session
      */
     public function __construct(string $backend = '', array $config = [])
     {
-        $this->backend = $backend ?: (getenv('TINA4_SESSION_HANDLER') ?: (getenv('TINA4_SESSION_BACKEND') ?: 'file'));
+        $this->backend = self::resolveBackend(
+            $backend ?: (getenv('TINA4_SESSION_HANDLER') ?: (getenv('TINA4_SESSION_BACKEND') ?: 'file'))
+        );
         $this->ttl = (int)($config['ttl'] ?? getenv('TINA4_SESSION_TTL') ?: 3600);
         $this->storagePath = $config['path'] ?? (getenv('TINA4_SESSION_PATH') ?: 'data/sessions');
         $this->strict = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_STRICT', 'false'));
@@ -466,6 +485,42 @@ class Session
         } finally {
             $this->sessionId = $previousId;
         }
+    }
+
+    /**
+     * Normalise a backend name and reject anything unrecognised.
+     *
+     * An UNKNOWN name used to fall through to the file backend at each of the
+     * five match() statements below. A typo in TINA4_SESSION_BACKEND therefore
+     * produced a running app writing sessions to local disk while the operator
+     * believed they were in Redis: nothing logged, nothing failed, and the
+     * symptom surfaced much later as users being logged out whenever a request
+     * landed on another instance. Validating ONCE here means those five
+     * `default =>` arms now only ever receive 'file' or 'filesystem'.
+     *
+     * A BLANK name still means file. An env var set to '' is a SET variable, so
+     * treating blank as unknown would break every deployment that clears the var
+     * to take the default.
+     *
+     * Normalisation (trim + lowercase) matches the Python master, so ' Redis '
+     * from a .env line resolves rather than being rejected.
+     *
+     * @throws \InvalidArgumentException when the name is not a known backend
+     */
+    private static function resolveBackend(string $name): string
+    {
+        $normalised = strtolower(trim($name));
+        if ($normalised === '') {
+            return 'file';
+        }
+        if (!in_array($normalised, self::VALID_BACKENDS, true)) {
+            throw new \InvalidArgumentException(
+                'Unknown session backend "' . $normalised . '". '
+                . 'Valid backends: ' . implode(', ', self::CANONICAL_BACKENDS) . '. '
+                . 'Leave TINA4_SESSION_BACKEND unset for the file default.'
+            );
+        }
+        return $normalised;
     }
 
     /**
