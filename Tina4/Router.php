@@ -587,49 +587,7 @@ class Router
         // TINA4_PHP_SESSION_NAME (default: PHPSESSID, PHP's default).
         //
         // Fixes tina4stack/tina4-php#112.
-        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-            // Router::$basePath is set by App::__construct, so falling
-            // back to getcwd() is defensive for code paths that use
-            // Router::dispatch() directly in tests without booting an
-            // App instance first.
-            $basePath = self::$basePath !== '.' ? self::$basePath : getcwd();
-            $sessionPath = getenv('TINA4_PHP_SESSION_PATH')
-                ?: ($basePath . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'sessions-php');
-            if (!is_dir($sessionPath)) {
-                @mkdir($sessionPath, 0755, true);
-            }
-            if (is_writable($sessionPath)) {
-                session_save_path($sessionPath);
-            }
-            $sessionName = getenv('TINA4_PHP_SESSION_NAME') ?: 'PHPSESSID';
-            session_name($sessionName);
-
-            // Harden the cookie BEFORE session_start() emits it. PHP's ini
-            // defaults (session.cookie_httponly=0, cookie_samesite="",
-            // cookie_secure=0) ship a bare `PHPSESSID=...; path=/` that is
-            // readable by any XSS and sent on cross-site requests — and $_SESSION
-            // is exactly where an app keeps auth state. Mirror the attributes the
-            // tina4_session cookie already sets below; lifetime/path/domain are
-            // carried over from ini so the cookie's scope is unchanged.
-            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-            // Secure when: explicitly asked for, forced by SameSite=None (browsers
-            // reject None without Secure), or the client is really on https.
-            // Request::isSecureScheme() honours x-forwarded-proto, so a TLS-
-            // terminating proxy no longer reads as plain HTTP (#175).
-            $nativeSecure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
-                || strcasecmp($sameSite, 'None') === 0
-                || Request::isSecureScheme();
-            $cookieParams = session_get_cookie_params();
-            session_set_cookie_params([
-                'lifetime' => $cookieParams['lifetime'],
-                'path' => $cookieParams['path'],
-                'domain' => $cookieParams['domain'],
-                'secure' => $nativeSecure,
-                'httponly' => true,
-                'samesite' => $sameSite,
-            ]);
-            @session_start();
-        }
+        self::startNativeSession();
 
         // Auto-start Tina4's own session — read session ID from cookie,
         // lazy-create on first use. This is independent of $_SESSION
@@ -650,77 +608,11 @@ class Router
 
         $result = self::dispatchInner($request, $response);
 
-        // Save session and set cookie after handler runs
-        $session->save();
+        self::saveSessionAndSetCookie($session, $sessionCookie, $sessionCookieName, $result);
 
-        // Probabilistic garbage collection (~1% of requests)
-        if (random_int(1, 100) === 1) {
-            try {
-                $session->gc();
-            } catch (\Throwable) {
-                // GC failure is non-critical — silently ignore
-            }
-        }
-        $sid = $session->getSessionId();
-        if ($sid && $sid !== $sessionCookie) {
-            $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
-            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-            // Same rule as the native PHPSESSID cookie above: explicit opt-in,
-            // forced by SameSite=None, or the client is really on https (which
-            // Request::isSecureScheme() detects through a TLS proxy, #175).
-            $secure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
-                || strcasecmp($sameSite, 'None') === 0
-                || Request::isSecureScheme();
+        $result = self::stripHeadBody($request, $result);
 
-            if (headers_sent()) {
-                // Built-in server mode: headers are managed via the Response object,
-                // so setcookie() would trigger a fatal error. Build the Set-Cookie
-                // header manually and attach it to the Response instead.
-                $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
-                $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
-                if ($secure) {
-                    $cookie .= '; Secure';
-                }
-                $result->header('Set-Cookie', $cookie);
-            } else {
-                // Apache/nginx/FPM mode: use PHP's native setcookie()
-                setcookie($sessionCookieName, $sid, [
-                    'expires' => time() + $ttl,
-                    'path' => '/',
-                    'httponly' => true,
-                    'samesite' => $sameSite,
-                    'secure' => $secure,
-                ]);
-            }
-        }
-
-        // RFC 9110 §9.3.2: the server MUST NOT send content in a HEAD
-        // response. Apply unconditionally — even an explicit Router::head()
-        // handler that accidentally returned a body gets the body stripped
-        // here, so the framework can't ship a non-conformant HEAD response
-        // no matter what the handler did.
-        //
-        // Content-Length is preserved (as the byte count the GET-equivalent
-        // body WOULD have been) so cache validators, link checkers, and
-        // monitoring probes get useful size information from the HEAD probe.
-        // RFC 9110 §9.3.2 SHOULD — same headers as the equivalent GET.
-        if (strtoupper($request->method) === 'HEAD') {
-            $body = $result->getBody();
-            if ($body !== '') {
-                $result->header('Content-Length', (string) strlen($body));
-                $result->setBody('');
-            }
-        }
-
-        // Request log line (v3.13.14). On by default in dev (so `tina4 serve`
-        // shows request activity on stdout), opt-in in production via
-        // TINA4_LOG_REQUESTS. Routed through Tina4\Log so it lands on stdout
-        // like every other log. Same format across all four frameworks.
-        if (self::requestLoggingEnabled()) {
-            $elapsed = round((microtime(true) - $reqStart) * 1000, 3);
-            $status = $result->getStatusCode();
-            Log::info("{$request->method} {$request->path} -> {$status} ({$elapsed}ms)");
-        }
+        self::logRequest($request, $result, $reqStart);
 
         return $result;
     }
@@ -776,27 +668,7 @@ class Router
         // actual route callback. Iteration is reversed so the first
         // declared middleware ends up as the outermost wrapper.
         $invokeRouteHandler = function (Request $request, Response $response) use ($route): mixed {
-            $ref = new \ReflectionFunction($route['callback']);
-            $refParams = $ref->getParameters();
-            $routeParams = $request->params;
-            $args = [];
-
-            foreach ($refParams as $p) {
-                $name = $p->getName();
-                if (array_key_exists($name, $routeParams)) {
-                    // Path parameter — inject by name
-                    $args[] = $routeParams[$name];
-                } else {
-                    // Not a path param — inject request or response based on type hint
-                    $type = $p->getType();
-                    $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
-                    if ($typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request') {
-                        $args[] = $request;
-                    } else {
-                        $args[] = $response;
-                    }
-                }
-            }
+            $args = self::bindHandlerArgs($request, $response, $route['callback']);
 
             return count($args) === 0
                 ? ($route['callback'])()
@@ -871,6 +743,401 @@ class Router
 
 
         return $handlerResult;
+    }
+
+
+    /**
+     * Invoke a callable middleware and unwrap the outcome.
+     *
+     * Thin wrapper over {@see invokeCallableMiddleware()} so both call sites
+     * read the same two lines instead of repeating the unwrap. `$short` is set
+     * when the invocation itself failed and a 500 must be sent.
+     *
+     * @param Request       $request  Passed to the middleware
+     * @param Response      $response Passed to the middleware
+     * @param callable      $mw       The middleware to invoke
+     * @param Response|null $short    Set to a 500 when the invocation threw
+     * @return mixed The middleware's own return value, or null when it threw
+     */
+    private static function runCallableMiddleware(
+        Request &$request,
+        Response &$response,
+        callable $mw,
+        ?Response &$short
+    ): mixed {
+        $outcome = self::invokeCallableMiddleware($request, $response, $mw);
+        if ($outcome instanceof Response) {
+            $short = $outcome;
+            return null;
+        }
+        $short = null;
+        return $outcome[0];
+    }
+
+    /**
+     * Interpret what a middleware returned.
+     *
+     * A Response is sent as is. `false` means "forbidden" and becomes a 403.
+     * Anything else - including a replaced [$request, $response] pair already
+     * applied by the caller - means "carry on".
+     *
+     * @param mixed    $mwResult What the middleware returned
+     * @param Request  $request  Used for the 403's path
+     * @param Response $response Used to build the 403
+     * @return Response|null A response to send immediately, or null to continue
+     */
+    private static function middlewareResultToResponse(
+        mixed $mwResult,
+        Request $request,
+        Response $response
+    ): ?Response {
+        if ($mwResult instanceof Response) {
+            return $mwResult;
+        }
+        if ($mwResult === false) {
+            $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
+            return self::injectDevToolbar($request, $errorResp, 'error');
+        }
+        return null;
+    }
+
+    /**
+     * Run one global-middleware pass.
+     *
+     * The pre-match and post-match passes had identical bodies; this is that
+     * body, once. A pass short-circuits when it leaves a non-default status -
+     * an error (4xx/5xx) or a CORS preflight (204).
+     *
+     * $request and $response are BY REFERENCE because runBefore returns a
+     * replaced pair, and the caller must see the replacement.
+     *
+     * @param array<int, class-string> $middleware The pass to run
+     * @param Request                  $request    Rebound from the pass's result
+     * @param Response                 $response   Rebound from the pass's result
+     * @return Response|null A response to send immediately, or null to continue
+     */
+    private static function runGlobalMiddlewarePass(
+        array $middleware,
+        Request &$request,
+        Response &$response
+    ): ?Response {
+        if (empty($middleware)) {
+            return null;
+        }
+
+        [$request, $response] = Middleware::runBefore($middleware, $request, $response);
+
+        $statusCode = $response->getStatusCode();
+        return ($statusCode >= 400 || $statusCode === 204) ? $response : null;
+    }
+
+    /**
+     * Turn a handler's return value into a Response.
+     *
+     * A handler may return a Response (used as is), an array (JSON), a string
+     * (HTML), or nothing at all - in which case whatever it wrote onto the
+     * response object stands.
+     *
+     * @param mixed    $handlerResult Whatever the handler returned
+     * @param Response $response      The response being built, and the fallback
+     * @return Response The response to send
+     */
+    private static function handlerResultToResponse(mixed $handlerResult, Response $response): Response
+    {
+        if ($handlerResult instanceof Response) {
+            return $handlerResult;
+        }
+        if (is_array($handlerResult)) {
+            return $response->json($handlerResult);
+        }
+        if (is_string($handlerResult)) {
+            return $response->html($handlerResult);
+        }
+        return $response;
+    }
+
+    /**
+     * Start PHP's native session so $_SESSION writes persist on every SAPI.
+     *
+     * PHP's default `session.auto_start = Off` means $_SESSION is a transient
+     * empty array unless something calls session_start(). The `php -S` built-in
+     * server behaves as if auto_start were On, which MASKS the bug in local
+     * development: code that reads or writes $_SESSION works fine locally, then
+     * silently loses every value on shared hosting.
+     *
+     * Tina4's own $request->session API (the tina4_session cookie +
+     * data/sessions/*.json) is untouched by this; both coexist. This only wires
+     * native sessions so existing app code using $_SESSION directly - login
+     * flows, booking flows, third-party integrations - keeps working.
+     *
+     * Storage is configurable via TINA4_PHP_SESSION_PATH (default
+     * data/sessions-php/ under the project root, so shared-hosting /tmp quotas
+     * do not surprise us) and TINA4_PHP_SESSION_NAME (default PHPSESSID).
+     *
+     * Fixes tina4stack/tina4-php#112.
+     */
+    private static function startNativeSession(): void
+    {
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+            // Router::$basePath is set by App::__construct, so falling
+            // back to getcwd() is defensive for code paths that use
+            // Router::dispatch() directly in tests without booting an
+            // App instance first.
+            $basePath = self::$basePath !== '.' ? self::$basePath : getcwd();
+            $sessionPath = getenv('TINA4_PHP_SESSION_PATH')
+                ?: ($basePath . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'sessions-php');
+            if (!is_dir($sessionPath)) {
+                @mkdir($sessionPath, 0755, true);
+            }
+            if (is_writable($sessionPath)) {
+                session_save_path($sessionPath);
+            }
+            $sessionName = getenv('TINA4_PHP_SESSION_NAME') ?: 'PHPSESSID';
+            session_name($sessionName);
+
+            // Harden the cookie BEFORE session_start() emits it. PHP's ini
+            // defaults (session.cookie_httponly=0, cookie_samesite="",
+            // cookie_secure=0) ship a bare `PHPSESSID=...; path=/` that is
+            // readable by any XSS and sent on cross-site requests — and $_SESSION
+            // is exactly where an app keeps auth state. Mirror the attributes the
+            // tina4_session cookie already sets below; lifetime/path/domain are
+            // carried over from ini so the cookie's scope is unchanged.
+            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+            // Secure when: explicitly asked for, forced by SameSite=None (browsers
+            // reject None without Secure), or the client is really on https.
+            // Request::isSecureScheme() honours x-forwarded-proto, so a TLS-
+            // terminating proxy no longer reads as plain HTTP (#175).
+            $nativeSecure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
+                || strcasecmp($sameSite, 'None') === 0
+                || Request::isSecureScheme();
+            $cookieParams = session_get_cookie_params();
+            session_set_cookie_params([
+                'lifetime' => $cookieParams['lifetime'],
+                'path' => $cookieParams['path'],
+                'domain' => $cookieParams['domain'],
+                'secure' => $nativeSecure,
+                'httponly' => true,
+                'samesite' => $sameSite,
+            ]);
+            @session_start();
+        }
+    }
+
+    /**
+     * Persist Tina4's own session and set its cookie after the handler ran.
+     *
+     * The cookie is only re-emitted when the session id actually CHANGED,
+     * compared against the value that arrived on the request - otherwise every
+     * response would carry a redundant Set-Cookie.
+     *
+     * @param Session     $session            The session to save
+     * @param string|null $sessionCookie      The id that arrived on the request, if any
+     * @param string      $sessionCookieName  The configured cookie name (Session::cookieName())
+     * @param Response    $result             The response a Set-Cookie header is added to
+     */
+    private static function saveSessionAndSetCookie(
+        Session $session,
+        ?string $sessionCookie,
+        string $sessionCookieName,
+        Response $result
+    ): void {
+        // Save session and set cookie after handler runs
+        $session->save();
+
+        // Probabilistic garbage collection (~1% of requests)
+        if (random_int(1, 100) === 1) {
+            try {
+                $session->gc();
+            } catch (\Throwable) {
+                // GC failure is non-critical — silently ignore
+            }
+        }
+        $sid = $session->getSessionId();
+        if ($sid && $sid !== $sessionCookie) {
+            $ttl = (int)(getenv('TINA4_SESSION_TTL') ?: 3600);
+            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+            // Same rule as the native PHPSESSID cookie above: explicit opt-in,
+            // forced by SameSite=None, or the client is really on https (which
+            // Request::isSecureScheme() detects through a TLS proxy, #175).
+            $secure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
+                || strcasecmp($sameSite, 'None') === 0
+                || Request::isSecureScheme();
+
+            if (headers_sent()) {
+                // Built-in server mode: headers are managed via the Response object,
+                // so setcookie() would trigger a fatal error. Build the Set-Cookie
+                // header manually and attach it to the Response instead.
+                $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
+                $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
+                if ($secure) {
+                    $cookie .= '; Secure';
+                }
+                $result->header('Set-Cookie', $cookie);
+            } else {
+                // Apache/nginx/FPM mode: use PHP's native setcookie()
+                setcookie($sessionCookieName, $sid, [
+                    'expires' => time() + $ttl,
+                    'path' => '/',
+                    'httponly' => true,
+                    'samesite' => $sameSite,
+                    'secure' => $secure,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * RFC 9110 s9.3.2: the server MUST NOT send content in a HEAD response.
+     *
+     * Applied unconditionally - even an explicit Router::head() handler that
+     * accidentally returned a body gets it stripped here, so the framework
+     * cannot ship a non-conformant HEAD response whatever the handler did.
+     *
+     * Content-Length is preserved as the byte count the GET-equivalent body
+     * WOULD have been, so cache validators, link checkers and monitoring probes
+     * still get useful size information (s9.3.2 SHOULD - same headers as the
+     * equivalent GET).
+     *
+     * PHP strips LATE, at the single exit; Node wraps write/end EARLY because
+     * it streams. ADR-0011 keeps the OUTCOME shared and the mechanism idiomatic
+     * per runtime.
+     *
+     * @param Request  $request The request, read for its method
+     * @param Response $result  The response to strip
+     * @return Response The same response, body removed when this was a HEAD
+     */
+    private static function stripHeadBody(Request $request, Response $result): Response
+    {
+        // RFC 9110 §9.3.2: the server MUST NOT send content in a HEAD
+        // response. Apply unconditionally — even an explicit Router::head()
+        // handler that accidentally returned a body gets the body stripped
+        // here, so the framework can't ship a non-conformant HEAD response
+        // no matter what the handler did.
+        //
+        // Content-Length is preserved (as the byte count the GET-equivalent
+        // body WOULD have been) so cache validators, link checkers, and
+        // monitoring probes get useful size information from the HEAD probe.
+        // RFC 9110 §9.3.2 SHOULD — same headers as the equivalent GET.
+        if (strtoupper($request->method) === 'HEAD') {
+            $body = $result->getBody();
+            if ($body !== '') {
+                $result->header('Content-Length', (string) strlen($body));
+                $result->setBody('');
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Emit the per-request log line.
+     *
+     * On by default in dev so `tina4 serve` shows request activity on stdout,
+     * opt-in in production via TINA4_LOG_REQUESTS. Routed through Tina4\Log so
+     * it lands on stdout like every other log. Same format across all four
+     * frameworks.
+     *
+     * @param Request  $request  The request, for method and path
+     * @param Response $result   The response, for the status
+     * @param float    $reqStart microtime(true) captured at dispatch entry
+     */
+    private static function logRequest(Request $request, Response $result, float $reqStart): void
+    {
+        // Request log line (v3.13.14). On by default in dev (so `tina4 serve`
+        // shows request activity on stdout), opt-in in production via
+        // TINA4_LOG_REQUESTS. Routed through Tina4\Log so it lands on stdout
+        // like every other log. Same format across all four frameworks.
+        if (self::requestLoggingEnabled()) {
+            $elapsed = round((microtime(true) - $reqStart) * 1000, 3);
+            $status = $result->getStatusCode();
+            Log::info("{$request->method} {$request->path} -> {$status} ({$elapsed}ms)");
+        }
+    }
+
+    /**
+     * Bind a route handler's parameters BY NAME.
+     *
+     * A handler declares whatever it needs - `($id, $request, $response)`,
+     * `($request, $response)`, or nothing - and each parameter is resolved by
+     * its own name and type hint:
+     *
+     *   1. a path parameter of that name wins;
+     *   2. otherwise a `Request` type hint (or the literal name `request`)
+     *      gets the request;
+     *   3. everything else gets the response.
+     *
+     * @param Request  $request  Candidate for injection, and the source of path params
+     * @param Response $response The default injection for an unmatched parameter
+     * @param callable $callback The handler whose signature is being read
+     * @return array<int, mixed> Positional arguments for the handler
+     */
+    private static function bindHandlerArgs(Request $request, Response $response, callable $callback): array
+    {
+        $refParams = (new \ReflectionFunction($callback))->getParameters();
+        $routeParams = $request->params;
+        $args = [];
+
+        foreach ($refParams as $p) {
+            $name = $p->getName();
+            if (array_key_exists($name, $routeParams)) {
+                $args[] = $routeParams[$name];
+                continue;
+            }
+            $type = $p->getType();
+            $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
+            $args[] = ($typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request')
+                ? $request
+                : $response;
+        }
+
+        return $args;
+    }
+
+    /**
+     * Resolve a middleware string to a real class name.
+     *
+     * Tries the name as given, then ucfirst - so "authMiddleware" finds
+     * `AuthMiddleware`.
+     *
+     * @param string $mw The middleware spec
+     * @return string|null The resolved class name, or null when none exists
+     */
+    private static function resolveMiddlewareClass(string $mw): ?string
+    {
+        foreach ([$mw, ucfirst($mw)] as $candidate) {
+            if (class_exists($candidate)) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Invoke a callable middleware, converting a throw into a clean 500.
+     *
+     * Both call sites in {@see runRouteMiddleware()} had this try/catch
+     * written out identically; this is that body, once.
+     *
+     * The return is deliberately two-shaped so a thrown 500 cannot be confused
+     * with a middleware that legitimately RETURNED a Response: a bare Response
+     * means "the invocation failed, send this", while a one-element array
+     * wraps whatever the middleware itself returned.
+     *
+     * @param Request  $request  Passed to the middleware
+     * @param Response $response Passed to the middleware, and used to build a 500
+     * @param callable $mw       The middleware to invoke
+     * @return Response|array{0: mixed} A 500 to send, or [the middleware's result]
+     */
+    private static function invokeCallableMiddleware(
+        Request &$request,
+        Response &$response,
+        callable $mw
+    ): Response|array {
+        try {
+            return [$mw($request, $response)];
+        } catch (\Throwable $error) {
+            return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+        }
     }
 
     /**
@@ -1023,14 +1290,7 @@ class Router
             }
             // Resolve middleware: string class name → call before() methods (Python parity)
             if (is_string($mw)) {
-                // Try as class name (exact, PascalCase, or ucfirst)
-                $className = null;
-                foreach ([$mw, ucfirst($mw)] as $candidate) {
-                    if (class_exists($candidate)) {
-                        $className = $candidate;
-                        break;
-                    }
-                }
+                $className = self::resolveMiddlewareClass($mw);
 
                 if ($className !== null) {
                     $shortCircuit = self::runClassMiddlewareHooks($request, $response, $className);
@@ -1042,33 +1302,26 @@ class Router
 
                 // Fallback: try as callable function name
                 if (is_callable($mw)) {
-                    try {
-                        $mwResult = $mw($request, $response);
-                    } catch (\Throwable $error) {
-                        return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+                    $mwResult = self::runCallableMiddleware($request, $response, $mw, $short);
+                    if ($short !== null) {
+                        return $short;
                     }
                 } else {
                     Log::warning("Middleware not found: {$mw}");
                     continue;
                 }
             } elseif (is_callable($mw)) {
-                try {
-                    $mwResult = $mw($request, $response);
-                } catch (\Throwable $error) {
-                    return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+                $mwResult = self::runCallableMiddleware($request, $response, $mw, $short);
+                if ($short !== null) {
+                    return $short;
                 }
             } else {
                 continue;
             }
 
-            // If middleware returns a Response, short-circuit
-            if ($mwResult instanceof Response) {
-                return $mwResult;
-            }
-            // If middleware returns false, stop processing
-            if ($mwResult === false) {
-                $errorResp = self::renderError($response, 403, 'Forbidden', $request->path);
-                return self::injectDevToolbar($request, $errorResp, 'error');
+            $short = self::middlewareResultToResponse($mwResult, $request, $response);
+            if ($short !== null) {
+                return $short;
             }
         }
 
@@ -1263,16 +1516,11 @@ class Router
         // three register it globally and read the matched route's metadata, so
         // the same ordering would break them. The flag says what each
         // middleware actually depends on instead of hardcoding one class.
-        $preMatchMiddleware = Middleware::getPreMatch();
-        if (!empty($preMatchMiddleware)) {
-            [$request, $response] = Middleware::runBefore($preMatchMiddleware, $request, $response);
-
-            // Short-circuit if a global middleware set a non-default status.
-            // Covers both error responses (4xx/5xx) and CORS preflight (204).
-            $statusCode = $response->getStatusCode();
-            if ($statusCode >= 400 || $statusCode === 204) {
-                return $response;
-            }
+        // Short-circuits when a global middleware set a non-default status -
+        // an error (4xx/5xx) or a CORS preflight (204).
+        $shortCircuit = self::runGlobalMiddlewarePass(Middleware::getPreMatch(), $request, $response);
+        if ($shortCircuit !== null) {
+            return $shortCircuit;
         }
 
         $result = self::match($request->method, $request->path);
@@ -1304,13 +1552,9 @@ class Router
         // ASP.NET puts UseAuthorization last before the endpoint. Middleware
         // that ran only after the gate could not throttle a brute-force login
         // or log a 401 - both real operational bugs.
-        $postMatchMiddleware = Middleware::getPostMatch();
-        if (!empty($postMatchMiddleware)) {
-            [$request, $response] = Middleware::runBefore($postMatchMiddleware, $request, $response);
-            $statusCode = $response->getStatusCode();
-            if ($statusCode >= 400 || $statusCode === 204) {
-                return $response;
-            }
+        $shortCircuit = self::runGlobalMiddlewarePass(Middleware::getPostMatch(), $request, $response);
+        if ($shortCircuit !== null) {
+            return $shortCircuit;
         }
 
         // Auth gate. Returns a 401 to send, or null to continue.
@@ -1332,15 +1576,7 @@ class Router
         // Returns either the handler's raw result, or a Response when the
         // invocation short-circuited or threw.
         $handlerResult = self::invokeRouteHandler($request, $response, $route, $functionMiddlewares);
-        if ($handlerResult instanceof Response) {
-            $finalResponse = $handlerResult;
-        } elseif (is_array($handlerResult)) {
-            $finalResponse = $response->json($handlerResult);
-        } elseif (is_string($handlerResult)) {
-            $finalResponse = $response->html($handlerResult);
-        } else {
-            $finalResponse = $response;
-        }
+        $finalResponse = self::handlerResultToResponse($handlerResult, $response);
 
         // Run global middleware "after" hooks
         if (!empty($globalMiddleware)) {
