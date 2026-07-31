@@ -67,9 +67,19 @@ class Router
     // The methods NOT listed here - extractAuthToken, bindHandlerArgs,
     // runOneRouteMiddleware, runClassMiddlewareHooks, runCallableMiddleware,
     // invokeCallableMiddleware, resolveMiddlewareClass,
-    // middlewareResultToResponse, handlerResultToResponse,
-    // runGlobalMiddlewarePass - are HELPERS a stage calls, not pipeline steps.
-    // The distinction matters: only a stage's position is a contract.
+    // middlewareResultToResponse, handlerResultToResponse - are HELPERS a
+    // stage calls, not pipeline steps. The distinction matters: only a stage's
+    // POSITION is a contract, and none of those nine has one.
+    //
+    // runGlobalMiddlewarePass used to be on that list, and by that same rule it
+    // did not belong there: its position IS the contract - ADR-0012 in full.
+    // The pre-match pass must run before the match so a global's headers
+    // survive a short-circuited 401; the post-match pass must run after
+    // $request->handler is assigned and BEFORE the auth gate. Leaving it out
+    // meant PHP's list did not show where the globals sit relative to the gate,
+    // which is the single most-argued ordering decision in this feature.
+    // Ruby, Python and Node all list it. One method, two phases - which is
+    // exactly what the pre/post split is.
 
     /** @var array<int, string> Stages run by dispatch() before dispatchInner. */
     public const PROLOGUE_STAGES = [
@@ -79,11 +89,13 @@ class Router
     /** @var array<int, string> Stages run until one returns a Response. */
     public const REQUEST_STAGES = [
         'trailingSlashRedirect',
+        'runGlobalMiddlewarePass',
         'dispatchNoMatch',
     ];
 
     /** @var array<int, string> Stages run for a matched route, in order. */
     public const ROUTE_STAGES = [
+        'runGlobalMiddlewarePass',
         'enforceRouteAuth',
         'runRouteMiddleware',
         'invokeRouteHandler',

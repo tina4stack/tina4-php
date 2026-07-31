@@ -38,9 +38,14 @@ class DispatchPipelineTest extends TestCase
     public function testThePipelineDeclaresItsStagesInOrder(): void
     {
         $this->assertSame(['startNativeSession'], Router::PROLOGUE_STAGES);
-        $this->assertSame(['trailingSlashRedirect', 'dispatchNoMatch'], Router::REQUEST_STAGES);
         $this->assertSame(
-            ['enforceRouteAuth', 'runRouteMiddleware', 'invokeRouteHandler'],
+            ['trailingSlashRedirect', 'runGlobalMiddlewarePass', 'dispatchNoMatch'],
+            Router::REQUEST_STAGES,
+            'ADR-0012: the PRE-match globals run before the match, so a global\'s '
+            . 'headers survive a short-circuited 401'
+        );
+        $this->assertSame(
+            ['runGlobalMiddlewarePass', 'enforceRouteAuth', 'runRouteMiddleware', 'invokeRouteHandler'],
             Router::ROUTE_STAGES,
             'ADR-0012 order: post-match globals -> auth gate -> the route\'s own middleware'
         );
