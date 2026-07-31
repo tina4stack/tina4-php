@@ -12,6 +12,43 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ## Unreleased
 
+### CORS preflight responses now carry `Allow`
+
+A CORS preflight (`OPTIONS` with an `Origin`) returned 204 with the
+`Access-Control-*` headers but no `Allow`, while a bare `OPTIONS` to the same
+path returned `Allow`. A preflight IS an OPTIONS response, so it now carries
+`Allow` too, derived from the router's real method set (RFC 9110 s9.3.7).
+
+This is conformance, not a deviation - see ADR-0013. The frameworks' own
+OPTIONS handlers already emit `Allow` (Django's `View.options()`, Express's
+router). The add-on CORS libraries omit it only because they short-circuit
+ahead of the framework and skip its OPTIONS handler. Tina4 owns both paths in
+one dispatcher.
+
+`Allow` and `Access-Control-Allow-Methods` are NOT interchangeable: `Allow` is
+what the RESOURCE supports, `Access-Control-Allow-Methods` is what the CORS
+POLICY permits cross-origin (`TINA4_CORS_METHODS`, a static list as in every
+mainstream library). A policy naming DELETE on a GET-only route is still a 405.
+
+Non-breaking: one added response header on a 204; no existing header changes.
+
+### Fixed: CorsMiddleware swallowed the bare OPTIONS handler
+
+`CorsMiddleware::beforeCors` short-circuited on ANY `OPTIONS` request with no
+`Origin` check, so registering it meant a plain `OPTIONS` from a link checker
+or monitoring probe got a 204 with no `Allow` - the RFC 9110 s9.3.7 handler
+never ran. Only a real preflight (one carrying an `Origin`) short-circuits now,
+matching Ruby, Python and Node.
+
+`CorsMiddleware` also read the `Origin` from `$_SERVER` only, so the header was
+invisible to anything not running under a web SAPI - the in-process TestClient,
+the CLI, or a hand-built `Request`. It now reads the `Request` first and falls
+back to `$_SERVER`.
+
+`Router::methodsAllowedForPath()` is now `public` (it was `private`); the
+equivalent was already public in the other three frameworks.
+
+
 ### Global middleware split into pre-match and post-match passes
 
 Dispatch order is now identical in all four frameworks:

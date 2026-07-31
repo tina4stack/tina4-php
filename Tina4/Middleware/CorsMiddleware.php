@@ -185,7 +185,12 @@ class CorsMiddleware
 
         // Resolve a single allowed origin from the request's Origin header.
         // The CORS spec forbids a comma-separated list in Access-Control-Allow-Origin.
-        $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? null;
+        //
+        // Read it off the REQUEST first and fall back to $_SERVER. Reading only
+        // $_SERVER meant the header was invisible to anything not running under
+        // a web SAPI - the in-process TestClient, the CLI, and any Request
+        // built by hand - so the origin silently resolved to null there.
+        $requestOrigin = $request->header('Origin') ?? ($_SERVER['HTTP_ORIGIN'] ?? null);
         $allowedList = array_map('trim', explode(',', $origins));
         $isWildcard = in_array('*', $allowedList, true);
 
@@ -213,8 +218,31 @@ class CorsMiddleware
             }
         }
 
-        // Handle OPTIONS preflight — return 204 No Content to short-circuit
-        if (strtoupper($request->method) === 'OPTIONS') {
+        // Handle OPTIONS preflight — return 204 No Content to short-circuit.
+        //
+        // Only a REAL preflight short-circuits. A preflight carries an Origin
+        // (browsers always send one); a bare OPTIONS does not, and belongs to
+        // the RFC 9110 s9.3.7 handler in dispatch, which answers 204 WITH an
+        // Allow header listing the path's method set.
+        //
+        // Without the Origin check this fired on EVERY OPTIONS request,
+        // swallowing the RFC 9110 path whenever CorsMiddleware was registered:
+        // a plain OPTIONS from a link checker or monitoring probe got a 204
+        // that told it nothing. Node had the identical bug and was fixed the
+        // same way; Ruby and Python already required the Origin.
+        if (strtoupper($request->method) === 'OPTIONS' && $requestOrigin !== null && $requestOrigin !== '') {
+            // Carry the resource's REAL method set as Allow (RFC 9110 s9.3.7)
+            // so a preflight answers the same question a bare OPTIONS does, on
+            // top of the CORS policy headers. Allow and
+            // Access-Control-Allow-Methods are NOT interchangeable: Allow is
+            // what the resource supports, ACAM is what the policy permits
+            // cross-origin. A policy allowing DELETE on a GET-only route still
+            // 405s. An unknown path yields "" - the same shape the
+            // bare-OPTIONS branch uses. This is CONFORMANCE, not a deviation:
+            // the frameworks' own OPTIONS handlers already emit Allow
+            // (Django's View.options(), Express's router); only the add-on
+            // CORS libraries lose it, by short-circuiting first. ADR-0013.
+            $response->header('Allow', implode(', ', \Tina4\Router::methodsAllowedForPath($request->path)));
             $response->status(204);
         }
 

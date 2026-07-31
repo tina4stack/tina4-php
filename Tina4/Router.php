@@ -500,7 +500,18 @@ class Router
      *
      * @return string[] e.g. ['GET', 'POST', 'HEAD', 'OPTIONS']
      */
-    private static function methodsAllowedForPath(string $path): array
+    /**
+     * The HTTP methods registered for a path, for Allow / 405 responses.
+     *
+     * PUBLIC because CorsMiddleware needs it to stamp Allow on a preflight
+     * (RFC 9110 s9.3.7). The other three frameworks already expose their
+     * equivalent (Router.methods_allowed_for_path / methodsAllowedForPath);
+     * PHP was the only one keeping it private.
+     *
+     * @param string $path Request path to look up
+     * @return array<int, string> Registered method names, e.g. ['GET','POST']
+     */
+    public static function methodsAllowedForPath(string $path): array
     {
         $path = '/' . trim($path, '/');
         $methods = [];
