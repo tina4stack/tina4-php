@@ -12,6 +12,42 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ## Unreleased
 
+### CORS denies by default, and never pairs the wildcard with credentials
+
+**Breaking:** `TINA4_CORS_ORIGINS` defaulted to `*`, which allowed every origin
+on a fresh install. It now defaults to UNSET, which denies every cross-origin
+request: no `Access-Control-Allow-Origin` is sent, and the browser's own CORS
+check blocks the request. Django, Rails and ASP.NET all require an explicit
+policy before emitting any CORS header, and now so does Tina4.
+
+**Migration:** name the origins your frontend runs on.
+
+```
+TINA4_CORS_ORIGINS=https://app.example.com
+```
+
+Comma-separate several. `TINA4_CORS_ORIGINS=*` restores the old allow-any
+behaviour for anyone who wants it: only the DEFAULT changed, not the capability.
+Non-browser clients (curl, server-to-server) never consult CORS and are
+unaffected. The status code of a denied preflight is unchanged at 204.
+
+Also in this change:
+
+- `Access-Control-Allow-Origin: *` is never sent alongside
+  `Access-Control-Allow-Credentials: true`. The Fetch Standard's CORS check
+  treats `*` as a literal once the request carries credentials, so every browser
+  rejects the pair. When both are configured the wildcard wins, credentials are
+  dropped, and a warning names the fix.
+- `Vary: Origin` is now sent whenever the allowed origin is computed from the
+  request's `Origin` header, including when the origin is REJECTED. Without it a
+  shared cache can store one origin's response and serve it to another
+  (RFC 9110 s12.5.5). It is not sent for a constant `*`, which does not vary.
+- Every rejected cross-origin request logs an actionable warning naming the
+  origin, the environment variable, and the fix. Silence was the common thread
+  in every defect this audit found.
+
+See ADR-0014.
+
 ### CORS preflight responses now carry `Allow`
 
 A CORS preflight (`OPTIONS` with an `Origin`) returned 204 with the
