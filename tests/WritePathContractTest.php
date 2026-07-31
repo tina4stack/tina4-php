@@ -8,250 +8,377 @@ use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
 
 /**
- * Write-path contract: a write with no filter is an error, not a full-table operation.
+ * The write-path contract (feature 3/4 of the feature audit).
  *
- * Audit feature 4 (plan/v3/features/004-sqlite-adapter.md), P1.
+ * `tests/fixtures/write_path_contract.json` is byte-identical in all four
+ * frameworks and is the shared answer key: the same cases, the same seeds, the
+ * same expectations, executed identically in python, php, ruby and node.
  *
- * The bug these lock in: update($table, $data) with no explicit filter builds
- * "UPDATE table SET ..." with NO WHERE clause, so it overwrites EVERY row and
- * reports success. Verified in PHP, Python and Ruby; Node silently changed
- * nothing instead.
+ * The bug these lock in: update($table, $data) with no explicit filter used to
+ * build "UPDATE table SET ..." with NO WHERE clause, so it overwrote EVERY row
+ * and reported success. A write with no filter is now an error.
  *
- * PHP already gets two things right and those are locked in here too: a failed
- * write RAISES (it never returns false), and lastId is null on update/delete.
+ * The fixture used to be ORPHANED — nothing read it, and the four runners were
+ * hand-written independently. They drifted to 17/16/15/14 cases with different
+ * names, and the case "a_string_filter_with_params_works_the_same_as_a_hash_filter"
+ * was executed by NONE of them while exactly that shape shipped broken in four
+ * Node adapters. Every case now runs in every framework, from this one file.
  *
- * Real SQLite files in a temp dir. No mocks.
+ * RUN IT AGAINST EVERY LIVE ENGINE. SQLite alone proves nothing: the whole
+ * reason per-adapter write SQL exists is that placeholder style, RETURNING
+ * support and identifier quoting differ exactly where the engine differs.
+ *
+ *   TINA4_TEST_WRITE_PATH_URL=postgres://host:5432/db \
+ *   TINA4_TEST_WRITE_PATH_USERNAME=u TINA4_TEST_WRITE_PATH_PASSWORD=p \
+ *     vendor/bin/phpunit tests/WritePathContractTest.php
+ *
+ * Unset, it falls back to a temp SQLite file so the suite still runs anywhere.
+ * No mocks — a database is a real dependency and CI provisions it.
  */
 class WritePathContractTest extends TestCase
 {
-    private string $dir;
-    private Database $db;
+    /** Every op the dispatcher implements. A case naming any other op FAILS. */
+    private const IMPLEMENTED_OPS = [
+        'insert', 'insert_batch', 'update', 'delete', 'truncate', 'primary_key',
+        'transaction_rollback', 'transaction_commit', 'execute_raw',
+    ];
+
+    /** @var array<string, mixed> */
+    private static array $contract;
+    private static Database $db;
+    private static string $dir;
+    private static string $url;
+    private static string $username;
+    private static string $password;
+    private static string $tableName;
+    private static string $compositeTableName;
+
+    /** @return array<string, mixed> */
+    private static function loadContract(): array
+    {
+        return json_decode(
+            file_get_contents(__DIR__ . '/fixtures/write_path_contract.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+    }
+
+    public static function setUpBeforeClass(): void
+    {
+        self::$contract = self::loadContract();
+        self::$tableName = self::$contract['table']['name'];
+        self::$compositeTableName = self::$contract['composite_table']['name'];
+
+        self::$dir = sys_get_temp_dir() . '/tina4-writepath-' . bin2hex(random_bytes(6));
+        mkdir(self::$dir, 0777, true);
+
+        $url = trim((string) (getenv('TINA4_TEST_WRITE_PATH_URL') ?: ''));
+        self::$url = $url === '' ? 'sqlite:///' . self::$dir . '/contract.db' : $url;
+        self::$username = (string) (getenv('TINA4_TEST_WRITE_PATH_USERNAME') ?: '');
+        self::$password = (string) (getenv('TINA4_TEST_WRITE_PATH_PASSWORD') ?: '');
+
+        self::$db = self::connect();
+
+        foreach ([self::$tableName, self::$compositeTableName] as $table) {
+            try {
+                self::$db->execute("DROP TABLE {$table}");
+            } catch (\Throwable) {
+                // first run against this engine
+            }
+        }
+        // The DDL lives in the shared fixture so all four frameworks create
+        // literally the same table. Ids come from the case data, not a
+        // sequence — an identity column would fight the explicit ids the
+        // cases name.
+        self::$db->execute(self::$contract['table']['ddl']);
+        self::$db->execute(self::$contract['composite_table']['ddl']);
+        self::$db->commit();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        foreach ([self::$tableName, self::$compositeTableName] as $table) {
+            try {
+                self::$db->execute("DROP TABLE {$table}");
+                self::$db->commit();
+            } catch (\Throwable) {
+                // teardown must never mask a failure
+            }
+        }
+        foreach (glob(self::$dir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir(self::$dir);
+    }
+
+    private static function connect(): Database
+    {
+        return Database::create(self::$url, username: self::$username, password: self::$password);
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function caseProvider(): array
+    {
+        $contract = self::loadContract();
+        $out = [];
+        foreach (array_merge($contract['cases'], $contract['errors']) as $case) {
+            $out[$case['name']] = [$case['name']];
+        }
+        return $out;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function findCase(string $name): ?array
+    {
+        foreach (array_merge(self::$contract['cases'], self::$contract['errors']) as $case) {
+            if ($case['name'] === $name) {
+                return $case;
+            }
+        }
+        return null;
+    }
+
+    /** @param array<string, mixed> $case */
+    private function tableFor(array $case): string
+    {
+        return ($case['table'] ?? '') === 'composite' ? self::$compositeTableName : self::$tableName;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function rows(Database $db, string $table): array
+    {
+        return $db->fetch("SELECT * FROM {$table}", [], 1000)->toArray();
+    }
 
     /**
-     * The engine under test.
-     *
-     * TINA4_TEST_WRITE_PATH_URL points this whole class at a real engine, with
-     * TINA4_TEST_WRITE_PATH_USERNAME / _PASSWORD for its login; unset, it runs
-     * on SQLite as before. CI runs the class once per engine.
-     *
-     * This suite pinned the write path for feature 4 and has only ever run on
-     * SQLite - which is the one engine that shares nothing with the others on
-     * the axes that matter here: placeholder style, RETURNING support,
-     * identifier quoting and sequence behaviour. It could not gate the feature-3
-     * refactor (moving insert/update/delete out of ten adapters into one
-     * builder) while that was true.
+     * Engine-tolerant value comparison. Engines disagree on the PHP type of an
+     * INTEGER column; this contract is about WHICH rows a write touched, not
+     * about type mapping, which the adapter contract owns.
      */
-    private static function engineUrl(): ?string
+    private function same(mixed $actual, mixed $expected): bool
     {
-        $url = trim((string) (getenv('TINA4_TEST_WRITE_PATH_URL') ?: ''));
-        return $url === '' ? null : $url;
+        return $actual === $expected || (string) $actual === (string) $expected;
     }
 
-    protected function setUp(): void
+    /** Both tables empty. Raw DELETE, never truncate() — that is under test. */
+    private function resetTables(): void
     {
-        $this->dir = sys_get_temp_dir() . '/tina4-writepath-' . bin2hex(random_bytes(6));
-        mkdir($this->dir, 0777, true);
+        foreach ([self::$tableName, self::$compositeTableName] as $table) {
+            self::$db->execute("DELETE FROM {$table}");
+        }
+        self::$db->commit();
+    }
 
-        $url = self::engineUrl();
-        $this->db = $url === null
-            ? Database::create('sqlite:///' . $this->dir . '/contract.db')
-            : Database::create(
-                $url,
-                username: (string) (getenv('TINA4_TEST_WRITE_PATH_USERNAME') ?: ''),
-                password: (string) (getenv('TINA4_TEST_WRITE_PATH_PASSWORD') ?: '')
+    /** @param array<string, mixed> $case */
+    private function seed(array $case, string $table): void
+    {
+        foreach ($case['seed'] ?? [] as $row) {
+            self::$db->insert($table, $row);
+        }
+        self::$db->commit();
+    }
+
+    /** @param array<string, mixed> $case */
+    private function runOp(array $case, string $table): mixed
+    {
+        $data = $case['data'] ?? null;
+
+        switch ($case['op']) {
+            case 'insert':
+            case 'insert_batch':
+                return self::$db->insert($table, $data);
+
+            case 'update':
+                if (array_key_exists('filter_sql', $case)) {
+                    return self::$db->update($table, $data, $case['filter_sql'], $case['filter_params']);
+                }
+                if (array_key_exists('filter', $case)) {
+                    return self::$db->update($table, $data, $case['filter']);
+                }
+                return self::$db->update($table, $data);
+
+            case 'delete':
+                if (array_key_exists('filter_sql', $case)) {
+                    return self::$db->delete($table, $case['filter_sql'], $case['filter_params']);
+                }
+                if (array_key_exists('filter', $case)) {
+                    return self::$db->delete($table, $case['filter']);
+                }
+                return self::$db->delete($table);
+
+            case 'truncate':
+                return self::$db->truncate($table);
+
+            case 'primary_key':
+                return self::$db->primaryKey($table);
+
+            case 'transaction_rollback':
+            case 'transaction_commit':
+                self::$db->startTransaction();
+                self::$db->insert($table, $data);
+                if ($case['op'] === 'transaction_commit') {
+                    self::$db->commit();
+                } else {
+                    self::$db->rollback();
+                }
+                return null;
+
+            case 'execute_raw':
+                return self::$db->execute($case['sql']);
+        }
+
+        $this->fail("unimplemented op {$case['op']} in case {$case['name']}");
+    }
+
+    /**
+     * Every expectation the fixture declares, checked by name.
+     *
+     * @param array<string, mixed> $case
+     */
+    private function checkExpectations(array $case, string $table, mixed $result): void
+    {
+        $name = $case['name'];
+        $expect = $case['expect'] ?? [];
+
+        if (array_key_exists('affected_rows', $expect)) {
+            $this->assertSame($expect['affected_rows'], $result->affectedRows, "{$name}: wrong affectedRows");
+        }
+
+        $rows = (array_key_exists('rows_after', $expect) || array_key_exists('unchanged', $expect))
+            ? $this->rows(self::$db, $table)
+            : [];
+
+        if (array_key_exists('rows_after', $expect)) {
+            $this->assertCount(
+                $expect['rows_after'],
+                $rows,
+                "{$name}: expected {$expect['rows_after']} row(s) after, got " . json_encode($rows)
             );
-
-        try {
-            $this->db->execute('DROP TABLE t');
-        } catch (\Throwable) {
-            // first run against this engine
         }
 
-        // AUTOINCREMENT is SQLite's spelling; SQLTranslator rewrites it per
-        // engine. `id INTEGER PRIMARY KEY` self-increments on SQLite and is a
-        // plain NOT NULL column everywhere else - writing it by hand is how a
-        // suite silently stays SQLite-only.
-        $ddl = 'CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(80))';
-        $this->db->execute(\Tina4\SQLTranslator::autoIncrementSyntax($ddl, $this->db->getAdapter()->getDatabaseType()));
-
-        // Let the SEQUENCE assign the ids. The assertions key on id 1 and 2, and
-        // a fresh sequence yields exactly those in insertion order on every
-        // engine. Hand-seeding id => 1, 2 instead leaves a real sequence still
-        // pointing at 1, so the first insert that omits an id collides on the
-        // primary key - SQLite hides that because its rowid follows the max.
-        $this->db->insert('t', ['name' => 'one']);
-        $this->db->insert('t', ['name' => 'two']);
-        $this->db->commit();
-    }
-
-    protected function tearDown(): void
-    {
-        foreach (glob($this->dir . '/*') ?: [] as $f) {
-            @unlink($f);
+        foreach ($expect['unchanged'] ?? [] as $matcher) {
+            $matched = 0;
+            foreach ($rows as $row) {
+                $all = true;
+                foreach ($matcher as $key => $value) {
+                    if (!$this->same($row[$key] ?? null, $value)) {
+                        $all = false;
+                        break;
+                    }
+                }
+                if ($all) {
+                    $matched++;
+                }
+            }
+            $this->assertSame(
+                1,
+                $matched,
+                "{$name}: expected exactly one row matching " . json_encode($matcher)
+                . ", found {$matched} in " . json_encode($rows)
+            );
         }
-        @rmdir($this->dir);
-    }
 
-    /** @return array<int, array<string, mixed>> */
-    private function rows(): array
-    {
-        return $this->db->fetch('SELECT * FROM t ORDER BY id')->toArray();
-    }
-
-    // --- pair 1: keyed update ---------------------------------------------
-
-    public function testUpdateWithAPrimaryKeyInDataUpdatesOnlyThatRow(): void
-    {
-        $this->db->update('t', ['id' => 1, 'name' => 'CHANGED']);
-        $rows = $this->rows();
-        $this->assertCount(2, $rows);
-        $this->assertSame('CHANGED', $rows[0]['name'], 'row 1 was not updated');
-        $this->assertSame('two', $rows[1]['name'], 'row 2 was touched');
-    }
-
-    public function testNegativeUpdateWithoutAFilterOrPrimaryKeyRaises(): void
-    {
-        $before = $this->rows();
-        $threw = false;
-        try {
-            $this->db->update('t', ['name' => 'NOPK']);
-        } catch (\Throwable $e) {
-            $threw = true;
-            $this->assertStringContainsStringIgnoringCase('filter', $e->getMessage());
+        if (array_key_exists('primary_key', $expect)) {
+            $this->assertSame($expect['primary_key'], $result, "{$name}: wrong primary key");
         }
-        $this->assertTrue($threw, 'a filterless update did not raise');
-        $this->assertSame($before, $this->rows(), 'a filterless update modified rows');
-    }
 
-    // --- pair 2: affected rows -------------------------------------------
-
-    public function testUpdateReportsTheRowsItChanged(): void
-    {
-        $result = $this->db->update('t', ['name' => 'X'], 'id = ?', [1]);
-        $this->assertSame(1, $result->affectedRows);
-    }
-
-    public function testNegativeUpdateNeverReportsZeroWhenAMatchingRowExists(): void
-    {
-        $result = $this->db->update('t', ['id' => 2, 'name' => 'TWO']);
-        $this->assertNotSame(0, $result->affectedRows);
-    }
-
-    // --- pair 3: delete filter forms -------------------------------------
-
-    public function testDeleteAcceptsAKeyValueFilter(): void
-    {
-        $this->db->delete('t', ['id' => 2]);
-        $this->assertCount(1, $this->rows());
-    }
-
-    public function testDeleteAcceptsAStringFilterWithParams(): void
-    {
-        $this->db->delete('t', 'id = ?', [2]);
-        $this->assertCount(1, $this->rows());
-    }
-
-    // --- pair 4: no accidental truncate ----------------------------------
-
-    public function testTruncateRemovesEveryRow(): void
-    {
-        $this->db->truncate('t');
-        $this->assertSame([], $this->rows());
-    }
-
-    public function testNegativeDeleteWithoutAFilterRaises(): void
-    {
-        $before = $this->rows();
-        $threw = false;
-        try {
-            $this->db->delete('t');
-        } catch (\Throwable $e) {
-            $threw = true;
-            $this->assertStringContainsStringIgnoringCase('filter', $e->getMessage());
+        if ($expect['last_id_is_null'] ?? false) {
+            $this->assertNull(
+                $result->lastId,
+                "{$name}: lastId is insert-only, but this write reported " . var_export($result->lastId, true)
+            );
         }
-        $this->assertTrue($threw, 'a filterless delete did not raise');
-        $this->assertSame($before, $this->rows(), 'a filterless delete removed rows');
-    }
 
-    // --- pair 5: write result contract -----------------------------------
-
-    public function testInsertReportsALastId(): void
-    {
-        $result = $this->db->insert('t', ['name' => 'three']);
-        $this->assertNotNull($result->lastId);
-    }
-
-    public function testNegativeUpdateAndDeleteDoNotReportALastId(): void
-    {
-        $this->assertNull($this->db->update('t', ['id' => 1, 'name' => 'CHANGED'])->lastId);
-        $this->assertNull($this->db->delete('t', ['id' => 2])->lastId);
-    }
-
-    // --- primary-key introspection ---------------------------------------
-
-    public function testPrimaryKeyIsIntrospectedRatherThanAssumed(): void
-    {
-        $this->assertSame(['id'], $this->db->primaryKey('t'));
-    }
-
-    // --- composite primary keys ------------------------------------------
-    // A PK resolver returning only the FIRST key column reintroduces the whole
-    // data-loss bug: WHERE order_id = 1 matches every row in that order.
-
-    private function compositeDb(): Database
-    {
-        $db = Database::create('sqlite:///' . $this->dir . '/composite.db');
-        $db->execute(
-            'CREATE TABLE order_items (order_id INTEGER, product_id INTEGER, qty INTEGER,'
-            . ' PRIMARY KEY (order_id, product_id))'
-        );
-        $db->insert('order_items', ['order_id' => 1, 'product_id' => 5, 'qty' => 1]);
-        $db->insert('order_items', ['order_id' => 1, 'product_id' => 6, 'qty' => 2]);
-        $db->insert('order_items', ['order_id' => 2, 'product_id' => 5, 'qty' => 3]);
-        return $db;
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    private function items(Database $db): array
-    {
-        return $db->fetch('SELECT * FROM order_items ORDER BY order_id, product_id')->toArray();
-    }
-
-    public function testCompositePrimaryKeyReturnsEveryKeyColumn(): void
-    {
-        $this->assertSame(['order_id', 'product_id'], $this->compositeDb()->primaryKey('order_items'));
-    }
-
-    public function testNegativeCompositeKeyNeverCollapsesToTheFirstColumn(): void
-    {
-        $this->assertCount(2, $this->compositeDb()->primaryKey('order_items'));
-    }
-
-    public function testACompositeKeyedUpdateTouchesExactlyOneRow(): void
-    {
-        $db = $this->compositeDb();
-        $db->update('order_items', ['order_id' => 1, 'product_id' => 5, 'qty' => 99]);
-        $rows = $this->items($db);
-        $this->assertSame(99, (int)$rows[0]['qty'], 'target row not updated');
-        $this->assertSame(2, (int)$rows[1]['qty'], 'sibling row in the same order was touched');
-        $this->assertSame(3, (int)$rows[2]['qty'], 'a different order was touched');
-    }
-
-    public function testNegativeAPartialCompositeKeyRaisesRatherThanMatchingMany(): void
-    {
-        $db = $this->compositeDb();
-        $before = $this->items($db);
-        $threw = false;
-        try {
-            $db->update('order_items', ['order_id' => 1, 'qty' => 42]);
-        } catch (\Throwable $e) {
-            $threw = true;
+        if (array_key_exists('last_id_is_not_stale', $expect)) {
+            $reported = $result->lastId;
+            // null / 0 / "" all mean "this engine cannot report one", which the
+            // contract allows. A stale value is the failure being pinned.
+            if ($reported !== null && $reported !== 0 && $reported !== '') {
+                $this->assertFalse(
+                    $this->same($reported, $expect['last_id_is_not_stale']),
+                    "{$name}: lastId came back as the EARLIER row's id — the adapter is "
+                    . "reporting a stale id rather than null"
+                );
+            }
         }
-        $this->assertTrue($threw, 'a partial composite key did not raise');
+
+        if ($expect['visible_after_reconnect'] ?? false) {
+            // A write only visible on the connection that made it is not
+            // durable, and reading it back on the same handle cannot tell.
+            $other = self::connect();
+            $this->assertCount(
+                $expect['rows_after'] ?? 1,
+                $this->rows($other, $table),
+                "{$name}: the write is not visible on a second connection — it was never durable"
+            );
+        }
+    }
+
+    /**
+     * Not a gate — the record. A reader must be able to see whether this
+     * contract was checked against a real engine or only against the one that
+     * shares nothing with them.
+     */
+    public function testTheRunRecordsWhichEngineItCovered(): void
+    {
+        fwrite(STDERR, "\nwrite-path contract covered: " . self::$db->getAdapter()->getDatabaseType() . "\n");
+        $this->assertNotSame('', self::$url);
+    }
+
+    /**
+     * The orphan guard. A case naming an op the dispatcher does not implement
+     * must FAIL, never be quietly skipped — silent skipping is how the fixture
+     * went unread for its whole life while the runners drifted apart.
+     */
+    public function testTheRunnerImplementsEveryOpTheSharedFixtureUses(): void
+    {
+        $declared = [];
+        foreach (array_merge(self::$contract['cases'], self::$contract['errors']) as $case) {
+            $declared[$case['op']] = true;
+        }
         $this->assertSame(
-            $before,
-            $this->items($db),
-            'a partial composite key modified rows - it matched on the first column'
+            [],
+            array_values(array_diff(array_keys($declared), self::IMPLEMENTED_OPS)),
+            'the shared fixture declares op(s) this runner cannot execute'
         );
+    }
+
+    /**
+     * Every case in the shared fixture, checked against the same answer key.
+     *
+     * @dataProvider caseProvider
+     */
+    public function testCaseFromTheSharedFixture(string $name): void
+    {
+        $case = $this->findCase($name);
+        $this->assertNotNull($case, "case {$name} vanished from the fixture");
+
+        $table = $this->tableFor($case);
+        $this->resetTables();
+        $this->seed($case, $table);
+
+        if ($case['expect_raises'] ?? false) {
+            $threw = false;
+            try {
+                $this->runOp($case, $table);
+            } catch (\Throwable) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, "{$name}: the op did not raise");
+            // The write must not have landed. This is the data-loss property.
+            $this->checkExpectations($case, $table, null);
+            if ($case['expect_error_recorded'] ?? false) {
+                $this->assertNotSame(
+                    '',
+                    (string) self::$db->getError(),
+                    "{$name}: the statement raised but getError() was empty — "
+                    . "the cause has to stay readable after the raise"
+                );
+            }
+            return;
+        }
+
+        $this->checkExpectations($case, $table, $this->runOp($case, $table));
     }
 }

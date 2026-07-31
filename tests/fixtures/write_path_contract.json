@@ -23,22 +23,55 @@
     "identifier quoting differ exactly where the engine differs. A green SQLite run",
     "is the least informative possible result.",
     "",
-    "No mocks. A database is a real dependency and CI provisions it."
+    "No mocks. A database is a real dependency and CI provisions it.",
+    "",
+    "THE RUNNERS EXECUTE THIS FILE. Every case below runs in python, php, ruby and",
+    "node, driven by the same `name`, the same `op`, the same seed and the same",
+    "answer key - the shape adapter_contract.json and batch_write_contract.json",
+    "already use. This file used to be ORPHANED: nothing read it, the four runners",
+    "were hand-written independently, and they drifted to 17/16/15/14 cases with",
+    "different names. That is how `a_string_filter_with_params...` below was never",
+    "executed anywhere, while the bug it describes shipped: Node's postgres, mysql,",
+    "mssql and firebird adapters walked a string filter with Object.keys(), so",
+    "Object.keys(\"1 = 1\") yielded [\"0\",\"1\",...] and PostgreSQL answered",
+    "`column \"0\" does not exist`. Do not add a hand-written case to a runner - add",
+    "it HERE, so all four gain it at once.",
+    "",
+    "OPS a runner must implement: insert, insert_batch, update, delete, truncate,",
+    "primary_key, transaction_rollback, transaction_commit, execute_raw.",
+    "",
+    "EXPECTATIONS a runner must check:",
+    "  affected_rows            - the write reported this many rows",
+    "  rows_after               - the table holds this many rows when the op is done",
+    "  unchanged                - one row matching EVERY listed column still exists",
+    "  primary_key              - primary_key(table) reports exactly this list",
+    "  last_id_is_set_or_null   - a last insert id, or null; never a stale value",
+    "  last_id_is_not_stale     - the reported last id is NOT this earlier row's id",
+    "  last_id_is_null          - last id is insert-only; update/delete report none",
+    "  visible_after_reconnect  - a SECOND connection to the same database sees it",
+    "  expect_raises            - the op raises rather than writing",
+    "  expect_error_recorded    - the cause stays readable on get_error() after it",
+    "",
+    "Each case starts from BOTH tables empty, applies its own seed, then runs its",
+    "op. Cases never depend on each other or on their order."
   ],
 
   "table": {
     "name": "tina4_write_contract",
-    "_note": "Single-column primary key. Created and dropped by each runner.",
+    "_note": "Single-column primary key. Created and dropped by each runner. Ids come from the DATA, not a sequence - the cases name id 1 and 2 explicitly, and an identity column would fight them.",
+    "ddl": "CREATE TABLE tina4_write_contract (id INTEGER NOT NULL PRIMARY KEY, name VARCHAR(80), qty INTEGER)",
     "columns": {
       "id": "INTEGER PRIMARY KEY",
       "name": "VARCHAR(80)",
       "qty": "INTEGER"
-    }
+    },
+    "primary_key": ["id"]
   },
 
   "composite_table": {
     "name": "tina4_write_composite",
-    "_note": "A primary key spanning TWO columns. Feature 4 found that a key was assumed to be one column, so a write keyed on only the first matched every row sharing that value. Every write case below runs against this table too.",
+    "_note": "A primary key spanning TWO columns. Feature 4 found that a key was assumed to be one column, so a write keyed on only the first matched every row sharing that value. NOT NULL is explicit because a composite key column must be non-nullable on every engine.",
+    "ddl": "CREATE TABLE tina4_write_composite (tenant VARCHAR(40) NOT NULL, code VARCHAR(40) NOT NULL, label VARCHAR(80), PRIMARY KEY (tenant, code))",
     "columns": {
       "tenant": "VARCHAR(40)",
       "code": "VARCHAR(40)",
@@ -56,10 +89,16 @@
     },
     {
       "name": "insert_reports_a_last_insert_id",
-      "_note": "lastId is set on INSERT only. Engines that cannot report one (some ODBC paths) may return null; they must NOT return a stale id from an earlier write.",
+      "_note": "lastId is set on INSERT only. Engines that cannot report one (some ODBC paths, and any engine asked for a non-identity key) may return null; they must NOT return a stale id from an earlier write. The seeded row 1 is that earlier write, so its id must never come back as the id of the row just inserted.",
       "op": "insert",
+      "seed": [{ "id": 1, "name": "alpha", "qty": 10 }],
       "data": { "id": 2, "name": "beta", "qty": 20 },
-      "expect": { "last_id_is_set_or_null": true, "last_id_is_not_stale": true }
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 2,
+        "last_id_is_set_or_null": true,
+        "last_id_is_not_stale": 1
+      }
     },
     {
       "name": "a_batch_insert_writes_every_row",
@@ -68,7 +107,14 @@
         { "id": 3, "name": "gamma", "qty": 30 },
         { "id": 4, "name": "delta", "qty": 40 }
       ],
-      "expect": { "affected_rows": 2, "rows_after": 2 }
+      "expect": {
+        "affected_rows": 2,
+        "rows_after": 2,
+        "unchanged": [
+          { "id": 3, "name": "gamma", "qty": 30 },
+          { "id": 4, "name": "delta", "qty": 40 }
+        ]
+      }
     },
     {
       "name": "update_with_an_explicit_filter_changes_only_matching_rows",
@@ -79,18 +125,46 @@
       ],
       "data": { "qty": 99 },
       "filter": { "id": 1 },
-      "expect": { "affected_rows": 1, "unchanged": [{ "id": 2, "qty": 20 }] }
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 99 }, { "id": 2, "qty": 20 }],
+        "last_id_is_null": true
+      }
     },
     {
       "name": "update_with_no_filter_uses_the_primary_key_from_the_data",
-      "_note": "Feature 4: update() with no filter takes the PK out of the data and uses it as the WHERE clause. It does NOT rewrite every row.",
+      "_note": "Feature 4: update() with no filter takes the PK out of the data and uses it as the WHERE clause. It does NOT rewrite every row. affected_rows must also never be 0 while a matching row exists - Node's old failure mode, where a caller who did not inspect the result believed the write landed.",
       "op": "update",
       "seed": [
         { "id": 1, "name": "alpha", "qty": 10 },
         { "id": 2, "name": "beta", "qty": 20 }
       ],
       "data": { "id": 1, "qty": 55 },
-      "expect": { "affected_rows": 1, "unchanged": [{ "id": 2, "qty": 20 }] }
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 55 }, { "id": 2, "qty": 20 }],
+        "last_id_is_null": true
+      }
+    },
+    {
+      "name": "a_string_filter_with_params_updates_the_same_rows_as_a_hash_filter",
+      "_note": "The update half of the two documented filter forms. Same seed and same answer key as update_with_an_explicit_filter_changes_only_matching_rows, spelled the other way; if the two ever disagree, one form is broken.",
+      "op": "update",
+      "seed": [
+        { "id": 1, "name": "alpha", "qty": 10 },
+        { "id": 2, "name": "beta", "qty": 20 }
+      ],
+      "data": { "qty": 99 },
+      "filter_sql": "id = ?",
+      "filter_params": [1],
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 99 }, { "id": 2, "qty": 20 }],
+        "last_id_is_null": true
+      }
     },
     {
       "name": "delete_with_an_explicit_filter_removes_only_matching_rows",
@@ -100,11 +174,16 @@
         { "id": 2, "name": "beta", "qty": 20 }
       ],
       "filter": { "id": 1 },
-      "expect": { "affected_rows": 1, "rows_after": 1 }
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 1,
+        "unchanged": [{ "id": 2, "qty": 20 }],
+        "last_id_is_null": true
+      }
     },
     {
       "name": "a_string_filter_with_params_works_the_same_as_a_hash_filter",
-      "_note": "Both forms are documented in all four; they must not diverge.",
+      "_note": "Both forms are documented in all four; they must not diverge. THIS is the case no runner executed while the fixture was orphaned, and it is exactly the shape that was broken in four Node adapters.",
       "op": "delete",
       "seed": [
         { "id": 1, "name": "alpha", "qty": 10 },
@@ -112,14 +191,29 @@
       ],
       "filter_sql": "id = ?",
       "filter_params": [2],
-      "expect": { "affected_rows": 1, "rows_after": 1 }
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 1,
+        "unchanged": [{ "id": 1, "qty": 10 }],
+        "last_id_is_null": true
+      }
+    },
+    {
+      "name": "truncate_removes_every_row",
+      "_note": "Emptying a table is a real thing to want, and it has to be spelled out - delete() with no filter raises. truncate() is the method that walks a raw '1 = 1' string filter into the adapter, which is how the Object.keys() bug was actually found.",
+      "op": "truncate",
+      "seed": [
+        { "id": 1, "name": "alpha", "qty": 10 },
+        { "id": 2, "name": "beta", "qty": 20 }
+      ],
+      "expect": { "affected_rows": 2, "rows_after": 0 }
     },
     {
       "name": "a_standalone_write_is_durable_without_an_explicit_commit",
       "_note": "The autocommit contract: ON for a standalone write. Verified by reading the row back on a DIFFERENT connection where the engine allows it.",
       "op": "insert",
       "data": { "id": 7, "name": "durable", "qty": 7 },
-      "expect": { "visible_after_reconnect": true }
+      "expect": { "rows_after": 1, "visible_after_reconnect": true }
     },
     {
       "name": "a_rolled_back_write_is_not_visible",
@@ -134,6 +228,19 @@
       "expect": { "rows_after": 1, "visible_after_reconnect": true }
     },
     {
+      "name": "the_primary_key_is_introspected_rather_than_assumed",
+      "_note": "primary_key() returns a LIST on every framework. A resolver that guessed 'id' would pass here and fail the composite case below - which is the point of having both.",
+      "op": "primary_key",
+      "expect": { "primary_key": ["id"] }
+    },
+    {
+      "name": "a_composite_primary_key_reports_every_key_column",
+      "_note": "A key that collapsed to its first column would build WHERE tenant = ? and match every row in the tenant. That is the data-loss bug, one layer down from the write.",
+      "op": "primary_key",
+      "table": "composite",
+      "expect": { "primary_key": ["tenant", "code"] }
+    },
+    {
       "name": "a_composite_key_write_matches_on_every_key_column",
       "_note": "Feature 4's sharpest case. Two rows share `tenant`; a write keyed on tenant alone would hit both.",
       "op": "update",
@@ -143,31 +250,115 @@
         { "tenant": "acme", "code": "a2", "label": "second" }
       ],
       "data": { "tenant": "acme", "code": "a1", "label": "changed" },
-      "expect": { "affected_rows": 1, "unchanged": [{ "code": "a2", "label": "second" }] }
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 2,
+        "unchanged": [
+          { "code": "a1", "label": "changed" },
+          { "code": "a2", "label": "second" }
+        ],
+        "last_id_is_null": true
+      }
+    },
+    {
+      "name": "delete_accepts_a_full_composite_key",
+      "op": "delete",
+      "table": "composite",
+      "seed": [
+        { "tenant": "acme", "code": "a1", "label": "first" },
+        { "tenant": "acme", "code": "a2", "label": "second" }
+      ],
+      "filter": { "tenant": "acme", "code": "a1" },
+      "expect": {
+        "affected_rows": 1,
+        "rows_after": 1,
+        "unchanged": [{ "code": "a2", "label": "second" }],
+        "last_id_is_null": true
+      }
     }
   ],
 
   "errors": [
     {
       "name": "update_with_neither_a_filter_nor_a_primary_key_raises",
-      "_note": "Feature 4, breaking in 3.13.94: a write with no filter is an ERROR, not a full-table operation. This is the case that used to overwrite every row.",
+      "_note": "Feature 4, breaking in 3.13.94: a write with no filter is an ERROR, not a full-table operation. This is the case that used to overwrite every row - so the seeded rows must still be exactly as seeded once it has raised.",
       "op": "update",
+      "seed": [
+        { "id": 1, "name": "alpha", "qty": 10 },
+        { "id": 2, "name": "beta", "qty": 20 }
+      ],
       "data": { "qty": 1 },
-      "expect_raises": true
+      "expect_raises": true,
+      "expect": {
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 10 }, { "id": 2, "qty": 20 }]
+      }
     },
     {
       "name": "delete_with_no_filter_raises",
       "_note": "truncate() is the explicit whole-table spelling, and it is a different method on purpose.",
       "op": "delete",
-      "expect_raises": true
+      "seed": [
+        { "id": 1, "name": "alpha", "qty": 10 },
+        { "id": 2, "name": "beta", "qty": 20 }
+      ],
+      "expect_raises": true,
+      "expect": {
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 10 }, { "id": 2, "qty": 20 }]
+      }
+    },
+    {
+      "name": "delete_with_a_blank_string_filter_raises",
+      "_note": "A BLANK string is not a filter, it is the absence of one, and it must raise exactly like an empty hash. Node's guard skipped the emptiness test for anything typed string, so delete(t, \"\") fell through to the adapter, which renders an empty WHERE as `DELETE FROM t` - a silent whole-table delete through the one method that exists to make that impossible.",
+      "op": "delete",
+      "seed": [
+        { "id": 1, "name": "alpha", "qty": 10 },
+        { "id": 2, "name": "beta", "qty": 20 }
+      ],
+      "filter_sql": "",
+      "filter_params": [],
+      "expect_raises": true,
+      "expect": {
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 10 }, { "id": 2, "qty": 20 }]
+      }
+    },
+    {
+      "name": "update_with_a_blank_string_filter_and_no_primary_key_raises",
+      "_note": "The update half of the same property: a blank string filter is no filter, so it falls through to the primary key - and with no PK in the data that is an error, not a full-table rewrite.",
+      "op": "update",
+      "seed": [
+        { "id": 1, "name": "alpha", "qty": 10 },
+        { "id": 2, "name": "beta", "qty": 20 }
+      ],
+      "data": { "qty": 1 },
+      "filter_sql": "",
+      "filter_params": [],
+      "expect_raises": true,
+      "expect": {
+        "rows_after": 2,
+        "unchanged": [{ "id": 1, "qty": 10 }, { "id": 2, "qty": 20 }]
+      }
     },
     {
       "name": "a_composite_key_write_missing_part_of_the_key_raises",
       "_note": "Half a composite key is not a filter. Accepting it would match every row sharing the first column.",
       "op": "update",
       "table": "composite",
+      "seed": [
+        { "tenant": "acme", "code": "a1", "label": "first" },
+        { "tenant": "acme", "code": "a2", "label": "second" }
+      ],
       "data": { "tenant": "acme", "label": "changed" },
-      "expect_raises": true
+      "expect_raises": true,
+      "expect": {
+        "rows_after": 2,
+        "unchanged": [
+          { "code": "a1", "label": "first" },
+          { "code": "a2", "label": "second" }
+        ]
+      }
     },
     {
       "name": "execute_raises_on_a_bad_statement_and_never_returns_false",
