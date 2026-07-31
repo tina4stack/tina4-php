@@ -37,6 +37,20 @@ class App
     public static string $VERSION = '3.13.94';
 
     /**
+     * The health path that is registered no matter what TINA4_HEALTH_PATH says.
+     * Probes written against it must keep working when an operator configures a
+     * different path, so this is an alias that is only ever added, never moved.
+     */
+    public const HEALTH_LEGACY_PATH = '/health';
+
+    /**
+     * The health path used when TINA4_HEALTH_PATH is unset. Identical in all
+     * four frameworks; the under-prefix keeps it clear of an application route
+     * that happens to be called /health.
+     */
+    public const HEALTH_DEFAULT_PATH = '/__health';
+
+    /**
      * Legacy env var names that v3.12 retired. Each maps to its new
      * TINA4_-prefixed canonical name. If any of these are set in the
      * environment we refuse to boot — silently ignoring them would
@@ -684,11 +698,17 @@ class App
     }
 
     /**
-     * Register the /health endpoint.
+     * Register the health check endpoint.
      *
-     * Path is configurable via TINA4_HEALTH_PATH (default '/health' for
-     * back-compat with the existing /health route used in tests; matches
-     * the v3 documented '/__health' alias when set).
+     * The path is configurable via TINA4_HEALTH_PATH and defaults to
+     * '/__health', matching Python, Ruby and Node and the documented default in
+     * docs/php/33-environment-variables.md. '/health' is ALWAYS registered as
+     * well, whatever the configured path, because it is what a probe that was
+     * written before the env var existed points at: setting TINA4_HEALTH_PATH
+     * must add a path, never take one away. PHP previously defaulted to
+     * '/health' and registered the configured path ONLY, so '/__health' 404ed
+     * on a default install and '/health' 404ed the moment an operator set the
+     * env var -- either of which silently takes a pod out of rotation.
      */
     private function registerHealthCheck(): void
     {
@@ -697,13 +717,18 @@ class App
         };
 
         $envPath = DotEnv::getEnv('TINA4_HEALTH_PATH');
-        $path = ($envPath !== null && $envPath !== '') ? $envPath : '/health';
+        $path = ($envPath !== null && $envPath !== '') ? $envPath : self::HEALTH_DEFAULT_PATH;
         if (!str_starts_with($path, '/')) {
             $path = '/' . $path;
         }
 
         Router::get($path, $handler);
         $this->routes['GET'][$path] = fn() => $this->getHealthData();
+
+        if ($path !== self::HEALTH_LEGACY_PATH) {
+            Router::get(self::HEALTH_LEGACY_PATH, $handler);
+            $this->routes['GET'][self::HEALTH_LEGACY_PATH] = fn() => $this->getHealthData();
+        }
     }
 
     /**
