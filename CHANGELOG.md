@@ -70,6 +70,66 @@ hard fatal. Nothing tested it. It now uses `check()`'s real headers and
 
 `X-RateLimit-Reset` is also now emitted (as an absolute Unix timestamp, matching
 tina4-ruby and tina4-nodejs); PHP previously sent it nowhere.
+### Breaking: the response cache obeys RFC 9111 (Authorization and Vary)
+
+The response cache keyed entries on method plus URL, with NO request header in
+the key. It is a shared, server-side store, so on a secured GET route the first
+caller's body was served to every later caller of the same URL. Measured
+end-to-end on a real secured route: a valid token for `bob` returned alice's
+private body with `X-Cache: HIT`. In Node, where route middleware runs before
+the auth gate, an ANONYMOUS request returned 200 with alice's body.
+
+Two RFC 9111 rules now apply, as they do in Varnish, nginx and Rails:
+
+- Section 3 / 3.5: a response to a request carrying `Authorization` is NOT
+  stored unless the response carries `Cache-Control: public`, `s-maxage` or
+  `must-revalidate`.
+- Section 4.1: `Vary` is honoured. The nominated request headers are recorded
+  with the entry and must match on lookup; an absent field matches only an
+  absent field. `Vary: *` is never stored.
+
+**Migration.** Authenticated GETs are no longer cached by default. If a
+response body is genuinely identical for every caller, opt back in per
+response:
+
+```php
+$response->header('Cache-Control', 'public');
+```
+
+Only add it where the body carries nothing user-specific. Public GET caching is
+unchanged. See ADR-0020 and `plan/v3/features/043-caching.md`.
+
+### Breaking: an unknown TINA4_CACHE_BACKEND raises instead of falling back to memory
+
+An unrecognised name silently became an in-process memory cache, so a typo
+(`TINA4_CACHE_BACKEND=redsi`) produced a running app that shared nothing while the
+operator believed it was Redis. It now raises, naming the bad value and the valid
+set - the contract `TINA4_SESSION_BACKEND` already uses.
+
+**Migration.** Fix the spelling. Valid: `memory`, `file`, `redis`, `valkey`,
+`memcached`, `mongodb`, `database` (plus the aliases `memcache`, `mongo`, `db`).
+
+### Breaking: {% cache %} TTL semantics now match Python, Ruby and Node
+
+PHP parsed a missing TTL as `0` and then treated `0` as "cache forever", so both
+ends of the contract were inverted against the other three frameworks:
+
+- `{% cache "key" %}` never re-rendered for the life of the process. It now
+  defaults to 60 seconds.
+- `{% cache "key" 0 %}` cached forever. `0` now means NOT cached, which is what
+  `now + 0` already meant in Python, Ruby and Node.
+
+**Migration.** A block that relied on `0` meaning "cache forever" needs an
+explicit positive TTL: `{% cache "key" 86400 %}`.
+
+### Breaking: ->middleware([ResponseCache::class]) now actually caches
+
+It was a silent no-op: `Middleware::discoverMethods()` collects only PUBLIC
+STATIC methods and `beforeCache`/`afterCache` are instance methods, so no hook
+was ever discovered - no warning, no header, no caching. Static
+`beforeResponseCache`/`afterResponseCache` hooks now delegate to the module
+singleton. Routes using this form start caching for the first time; the route's
+responses are now subject to the RFC 9111 rules above.
 
 ### One middleware return-value contract, both entry points
 

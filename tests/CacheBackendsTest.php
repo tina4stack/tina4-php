@@ -100,9 +100,24 @@ class CacheBackendsTest extends TestCase
         @unlink($path);
     }
 
-    public function testUnknownFallsBackToMemory(): void
+    public function testCacheBackendUnknownNameRaises(): void
     {
-        $this->assertSame('memory', CacheFactory::create('bogus')->name());
+        // An unrecognised TINA4_CACHE_BACKEND raises, naming the valid set. It
+        // used to fall through to memory, so a typo (redsi) produced a running
+        // app with a per-process cache while the operator believed it was
+        // Redis. Same contract the session layer already settled on.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Unknown cache backend 'redsi'");
+        CacheFactory::create('redsi');
+    }
+
+    public function testCacheBackendKnownNamesDoNotRaise(): void
+    {
+        // Negative control: every documented spelling still builds.
+        $this->assertSame('memory', CacheFactory::create('memory')->name());
+        $this->assertSame('memory', CacheFactory::create('MEMORY')->name());
+        $this->assertSame('memory', CacheFactory::create(' memory ')->name());
+        $this->assertSame('memory', CacheFactory::create('')->name());
     }
 
     public function testUnavailableBackendFallsBackToFile(): void

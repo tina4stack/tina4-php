@@ -918,7 +918,10 @@ class Frond
         // Parse "key" ttl
         $parts = preg_split(self::RE_WHITESPACE_SPLIT, trim($params), 2);
         $key = trim($parts[0], "\"'");
-        $ttl = isset($parts[1]) ? (int)$parts[1] : 0;
+        // Default 60s when no TTL is given, matching Python/Ruby/Node. PHP
+        // defaulted to 0, and 0 meant "cache forever" here, so
+        // {% cache "k" %} never re-rendered for the life of the process.
+        $ttl = isset($parts[1]) ? (int)$parts[1] : 60;
         $body = $this->parse($tokens, $pos, 'endcache');
         $pos++;
         return ['type' => 'cache', 'key' => $key, 'ttl' => $ttl, 'body' => $body];
@@ -1492,7 +1495,10 @@ class Frond
         $key = $node['key'];
         if (isset($this->cache[$key])) {
             $entry = $this->cache[$key];
-            if ($entry['ttl'] === 0 || (time() - $entry['time']) < $entry['ttl']) {
+            // ttl 0 means NOT cached (Python/Ruby/Node all treat now+0 as
+            // already expired). PHP read 0 as "cache forever" -- the exact
+            // opposite -- so {% cache "k" 0 %} was permanent here.
+            if ($entry['ttl'] > 0 && (time() - $entry['time']) < $entry['ttl']) {
                 return $entry['content'];
             }
         }
