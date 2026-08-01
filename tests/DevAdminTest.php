@@ -1406,37 +1406,7 @@ class DevAdminTest extends TestCase
     }
 }
 
-// ── SQLite LIMIT dedup ─────────────────────────────────────────────
-
-class SQLiteLimitDedupTest extends TestCase
-{
-    public function testFetchWithExistingLimitDoesNotDouble(): void
-    {
-        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
-        $db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)");
-        for ($i = 0; $i < 10; $i++) {
-            $db->exec("INSERT INTO items (id, name) VALUES ({$i}, 'item{$i}')");
-        }
-
-        // SQL already has LIMIT — should NOT add another
-        $result = $db->fetch("SELECT * FROM items LIMIT 3");
-        $this->assertCount(3, $result['data']);
-
-        $db->close();
-    }
-
-    public function testFetchWithoutLimitAddsDefault(): void
-    {
-        $db = new \Tina4\Database\SQLite3Adapter(':memory:');
-        $db->exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)");
-        for ($i = 0; $i < 30; $i++) {
-            $db->exec("INSERT INTO items (id, name) VALUES ({$i}, 'item{$i}')");
-        }
-
-        // No LIMIT in SQL — adapter adds default (10)
-        $result = $db->fetch("SELECT * FROM items");
-        $this->assertCount(10, $result['data']);
-
-        $db->close();
-    }
-}
+// SQLiteLimitDedupTest used to live here as a second `extends TestCase` class.
+// PHPUnit 11 collects only the class matching the file basename, so it never ran
+// once. It is now tests/SQLiteLimitDedupTest.php, and ClassCollectionTest fails
+// the build if a second TestCase class is ever buried in a file again.
