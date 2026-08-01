@@ -296,6 +296,56 @@ class AuthSessionContractTest extends TestCase
      * session.use_strict_mode=1 default — require the server to only accept an
      * id it actually issued.
      */
+    /**
+     * A backend OUTAGE must degrade, never rotate the session id.
+     *
+     * Strict mode discards an id the store does not KNOW. A store that does not
+     * ANSWER is not evidence of that, and treating it as such rotates the id on
+     * every request for the whole outage - logging every user out over a blip
+     * and orphaning their stored sessions. The documented policy is log-loud +
+     * degrade.
+     *
+     * The outage is REAL, not simulated: the redis backend is pointed at a
+     * closed port, so the handler genuinely fails to connect.
+     */
+    public function testBackendOutageDoesNotRotateTheSessionId(): void
+    {
+        $priorHost = getenv('TINA4_SESSION_REDIS_HOST') ?: null;
+        $priorPort = getenv('TINA4_SESSION_REDIS_PORT') ?: null;
+        // A port nothing is listening on - a genuine unreachable backend.
+        putenv('TINA4_SESSION_REDIS_HOST=127.0.0.1');
+        putenv('TINA4_SESSION_REDIS_PORT=59999');
+
+        try {
+            $supplied = 'abcdef0123456789abcdef0123456789';
+            $seen = [];
+            for ($i = 0; $i < 3; $i++) {
+                $session = new Session('redis');
+                $seen[] = $session->start($supplied);
+            }
+
+            $this->assertSame(
+                [$supplied, $supplied, $supplied],
+                $seen,
+                'session id rotated during a backend outage: ' . implode(', ', $seen)
+            );
+        } finally {
+            if ($priorHost === null) { putenv('TINA4_SESSION_REDIS_HOST'); } else { putenv("TINA4_SESSION_REDIS_HOST={$priorHost}"); }
+            if ($priorPort === null) { putenv('TINA4_SESSION_REDIS_PORT'); } else { putenv("TINA4_SESSION_REDIS_PORT={$priorPort}"); }
+        }
+
+        // Negative half: a HEALTHY store that genuinely has no such session must
+        // still discard the id, or strict mode has been disabled not fixed.
+        $store = $this->tempRoot . '/outage_control';
+        mkdir($store, 0755, true);
+        $healthy = $this->fileSession($store);
+        $this->assertNotSame(
+            'abcdef0123456789abcdef0123456789',
+            $healthy->start('abcdef0123456789abcdef0123456789'),
+            'strict mode stopped discarding an unknown id on a healthy backend'
+        );
+    }
+
     public function testWellFormedButUnknownSessionIdIsNotAdopted(): void
     {
         $store = $this->tempRoot . '/strict';
