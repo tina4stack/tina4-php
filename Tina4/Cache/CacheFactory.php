@@ -73,8 +73,19 @@ class CacheFactory
             case 'file':
                 $cacheDir = $cacheDir ?? (\Tina4\DotEnv::getEnv('TINA4_CACHE_DIR') ?? 'data/cache');
                 return new FileBackend($cacheDir, $maxEntries);
-            default:
+            case 'memory':
+            case '':
                 return new MemoryBackend($maxEntries);
+            default:
+                // An UNRECOGNISED name RAISES, naming the bad value and the
+                // valid ones -- the contract the session layer already settled
+                // on. Falling through to memory turned a typo
+                // (TINA4_CACHE_BACKEND=redsi) into a running app with a
+                // per-process cache while the operator believed it was Redis.
+                throw new \InvalidArgumentException(
+                    "Unknown cache backend '{$backend}'. Valid backends: "
+                    . 'memory, file, redis, valkey, memcached, mongodb, database.'
+                );
         }
 
         // Graceful degradation — fall back to file (persistent, always
