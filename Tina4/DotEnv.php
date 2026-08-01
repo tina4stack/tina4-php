@@ -180,6 +180,32 @@ class DotEnv
     /**
      * Parse a value string, handling quotes and inline comments.
      */
+    /**
+     * Index of the quote that CLOSES a quoted value, or false if unterminated.
+     *
+     * Inside a double-quoted value a backslash escapes the next character, so a
+     * \" is part of the value and must not end it. Single-quoted values are
+     * verbatim (shell semantics), so nothing escapes there.
+     *
+     * @param string $value the raw value, starting at its opening quote
+     * @param string $quote the opening quote character
+     * @return int|false index of the closing quote, or false when unterminated
+     */
+    private static function findClosingQuote(string $value, string $quote)
+    {
+        $len = strlen($value);
+        for ($i = 1; $i < $len; $i++) {
+            if ($quote === '"' && $value[$i] === '\\' && $i + 1 < $len) {
+                $i++;
+                continue;
+            }
+            if ($value[$i] === $quote) {
+                return $i;
+            }
+        }
+        return false;
+    }
+
     private static function parseValue(string $value): string
     {
         if ($value === '') {
@@ -188,9 +214,15 @@ class DotEnv
 
         $firstChar = $value[0];
 
-        // Double-quoted value
+        // Double-quoted value.
+        //
+        // The terminator scan must SKIP a quote preceded by a backslash. A plain
+        // strpos() stopped at the first ESCAPED quote, so DQ="say \"hi\"" was
+        // truncated to `say \` -- and that made this class's own \" escape entry
+        // below unreachable, because the value never contained one by the time
+        // the replace ran. Python, Ruby and Node now use the identical scan.
         if ($firstChar === '"') {
-            $endQuote = strpos($value, '"', 1);
+            $endQuote = self::findClosingQuote($value, '"');
             if ($endQuote !== false) {
                 $value = substr($value, 1, $endQuote - 1);
                 // Process escape sequences in double-quoted strings
@@ -207,7 +239,7 @@ class DotEnv
 
         // Single-quoted value (no escaping, no interpolation)
         if ($firstChar === "'") {
-            $endQuote = strpos($value, "'", 1);
+            $endQuote = self::findClosingQuote($value, "'");
             if ($endQuote !== false) {
                 return substr($value, 1, $endQuote - 1);
             }

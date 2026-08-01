@@ -18,9 +18,7 @@
     "prefix dropped the variable entirely, a trailing comment stayed in the value,",
     "and ${VAR} never expanded anywhere but PHP."
   ],
-
-  "env_file": "PLAIN=hello\nexport EXPORTED=shellstyle\nQUOTED=\"double quoted\"\nSINGLE='single quoted'\nHOST=example.com\nINTERP=${HOST}/api\nDQ_INTERP=\"${HOST}/v2\"\nLITERAL='${HOST}/api'\nWITH_HASH=value # trailing comment\nQUOTED_HASH=\"a # b\"\nUNKNOWN=${NOPE}/x\nEMPTY=\nESCAPES=\"line1\\nline2\\ttabbed\"\nSPACED_KEY = spaced\nno_equals_sign\n1BAD=invalid key\n",
-
+  "env_file": "PLAIN=hello\nexport EXPORTED=shellstyle\nQUOTED=\"double quoted\"\nSINGLE='single quoted'\nHOST=example.com\nINTERP=${HOST}/api\nDQ_INTERP=\"${HOST}/v2\"\nLITERAL='${HOST}/api'\nWITH_HASH=value # trailing comment\nQUOTED_HASH=\"a # b\"\nUNKNOWN=${NOPE}/x\nEMPTY=\nESCAPES=\"line1\\nline2\\ttabbed\"\nSPACED_KEY = spaced\nno_equals_sign\n1BAD=invalid key\nDQ_THEN_COMMENT=\"s3cret\" # the database password\nSQ_THEN_COMMENT='lit' # note\nTRAILING_BS=hello\\\nCONT_NEXT=world\n",
   "expected": {
     "PLAIN": "hello",
     "EXPORTED": "shellstyle",
@@ -35,14 +33,19 @@
     "UNKNOWN": "${NOPE}/x",
     "EMPTY": "",
     "ESCAPES": "line1\nline2\ttabbed",
-    "SPACED_KEY": "spaced"
+    "SPACED_KEY": "spaced",
+    "DQ_THEN_COMMENT": "s3cret",
+    "SQ_THEN_COMMENT": "lit",
+    "TRAILING_BS": "hello\\",
+    "CONT_NEXT": "world"
   },
-
   "_never_set": {
     "_note": "Keys that must NOT exist after loading. A malformed line is skipped with a warning, never guessed at, and one bad line never stops the rest of the file.",
-    "keys": ["no_equals_sign", "1BAD"]
+    "keys": [
+      "no_equals_sign",
+      "1BAD"
+    ]
   },
-
   "_rules": {
     "export_prefix": "A shell-style `export FOO=bar` is valid input. Ruby dropped these lines entirely and said nothing, so a .env copied out of a shell profile lost keys and the failure surfaced somewhere unrelated.",
     "trailing_comment": "An unquoted value ends at the first SPACE-HASH. Ruby kept the whole line, so `value # note` became 'value # note' - a wrong value rather than an absent one, which is the harder kind to notice.",
@@ -52,9 +55,10 @@
     "unresolved_reference": "Left LITERAL and warned about once per name, never resolved to an empty string. PHP emptied it, so `URL=${DB_HOST}/db` with a typo silently became '/db'.",
     "empty_value": "`EMPTY=` sets the empty string. It does not unset and it is not absent.",
     "escapes": "A double-quoted value processes \\n, \\t and \\\\. A single-quoted one does not.",
-    "spaced_key": "Whitespace around the key is trimmed."
+    "spaced_key": "Whitespace around the key is trimmed.",
+    "no_line_continuation": "A trailing backslash does NOT join the next line. The value keeps the literal backslash and the following line is parsed on its own. Node alone implemented shell-style continuation, so one .env produced a DIFFERENT SET OF VARIABLES on Node than on the other three - the swap in ADR-0024 broken at the config layer itself. The continuation loop was deleted rather than ported: no mainstream dotenv (motdotla, vlucas/phpdotenv, bkeepers/dotenv, python-dotenv) joins lines this way, so porting it to three frameworks would have moved all four off the ecosystem contract to preserve one framework's extension.",
+    "quoted_then_comment": "A QUOTED value ends at its CLOSING QUOTE; anything after it is a comment and is discarded. This corpus already covered a `#` INSIDE quotes (quoted_hash) and a `#` after an UNQUOTED value (trailing_comment), but never the case between them - and that is the single most common line in a real .env. Python, Ruby and Node decided 'is this quoted?' by testing the FIRST and LAST character, so a trailing comment made the last character non-quote, the value fell to the unquoted branch, and the QUOTE CHARACTERS were left in the value: PW=\"s3cret\" # comment yielded the 8-character string \"s3cret\" including quotes. A credential handed to a driver with quotes baked into it. PHP was correct - it scans for the closing quote. Missing corpus row, not a missing fixture: all four passed this file byte-identically while 3 of 4 were wrong."
   },
-
   "precedence": {
     "_note": "real environment > .env.local > .env, first-wins. A stray gitignored .env.local must never clobber an explicitly-set production variable.",
     "env": "PRECEDENCE_KEY=from_env\nSHARED_KEY=from_env\n",
