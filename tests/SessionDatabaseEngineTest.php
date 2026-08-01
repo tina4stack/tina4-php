@@ -31,6 +31,7 @@ namespace Tina4\Tests;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
+use Tina4\Database\MySQLAdapter;
 use Tina4\Session\DatabaseSessionHandler;
 
 class SessionDatabaseEngineTest extends TestCase
@@ -47,16 +48,16 @@ class SessionDatabaseEngineTest extends TestCase
                 getenv('TINA4_TEST_PG_URL') ?: 'postgres://127.0.0.1:55432/postgres',
                 getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1',
                 (int)(getenv('TINA4_TEST_PG_PORT') ?: 55432),
-                getenv('TINA4_TEST_PG_USER') ?: 'tina4',
-                getenv('TINA4_TEST_PG_PASS') ?: 'tina4',
+                getenv('TINA4_TEST_PG_USERNAME') ?: 'tina4',
+                getenv('TINA4_TEST_PG_PASSWORD') ?: 'tina4',
                 'pgsql:host=%s;port=%d;dbname=postgres',
             ],
             'mysql' => [
                 getenv('TINA4_TEST_MYSQL_URL') ?: 'mysql://127.0.0.1:3306/tina4_test',
                 getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1',
                 (int)(getenv('TINA4_TEST_MYSQL_PORT') ?: 3306),
-                getenv('TINA4_TEST_MYSQL_USER') ?: 'root',
-                getenv('TINA4_TEST_MYSQL_PASS') ?: 'tina4',
+                getenv('TINA4_TEST_MYSQL_USERNAME') ?: 'root',
+                getenv('TINA4_TEST_MYSQL_PASSWORD') ?: 'tina4',
                 'mysql:host=%s;port=%d;dbname=tina4_test',
             ],
         ];
@@ -89,6 +90,25 @@ class SessionDatabaseEngineTest extends TestCase
     private function connect(string $engine, array $spec): array
     {
         [$url, $host, $port, $user, $pass, $dsn] = $spec;
+
+        // The reachability gate below is a TCP probe, and the adapter under test
+        // reaches the engine over TCP — so this out-of-band PDO connection must
+        // use TCP too, or it is verifying a different server (or none at all).
+        //
+        // libmysqlclient treats the host "localhost" as a request for the UNIX
+        // SOCKET and IGNORES the port entirely, so `mysql:host=localhost;port=3306`
+        // hunts for /tmp/mysql.sock and dies "[2002] No such file or directory"
+        // against any TCP-published server (a Docker MySQL, i.e. every CI runner —
+        // the workflow sets TINA4_TEST_MYSQL_HOST=localhost). fsockopen has no such
+        // special case, so the probe reported the engine REACHABLE and the test
+        // then hard-failed instead of skipping. libpq has no such rule, which is
+        // why only the mysql data set failed.
+        //
+        // MySQLAdapter::rewriteHostForTcp is the framework's own fix for this
+        // footgun — reuse it rather than re-deriving it, so the test and the code
+        // under test can never disagree about which server they are talking to.
+        $host = MySQLAdapter::rewriteHostForTcp($host, $port);
+
         $this->requireReachable($engine, $host, $port);
 
         try {
