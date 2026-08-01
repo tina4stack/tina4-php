@@ -1,3 +1,17 @@
+### Fixed (session write, PHP-only defect)
+
+- `Session::saveToFile()` discarded the return value of `file_put_contents()`.
+  That function returns `false` on failure and does NOT throw, so a write that
+  never landed - a read-only file, a full disk, a revoked permission - left
+  `save()` returning `true` and the caller believing the session was persisted.
+  It now throws on a failed write; `safeWrite()` catches it and degrades per the
+  log-loud policy, so `save()` returns `false` and the dirty flag is retained.
+
+  PHP-only by construction: Python (`open().write`), Ruby (`File.write`) and Node
+  (`writeFileSync`) all RAISE on failure, so their identical `safeWrite` wrappers
+  already caught it. Verified empirically on Ruby (logs + returns false); the
+  other two share the same architecture. No port required.
+
 # Changelog
 
 Tina4 keeps ONE version across all four frameworks (Python, PHP, Ruby, Node.js), so a version
