@@ -86,14 +86,18 @@ class RedisSessionHandler
      * @param string $sessionId The session ID
      * @param array  $data      Session data to store
      */
-    public function write(string $sessionId, array $data): void
+    public function write(string $sessionId, array $data, int $ttl = 0): void
     {
         $this->ensureConnected();
 
         $key = $this->keyPrefix . $sessionId;
         $value = json_encode($data, JSON_UNESCAPED_SLASHES);
+        // A per-call $ttl WINS over the handler default. Every handler in every
+        // Tina4 framework takes this third argument and honours it; Session::write()
+        // passes it through, so asking for a 60s session really gets 60s.
+        $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
 
-        $this->sendCommand('SETEX', $key, (string)$this->ttl, $value);
+        $this->sendCommand('SETEX', $key, (string)$effectiveTtl, $value);
     }
 
     /**

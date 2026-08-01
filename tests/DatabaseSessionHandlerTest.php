@@ -40,9 +40,10 @@ class DatabaseSessionHandlerTest extends TestCase
         $this->assertTrue($ref->hasMethod('write'));
 
         $method = $ref->getMethod('write');
-        $this->assertEquals(2, $method->getNumberOfParameters());
+        $this->assertEquals(3, $method->getNumberOfParameters());
         $this->assertEquals('sessionId', $method->getParameters()[0]->getName());
         $this->assertEquals('data', $method->getParameters()[1]->getName());
+        $this->assertEquals('ttl', $method->getParameters()[2]->getName());
     }
 
     public function testHasDeleteMethod(): void

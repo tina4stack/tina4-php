@@ -83,14 +83,16 @@ class ValkeySessionHandler
      * @param string $sessionId The session ID
      * @param array  $data      Session data to store
      */
-    public function write(string $sessionId, array $data): void
+    public function write(string $sessionId, array $data, int $ttl = 0): void
     {
         $this->ensureConnected();
 
         $key = $this->keyPrefix . $sessionId;
         $value = json_encode($data, JSON_UNESCAPED_SLASHES);
+        // A per-call $ttl WINS over the handler default (see RedisSessionHandler).
+        $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
 
-        $this->sendCommand('SETEX', $key, (string)$this->ttl, $value);
+        $this->sendCommand('SETEX', $key, (string)$effectiveTtl, $value);
     }
 
     /**

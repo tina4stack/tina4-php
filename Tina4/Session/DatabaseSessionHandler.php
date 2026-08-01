@@ -78,7 +78,10 @@ class DatabaseSessionHandler
 
         $expiresAt = (float)($row['expiresAt'] ?? $row['expires_at'] ?? 0);
 
-        if ($expiresAt < microtime(true)) {
+        // An absent or zero expiry means "never expires" and is guarded OUT of
+        // the comparison. Without the `> 0` test a row carrying no expiry (0)
+        // is judged expired against every clock and destroyed on read.
+        if ($expiresAt > 0 && $expiresAt < microtime(true)) {
             // Session expired — clean it up
             $this->destroy($sessionId);
             return null;
@@ -98,12 +101,15 @@ class DatabaseSessionHandler
      * @param string $sessionId The session ID
      * @param array  $data      Session data to store
      */
-    public function write(string $sessionId, array $data): void
+    public function write(string $sessionId, array $data, int $ttl = 0): void
     {
         $this->ensureTable();
 
         $encoded = json_encode($data, JSON_UNESCAPED_SLASHES);
-        $expiresAt = microtime(true) + $this->ttl;
+        // A per-call $ttl WINS over the handler default; a ttl of 0 means "never
+        // expires" and is stored as the absolute 0 that read() guards out.
+        $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
+        $expiresAt = $effectiveTtl > 0 ? microtime(true) + $effectiveTtl : 0.0;
 
         // Check if session already exists — parameterised.
         $existing = $this->db->fetch(
@@ -113,12 +119,12 @@ class DatabaseSessionHandler
         );
 
         if ($this->firstRow($existing) !== null) {
-            $this->db->exec(
+            $this->db->execute(
                 "UPDATE tina4_session SET data = ?, expires_at = ? WHERE session_id = ?",
                 [$encoded, $expiresAt, $sessionId]
             );
         } else {
-            $this->db->exec(
+            $this->db->execute(
                 "INSERT INTO tina4_session (session_id, data, expires_at) VALUES (?, ?, ?)",
                 [$sessionId, $encoded, $expiresAt]
             );
@@ -146,7 +152,7 @@ class DatabaseSessionHandler
     {
         $this->ensureTable();
 
-        $this->db->exec(
+        $this->db->execute(
             "DELETE FROM tina4_session WHERE session_id = ?",
             [$sessionId]
         );
@@ -163,7 +169,7 @@ class DatabaseSessionHandler
         $this->ensureTable();
 
         $now = microtime(true);
-        $this->db->exec(
+        $this->db->execute(
             "DELETE FROM tina4_session WHERE expires_at > 0 AND expires_at < ?",
             [$now]
         );
@@ -220,11 +226,11 @@ class DatabaseSessionHandler
         }
 
         if (!$this->db->tableExists('tina4_session')) {
-            $this->db->exec(
+            $this->db->execute(
                 "CREATE TABLE IF NOT EXISTS tina4_session ("
                 . "session_id VARCHAR(255) PRIMARY KEY, "
                 . "data TEXT NOT NULL, "
-                . "expires_at REAL NOT NULL"
+                . "expires_at DOUBLE PRECISION NOT NULL"
                 . ")"
             );
             $this->db->commit();

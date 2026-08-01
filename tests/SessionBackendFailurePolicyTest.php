@@ -44,7 +44,7 @@ class ThrowingSessionHandler extends DatabaseSessionHandler
         throw new \RuntimeException('backend unreachable (read)');
     }
 
-    public function write(string $sessionId, array $data): void
+    public function write(string $sessionId, array $data, int $ttl = 0): void
     {
         throw new \RuntimeException('backend unreachable (write)');
     }
@@ -71,7 +71,7 @@ class EmptyHealthySessionHandler extends DatabaseSessionHandler
         return null; // genuinely empty, healthy backend
     }
 
-    public function write(string $sessionId, array $data): void
+    public function write(string $sessionId, array $data, int $ttl = 0): void
     {
         // succeed silently
     }
