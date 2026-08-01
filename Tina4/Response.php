@@ -201,9 +201,9 @@ class Response
      *
      * @return $this
      */
-    public function json(mixed $data, int $status = 200): self
+    public function json(mixed $data, ?int $status = null): self
     {
-        $this->statusCode = $status;
+        $this->statusCode = $status ?? $this->statusCode;
         $this->headers['Content-Type'] = 'application/json';
         $this->body = json_encode($this->jsonable($data), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         return $this;
@@ -245,9 +245,9 @@ class Response
      *
      * @return $this
      */
-    public function html(string $content, int $status = 200): self
+    public function html(string $content, ?int $status = null): self
     {
-        $this->statusCode = $status;
+        $this->statusCode = $status ?? $this->statusCode;
         $this->headers['Content-Type'] = 'text/html; charset=UTF-8';
         $this->body = $content;
         return $this;
@@ -258,9 +258,9 @@ class Response
      *
      * @return $this
      */
-    public function text(string $content, int $status = 200): self
+    public function text(string $content, ?int $status = null): self
     {
-        $this->statusCode = $status;
+        $this->statusCode = $status ?? $this->statusCode;
         $this->headers['Content-Type'] = 'text/plain; charset=UTF-8';
         $this->body = $content;
         return $this;
@@ -269,9 +269,9 @@ class Response
     /**
      * Return an XML response.
      */
-    public function xml(string $content, int $status = 200): self
+    public function xml(string $content, ?int $status = null): self
     {
-        $this->statusCode = $status;
+        $this->statusCode = $status ?? $this->statusCode;
         $this->headers['Content-Type'] = 'application/xml; charset=UTF-8';
         $this->body = $content;
         return $this;
