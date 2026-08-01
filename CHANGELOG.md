@@ -12,6 +12,65 @@ UNRELEASED work. When a version ships, its notes go to the release notes above.
 
 ## Unreleased
 
+### Breaking: the rate limiter keys on the socket peer, not X-Forwarded-For
+
+`X-Forwarded-For` is written by whoever sends it. Reading it unconditionally let
+any client pick its own rate-limit bucket, and - worse - pick SOMEONE ELSE'S,
+exhausting a third party's quota. Measured with `TINA4_RATE_LIMIT=3`: a rotating
+`X-Forwarded-For` scored 200,200,200,200,200,200 where a fixed one correctly
+scored 200,200,200,429,429,429.
+
+`X-Forwarded-For` and `X-Real-IP` are now read ONLY when the raw socket peer is
+listed in the new `TINA4_TRUSTED_PROXIES`. Within the chain the RIGHTMOST hop
+that is not itself a trusted proxy wins, matching Rack and Express (a client can
+prepend its own hop, so the leftmost entry is attacker-controlled even behind a
+real proxy).
+
+**Migration.** If your app runs behind a proxy, load balancer or ingress, set
+`TINA4_TRUSTED_PROXIES` to that proxy's address or range. It accepts a
+comma-separated mix of exact addresses and CIDR ranges, IPv4 and IPv6:
+
+```
+TINA4_TRUSTED_PROXIES=10.0.0.0/8
+TINA4_TRUSTED_PROXIES=192.168.1.5, ::1, fd00::/8
+```
+
+It is EMPTY by default, which means trust nothing. If you leave it unset behind a
+proxy, every client is bucketed under the proxy's address and you will
+over-limit. That is deliberate: over-limiting is a degraded service, while the
+previous behaviour was an open door. Direct-to-internet apps need no change.
+
+See ADR-0019.
+
+### Breaking: json/html/text/xml keep an explicitly-set status code
+
+`$response->status(429)->json([...])` returned **200**. The helpers took a
+defaulted `int $status = 200` which overwrote whatever `status()` had just set.
+
+This was not academic: `RateLimiterMiddleware::beforeRateLimit` ends in exactly
+that call, so the rate limiter answered 200 to requests it was blocking. A client
+reads the status, not the body, so a throttled client was told it succeeded and
+never backed off.
+
+The parameter is now a null sentinel: an explicitly-set status is preserved, an
+explicitly-passed one still wins, and a fresh response still defaults to 200.
+
+**Migration.** None for correct code. If you relied on `json()` RESETTING a
+previously-set status to 200, pass the status you want explicitly:
+`$response->json($data, 200)`.
+
+### Fixed: RateLimiter::apply() could never have worked
+
+It read `$info['limit']`, `['remaining']` and `['reset']` out of `check()`,
+which returns only `allowed`/`headers`/`status`, emitting three EMPTY
+`X-RateLimit-*` headers plus three PHP warnings; then on the over-limit path it
+called `Response::setStatusCode()`, a method that does not exist, which is a
+hard fatal. Nothing tested it. It now uses `check()`'s real headers and
+`Response::status()`.
+
+`X-RateLimit-Reset` is also now emitted (as an absolute Unix timestamp, matching
+tina4-ruby and tina4-nodejs); PHP previously sent it nowhere.
+
 ### One middleware return-value contract, both entry points
 
 `Middleware::runBefore()` / `runAfter()` (the orchestrator) and
