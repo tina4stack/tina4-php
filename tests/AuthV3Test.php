@@ -410,8 +410,8 @@ class AuthV3Test extends TestCase
 
         $middleware = Auth::middleware();
 
-        // Create a mock request with the Authorization header
-        $request = $this->createMockRequest("Bearer $token");
+        // A REAL Tina4\Request carrying a real Authorization header
+        $request = $this->requestWithAuthHeader("Bearer $token");
 
         $result = $middleware($request);
         $this->assertNotNull($result);
@@ -424,7 +424,7 @@ class AuthV3Test extends TestCase
         $token = Auth::getToken(['sub' => 'user-1', 'exp' => time() - 10], 0);
 
         $middleware = Auth::middleware();
-        $request = $this->createMockRequest("Bearer $token");
+        $request = $this->requestWithAuthHeader("Bearer $token");
 
         $result = $middleware($request);
         $this->assertNull($result);
@@ -433,7 +433,7 @@ class AuthV3Test extends TestCase
     public function testMiddlewareMissingToken(): void
     {
         $middleware = Auth::middleware();
-        $request = $this->createMockRequest('');
+        $request = $this->requestWithAuthHeader('');
 
         $result = $middleware($request);
         $this->assertNull($result);
@@ -442,7 +442,7 @@ class AuthV3Test extends TestCase
     public function testMiddlewareInvalidBearerFormat(): void
     {
         $middleware = Auth::middleware();
-        $request = $this->createMockRequest('Basic dXNlcjpwYXNz');
+        $request = $this->requestWithAuthHeader('Basic dXNlcjpwYXNz');
 
         $result = $middleware($request);
         $this->assertNull($result);
@@ -451,10 +451,35 @@ class AuthV3Test extends TestCase
     public function testMiddlewareInvalidToken(): void
     {
         $middleware = Auth::middleware();
-        $request = $this->createMockRequest('Bearer invalid.token.here');
+        $request = $this->requestWithAuthHeader('Bearer invalid.token.here');
 
         $result = $middleware($request);
         $this->assertNull($result);
+    }
+
+    /**
+     * A NON-Bearer scheme carrying an OTHERWISE-VALID token must be rejected.
+     *
+     * Auth::middleware() slices the token with substr($header, 7) AFTER checking
+     * the 'Bearer ' prefix. Any other 7-character prefix therefore lines a real
+     * JWT up at exactly the same offset — 'Token  <jwt>' is the shortest example.
+     * Every other middleware test feeds a token that fails validToken() anyway,
+     * so deleting the scheme guard entirely left all five of them GREEN while
+     * `Authorization: Token  <jwt>` authenticated successfully. This is the one
+     * assertion that actually pins the scheme check.
+     */
+    public function testMiddlewareRejectsNonBearerSchemeCarryingAValidToken(): void
+    {
+        $token = Auth::getToken(['sub' => 'attacker']);
+
+        $middleware = Auth::middleware();
+        // 'Token  ' is 7 chars, so substr($header, 7) is the untouched JWT.
+        $request = $this->requestWithAuthHeader("Token  $token");
+
+        $this->assertNull(
+            $middleware($request),
+            'Only the Bearer scheme may authenticate; a 7-char lookalike prefix must not.'
+        );
     }
 
     // ── Authenticate Request ──────────────────────────────────────
@@ -643,26 +668,29 @@ class AuthV3Test extends TestCase
     // ── Helper ────────────────────────────────────────────────────
 
     /**
-     * Create a mock request object with an Authorization header.
+     * Build a REAL Tina4\Request carrying a real Authorization header.
+     *
+     * NOT a double. This used to return an anonymous one-method object that
+     * re-implemented header() by hand, so all five Auth::middleware() tests
+     * asserted against a fabricated request. Auth::middleware() takes
+     * `object $request` and calls `$request->header('Authorization')`, so any
+     * divergence between the fake's lookup and the real Request's — header
+     * case handling, an absent header returning '' rather than null — left
+     * these tests green while the middleware failed on real traffic. This is
+     * the auth gate, so that gap was an authentication-bypass blind spot.
+     *
+     * The real Request stores headers in a CaseInsensitiveArray, so passing
+     * the canonical 'Authorization' spelling exercises the real normalisation.
+     * Passing '' means "no Authorization header at all" — the real absent-header
+     * case, rather than a fake mapping '' to null.
      */
-    private function createMockRequest(string $authHeader): object
+    private function requestWithAuthHeader(string $authHeader): \Tina4\Request
     {
-        return new class($authHeader) {
-            private string $authHeader;
-
-            public function __construct(string $authHeader)
-            {
-                $this->authHeader = $authHeader;
-            }
-
-            public function header(string $name): ?string
-            {
-                if (strtolower($name) === 'authorization') {
-                    return $this->authHeader ?: null;
-                }
-                return null;
-            }
-        };
+        return \Tina4\Request::create(
+            method: 'GET',
+            path: '/protected',
+            headers: $authHeader === '' ? [] : ['Authorization' => $authHeader],
+        );
     }
 
     // ── authenticateRequest secret + algorithm params ─────────────

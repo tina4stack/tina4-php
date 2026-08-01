@@ -18,72 +18,21 @@ use PHPUnit\Framework\TestCase;
 use Tina4\Database\SQLite3Adapter;
 use Tina4\Migration;
 
-/**
- * A fake MSSQL adapter that does NOT connect (the real ctor requires ext-sqlsrv).
- * It is `instanceof \Tina4\Database\MSSQLAdapter`, which is all the CREATE-TABLE
- * idempotency guard checks, and lets us control tableExists().
+/*
+ * NO DOUBLES.
+ *
+ * This file used to declare FakeMSSQLAdapter and FakeFirebirdAdapter: subclasses
+ * that skipped their parent constructor (so they never connected) and overrode
+ * tableExists() to return a constructor-injected boolean. Those made the
+ * CREATE-TABLE idempotency tests self-fulfilling — they asserted that a guard
+ * keyed on `instanceof` fires when handed an `instanceof`, and proved nothing
+ * about what a real engine reports for `users`, `[Things]` or `"Orders"`.
+ *
+ * What remains here is engine-independent: statement splitting, discovery
+ * order, and the SQLite leg of [9] — all driven by a REAL SQLite3Adapter.
+ * Every leg that needs Firebird or MSSQL moved to
+ * MigrationFootgunsLiveEngineTest, which drives those engines for real.
  */
-class FakeMSSQLAdapter extends \Tina4\Database\MSSQLAdapter
-{
-    public function __construct(private bool $exists)
-    {
-        // Intentionally do NOT call parent::__construct() — no real connection.
-    }
-
-    // The Migration ctor checks for the tracking table; report it present so
-    // ensureMigrationsTable() takes the no-op path (no real connection needed).
-    public function tableExists(string $tableName): bool
-    {
-        if ($tableName === 'tina4_migration') {
-            return true;
-        }
-        return $this->exists;
-    }
-
-    public function getColumns(string $tableName): array
-    {
-        // Report the canonical v3 tracking-table shape so ensureMigrationsTable()
-        // treats it as already-current (no v2 / older-v3 in-place upgrade).
-        return [
-            ['name' => 'id'],
-            ['name' => 'migration_name'],
-            ['name' => 'description'],
-            ['name' => 'batch'],
-            ['name' => 'executed_at'],
-            ['name' => 'passed'],
-        ];
-    }
-}
-
-/** Fake Firebird adapter — same trick. */
-class FakeFirebirdAdapter extends \Tina4\Database\FirebirdAdapter
-{
-    public function __construct(private bool $exists)
-    {
-    }
-
-    public function tableExists(string $tableName): bool
-    {
-        if ($tableName === 'tina4_migration') {
-            return true;
-        }
-        return $this->exists;
-    }
-
-    public function getColumns(string $tableName): array
-    {
-        // Report the canonical v3 tracking-table shape so ensureMigrationsTable()
-        // treats it as already-current (no v2 / older-v3 in-place upgrade).
-        return [
-            ['name' => 'id'],
-            ['name' => 'migration_name'],
-            ['name' => 'description'],
-            ['name' => 'batch'],
-            ['name' => 'executed_at'],
-            ['name' => 'passed'],
-        ];
-    }
-}
 
 class MigrationFootgunsTest extends TestCase
 {
@@ -302,52 +251,25 @@ class MigrationFootgunsTest extends TestCase
 
     // ── [9] CREATE TABLE idempotency on Firebird/MSSQL ──────────────────
 
-    public function testCreateTableSkippedOnMssqlWhenTableExists(): void
-    {
-        $m = $this->newMigration(new FakeMSSQLAdapter(true));
-        $reason = $this->invoke($m, 'shouldSkipCreateTable', ['CREATE TABLE users (id INT)']);
-        $this->assertNotNull($reason);
-        $this->assertStringContainsString('users', $reason);
-    }
-
-    public function testCreateTableSkippedOnFirebirdQuotedWhenExists(): void
-    {
-        $m = $this->newMigration(new FakeFirebirdAdapter(true));
-        $reason = $this->invoke($m, 'shouldSkipCreateTable', ['CREATE TABLE "Orders" (id INT)']);
-        $this->assertNotNull($reason);
-        $this->assertStringContainsString('Orders', $reason);
-    }
-
-    public function testCreateTableSkippedOnMssqlBracketedWhenExists(): void
-    {
-        $m = $this->newMigration(new FakeMSSQLAdapter(true));
-        $reason = $this->invoke($m, 'shouldSkipCreateTable', ['CREATE TABLE [Things] (id INT)']);
-        $this->assertNotNull($reason);
-        $this->assertStringContainsString('Things', $reason);
-    }
-
-    public function testCreateTableNotSkippedWhenAbsent(): void
-    {
-        $m = $this->newMigration(new FakeFirebirdAdapter(false));
-        $reason = $this->invoke($m, 'shouldSkipCreateTable', ['CREATE TABLE users (id INT)']);
-        $this->assertNull($reason);
-    }
+    // The MSSQL and Firebird legs of [9] live in MigrationFootgunsLiveEngineTest,
+    // driven against real engines. That includes the non-CREATE-statement case:
+    // it is only meaningful on an engine where the guard is ACTIVE, because on
+    // SQLite shouldSkipCreateTable() returns null at the dialect check before it
+    // ever looks at the statement — asserting null here would pass for the wrong
+    // reason and would keep passing with the statement check deleted.
 
     public function testCreateTableNotSkippedOnSqliteLeftToIfNotExists(): void
     {
         // SQLite supports IF NOT EXISTS → never skipped by this guard, even when
-        // the table really exists.
+        // the table really exists. Driven by a REAL SQLite3Adapter that really
+        // creates the table, so the assertion is about the dialect gate and not
+        // about an absent table.
         $db = new SQLite3Adapter(':memory:');
         $db->exec('CREATE TABLE users (id INTEGER)');
+        $this->assertTrue($db->tableExists('users'), 'Precondition: the real table must exist.');
+
         $m = $this->newMigration($db);
         $reason = $this->invoke($m, 'shouldSkipCreateTable', ['CREATE TABLE users (id INT)']);
-        $this->assertNull($reason);
-    }
-
-    public function testNonCreateStatementIgnored(): void
-    {
-        $m = $this->newMigration(new FakeMSSQLAdapter(true));
-        $reason = $this->invoke($m, 'shouldSkipCreateTable', ['INSERT INTO users VALUES (1)']);
         $this->assertNull($reason);
     }
 

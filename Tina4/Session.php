@@ -931,11 +931,20 @@ class Session
         $this->data['_meta']['created_at'] ??= time();
         $this->data['_meta']['expires_at'] = $this->ttl > 0 ? time() + $this->ttl : 0;
 
-        file_put_contents(
+        // file_put_contents returns FALSE on failure and does not throw. Discarding
+        // it made save() report success on a write that never landed - a read-only
+        // file, a full disk or a revoked permission all silently lost the session.
+        // safeWrite() catches this and degrades per the log-loud policy.
+        $written = file_put_contents(
             $this->getFilePath(),
             json_encode($this->data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
             LOCK_EX
         );
+        if ($written === false) {
+            throw new \RuntimeException(
+                'Failed to write session file: ' . $this->getFilePath()
+            );
+        }
     }
 
     /**
