@@ -6,99 +6,108 @@
  * License: MIT https://opensource.org/licenses/MIT
  *
  * Backend-failure policy lock-in (log-loud + degrade) for the Session boundary.
+ * NO DOUBLES.
  *
- * The policy lives at the Session boundary (one wrapper, all backends), so an
- * unreachable backend never crashes the request. These tests inject a THROWING
- * handler into the 'database' backend and assert the five invariants mirrored
- * from the Python master (commit cefc738):
+ * Contract (parity across all 4 frameworks): when a session backend
+ * (Redis/Valkey/Mongo/Database) becomes unreachable mid-request, the framework
+ * must log loudly and degrade — never silently lose data, and never let one
+ * backend blip 500 every request (cascade outage):
  *
- *   1. start() on an unreachable backend does NOT raise — returns an id, empty
- *      data, AND logs an error (never silent).
- *   2. save() on an unreachable backend returns false-y, RETAINS the dirty
- *      flag, logs an error, does not crash.
- *   3. destroy()/gc() on an unreachable backend log + do not crash.
- *   4. A genuinely EMPTY but HEALTHY backend (read returns no data WITHOUT
- *      raising) logs ZERO errors — empty is not a failure.
- *   5. With TINA4_SESSION_STRICT=true, read/write failures RE-RAISE.
+ *   read failure       -> log an error, return an empty session (request serves)
+ *   write failure      -> log an error, best-effort (dirty flag kept for retry)
+ *   destroy/gc failure -> log an error, swallow
+ *
+ * A genuinely EMPTY result (no such session yet) is NOT a failure and must never
+ * be logged as one. TINA4_SESSION_STRICT=true flips all of this to re-raise.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THIS FILE USED TO BE — and why every line of it was untrustworthy.
+ *
+ * It declared two in-test SessionHandler subclasses, ThrowingSessionHandler and
+ * EmptyHealthySessionHandler. It was the last surviving member of a double that
+ * had been ported four ways — tina4-python's _ExplodingHandler, tina4-ruby's
+ * RaisingHandler, tina4-nodejs's ExplodingHandler — each with a matching
+ * "Empty*" positive control that also could not fail.
+ *
+ * ThrowingSessionHandler raised \RuntimeException('backend unreachable (read)').
+ * The CLASS happened to be right — the real RedisSessionHandler also raises
+ * \RuntimeException, and the policy catches \Throwable — so PHP escaped the
+ * class-level calibration bug found in Python (whose double raised the BUILTIN
+ * ConnectionError while redis-py raises redis.exceptions.ConnectionError, which
+ * does not inherit from it). But the MESSAGE was pure invention: the two strict
+ * -mode tests asserted expectExceptionMessage('backend unreachable (read)'),
+ * a string no Tina4 code has ever produced. The real driver says
+ * "Redis connection failed: [61] Connection refused". Those assertions were
+ * therefore true only of the fake, and would have kept passing had the real
+ * transport stopped raising entirely.
+ *
+ * EmptyHealthySessionHandler was the worse of the two. It asserted "an empty
+ * healthy read logs ZERO errors" against a handler that CANNOT fail, so it could
+ * never catch the regression it existed for: a real server's `$-1` null bulk
+ * reply being misclassified by the TRANSPORT as an error. That misclassification
+ * lives in RedisSessionHandler::readReply(), and the transport never ran.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT IT IS NOW — real drivers, a real log sink, no stand-ins.
+ *
+ *  (1) UNREACHABLE BACKEND: the REAL RedisSessionHandler pointed at a genuinely
+ *      closed port, obtained by bind-then-release. Every operation fails with a
+ *      real ECONNREFUSED through the real socket. Needs no service, so it never
+ *      skips. A driver-sanity assertion proves the port really is closed first,
+ *      otherwise every "unreachable" case would be vacuous.
+ *  (2) EMPTY-BUT-HEALTHY: the REAL RedisSessionHandler against LIVE Redis,
+ *      reading a freshly generated random key that provably never existed — a
+ *      real `$-1` null bulk reply off the wire. Skips loudly naming host+port.
+ *  (3) GC FAILURE: the REAL DatabaseSessionHandler on a REAL SQLite file that is
+ *      made read-only, so the DELETE takes a real SQLITE_READONLY.
+ *  (4) WRITE-FAILS-AFTER-A-SUCCESSFUL-START: the REAL file backend in a real
+ *      temp dir. start()+save() write for real, then the session FILE is
+ *      chmod 0400 so the NEXT write takes a real EACCES from the real kernel.
+ *
+ * LOGGING is measured at the real sink: Log::configure() points the REAL logger
+ * at a real directory and the tests read the bytes it actually wrote, delta per
+ * scenario. A sink self-test runs first so a logger that writes nothing cannot
+ * make the "logged nothing" assertions trivially true.
+ *
+ * POSIX detail, measured not assumed (same finding as the Node and Python
+ * conversions): chmod 0500 on the session DIRECTORY does NOT block the write.
+ * An existing path needs write permission on the FILE; directory permission
+ * governs create/unlink/rename.
  */
 
 namespace Tina4\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
-use Tina4\Database\SQLite3Adapter;
 use Tina4\Log;
 use Tina4\Session;
 use Tina4\Session\DatabaseSessionHandler;
-
-/**
- * A session handler whose every operation throws — simulates an unreachable
- * backend. Subclasses the real handler so it satisfies Session's typed
- * `$dbHandler` property. The parent ctor needs a DB, so we hand it an in-memory
- * SQLite adapter; the overridden methods never touch it.
- */
-class ThrowingSessionHandler extends DatabaseSessionHandler
-{
-    public function read(string $sessionId): ?array
-    {
-        throw new \RuntimeException('backend unreachable (read)');
-    }
-
-    public function write(string $sessionId, array $data): void
-    {
-        throw new \RuntimeException('backend unreachable (write)');
-    }
-
-    public function destroy(string $sessionId): void
-    {
-        throw new \RuntimeException('backend unreachable (destroy)');
-    }
-
-    public function gc(int $ttl): void
-    {
-        throw new \RuntimeException('backend unreachable (gc)');
-    }
-}
-
-/**
- * A healthy handler that simply has no stored session — read returns null
- * WITHOUT throwing. Must produce ZERO error logs (empty != failure).
- */
-class EmptyHealthySessionHandler extends DatabaseSessionHandler
-{
-    public function read(string $sessionId): ?array
-    {
-        return null; // genuinely empty, healthy backend
-    }
-
-    public function write(string $sessionId, array $data): void
-    {
-        // succeed silently
-    }
-
-    public function destroy(string $sessionId): void
-    {
-        // succeed silently
-    }
-}
+use Tina4\Session\RedisSessionHandler;
 
 class SessionBackendFailurePolicyTest extends TestCase
 {
     private string $tempDir;
 
+    /** Byte offset into tina4.log marking the start of the scenario under test. */
+    private int $logMark = 0;
+
+    private const REDIS_HOST_DEFAULT = '127.0.0.1';
+    private const REDIS_PORT_DEFAULT = 6379;
+
     protected function setUp(): void
     {
         $this->tempDir = sys_get_temp_dir() . '/tina4_sess_policy_' . uniqid();
         mkdir($this->tempDir, 0755, true);
-        // Pin dev (TINA4_DEBUG=true) so the log FILE is written — since
-        // v3.13.39 the file is dev-gated by default (prod/containers are
-        // stdout-only). This suite asserts backend failures land in the file.
+        // Pin dev (TINA4_DEBUG=true) so the log FILE is written — since v3.13.39
+        // the file is dev-gated by default (prod/containers are stdout-only).
         $_ENV['TINA4_DEBUG'] = 'true';
         @putenv('TINA4_DEBUG=true');
         Log::reset();
         Log::configure(logDir: $this->tempDir);
         putenv('TINA4_SESSION_STRICT');
         unset($_ENV['TINA4_SESSION_STRICT']);
+
+        $this->assertLogSinkIsReal();
     }
 
     protected function tearDown(): void
@@ -108,164 +117,544 @@ class SessionBackendFailurePolicyTest extends TestCase
         @putenv('TINA4_DEBUG');
         putenv('TINA4_SESSION_STRICT');
         unset($_ENV['TINA4_SESSION_STRICT']);
-        foreach (glob($this->tempDir . '/*') ?: [] as $f) {
-            @unlink($f);
-        }
-        @rmdir($this->tempDir);
+        $this->removeDir($this->tempDir);
     }
 
-    private function logContents(): string
+    private function removeDir(string $dir): void
     {
-        $file = $this->tempDir . '/tina4.log';
-        return is_file($file) ? (string)file_get_contents($file) : '';
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $this->removeDir($path);
+                continue;
+            }
+            @chmod($path, 0600); // a 0400 fixture file must still be removable
+            @unlink($path);
+        }
+        @rmdir($dir);
     }
 
-    private function errorLogCount(): int
+    // ── the real log sink ───────────────────────────────────────────────────
+
+    private function logFile(): string
     {
-        $file = $this->tempDir . '/error.log';
-        if (!is_file($file)) {
-            return 0;
-        }
-        $lines = array_filter(explode("\n", trim((string)file_get_contents($file))));
-        return count($lines);
+        return $this->tempDir . '/tina4.log';
+    }
+
+    /** Ignore everything logged before the scenario under test. */
+    private function markLog(): void
+    {
+        clearstatcache(true, $this->logFile());
+        $this->logMark = is_file($this->logFile()) ? (int) filesize($this->logFile()) : 0;
     }
 
     /**
-     * Build a Session on the 'database' backend with the given handler injected
-     * into the private $dbHandler property.
+     * The ERROR messages the REAL logger actually wrote since the last mark.
+     *
+     * This is not a capture double: Log::error() runs its real body — level
+     * gating, output routing, JSON structuring, the file write — and we read the
+     * file afterwards, exactly as an operator would.
+     *
+     * @return array<int, string>
      */
-    private function sessionWith(DatabaseSessionHandler $handler): Session
+    private function loggedErrors(): array
     {
-        $session = new Session('database');
-        $ref = new \ReflectionClass($session);
-        $prop = $ref->getProperty('dbHandler');
-        $prop->setValue($session, $handler);
+        clearstatcache(true, $this->logFile());
+        if (!is_file($this->logFile())) {
+            return [];
+        }
+        $handle = fopen($this->logFile(), 'r');
+        fseek($handle, $this->logMark);
+        $bytes = (string) stream_get_contents($handle);
+        fclose($handle);
+
+        $errors = [];
+        foreach (explode("\n", $bytes) as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $entry = json_decode($line, true);
+            if (is_array($entry) && strtoupper((string) ($entry['level'] ?? '')) === 'ERROR') {
+                $errors[] = (string) ($entry['message'] ?? '');
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Driver sanity for the SINK itself.
+     *
+     * Without this, a logger that silently wrote nothing would make every
+     * "was logged" assertion vacuous AND every "logged nothing" assertion
+     * trivially true — the whole file would pass while measuring nothing.
+     */
+    private function assertLogSinkIsReal(): void
+    {
+        $this->markLog();
+        Log::error('sink-selftest');
+        $this->assertNotEmpty(
+            array_filter($this->loggedErrors(), static fn (string $m) => str_contains($m, 'sink-selftest')),
+            'the real logger wrote nothing to ' . $this->logFile()
+            . ' — every log assertion in this file would be meaningless'
+        );
+    }
+
+    // ── real, genuinely closed port ─────────────────────────────────────────
+
+    /**
+     * A port that is genuinely closed: bind it, read it, release it.
+     * Not a simulation of refusal — the kernel refuses the connect for real.
+     */
+    private function closedPort(): int
+    {
+        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertNotFalse($probe, "could not bind a probe socket: [$errno] $errstr");
+        $name = stream_socket_get_name($probe, false);
+        fclose($probe);
+
+        $port = (int) substr($name, strrpos($name, ':') + 1);
+
+        $check = @fsockopen('127.0.0.1', $port, $e, $s, 0.5);
+        if ($check !== false) {
+            fclose($check);
+            $this->fail("127.0.0.1:$port answered — it was supposed to be closed, so every "
+                . "'unreachable backend' case here would be vacuous");
+        }
+
+        return $port;
+    }
+
+    /**
+     * A Session on the 'redis' backend driven by the REAL RedisSessionHandler
+     * pointed at a genuinely closed port.
+     *
+     * NOT a double: this is the shipped handler class talking real RESP over a
+     * real socket. PHP's Session takes no handler constructor argument, so the
+     * real object is injected into the real property — the equivalent of
+     * Python's Session(handler=...).
+     */
+    private function unreachableRedisSession(): Session
+    {
+        $handler = new RedisSessionHandler([
+            'host' => '127.0.0.1',
+            'port' => $this->closedPort(),
+            'ttl'  => 60,
+        ]);
+
+        return $this->sessionWithRedisHandler($handler);
+    }
+
+    private function sessionWithRedisHandler(RedisSessionHandler $handler): Session
+    {
+        $session = new Session('redis', ['ttl' => 600]);
+        (new \ReflectionClass($session))->getProperty('redisHandler')->setValue($session, $handler);
+
         return $session;
     }
 
-    private function throwingHandler(): ThrowingSessionHandler
+    // ── live Redis ──────────────────────────────────────────────────────────
+
+    private static function redisHost(): string
     {
-        $db = Database::create('sqlite::memory:');
-        return new ThrowingSessionHandler(['db' => $db, 'ttl' => 3600]);
+        return getenv('TINA4_TEST_REDIS_HOST') ?: self::REDIS_HOST_DEFAULT;
     }
 
-    private function emptyHealthyHandler(): EmptyHealthySessionHandler
+    private static function redisPort(): int
     {
-        $db = Database::create('sqlite::memory:');
-        return new EmptyHealthySessionHandler(['db' => $db, 'ttl' => 3600]);
+        return (int) (getenv('TINA4_TEST_REDIS_PORT') ?: self::REDIS_PORT_DEFAULT);
     }
 
-    // -- Invariant 1: unreachable backend on start() degrades + logs ----------
-
-    public function testStartOnUnreachableBackendDoesNotRaiseAndLogs(): void
+    private function liveRedisHandlerOrSkip(): RedisSessionHandler
     {
-        $session = $this->sessionWith($this->throwingHandler());
+        $host = self::redisHost();
+        $port = self::redisPort();
 
-        $id = $session->start('existing-session-id'); // resuming -> triggers a read
+        $socket = @fsockopen($host, $port, $errno, $errstr, 2);
+        if ($socket === false) {
+            $this->markTestSkipped(sprintf(
+                'redis not reachable at %s:%d (%s) — the empty-but-healthy read needs a REAL server',
+                $host,
+                $port,
+                $errstr
+            ));
+        }
+        fclose($socket);
 
-        // Did NOT raise, returned a session id.
-        $this->assertSame('existing-session-id', $id);
+        return new RedisSessionHandler(['host' => $host, 'port' => $port, 'ttl' => 60]);
+    }
+
+    private function randomAbsentSessionId(string $prefix): string
+    {
+        return $prefix . '-' . bin2hex(random_bytes(12));
+    }
+
+    // ── real database-backed session on a real SQLite file ──────────────────
+
+    private function databaseSession(string $dbFile): Session
+    {
+        $handler = new DatabaseSessionHandler([
+            'db'  => Database::create('sqlite:///' . $dbFile),
+            'ttl' => 3600,
+        ]);
+        $session = new Session('database', ['ttl' => 3600]);
+        (new \ReflectionClass($session))->getProperty('dbHandler')->setValue($session, $handler);
+
+        return $session;
+    }
+
+    private function dirtyFlag(Session $session): bool
+    {
+        return (bool) (new \ReflectionClass($session))->getProperty('dirty')->getValue($session);
+    }
+
+    // ── Invariant 1: read failure logs + degrades to an empty session ───────
+
+    public function testReadFailureOnAReallyRefusedPortLogsAndDegradesToEmpty(): void
+    {
+        $session = $this->unreachableRedisSession();
+
+        $this->markLog();
+        $id = $session->start('sess-read-1'); // resuming -> triggers a real read
+
+        $this->assertSame('sess-read-1', $id, 'the request must still get a session id');
         $this->assertTrue($session->isStarted());
+        $this->assertSame([], $session->all(), 'must degrade to empty, not crash');
 
-        // Data degraded to empty (only internal meta, no user keys).
-        $this->assertSame([], $session->all());
-
-        // An error WAS logged (never silent), naming the handler.
-        $log = $this->logContents();
-        $this->assertStringContainsString('"level":"ERROR"', $log);
-        $this->assertStringContainsString('Session read failed', $log);
-        $this->assertStringContainsString('DatabaseSessionHandler', $log);
+        $errors = $this->loggedErrors();
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => str_contains($m, 'Session read failed')),
+            'a backend read failure must be logged, never silent. Got: ' . json_encode($errors)
+        );
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => str_contains($m, 'RedisSessionHandler')),
+            'the log must name the backend that failed'
+        );
+        // The cause must be the REAL driver's message, not a string this test chose.
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => stripos($m, 'refused') !== false),
+            'the logged cause must be the real ECONNREFUSED. Got: ' . json_encode($errors)
+        );
     }
 
-    // -- Invariant 2: save() on unreachable backend -> false, dirty retained --
+    // ── Invariant 2: write failure -> false, dirty retained, logged ─────────
 
-    public function testSaveOnUnreachableBackendReturnsFalseAndRetainsDirty(): void
+    public function testWriteFailureOnAReallyRefusedPortIsBestEffortAndLogged(): void
     {
-        $session = $this->sessionWith($this->throwingHandler());
-        $session->start(); // fresh session, no read
+        $session = $this->unreachableRedisSession();
+        $session->start(); // fresh session — no read, so this succeeds
 
-        // set() flips dirty + calls save(); save() degrades on the throwing write.
-        $session->set('user_id', 42);
+        $this->markLog();
+        $session->set('user_id', 42); // set() flips dirty + calls save()
 
-        // dirty flag retained for a later retry.
-        $ref = new \ReflectionClass($session);
-        $dirty = $ref->getProperty('dirty');
-        $this->assertTrue($dirty->getValue($session), 'dirty flag must be retained after a failed write');
+        $this->assertFalse($session->save(), 'a degraded write must report false');
+        $this->assertTrue(
+            $this->dirtyFlag($session),
+            'dirty flag must be retained after a failed write so a later save() retries'
+        );
 
-        // save() itself returns false-y on the degraded write.
-        $this->assertFalse($session->save());
-
-        // Did not crash; an error was logged.
-        $log = $this->logContents();
-        $this->assertStringContainsString('Session write failed', $log);
-        $this->assertStringContainsString('"level":"ERROR"', $log);
+        $errors = $this->loggedErrors();
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => str_contains($m, 'Session write failed')),
+            'a backend write failure must be logged. Got: ' . json_encode($errors)
+        );
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => stripos($m, 'refused') !== false),
+            'the logged cause must be the real ECONNREFUSED'
+        );
     }
 
-    // -- Invariant 3: destroy()/gc() on unreachable backend log + don't crash -
+    // ── Invariant 3: destroy / gc failures log + do not crash ───────────────
 
-    public function testDestroyOnUnreachableBackendLogsAndDoesNotCrash(): void
+    public function testDestroyFailureOnAReallyRefusedPortLogsAndDoesNotCrash(): void
     {
-        $session = $this->sessionWith($this->throwingHandler());
-        $session->start('some-id');
+        $session = $this->unreachableRedisSession();
+        $session->start(); // fresh — no read
 
-        // Must not throw.
-        $session->destroy();
+        $this->markLog();
+        $session->destroy(); // must not raise
 
         $this->assertFalse($session->isStarted());
-        $this->assertStringContainsString('Session destroy failed', $this->logContents());
+        $this->assertNotEmpty(
+            array_filter($this->loggedErrors(), static fn (string $m) => str_contains($m, 'Session destroy failed')),
+            'a backend destroy failure must be logged'
+        );
     }
 
-    public function testGcOnUnreachableBackendLogsAndDoesNotCrash(): void
+    /**
+     * gc() only reaches a backend for the file and database backends (Redis and
+     * friends expire natively), so the real failure driver here is a REAL SQLite
+     * database file that is read-only: the DELETE takes a real SQLITE_READONLY
+     * ("attempt to write a readonly database") from the real engine.
+     *
+     * POSIX detail, measured not assumed: chmod 0400 on the database file does
+     * NOT affect a connection that is ALREADY OPEN — the kernel checks
+     * permission at open() time, so an existing handle keeps writing happily.
+     * (chmod 0500 on the DIRECTORY does not deny it either, since SQLite reuses
+     * the journal path it already created.) The failure only materialises for a
+     * connection opened AFTER the chmod, so the second Session below gets its
+     * own fresh Database on the now-read-only file.
+     */
+    public function testGcFailureOnAReallyReadOnlyDatabaseLogsAndDoesNotCrash(): void
     {
-        $session = $this->sessionWith($this->throwingHandler());
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('running as root: chmod 0400 does not deny root, so no real SQLITE_READONLY');
+        }
 
-        // Must not throw.
+        $dbFile = $this->tempDir . '/sessions.db';
+
+        // A real write on a writable database first, so the schema and the row
+        // genuinely exist and the file is a real, populated SQLite database.
+        $seed = $this->databaseSession($dbFile);
+        $seed->start('gc-victim');
+        $seed->set('k', 'v');
+        $this->assertTrue($seed->save(), 'precondition: the first write must genuinely succeed');
+
+        chmod($dbFile, 0400);
+        $this->assertFalse(is_writable($dbFile), 'precondition: the real database file must really be read-only');
+
+        // A FRESH connection, opened after the chmod — this one really cannot write.
+        $session = $this->databaseSession($dbFile);
+
+        $this->markLog();
+        $session->gc(); // must not raise
+
+        $errors = $this->loggedErrors();
+        chmod($dbFile, 0600); // restore before an assertion can abort the test
+
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => str_contains($m, 'Session gc failed')),
+            'a backend gc failure must be logged. Got: ' . json_encode($errors)
+        );
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => stripos($m, 'readonly') !== false),
+            'the logged cause must be the real SQLITE_READONLY. Got: ' . json_encode($errors)
+        );
+    }
+
+    // ── Invariant 4: empty-but-healthy is NOT a failure (the important one) ──
+
+    /**
+     * A HEALTHY server with no data for this id: a real `$-1` null bulk reply.
+     *
+     * The deleted EmptyHealthySessionHandler could not fail, so it could never
+     * catch the regression this exists for — a real empty reply being
+     * misclassified by RedisSessionHandler::readReply() as an error. The
+     * transport now runs.
+     */
+    public function testEmptyButHealthyRedisReadIsNotABackendError(): void
+    {
+        $handler = $this->liveRedisHandlerOrSkip();
+        $session = $this->sessionWithRedisHandler($handler);
+        $neverWritten = $this->randomAbsentSessionId('absent');
+
+        $this->markLog();
+        $session->start($neverWritten);
+
+        $this->assertSame([], $session->all(), 'an absent session reads as empty');
+        $this->assertSame(
+            [],
+            $this->loggedErrors(),
+            'an empty (but successful) read must never be logged as a failure'
+        );
+    }
+
+    /**
+     * NEGATIVE CONTROL for the test above.
+     *
+     * "Logged zero errors" is also true of a backend that silently does nothing,
+     * so on the same live server we prove a real value crosses a process
+     * boundary: a SECOND Session on a SECOND handler resumes the id and finds it.
+     */
+    public function testNegativeControlLiveRedisReallyRoundTripsAcrossTwoSessions(): void
+    {
+        $writerHandler = $this->liveRedisHandlerOrSkip();
+        $sessionId = $this->randomAbsentSessionId('roundtrip');
+
+        try {
+            $this->markLog();
+            $writer = $this->sessionWithRedisHandler($writerHandler);
+            $writer->start($sessionId);
+            $writer->set('user_id', 42);
+            $this->assertTrue($writer->save(), 'the write must genuinely reach Redis');
+
+            $readerHandler = $this->liveRedisHandlerOrSkip();
+            $reader = $this->sessionWithRedisHandler($readerHandler);
+            $reader->start($sessionId);
+
+            $this->assertSame(42, $reader->get('user_id'), 'the value never reached Redis');
+            $this->assertSame([], $this->loggedErrors(), 'a healthy round-trip must log no errors');
+        } finally {
+            $writerHandler->destroy($sessionId);
+        }
+    }
+
+    /**
+     * NEGATIVE CONTROL: an uncontended gc() on a real, writable database must be
+     * silent. Without this, a change that made EVERY gc() log an error would
+     * still pass the gc-failure test above.
+     */
+    public function testNegativeControlUncontendedGcLogsNothing(): void
+    {
+        $session = $this->databaseSession($this->tempDir . '/gc-ok.db');
+        $session->start('gc-ok');
+        $session->set('k', 'v');
+        $this->assertTrue($session->save());
+
+        $this->markLog();
         $session->gc();
 
-        $this->assertStringContainsString('Session gc failed', $this->logContents());
+        $this->assertSame([], $this->loggedErrors(), 'a successful gc must log nothing');
     }
 
-    // -- Invariant 4: empty-but-healthy backend logs ZERO errors --------------
+    // ── Invariant 5: TINA4_SESSION_STRICT=true re-raises the REAL error ─────
 
-    public function testEmptyHealthyBackendLogsNoErrors(): void
-    {
-        $session = $this->sessionWith($this->emptyHealthyHandler());
-
-        $session->start('no-such-session'); // healthy read returns null, no throw
-        $session->set('k', 'v');            // healthy write, no throw
-        $session->save();
-        $session->destroy();                // healthy destroy, no throw
-
-        $this->assertSame(0, $this->errorLogCount(), 'empty-but-healthy backend must log zero errors');
-        $this->assertStringNotContainsString('"level":"ERROR"', $this->logContents());
-    }
-
-    // -- Invariant 5: TINA4_SESSION_STRICT=true re-raises ---------------------
-
-    public function testStrictModeReRaisesReadFailure(): void
+    /**
+     * Locks in the calibration hazard the double hid.
+     *
+     * The deleted test asserted expectExceptionMessage('backend unreachable
+     * (read)') — a string the TEST invented and no Tina4 code has ever produced.
+     * The real driver raises \RuntimeException('Redis connection failed: [61]
+     * Connection refused'), so that assertion was true only of the fake.
+     */
+    public function testStrictModeReRaisesTheRealDriverErrorOnRead(): void
     {
         putenv('TINA4_SESSION_STRICT=true');
         $_ENV['TINA4_SESSION_STRICT'] = 'true';
 
-        $session = $this->sessionWith($this->throwingHandler());
+        $session = $this->unreachableRedisSession(); // ctor reads the strict flag
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('backend unreachable (read)');
-
-        $session->start('existing-id'); // strict -> read failure re-raises
+        try {
+            $session->start('sess-strict-r');
+            $this->fail('strict mode must re-raise a real backend read failure');
+        } catch (\Throwable $caught) {
+            $this->assertInstanceOf(\RuntimeException::class, $caught);
+            $this->assertStringContainsString('Redis connection failed', $caught->getMessage());
+            $this->assertStringContainsStringIgnoringCase(
+                'refused',
+                $caught->getMessage(),
+                'regression guard: the re-raised error must be the REAL driver error, '
+                . 'not a message a test invented'
+            );
+        }
     }
 
-    public function testStrictModeReRaisesWriteFailure(): void
+    public function testStrictModeReRaisesTheRealDriverErrorOnWrite(): void
     {
         putenv('TINA4_SESSION_STRICT=true');
         $_ENV['TINA4_SESSION_STRICT'] = 'true';
 
-        $session = $this->sessionWith($this->throwingHandler());
-        $session->start(); // fresh, no read
+        $session = $this->unreachableRedisSession();
+        $session->start(); // fresh — no read, so this does not raise
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('backend unreachable (write)');
+        try {
+            $session->set('k', 'v'); // set() -> save() -> real refused write
+            $this->fail('strict mode must re-raise a real backend write failure');
+        } catch (\Throwable $caught) {
+            $this->assertInstanceOf(\RuntimeException::class, $caught);
+            $this->assertStringContainsString('Redis connection failed', $caught->getMessage());
+        }
+    }
 
-        $session->set('k', 'v'); // strict -> write failure re-raises
+    /**
+     * NEGATIVE CONTROL: strict must not turn a WORKING backend into an error.
+     * Without this, "strict raises" would still pass for an implementation that
+     * raises unconditionally.
+     */
+    public function testNegativeControlStrictModeIsSilentOnAHealthyBackend(): void
+    {
+        $handler = $this->liveRedisHandlerOrSkip();
+
+        putenv('TINA4_SESSION_STRICT=true');
+        $_ENV['TINA4_SESSION_STRICT'] = 'true';
+
+        $sessionId = $this->randomAbsentSessionId('strict-ok');
+        try {
+            $this->markLog();
+            $session = $this->sessionWithRedisHandler($handler);
+            $session->start($sessionId); // must not raise
+            $session->set('ok', 1);
+
+            $this->assertTrue($session->save());
+            $this->assertSame([], $this->loggedErrors(), 'strict mode must be silent on a healthy backend');
+        } finally {
+            $handler->destroy($sessionId);
+        }
+    }
+
+    // ── the mid-request death case, produced rather than simulated ──────────
+
+    /**
+     * KNOWN FRAMEWORK BUG — this test is EXPECTED TO FAIL until it is fixed.
+     * It is deliberately left failing rather than mocked away or deleted.
+     *
+     * A REAL file-backend session writes successfully, then the real session FILE
+     * is made read-only so the NEXT write takes a real EACCES from the real
+     * kernel. The documented policy is: log an error, return false from save(),
+     * and RETAIN the dirty flag so a later save() retries.
+     *
+     * Measured on macOS + PHP 8.5.7, all three are violated, because
+     * Tina4/Session.php:743 (saveToFile) ignores the return value of
+     * file_put_contents(). PHP's file_put_contents does not throw on EACCES — it
+     * emits a warning and returns false — so nothing ever reaches the
+     * safeWrite() catch block:
+     *
+     *     save() returned            true   (documented: false)
+     *     dirty flag                 CLEARED (documented: retained for retry)
+     *     errors logged              NONE   (documented: log-loud)
+     *     bytes on disk              the PREVIOUS write; the new data is GONE
+     *
+     * This is silent session data loss on the DEFAULT backend. The deleted
+     * ThrowingSessionHandler hid it perfectly: it THREW, so the policy wrappers
+     * looked exercised, while the real file backend can never throw at all.
+     */
+    public function testWriteFailsAfterASuccessfulStartWithARealEacces(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('running as root: chmod 0400 does not deny root, so no real EACCES');
+        }
+
+        $sessionDir = $this->tempDir . '/sessions';
+        $session = new Session('file', ['path' => $sessionDir, 'ttl' => 3600]);
+
+        $sessionId = $session->start('sess-eacces');
+        $session->set('stage', 'one');
+        $this->assertTrue($session->save(), 'the first write must genuinely succeed');
+
+        $sessionFile = $sessionDir . '/' . $sessionId . '.json';
+        $this->assertFileExists($sessionFile, 'start()+save() must have created a real file');
+
+        // 0400 on the FILE, not the directory: an existing path needs write
+        // permission on the FILE itself; directory permission governs
+        // create/unlink/rename and would NOT deny this write.
+        chmod($sessionFile, 0400);
+        $this->assertFalse(is_writable($sessionFile), 'precondition: the real file must really be read-only');
+
+        $this->markLog();
+        $session->set('stage', 'two');
+        $saved = $session->save();
+
+        $onDisk = (string) file_get_contents($sessionFile);
+        chmod($sessionFile, 0600); // restore before any assertion can abort the test
+
+        $this->assertFalse($saved, 'a real EACCES must be reported, not swallowed');
+        $this->assertTrue($this->dirtyFlag($session), 'the dirty flag must be retained for a later retry');
+
+        $errors = $this->loggedErrors();
+        $this->assertNotEmpty(
+            array_filter($errors, static fn (string $m) => str_contains($m, 'Session write failed')),
+            'a real EACCES must be logged. Got: ' . json_encode($errors)
+        );
+        $this->assertStringNotContainsString(
+            '"stage": "two"',
+            $onDisk,
+            'sanity: the write really did not land, so save() reporting true is data loss'
+        );
     }
 }

@@ -328,10 +328,14 @@ class MigrationFootgunsLiveEngineTest extends TestCase
      * really creates a relation literally named `Orders`. But BOTH Firebird
      * adapters look the name up with `strtoupper($table)`:
      *
-     *   Tina4/Database/PdoFirebirdAdapter.php:190  (the path actually exercised
+     *   Tina4/Database/PdoFirebirdAdapter.php:194  (the path actually exercised
      *                                               on macOS + Firebird 5, where
      *                                               the facade selects PDO)
-     *   Tina4/Database/FirebirdAdapter.php:409     (same defect, ext-interbase)
+     *   Tina4/Database/FirebirdAdapter.php:413     (same defect, ext-interbase)
+     *
+     * Both classes repeat the same strtoupper() lookup in getColumns() and the
+     * column-existence query (PdoFirebirdAdapter:210,223 / FirebirdAdapter:429,445),
+     * so a quoted mixed-case table is invisible to those too.
      *
      *     WHERE ... TRIM(RDB$RELATION_NAME) = ?     -- bound with strtoupper($table)
      *
