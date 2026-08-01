@@ -543,6 +543,44 @@ class SessionV3Test extends TestCase
         $this->assertFalse($session->get('deleted'));
     }
 
+    /**
+     * Cross-framework contract: "session get returns a stored false instead of the default".
+     *
+     * A key whose stored value is boolean false is PRESENT, so get() must hand back
+     * that false even when the caller supplied a truthy default. Only an ABSENT key
+     * falls through to the default. Implementing get() with a truthiness operator
+     * (PHP `?:`, Ruby `||`, JS `||`) breaks the first half; returning the stored value
+     * unconditionally breaks the second, which is why both halves are asserted here.
+     *
+     * Identical test in tina4-python, tina4-ruby and tina4-nodejs — grep the sentence
+     * above to find all four.
+     */
+    public function testSessionGetReturnsAStoredFalseInsteadOfTheDefault(): void
+    {
+        $session = $this->createSession();
+        $sessionId = $session->start();
+
+        // POSITIVE — a stored false reads back as false, never as the caller's default.
+        $session->set('emailOptIn', false);
+        $this->assertTrue($session->has('emailOptIn'), 'a stored false must count as present');
+        $this->assertSame(false, $session->get('emailOptIn', true));
+        $this->assertSame(false, $session->get('emailOptIn'));
+
+        // NEGATIVE CONTROL — an ABSENT key still returns the default. Without this a
+        // "fix" that simply never returns the default would pass.
+        $this->assertFalse($session->has('neverStored'), 'the control key must be absent');
+        $this->assertSame(true, $session->get('neverStored', true));
+        $this->assertSame('fallback', $session->get('neverStored', 'fallback'));
+        $this->assertNull($session->get('neverStored'));
+
+        // The same contract after a real round-trip through the backend file, so this
+        // pins the stored value and not just the in-memory array.
+        $reopened = $this->createSession();
+        $reopened->start($sessionId);
+        $this->assertSame(false, $reopened->get('emailOptIn', true));
+        $this->assertSame(true, $reopened->get('neverStored', true));
+    }
+
     public function testStoreNestedArray(): void
     {
         $session = $this->createSession();
