@@ -43,22 +43,39 @@ class SessionDatabaseEngineTest extends TestCase
      */
     public static function engines(): array
     {
+        // The URL is what the SESSION WRITES through; the DSN is what this test
+        // READS BACK through to verify. They must name the SAME database, and
+        // hardcoding the DSN's dbname made that true only by coincidence: the
+        // URL default happened to end in /postgres and the DSN said
+        // dbname=postgres. The moment TINA4_TEST_PG_URL was exported pointing at
+        // tina4_py, the session was written in one database and looked for in
+        // another - "relation tina4_session does not exist" on all three cases.
+        // Deriving the DSN's dbname FROM the URL makes them unable to disagree.
+        $dbOf = static function (string $url, string $fallback): string {
+            $path = parse_url($url, PHP_URL_PATH);
+            $db = is_string($path) ? ltrim($path, '/') : '';
+            return $db !== '' ? $db : $fallback;
+        };
+
+        $pgUrl = getenv('TINA4_TEST_PG_URL') ?: 'postgres://127.0.0.1:55432/postgres';
+        $myUrl = getenv('TINA4_TEST_MYSQL_URL') ?: 'mysql://127.0.0.1:3306/tina4_test';
+
         return [
             'postgresql' => [
-                getenv('TINA4_TEST_PG_URL') ?: 'postgres://127.0.0.1:55432/postgres',
+                $pgUrl,
                 getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1',
                 (int)(getenv('TINA4_TEST_PG_PORT') ?: 55432),
                 getenv('TINA4_TEST_PG_USERNAME') ?: 'tina4',
                 getenv('TINA4_TEST_PG_PASSWORD') ?: 'tina4',
-                'pgsql:host=%s;port=%d;dbname=postgres',
+                'pgsql:host=%s;port=%d;dbname=' . $dbOf($pgUrl, 'postgres'),
             ],
             'mysql' => [
-                getenv('TINA4_TEST_MYSQL_URL') ?: 'mysql://127.0.0.1:3306/tina4_test',
+                $myUrl,
                 getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1',
                 (int)(getenv('TINA4_TEST_MYSQL_PORT') ?: 3306),
                 getenv('TINA4_TEST_MYSQL_USERNAME') ?: 'root',
                 getenv('TINA4_TEST_MYSQL_PASSWORD') ?: 'tina4',
-                'mysql:host=%s;port=%d;dbname=tina4_test',
+                'mysql:host=%s;port=%d;dbname=' . $dbOf($myUrl, 'tina4_test'),
             ],
         ];
     }
