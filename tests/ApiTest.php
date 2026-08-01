@@ -12,55 +12,65 @@
  * the auth setters, URL/path building, and — the new feature — opt-in
  * retry/backoff.
  *
- * The retry tests use a tiny ScriptedApi subclass that overrides the protected
- * `attempt()` network seam to replay a scripted sequence of result arrays
- * (mirroring how the Python suite patches `_open`). No real wire traffic, and a
- * tiny retryBackoff keeps the exponential sleeps negligible.
+ * NO MOCKS. The retry tests used to subclass Api and override the protected
+ * `attempt()` seam to replay canned result arrays; they now drive a REAL
+ * scripted HTTP server (tests/fixtures/api_retry_server.php) over REAL sockets.
+ * The server owns its own listener so it can also ABORT a connection with zero
+ * bytes, which is how the transport-failure retry branch is reached for real
+ * rather than by handing the client a `http_code => null` array. Attempt counts
+ * come from the SERVER's own hit counters, so they measure requests that
+ * actually crossed the wire. A tiny retryBackoff keeps the exponential sleeps
+ * negligible.
  */
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Api;
 
-/**
- * Api subclass whose single-attempt seam returns scripted responses instead of
- * touching the network. Counts attempts so retry behaviour can be asserted.
- */
-class ScriptedApi extends Api
-{
-    /** @var array<int, array> Queue of result arrays to return, one per attempt. */
-    public array $scripted = [];
-    public int $attempts = 0;
-
-    public function __construct(array $scripted, int $maxRetries = 0, float $retryBackoff = 0.01)
-    {
-        parent::__construct('https://api.example.com', maxRetries: $maxRetries, retryBackoff: $retryBackoff);
-        $this->scripted = $scripted;
-    }
-
-    protected function attempt(string $method = 'GET', string $path = '', mixed $body = null, string $contentType = 'application/json'): array
-    {
-        $this->attempts++;
-        // Pop the next scripted response; if exhausted, reuse the last one
-        // (defensive — every test queues enough entries for max attempts).
-        $next = array_shift($this->scripted);
-        if ($next === null) {
-            throw new \RuntimeException('ScriptedApi ran out of scripted responses');
-        }
-        return $next;
-    }
-}
-
 class ApiTest extends TestCase
 {
-    /** Build a standardized result array shaped like Api::attempt() returns. */
-    private function makeResult(?int $httpCode, mixed $body = null, ?string $error = null): array
+    /** The one real scripted server shared by every retry case in this class. */
+    private static ?TestServer $server = null;
+
+    public static function setUpBeforeClass(): void
     {
-        return [
-            'http_code' => $httpCode,
-            'body' => $body,
-            'headers' => [],
-            'error' => $error,
-        ];
+        self::$server = TestServer::startScript(__DIR__ . '/fixtures/api_retry_server.php');
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        self::$server?->stop();
+        self::$server = null;
+    }
+
+    /**
+     * An Api pointed at the real server, plus the unique scenario key its
+     * requests will be counted under.
+     *
+     * @return array{0: Api, 1: string, 2: string} [api, path, key]
+     */
+    private function scenario(string $behaviour, int $maxRetries): array
+    {
+        $key = $behaviour . '-' . bin2hex(random_bytes(6));
+        $api = new Api(
+            self::$server->base(),
+            maxRetries: $maxRetries,
+            retryBackoff: 0.01
+        );
+
+        return [$api, "/scripted?b={$behaviour}&k={$key}", $key];
+    }
+
+    /**
+     * How many requests the REAL server saw for a scenario key. This is a live
+     * HTTP read against the same server, not a counter kept inside the client.
+     */
+    private function serverHits(string $key): int
+    {
+        $probe = new Api(self::$server->base());
+        $result = $probe->get('/hits', ['k' => $key]);
+        $this->assertSame(200, $result['http_code'], 'the hit-count endpoint must answer');
+
+        return (int)$result['body']['hits'];
     }
 
     /** Read a private/protected property for assertion. */
@@ -250,106 +260,105 @@ class ApiTest extends TestCase
         $this->assertSame('http://other.com/data', $this->buildUrl($api, 'http://other.com/data'));
     }
 
-    // -- Retry / backoff -----------------------------------------------------
+    // -- Retry / backoff (real sockets, real server) -------------------------
 
     public function testDefaultMakesSingleAttemptOn503(): void
     {
-        // max_retries defaults to 0 → exactly ONE attempt even on a 503.
-        $api = new ScriptedApi(
-            [$this->makeResult(503, 'down', 'HTTP 503')],
-            maxRetries: 0
-        );
-        $result = $api->get('/x');
+        // maxRetries defaults to 0 → exactly ONE request reaches the server
+        // even though the 503 it answers with IS in the retryable set.
+        [$api, $path, $key] = $this->scenario('always-503', maxRetries: 0);
+
+        $result = $api->get($path);
+
         $this->assertSame(503, $result['http_code']);
-        $this->assertSame(1, $api->attempts, 'NEGATIVE: no retry by default');
+        $this->assertSame('HTTP 503', $result['error']);
+        $this->assertSame(1, $this->serverHits($key), 'NEGATIVE: no retry by default');
     }
 
     public function test503ThenSuccessRecoversInTwoAttempts(): void
     {
-        $api = new ScriptedApi(
-            [
-                $this->makeResult(503, 'down', 'HTTP 503'),
-                $this->makeResult(200, ['ok' => true]),
-            ],
-            maxRetries: 2
-        );
-        $result = $api->get('/x');
+        [$api, $path, $key] = $this->scenario('down-then-ok', maxRetries: 2);
+
+        $result = $api->get($path);
+
         $this->assertSame(200, $result['http_code'], 'POSITIVE: recovered after retry');
-        $this->assertSame(['ok' => true], $result['body']);
-        $this->assertSame(2, $api->attempts);
+        $this->assertTrue($result['body']['ok']);
+        $this->assertSame(2, $result['body']['hit'], 'the SECOND request is the one that succeeded');
+        $this->assertSame(2, $this->serverHits($key));
     }
 
     public function testTransportErrorThenSuccessRecovers(): void
     {
-        // http_code null is a transport error → retryable.
-        $api = new ScriptedApi(
-            [
-                $this->makeResult(null, null, 'Request failed: unable to connect'),
-                $this->makeResult(200, 'ok'),
-            ],
-            maxRetries: 3
-        );
-        $result = $api->get('/x');
+        // A REAL transport failure: the server accepts the first connection and
+        // closes it with zero bytes, so fopen() fails and http_code is null —
+        // the retryable "no response at all" branch.
+        [$api, $path, $key] = $this->scenario('abort-then-ok', maxRetries: 3);
+
+        $result = $api->get($path);
+
         $this->assertSame(200, $result['http_code']);
-        $this->assertSame(2, $api->attempts);
+        $this->assertSame(2, $result['body']['hit']);
+        $this->assertSame(2, $this->serverHits($key));
+    }
+
+    public function testTransportErrorIsNotRetriedWhenRetriesAreOff(): void
+    {
+        // NEGATIVE control for the case above: the same real abort, with
+        // retries off, surfaces as a single failed attempt.
+        [$api, $path, $key] = $this->scenario('abort-then-ok', maxRetries: 0);
+
+        $result = $api->get($path);
+
+        $this->assertNull($result['http_code'], 'a real aborted connection has no status');
+        $this->assertNull($result['body']);
+        $this->assertStringContainsString('unable to connect', (string)$result['error']);
+        $this->assertSame(1, $this->serverHits($key), 'NEGATIVE: no retry by default');
     }
 
     public function testRetriesExhaustAndReturnLast503(): void
     {
-        // maxRetries=2 → 3 attempts total, all 503 → returns the last 503.
-        $api = new ScriptedApi(
-            [
-                $this->makeResult(503, 'down', 'HTTP 503'),
-                $this->makeResult(503, 'down', 'HTTP 503'),
-                $this->makeResult(503, 'down', 'HTTP 503'),
-            ],
-            maxRetries: 2
-        );
-        $result = $api->get('/x');
+        // maxRetries=2 → 3 requests on the wire, all 503 → returns the last 503.
+        [$api, $path, $key] = $this->scenario('always-503', maxRetries: 2);
+
+        $result = $api->get($path);
+
         $this->assertSame(503, $result['http_code']);
-        $this->assertSame(3, $api->attempts);
+        $this->assertSame(3, $result['body']['hit']);
+        $this->assertSame(3, $this->serverHits($key));
     }
 
     public function test404IsNotRetried(): void
     {
-        // A 4xx (other than 429) is NOT retryable — single attempt.
-        $api = new ScriptedApi(
-            [$this->makeResult(404, 'missing', 'HTTP 404')],
-            maxRetries: 3
-        );
-        $result = $api->get('/x');
+        // A 4xx (other than 429) is NOT retryable — single request.
+        [$api, $path, $key] = $this->scenario('always-404', maxRetries: 3);
+
+        $result = $api->get($path);
+
         $this->assertSame(404, $result['http_code']);
-        $this->assertSame(1, $api->attempts, 'NEGATIVE: 4xx is not retried');
+        $this->assertSame(1, $this->serverHits($key), 'NEGATIVE: 4xx is not retried');
     }
 
     public function test429IsRetried(): void
     {
         // 429 (rate limit) IS in the retry set.
-        $api = new ScriptedApi(
-            [
-                $this->makeResult(429, 'slow down', 'HTTP 429'),
-                $this->makeResult(200, 'ok'),
-            ],
-            maxRetries: 1
-        );
-        $result = $api->get('/x');
+        [$api, $path, $key] = $this->scenario('throttle-then-ok', maxRetries: 1);
+
+        $result = $api->get($path);
+
         $this->assertSame(200, $result['http_code']);
-        $this->assertSame(2, $api->attempts);
+        $this->assertSame(2, $this->serverHits($key));
     }
 
     public function testSuccessfulResponseIsNotRetried(): void
     {
         // A 2xx returns immediately even when retries are enabled.
-        $api = new ScriptedApi(
-            [
-                $this->makeResult(200, 'ok'),
-                $this->makeResult(200, 'should-not-be-reached'),
-            ],
-            maxRetries: 3
-        );
-        $result = $api->get('/x');
+        [$api, $path, $key] = $this->scenario('always-200', maxRetries: 3);
+
+        $result = $api->get($path);
+
         $this->assertSame(200, $result['http_code']);
-        $this->assertSame('ok', $result['body']);
-        $this->assertSame(1, $api->attempts);
+        $this->assertTrue($result['body']['ok']);
+        $this->assertSame(1, $result['body']['hit']);
+        $this->assertSame(1, $this->serverHits($key));
     }
 }

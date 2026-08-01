@@ -477,11 +477,12 @@ class Api
     /**
      * A single HTTP attempt. Returns the standardized result array.
      *
-     * This is the network-call seam — protected on purpose so a test can
-     * subclass and override it to return a scripted sequence of responses
-     * without touching the wire (mirrors the Python master's _open patch point).
-     * Keep this signature at four parameters: a subclass override (e.g. the test
-     * ScriptedApi) must stay signature-compatible.
+     * This is the network-call seam — protected so an APPLICATION subclass can
+     * wrap or instrument one attempt (the same audience as the $transport
+     * constructor argument). Tina4's own suite never overrides it with canned
+     * responses: ApiTest drives the retry policy against a real scripted HTTP
+     * server over real sockets. Keep this signature at four parameters — a
+     * subclass override must stay signature-compatible.
      *
      * @param string $method      HTTP method (GET, POST, PUT, PATCH, DELETE)
      * @param string $path        Full URL or path (appended to baseUrl if not absolute)

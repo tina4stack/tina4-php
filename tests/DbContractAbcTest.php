@@ -21,11 +21,7 @@
 namespace Tina4\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Tina4\Database\CachedDatabase;
 use Tina4\Database\Database;
-use Tina4\Database\DatabaseAdapter;
-use Tina4\Database\DatabaseException;
-use Tina4\Database\DatabaseResult;
 
 class DbContractAbcTest extends TestCase
 {
@@ -247,45 +243,126 @@ class DbContractAbcTest extends TestCase
 
     // ── THEME C — commit failure + pin retention + nested guard ───────────
 
+    /**
+     * A REAL commit failure on a REAL engine — no wrapper, no simulation.
+     *
+     * SQLite checks DEFERRED foreign keys at COMMIT time
+     * (`PRAGMA defer_foreign_keys = ON`, which the engine resets on every
+     * COMMIT/ROLLBACK). A child row pointing at a parent that does not exist is
+     * therefore accepted by the INSERT and REFUSED by the COMMIT with
+     * SQLITE_CONSTRAINT, leaving the transaction open and awaiting a ROLLBACK.
+     * That is precisely the state contract C describes, produced by the database
+     * itself.
+     *
+     * Two cheaper-looking routes do NOT work here, and both were measured:
+     * chmod on an ALREADY-OPEN sqlite handle does not deny writes (SQLite checks
+     * permissions at open), and chmod 0500 on the containing directory does not
+     * either; the denial only materialises for a connection opened AFTER the
+     * chmod — at which point the INSERT fails and COMMIT is never reached, so it
+     * would test the wrong call.
+     */
     public function testCommitFailureRaisesRetainsPinThenRollbackCleansUp(): void
     {
         $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR
             . 'tina4_commit_fail_' . uniqid('', true) . '.db';
-        $base = Database::create('sqlite:///' . $tmp);
-        $base->execute('CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)');
+        $db = Database::create('sqlite:///' . $tmp);
 
-        // Wrap the live SQLite adapter so its commit() raises ONCE.
-        $flaky = new FlakyCommitAdapter($base->getAdapter());
-        $db = $this->databaseWithAdapter($flaky);
-
-        $db->startTransaction();
-        $db->execute("INSERT INTO t (id, v) VALUES (1, 'x')");
-
-        // commit() must RE-RAISE and populate getError().
         try {
-            $db->commit();
-            $this->fail('commit() must re-raise when the underlying commit fails');
-        } catch (\Throwable $e) {
+            $db->execute('CREATE TABLE parent (id INTEGER PRIMARY KEY)');
+            $db->execute(
+                'CREATE TABLE child (id INTEGER PRIMARY KEY, '
+                . 'parent_id INTEGER NOT NULL REFERENCES parent(id))'
+            );
+
+            $db->startTransaction();
+            $db->execute('PRAGMA defer_foreign_keys = ON');
+            // Accepted now, refused at COMMIT: parent 999 does not exist.
+            $db->execute("INSERT INTO child (id, parent_id) VALUES (1, 999)");
+
+            // commit() must RE-RAISE and populate getError().
+            $raised = null;
+            try {
+                $db->commit();
+            } catch (\Throwable $e) {
+                $raised = $e;
+            }
+            $this->assertNotNull(
+                $raised,
+                'commit() must re-raise when the engine refuses the commit'
+            );
+            $this->assertStringContainsStringIgnoringCase(
+                'foreign key',
+                $raised->getMessage(),
+                'the raised error must be the ENGINE\'s commit-time constraint failure'
+            );
             $this->assertNotNull($db->getError(), 'getError() populated on commit failure');
+
+            // The pin must be RETAINED so rollback lands on the same connection.
+            $this->assertTrue(
+                $this->pinIsRetained($db),
+                'the transaction pin must be retained after a failed commit'
+            );
+
+            // A follow-up rollback on the SAME connection cleans up + clears the pin.
+            $db->rollback();
+            $this->assertFalse(
+                $this->pinIsRetained($db),
+                'rollback() must clear the pin (terminal cleanup)'
+            );
+
+            // ... and the engine really discarded the uncommitted row.
+            $this->assertNull(
+                $db->fetchOne('SELECT id FROM child WHERE id = 1'),
+                'the row from the failed transaction must not have persisted'
+            );
+        } finally {
+            $db->close();
+            @unlink($tmp);
+            @unlink($tmp . '-wal');
+            @unlink($tmp . '-shm');
         }
+    }
 
-        // The pin must be RETAINED so rollback lands on the same connection.
-        $this->assertTrue(
-            $this->pinIsRetained($db),
-            'the transaction pin must be retained after a failed commit'
-        );
+    /**
+     * The POSITIVE control for the case above: the identical deferred-FK setup
+     * with a parent that DOES exist commits cleanly and releases the pin. Proves
+     * the failure test fails because of the constraint, not because deferring
+     * foreign keys breaks commits.
+     */
+    public function testSatisfiedDeferredForeignKeyCommitsAndReleasesPin(): void
+    {
+        $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'tina4_commit_ok_' . uniqid('', true) . '.db';
+        $db = Database::create('sqlite:///' . $tmp);
 
-        // A follow-up rollback on the SAME connection cleans up + clears the pin.
-        $db->rollback();
-        $this->assertFalse(
-            $this->pinIsRetained($db),
-            'rollback() must clear the pin (terminal cleanup)'
-        );
+        try {
+            $db->execute('CREATE TABLE parent (id INTEGER PRIMARY KEY)');
+            $db->execute(
+                'CREATE TABLE child (id INTEGER PRIMARY KEY, '
+                . 'parent_id INTEGER NOT NULL REFERENCES parent(id))'
+            );
 
-        $base->close();
-        @unlink($tmp);
-        @unlink($tmp . '-wal');
-        @unlink($tmp . '-shm');
+            $db->startTransaction();
+            $db->execute('PRAGMA defer_foreign_keys = ON');
+            // Child first, parent second — legal precisely because the check is
+            // deferred to COMMIT, and satisfied by the time it runs.
+            $db->execute("INSERT INTO child (id, parent_id) VALUES (1, 7)");
+            $db->execute('INSERT INTO parent (id) VALUES (7)');
+            $db->commit();
+
+            $this->assertFalse(
+                $this->pinIsRetained($db),
+                'a successful commit must release the pin'
+            );
+            $row = $db->fetchOne('SELECT parent_id FROM child WHERE id = 1');
+            $this->assertSame(7, (int)$row['parent_id'], 'the committed row persisted');
+            $this->assertNull($db->getError());
+        } finally {
+            $db->close();
+            @unlink($tmp);
+            @unlink($tmp . '-wal');
+            @unlink($tmp . '-shm');
+        }
     }
 
     public function testSuccessfulCommitClearsPin(): void
@@ -347,16 +424,6 @@ class DbContractAbcTest extends TestCase
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    /** Build a Database whose single connection is the given adapter. */
-    private function databaseWithAdapter(DatabaseAdapter $adapter): Database
-    {
-        $db = Database::create('sqlite::memory:');
-        $ref = new \ReflectionClass($db);
-        $prop = $ref->getProperty('adapter');
-        $prop->setValue($db, $adapter);
-        return $db;
-    }
-
     /** Read the private pinnedAdapter to assert pin state. */
     private function pinIsRetained(Database $db): bool
     {
@@ -364,47 +431,4 @@ class DbContractAbcTest extends TestCase
         $prop = $ref->getProperty('pinnedAdapter');
         return $prop->getValue($db) !== null;
     }
-}
-
-/**
- * Decorator whose commit() throws ONCE (then delegates) — the PHP analogue of
- * the Python test's monkeypatched adapter.commit. Everything else delegates to
- * the wrapped live adapter so the transaction really runs on a real connection.
- */
-class FlakyCommitAdapter implements DatabaseAdapter
-{
-    private DatabaseAdapter $inner;
-    private bool $failed = false;
-
-    public function __construct(DatabaseAdapter $inner)
-    {
-        $this->inner = $inner;
-    }
-
-    public function commit(): void
-    {
-        if (!$this->failed) {
-            $this->failed = true;
-            throw new DatabaseException('simulated commit failure');
-        }
-        $this->inner->commit();
-    }
-
-    public function open(): void { $this->inner->open(); }
-    public function close(): void { $this->inner->close(); }
-    public function query(string $sql, array $params = []): array { return $this->inner->query($sql, $params); }
-    public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array { return $this->inner->fetch($sql, $params, $limit, $offset); }
-    public function fetchOne(string $sql, array $params = []): ?array { return $this->inner->fetchOne($sql, $params); }
-    public function execute(string $sql, array $params = []): bool|DatabaseResult { return $this->inner->execute($sql, $params); }
-    public function executeMany(string $sql, array $paramsList = []): int { return $this->inner->executeMany($sql, $paramsList); }
-    public function insert(string $table, array $data): bool { return $this->inner->insert($table, $data); }
-    public function update(string $table, array $data, string $where = '', array $whereParams = []): bool { return $this->inner->update($table, $data, $where, $whereParams); }
-    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool { return $this->inner->delete($table, $filter, $whereParams); }
-    public function startTransaction(): void { $this->inner->startTransaction(); }
-    public function rollback(): void { $this->inner->rollback(); }
-    public function tableExists(string $table): bool { return $this->inner->tableExists($table); }
-    public function getColumns(string $table): array { return $this->inner->getColumns($table); }
-    public function getTables(): array { return $this->inner->getTables(); }
-    public function lastInsertId(): int|string { return $this->inner->lastInsertId(); }
-    public function error(): ?string { return $this->inner->error(); }
 }

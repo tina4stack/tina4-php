@@ -86,20 +86,63 @@ final class TestServer
      */
     public static function start(string $router, array $env = [], ?string $cwd = null): self
     {
+        $port = self::freePort();
+
+        // `exec` replaces the /bin/sh wrapper with php itself — see the class docblock.
+        $cmd = 'exec ' . escapeshellarg(PHP_BINARY)
+            . ' -S 127.0.0.1:' . $port . ' ' . escapeshellarg($router);
+
+        return self::launch($cmd, $port, $env, $cwd ?? dirname($router));
+    }
+
+    /**
+     * Boot a standalone PHP server SCRIPT (one that binds its own listener) on a
+     * free port and wait until it accepts.
+     *
+     * `php -S` is an HTTP server and nothing else: it cannot abort a connection
+     * without a response, so it cannot produce a real transport failure for a
+     * client to retry. A script that owns its own `stream_socket_server` can —
+     * and it is still a real listener speaking real HTTP over real sockets.
+     * The port is passed as $argv[1].
+     *
+     * @param string                $script the server script to run
+     * @param array<int, string>    $args   extra arguments, appended after the port
+     * @param array<string, string> $env    extra environment for the child (null = inherit)
+     * @param string|null           $cwd    working directory (default: the script's directory)
+     *
+     * @throws \RuntimeException when the process cannot be started, or never accepts
+     */
+    public static function startScript(string $script, array $args = [], array $env = [], ?string $cwd = null): self
+    {
+        $port = self::freePort();
+
+        $cmd = 'exec ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' ' . $port;
+        foreach ($args as $arg) {
+            $cmd .= ' ' . escapeshellarg((string)$arg);
+        }
+
+        return self::launch($cmd, $port, $env, $cwd ?? dirname($script));
+    }
+
+    /**
+     * Spawn a server command with the fd/reaping hygiene described on the class,
+     * and block until the port accepts.
+     *
+     * @param array<string, string> $env
+     *
+     * @throws \RuntimeException when the process cannot be started, or never accepts
+     */
+    private static function launch(string $cmd, int $port, array $env, string $cwd): self
+    {
         if (!self::$shutdownRegistered) {
             register_shutdown_function(static fn () => self::stopAll());
             self::$shutdownRegistered = true;
         }
 
-        $port = self::freePort();
         $log = tempnam(sys_get_temp_dir(), 'tina4-testserver-');
         if ($log === false) {
             throw new \RuntimeException('could not create a log file for the test server');
         }
-
-        // `exec` replaces the /bin/sh wrapper with php itself — see the class docblock.
-        $cmd = 'exec ' . escapeshellarg(PHP_BINARY)
-            . ' -S 127.0.0.1:' . $port . ' ' . escapeshellarg($router);
 
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
@@ -108,9 +151,9 @@ final class TestServer
         ];
 
         $pipes = [];
-        $proc = proc_open($cmd, $descriptors, $pipes, $cwd ?? dirname($router), $env ?: null);
+        $proc = proc_open($cmd, $descriptors, $pipes, $cwd, $env ?: null);
         if (!is_resource($proc)) {
-            throw new \RuntimeException("could not start php -S on port {$port}");
+            throw new \RuntimeException("could not start a test server on port {$port}");
         }
 
         $status = proc_get_status($proc);
@@ -129,7 +172,7 @@ final class TestServer
         $why = trim($server->log());
         $server->stop();
         throw new \RuntimeException(
-            "php -S never accepted on port {$port}" . ($why !== '' ? ": {$why}" : '')
+            "the test server never accepted on port {$port}" . ($why !== '' ? ": {$why}" : '')
         );
     }
 
