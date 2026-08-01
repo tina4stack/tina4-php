@@ -61,9 +61,28 @@ class SessionV3Test extends TestCase
 
     public function testStartWithExistingId(): void
     {
+        // The session must EXIST in the store before its id can be resumed:
+        // start() runs in strict mode (OWASP / session.use_strict_mode=1), so a
+        // well-formed id the backend never issued is discarded rather than
+        // adopted. Supplying a bare literal here used to "resume" a session
+        // that had never existed.
+        $created = $this->createSession();
+        $id = $created->start();
+        $created->set('k', 'v');
+        $created->save();
+
         $session = $this->createSession();
-        $id = $session->start('my-custom-session-id');
-        $this->assertEquals('my-custom-session-id', $id);
+        $this->assertEquals($id, $session->start($id));
+        $this->assertEquals('v', $session->get('k'));
+    }
+
+    public function testStartWithUnknownIdMintsAFreshOne(): void
+    {
+        $session = $this->createSession();
+        $unknown = 'well-formed-but-never-issued-id';
+
+        $this->assertTrue(Session::isValidSessionId($unknown));
+        $this->assertNotEquals($unknown, $session->start($unknown));
     }
 
     public function testIsStarted(): void
@@ -191,13 +210,19 @@ class SessionV3Test extends TestCase
         $id = $session->start();
 
         $session->set('key', 'value');
+
+        // The filename is the SHA-256 of the session id, never the raw id
+        // (parity with the Python master) — see Session::getFilePath().
+        // Asserting the file EXISTS first is what makes the assertion below a
+        // real gate: "this path does not exist" is trivially true of any wrong
+        // path, so on its own it would pass even if the derivation changed.
+        $filePath = $this->testSessionPath . '/' . hash('sha256', $id) . '.json';
+        $this->assertFileExists($filePath, 'session was not written to the hashed path');
+
         $session->destroy();
 
         $this->assertFalse($session->isStarted());
         $this->assertNull($session->get('key'));
-
-        // File should be removed
-        $filePath = $this->testSessionPath . '/' . $id . '.json';
         $this->assertFileDoesNotExist($filePath);
     }
 
@@ -215,12 +240,12 @@ class SessionV3Test extends TestCase
         $this->assertEquals(32, strlen($newId));
         $this->assertEquals('this', $session->get('keep'));
 
-        // Old file should be removed
-        $oldFile = $this->testSessionPath . '/' . $oldId . '.json';
+        // Old file should be removed (filename is the SHA-256 of the id).
+        $oldFile = $this->testSessionPath . '/' . hash('sha256', $oldId) . '.json';
         $this->assertFileDoesNotExist($oldFile);
 
         // New file should exist
-        $newFile = $this->testSessionPath . '/' . $newId . '.json';
+        $newFile = $this->testSessionPath . '/' . hash('sha256', $newId) . '.json';
         $this->assertFileExists($newFile);
     }
 

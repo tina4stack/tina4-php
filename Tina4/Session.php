@@ -25,6 +25,28 @@ namespace Tina4;
 class Session
 {
     /**
+     * A session id is OPAQUE — an unguessable lookup token and nothing else. It
+     * is never a filename, a path, a SQL fragment or a Redis key fragment, so
+     * the only characters it may contain are the ones every backend treats as
+     * inert.
+     *
+     * The alphabet is the RFC 4648 base64url set, which is exactly what all four
+     * frameworks already mint: PHP/Node hex(16), Ruby hex(32), Python
+     * secrets.token_urlsafe(32). Validation is therefore non-breaking for every
+     * id the family has ever issued, while rejecting the '.' and '/' that turn a
+     * cookie into a path traversal.
+     *
+     * There is deliberately NO entropy floor here. Unguessability is guaranteed
+     * by the framework's own minting (bin2hex(random_bytes(16))), not by
+     * inspecting an id a trusted caller passed to start() on purpose — an app is
+     * entitled to run $session->start('my-session-id') with an id it manages
+     * itself, and a length rule would break that without closing any attack. The
+     * vulnerability was always the ALPHABET, never the length. The 128-character
+     * ceiling only bounds what an attacker can push through a backend key.
+     */
+    public const SESSION_ID_PATTERN = '/^[A-Za-z0-9_-]{1,128}$/';
+
+    /**
      * Every accepted backend name, aliases included. Byte-identical membership in
      * all four frameworks. This is the one place the list is written in PHP, so
      * the five match() statements below and the error message cannot disagree.
@@ -59,6 +81,20 @@ class Session
     /** @var bool Whether a session is active */
     private bool $started = false;
 
+    /**
+     * @var bool Whether the last backend load AFFIRMATIVELY returned a stored
+     *           record. Drives strict mode in start(): an id the store has
+     *           never issued is discarded rather than adopted.
+     */
+    private bool $backendHadRecord = false;
+
+    /**
+     * @var bool Whether the last backend load THREW. Kept separate from
+     *           $backendHadRecord because "the store did not answer" is not the
+     *           same claim as "the store has no such session" — see start().
+     */
+    private bool $backendReadFailed = false;
+
     /** @var bool Whether the data store has unsaved changes (retained across a failed save for retry) */
     private bool $dirty = false;
 
@@ -83,17 +119,67 @@ class Session
     }
 
     /**
+     * Whether $sessionId is a well-formed opaque session identifier.
+     *
+     * Callers pass UNTRUSTED input here (the session cookie is attacker-chosen),
+     * so anything outside SESSION_ID_PATTERN is rejected.
+     *
+     * @param string|null $sessionId The candidate identifier
+     * @return bool True when the id is safe to use as an opaque lookup token
+     */
+    public static function isValidSessionId(?string $sessionId): bool
+    {
+        return $sessionId !== null && preg_match(self::SESSION_ID_PATTERN, $sessionId) === 1;
+    }
+
+    /**
      * Start or resume a session.
      *
+     * $sessionId is UNTRUSTED — it arrives from the session cookie, which the
+     * client fully controls. A supplied id is adopted ONLY when it clears both
+     * gates; otherwise it is discarded and a fresh one minted:
+     *
+     *   1. It must be a well-formed opaque identifier (SESSION_ID_PATTERN).
+     *      Adopting anything else let a cookie steer a filesystem path —
+     *      arbitrary read/write on the file backend.
+     *   2. The backend must already hold a record for it (strict mode). An id
+     *      the store never issued is not a session, so an attacker cannot plant
+     *      one in the victim's browser and ride it after the victim logs in.
+     *
+     * BREAKING: gate 2 means every session in flight at deploy time is dropped
+     * once — an existing cookie misses the store on the first request and the
+     * client is issued a new, empty session. This is the intended trade.
+     *
      * @param string|null $sessionId Existing session ID, or null to generate one
-     * @return string The session ID
+     * @return string The session ID actually in use (may differ from the input)
      */
     public function start(?string $sessionId = null): string
     {
+        if ($sessionId !== null && !self::isValidSessionId($sessionId)) {
+            $sessionId = null;
+        }
+
         if ($sessionId !== null) {
             $this->sessionId = $sessionId;
             $this->load();
-        } else {
+
+            // Strict mode (OWASP; PHP's own session.use_strict_mode=1 default):
+            // only an id the STORE has actually issued may be adopted. A
+            // well-formed id the backend has never seen is discarded, so an
+            // attacker cannot plant a session id in the victim's browser and
+            // then ride it once the victim logs in (session fixation).
+            //
+            // A FAILED read is deliberately NOT treated as "no such session":
+            // during a backend outage that would mint a brand-new id on every
+            // request, logging out every user and orphaning their stored
+            // sessions. Absence must be asserted by the store, not inferred
+            // from its silence.
+            if (!$this->backendHadRecord && !$this->backendReadFailed) {
+                $sessionId = null;
+            }
+        }
+
+        if ($sessionId === null) {
             $this->sessionId = bin2hex(random_bytes(16));
             $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         }
@@ -427,9 +513,11 @@ class Session
      */
     private function safeRead(string $sessionId): void
     {
+        $this->backendReadFailed = false;
         try {
             $this->dispatchLoad();
         } catch (\Throwable $e) {
+            $this->backendReadFailed = true;
             Log::error(
                 "Session read failed ({$this->handlerLabel()}): " . $e->getMessage()
             );
@@ -553,6 +641,11 @@ class Session
      */
     private function dispatchLoad(): void
     {
+        // Each loader sets this true only when the backend affirmatively
+        // returned a stored record; "no record" and "corrupt/expired record"
+        // both leave it false, which is what start()'s strict mode acts on.
+        $this->backendHadRecord = false;
+
         match ($this->backend) {
             'redis' => $this->loadFromRedis(),
             'valkey' => $this->loadFromValkey(),
@@ -693,10 +786,34 @@ class Session
 
     /**
      * Get the file path for the current session.
+     *
+     * TWO independent defences, because read() and write() take a
+     * caller-supplied id straight from the application and never pass through
+     * start():
+     *
+     *   1. A malformed id is REFUSED outright. '../../outside/pwned' would
+     *      otherwise resolve to an attacker-chosen path anywhere the worker can
+     *      write.
+     *   2. The filename is the SHA-256 of the id, never the id itself (parity
+     *      with the Python master's FileSessionHandler._file). Even if a future
+     *      change loosened gate 1, a hex digest cannot contain a path separator
+     *      or a '..' segment. It also keeps the raw session id — a bearer
+     *      credential — out of directory listings, backups and log output.
+     *
+     * The hash is NOT a substitute for the validation; both stay.
+     *
+     * @return string Absolute-or-relative path of this session's JSON file
+     * @throws \InvalidArgumentException When the current session id is malformed
      */
     private function getFilePath(): string
     {
-        return $this->storagePath . '/' . $this->sessionId . '.json';
+        if (!self::isValidSessionId($this->sessionId)) {
+            throw new \InvalidArgumentException(
+                'Refusing to derive a session file path from a malformed session id'
+            );
+        }
+
+        return $this->storagePath . '/' . hash('sha256', $this->sessionId) . '.json';
     }
 
     /**
@@ -729,6 +846,7 @@ class Session
 
         $this->data = $decoded;
         $this->data['_meta']['last_accessed'] = time();
+        $this->backendHadRecord = true;
     }
 
     /**
@@ -776,6 +894,7 @@ class Session
     private function loadFromRedis(): void
     {
         $data = $this->getRedisHandler()->read($this->sessionId);
+        $this->backendHadRecord = !empty($data);
         $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         $this->data['_meta']['last_accessed'] = time();
     }
@@ -811,6 +930,7 @@ class Session
     private function loadFromValkey(): void
     {
         $data = $this->getValkeyHandler()->read($this->sessionId);
+        $this->backendHadRecord = !empty($data);
         $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         $this->data['_meta']['last_accessed'] = time();
     }
@@ -840,6 +960,7 @@ class Session
     private function loadFromMemcached(): void
     {
         $data = $this->getMemcachedHandler()->read($this->sessionId);
+        $this->backendHadRecord = !empty($data);
         $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         $this->data['_meta']['last_accessed'] = time();
     }
@@ -869,6 +990,7 @@ class Session
     private function loadFromMongo(): void
     {
         $data = $this->getMongoHandler()->read($this->sessionId);
+        $this->backendHadRecord = !empty($data);
         $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         $this->data['_meta']['last_accessed'] = time();
     }
@@ -898,6 +1020,7 @@ class Session
     private function loadFromDatabase(): void
     {
         $data = $this->getDbHandler()->read($this->sessionId);
+        $this->backendHadRecord = !empty($data);
         $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         $this->data['_meta']['last_accessed'] = time();
     }
