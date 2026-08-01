@@ -25,6 +25,23 @@ namespace Tina4;
 class Session
 {
     /**
+     * A session id is OPAQUE — an unguessable lookup token and nothing else. It
+     * is never a filename, a path, a SQL fragment or a Redis key fragment, so
+     * the only characters it may contain are the ones every backend treats as
+     * inert.
+     *
+     * The alphabet is the RFC 4648 base64url set, which is exactly what all four
+     * frameworks already mint: PHP/Node hex(16), Ruby hex(32), Python
+     * secrets.token_urlsafe(32). Validation is therefore non-breaking for every
+     * id the family has ever issued, while rejecting the '.' and '/' that turn a
+     * cookie into a path traversal.
+     *
+     * The 16-character floor also rejects a trivially brute-forceable id; the
+     * 128-character ceiling bounds what an attacker can push through a key.
+     */
+    public const SESSION_ID_PATTERN = '/^[A-Za-z0-9_-]{16,128}$/';
+
+    /**
      * Every accepted backend name, aliases included. Byte-identical membership in
      * all four frameworks. This is the one place the list is written in PHP, so
      * the five match() statements below and the error message cannot disagree.
@@ -83,13 +100,41 @@ class Session
     }
 
     /**
+     * Whether $sessionId is a well-formed opaque session identifier.
+     *
+     * Callers pass UNTRUSTED input here (the session cookie is attacker-chosen),
+     * so anything outside SESSION_ID_PATTERN is rejected.
+     *
+     * @param string|null $sessionId The candidate identifier
+     * @return bool True when the id is safe to use as an opaque lookup token
+     */
+    public static function isValidSessionId(?string $sessionId): bool
+    {
+        return $sessionId !== null && preg_match(self::SESSION_ID_PATTERN, $sessionId) === 1;
+    }
+
+    /**
      * Start or resume a session.
+     *
+     * $sessionId is UNTRUSTED — it arrives from the session cookie, which the
+     * client fully controls. An id that is not a well-formed opaque identifier
+     * is DISCARDED and a fresh one minted, never adopted: adopting it let a
+     * cookie steer a filesystem path (arbitrary read/write on the file backend)
+     * and let an attacker pre-plant a session id that survived the victim's
+     * login (session fixation).
+     *
+     * A legitimate id from any of the four frameworks passes unchanged, so this
+     * is non-breaking for every session already in flight.
      *
      * @param string|null $sessionId Existing session ID, or null to generate one
      * @return string The session ID
      */
     public function start(?string $sessionId = null): string
     {
+        if ($sessionId !== null && !self::isValidSessionId($sessionId)) {
+            $sessionId = null;
+        }
+
         if ($sessionId !== null) {
             $this->sessionId = $sessionId;
             $this->load();
@@ -693,9 +738,25 @@ class Session
 
     /**
      * Get the file path for the current session.
+     *
+     * Defence in depth: start() already discards a malformed id, but read() and
+     * write() take a caller-supplied id straight from the application. A
+     * non-conforming id must never reach the filesystem — '../../outside/pwned'
+     * would otherwise resolve to an attacker-chosen path anywhere the worker can
+     * write. The derivation for a VALID id is unchanged, so existing session
+     * files keep their filenames and nobody is logged out by this check.
+     *
+     * @return string Absolute-or-relative path of this session's JSON file
+     * @throws \InvalidArgumentException When the current session id is malformed
      */
     private function getFilePath(): string
     {
+        if (!self::isValidSessionId($this->sessionId)) {
+            throw new \InvalidArgumentException(
+                'Refusing to derive a session file path from a malformed session id'
+            );
+        }
+
         return $this->storagePath . '/' . $this->sessionId . '.json';
     }
 

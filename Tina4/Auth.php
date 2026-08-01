@@ -365,16 +365,29 @@ class Auth
 
         $now = time();
 
-        // Check expiration
-        if (isset($payload['exp']) && $now > $payload['exp']) {
-            return null;
+        // RFC 7519 §4.1.4: "The processing of the 'exp' claim requires that the
+        // current date/time MUST be before the expiration date/time". now == exp
+        // is therefore ALREADY expired, so the test is >=, not >. With an integer
+        // clock, > accepted an expired token for a full extra second.
+        //
+        // array_key_exists, not isset: isset() is false for null, so an
+        // `exp: null` claim read as "no exp at all" and the token never expired.
+        if (array_key_exists('exp', $payload)) {
+            $exp = self::numericDate($payload['exp']);
+            if ($exp === null || $now >= $exp) {
+                return null;
+            }
         }
 
-        // "nbf" (not-before): a post-dated token is not valid yet. A token with no
-        // nbf claim is unconstrained, which is what keeps this non-breaking for
-        // every token already in circulation.
-        if (isset($payload['nbf']) && $now + self::JWT_LEEWAY_SECONDS < $payload['nbf']) {
-            return null;
+        // "nbf" (not-before): a post-dated token is not valid yet, tolerating
+        // JWT_LEEWAY_SECONDS of clock skew (RFC 7519 §4.1.5 permits it). A token
+        // with no nbf claim is unconstrained, which is what keeps this
+        // non-breaking for every token already in circulation.
+        if (array_key_exists('nbf', $payload)) {
+            $nbf = self::numericDate($payload['nbf']);
+            if ($nbf === null || $now + self::JWT_LEEWAY_SECONDS < $nbf) {
+                return null;
+            }
         }
 
         return $payload;
@@ -563,6 +576,28 @@ class Auth
     }
 
     // ── Internal Helpers ──────────────────────────────────────────
+
+    /**
+     * Coerce an RFC 7519 NumericDate claim to integer seconds, else null.
+     *
+     * RFC 7519 §2 defines "exp"/"nbf"/"iat" as a NumericDate — a JSON numeric
+     * value. A claim that is PRESENT but not a number is malformed, and a
+     * malformed constraint must never read as "no constraint": treating a
+     * non-numeric exp as absent turns a broken token into one that never
+     * expires. Booleans are rejected explicitly so `exp: true` cannot compare as
+     * the year 1970.
+     *
+     * @param mixed $value The raw decoded claim value
+     * @return int|null Integer seconds, or null when the claim is not a number
+     */
+    private static function numericDate(mixed $value): ?int
+    {
+        if (is_bool($value) || (!is_int($value) && !is_float($value))) {
+            return null;
+        }
+
+        return (int)$value;
+    }
 
     /**
      * Base64url-encode data (RFC 7515).
