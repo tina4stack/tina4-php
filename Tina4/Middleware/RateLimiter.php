@@ -56,9 +56,16 @@ class RateLimiter
         $currentCount = count($this->requests[$ip]);
         $remaining = max(0, $this->limit - $currentCount);
 
+        // X-RateLimit-Reset is an absolute Unix timestamp (seconds), matching
+        // tina4-ruby and tina4-nodejs and the de-facto reading used by GitHub
+        // and most public APIs. PHP emitted no reset header at all before.
+        $oldest = $this->requests[$ip][0] ?? $now;
+        $resetAt = (int)ceil(($currentCount > 0 ? $oldest : $now) + $this->window);
+
         $headers = [
             'X-RateLimit-Limit' => (string)$this->limit,
             'X-RateLimit-Remaining' => (string)$remaining,
+            'X-RateLimit-Reset' => (string)$resetAt,
         ];
 
         if ($currentCount >= $this->limit) {
@@ -156,17 +163,20 @@ class RateLimiter
     {
         $ip = $request->ip ?? 'unknown';
         $result = $this->check($ip);
-        $allowed = $result['allowed'];
-        $info = $result;
 
-        $response->header('X-RateLimit-Limit', (string)$info['limit']);
-        $response->header('X-RateLimit-Remaining', (string)$info['remaining']);
-        $response->header('X-RateLimit-Reset', (string)$info['reset']);
+        // check() returns ['allowed', 'headers', 'status'] and the headers are
+        // already complete, including Retry-After when the limit is exceeded.
+        // This method used to read $info['limit'] / ['remaining'] / ['reset'],
+        // keys check() has never returned, so it emitted three EMPTY headers
+        // plus three PHP warnings - and then called Response::setStatusCode(),
+        // which does not exist, so the over-limit path was a hard fatal. It
+        // could never have worked; nothing tested it. ADR-0019.
+        foreach ($result['headers'] as $name => $value) {
+            $response->header($name, $value);
+        }
 
-        if (!$allowed) {
-            $retryAfter = max(1, (int)$info['reset']);
-            $response->header('Retry-After', (string)$retryAfter);
-            $response->setStatusCode(429);
+        if (!$result['allowed']) {
+            $response->status(429)->json(['error' => 'Too Many Requests']);
         }
 
         return [$request, $response];

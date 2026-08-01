@@ -252,15 +252,18 @@ class Request
         $explicit = $files ?? ($_FILES ?? []);
         $this->files = self::normaliseFiles(array_merge($explicit, $this->multipartFiles));
 
-        // IP address
-        $this->ip = $ip ?? $this->resolveIp();
-
         // Raw socket peer — explicit arg first (the built-in socket server
         // and PSR-7/Swoole transports pass the real peer), else REMOTE_ADDR
         // from the SAPI (php -S / FPM / Apache set it to the real client).
         // NEVER X-Forwarded-For: a trust decision must not read a spoofable
         // header. Empty string for in-process / synthetic requests.
+        //
+        // Resolved BEFORE $this->ip: the peer decides whether the forwarding
+        // headers may be believed at all (TINA4_TRUSTED_PROXIES, ADR-0019).
         $this->remoteIp = $remoteIp ?? ($_SERVER['REMOTE_ADDR'] ?? '');
+
+        // IP address
+        $this->ip = $ip ?? $this->resolveIp($this->remoteIp);
     }
 
     /**
@@ -488,21 +491,44 @@ class Request
     }
 
     /**
-     * Resolve the client IP address, supporting proxy headers.
+     * Resolve the client IP, honouring forwarding headers ONLY behind a trusted proxy.
+     *
+     * X-Forwarded-For is set by whoever sends it, so an unfiltered read lets
+     * any client choose its own rate-limit bucket - and, worse, choose SOMEONE
+     * ELSE'S. The header is therefore consulted only when the raw socket peer
+     * is listed in TINA4_TRUSTED_PROXIES; otherwise the peer IS the client.
+     * See ADR-0019.
+     *
+     * Within the chain the RIGHTMOST entry that is not itself a trusted proxy
+     * wins. Taking the leftmost would be no safer than trusting the header
+     * outright: a client can prepend its own hop, and the proxy appends rather
+     * than replaces. This is the algorithm Rack uses (Rack::Request#ip).
+     *
+     * Headers are read from the Request first and $_SERVER only as a fallback,
+     * so the value is visible to the in-process TestClient, the CLI and a
+     * hand-built Request - not just under a web SAPI. (Same fix ADR-0013 made
+     * for CorsMiddleware's Origin read.)
      */
-    private function resolveIp(): string
+    private function resolveIp(string $peer = ''): string
     {
-        // Check X-Forwarded-For
-        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-            return trim($ips[0]);
+        if ($peer === '' || !TrustedProxy::isTrusted($peer)) {
+            return $peer !== '' ? $peer : ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
         }
 
-        // Check X-Real-IP
-        if (isset($_SERVER['HTTP_X_REAL_IP'])) {
-            return trim($_SERVER['HTTP_X_REAL_IP']);
+        $forwarded = (string)($this->headers['x-forwarded-for']
+            ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '');
+        if (trim($forwarded) !== '') {
+            $hops = array_values(array_filter(array_map('trim', explode(',', $forwarded)), 'strlen'));
+            foreach (array_reverse($hops) as $hop) {
+                if (!TrustedProxy::isTrusted($hop)) {
+                    return $hop;
+                }
+            }
+            // Every hop is itself a trusted proxy - the peer is the best we have.
+            return $peer;
         }
 
-        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $realIp = trim((string)($this->headers['x-real-ip'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? ''));
+        return $realIp !== '' ? $realIp : $peer;
     }
 }
