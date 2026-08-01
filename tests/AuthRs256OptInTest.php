@@ -791,6 +791,15 @@ class AuthRs256OptInTest extends TestCase
                     fwrite(STDERR, "CONTROL FAILED: ext-openssl is gone, so this tests the wrong branch\n");
                     exit(1);
                 }
+                // Keep the framework's own logging OFF this pipe so stdout carries
+                // only this child's marker. tlsVerify: false legitimately logs a
+                // WARNING, and since feature 2 made stdout ALWAYS-ON by default
+                // (PHP used to suppress it entirely, which is why this assertion
+                // passed before), that warning would otherwise be the first thing
+                // on stdout. Silencing the channel keeps assertStringStartsWith at
+                // full strength instead of relaxing it to a "contains" check.
+                putenv('TINA4_LOG_OUTPUT=file');
+                \Tina4\Log::reset();
                 try {
                     new \Tina4\Mqtt(url: '{$url}', tlsVerify: false, timeout: 3);
                     echo 'NO-ERROR';
