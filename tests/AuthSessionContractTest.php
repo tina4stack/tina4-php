@@ -164,7 +164,7 @@ class AuthSessionContractTest extends TestCase
         $store = $this->tempRoot . '/store';
         mkdir($store, 0755, true);
 
-        $hostileIds = ['../../etc/passwd', 'a/b', 'a\\b', 'a.b', '..', '', 'short'];
+        $hostileIds = ['../../etc/passwd', 'a/b', 'a\\b', 'a.b', '..', '', 'a b', 'a;b'];
 
         foreach ($hostileIds as $hostile) {
             $session = $this->fileSession($store);
@@ -180,6 +180,32 @@ class AuthSessionContractTest extends TestCase
                 "replacement id is itself invalid for input '{$hostile}'"
             );
         }
+
+        // Positive half: a SHORT but alphabet-clean id that the store ALREADY
+        // KNOWS resumes under its own id — the rule rejects the alphabet, not
+        // short ids. There is deliberately no entropy floor: an app is entitled
+        // to manage its own id, and unguessability comes from the framework's
+        // minting, not from inspecting an id a trusted caller chose.
+        // The seeded record must carry _meta.last_accessed. This is NOT a detail
+        // of the fix under test: write() does not stamp _meta, and the file
+        // backend reads a missing last_accessed as 0, so `time() - 0 > ttl`
+        // marks the record expired and DELETES it. write()/read() therefore do
+        // not round-trip today for a raw payload - a pre-existing bug, present
+        // before this change, reported separately.
+        $seeded = $this->fileSession($store);
+        $seeded->write(
+            'my-session-id',
+            ['_meta' => ['created_at' => time(), 'last_accessed' => time()], 'seeded' => true],
+            3600
+        );
+
+        $resumed = $this->fileSession($store);
+        $this->assertSame(
+            'my-session-id',
+            $resumed->start('my-session-id'),
+            'a short but well-formed id the store HOLDS was not resumed'
+        );
+        $this->assertTrue($resumed->get('seeded'));
     }
 
     /**
@@ -197,6 +223,11 @@ class AuthSessionContractTest extends TestCase
         $minted = $session->start();
         $this->assertTrue(Session::isValidSessionId($minted), 'a self-minted id failed its own validator');
 
+        // The session must be PERSISTED before it can be resumed: strict mode
+        // only adopts an id the store actually holds a record for.
+        $session->set('k', 'v');
+        $session->save();
+
         $resumed = $this->fileSession($store);
         $this->assertSame($minted, $resumed->start($minted), 'a self-minted id was not resumed as-is');
 
@@ -213,6 +244,95 @@ class AuthSessionContractTest extends TestCase
                 "rejected a sibling framework's id shape: '{$foreign}'"
             );
         }
+    }
+
+    /**
+     * NEGATIVE CONTROL for the whole session half: a legitimate session must
+     * still work end to end.
+     *
+     * Every other session test here asserts that something is REFUSED. Without
+     * this one, a "fix" that simply broke all sessions — reject every id, never
+     * persist anything — would pass the entire file. This is the test that
+     * fails if the hardening goes too far.
+     */
+    public function testLegitimateSessionRoundTripsCreateSaveResumeAndRead(): void
+    {
+        $store = $this->tempRoot . '/roundtrip';
+        mkdir($store, 0755, true);
+
+        // Create + save.
+        $created = $this->fileSession($store);
+        $id = $created->start();
+        $created->set('user_id', 4242);
+        $created->set('role', 'admin');
+        $this->assertTrue($created->save(), 'saving a legitimate session reported failure');
+
+        // A record really was persisted (one file, on the real filesystem).
+        $this->assertCount(1, glob($store . '/*.json'), 'no session file was written');
+
+        // Resume under the SAME id, in a completely separate Session instance.
+        $resumed = $this->fileSession($store);
+        $this->assertSame($id, $resumed->start($id), 'a real session was not resumed under its own id');
+
+        // Read the values back.
+        $this->assertSame(4242, $resumed->get('user_id'));
+        $this->assertSame('admin', $resumed->get('role'));
+
+        // And it survives a second hop, so resuming is repeatable.
+        $resumed->set('role', 'auditor');
+        $resumed->save();
+
+        $again = $this->fileSession($store);
+        $this->assertSame($id, $again->start($id));
+        $this->assertSame('auditor', $again->get('role'), 'an update made on a resumed session was lost');
+    }
+
+    /**
+     * Strict mode: a WELL-FORMED id the store never issued is not adopted.
+     *
+     * Format validation alone stops the traversal, not the fixation: an
+     * attacker can plant a perfectly well-formed id in the victim's browser and
+     * ride it once the victim logs in. OWASP's strict mode — and PHP's own
+     * session.use_strict_mode=1 default — require the server to only accept an
+     * id it actually issued.
+     */
+    public function testWellFormedButUnknownSessionIdIsNotAdopted(): void
+    {
+        $store = $this->tempRoot . '/strict';
+        mkdir($store, 0755, true);
+
+        // Negative half: well-formed by every character/length rule, but the
+        // store has never heard of it.
+        $plantedId = 'attackerPlantedSessionId0123456789';
+        $this->assertTrue(
+            Session::isValidSessionId($plantedId),
+            'precondition: the planted id must be well-formed, or this proves nothing'
+        );
+
+        $victim = $this->fileSession($store);
+        $adopted = $victim->start($plantedId);
+
+        $this->assertNotSame(
+            $plantedId,
+            $adopted,
+            'an unknown session id was adopted - session fixation is still possible'
+        );
+        $this->assertTrue(Session::isValidSessionId($adopted), 'the replacement id is itself invalid');
+
+        // Positive half: a KNOWN id resumes unchanged, so strict mode has not
+        // simply broken resumption.
+        $known = $this->fileSession($store);
+        $knownId = $known->start();
+        $known->set('established', true);
+        $known->save();
+
+        $resumed = $this->fileSession($store);
+        $this->assertSame(
+            $knownId,
+            $resumed->start($knownId),
+            'a session the store DOES hold was not resumed under its own id'
+        );
+        $this->assertTrue($resumed->get('established'));
     }
 
     // ── 41: RFC 7519 s4.1.4 - the token MUST NOT be accepted at or after exp ──

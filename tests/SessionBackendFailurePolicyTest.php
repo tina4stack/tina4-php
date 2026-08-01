@@ -206,10 +206,7 @@ class SessionBackendFailurePolicyTest extends TestCase
     public function testDestroyOnUnreachableBackendLogsAndDoesNotCrash(): void
     {
         $session = $this->sessionWith($this->throwingHandler());
-        // Conforming opaque id (>= 16 chars of [A-Za-z0-9_-]) — see the note on
-        // testEmptyHealthyBackendLogsNoErrors: a malformed id is DISCARDED by
-        // start(), so it would never resume and never reach the backend.
-        $session->start('destroy-session-id');
+        $session->start('some-id');
 
         // Must not throw.
         $session->destroy();
@@ -234,12 +231,7 @@ class SessionBackendFailurePolicyTest extends TestCase
     {
         $session = $this->sessionWith($this->emptyHealthyHandler());
 
-        // The id MUST be a conforming opaque id (>= 16 chars of [A-Za-z0-9_-]).
-        // Session::start() discards a malformed id and mints a fresh one instead
-        // of resuming (ADR-0021), so a short literal like the previous
-        // 'no-such-session' (15 chars) would skip the backend read entirely and
-        // pass this test vacuously — proving nothing about the empty-read path.
-        $session->start('no-such-session-id'); // healthy read returns null, no throw
+        $session->start('no-such-session'); // healthy read returns null, no throw
         $session->set('k', 'v');            // healthy write, no throw
         $session->save();
         $session->destroy();                // healthy destroy, no throw
@@ -260,10 +252,7 @@ class SessionBackendFailurePolicyTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('backend unreachable (read)');
 
-        // Conforming opaque id — a malformed one is discarded by start() (see
-        // testEmptyHealthyBackendLogsNoErrors), so no read would happen and the
-        // strict-mode re-raise under test would never fire.
-        $session->start('existing-session-id'); // strict -> read failure re-raises
+        $session->start('existing-id'); // strict -> read failure re-raises
     }
 
     public function testStrictModeReRaisesWriteFailure(): void
