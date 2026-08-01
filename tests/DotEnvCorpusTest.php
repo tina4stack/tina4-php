@@ -229,4 +229,27 @@ class DotEnvCorpusTest extends TestCase
         $this->assertSame($real['value'], getenv($real['key']));
         putenv($real['key']);
     }
+
+    /**
+     * One truthiness table, every subsystem, every framework.
+     *
+     * The parser is only half the contract - the other half is what a parsed
+     * value MEANS as a boolean. It was not one table: Ruby's Env::bool also
+     * accepted y/t/n/f while its own Log and Mcp checks did not, so one .env
+     * gave two answers in one process. PHP was already on the canonical set;
+     * this pins it so it stays there.
+     */
+    public function testCorpusTruthyValuesAreTruthy(): void
+    {
+        foreach (self::$corpus['truthiness']['truthy'] as $value) {
+            $this->assertTrue(DotEnv::isTruthy($value), "isTruthy failed for " . var_export($value, true));
+        }
+    }
+
+    public function testCorpusFalsyValuesAreFalsy(): void
+    {
+        foreach (self::$corpus['truthiness']['falsy'] as $value) {
+            $this->assertFalse(DotEnv::isTruthy($value), "isTruthy wrongly true for " . var_export($value, true));
+        }
+    }
 }
