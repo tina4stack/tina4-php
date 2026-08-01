@@ -572,12 +572,58 @@ class Response
      * @param bool        $download    If true, sets Content-Disposition: attachment
      * @return $this
      */
-    public function file(string $path, ?string $contentType = null, bool $download = false): self
+    public function file(string $path, ?string $contentType = null, bool $download = false, ?string $root = null): self
     {
+        // SECURITY: confine the read. See tina4-python's Response.file() for the
+        // full reasoning; the short version is that the natural spelling
+        //
+        //     $response->file('downloads/' . $name);   $name = '../secret.env'
+        //
+        // used to serve any file the process could read. Measured before the
+        // fix: 200 with the contents of a .env one level above the intended
+        // directory.
+        //
+        // TWO checks, because containment ALONE is not enough: that payload
+        // resolves to <project>/secret.env, still inside the project root, and
+        // the project root is exactly where .env lives. Rejecting '..' on the
+        // way in is what closes it; containment then catches absolute paths and
+        // symlinks, which carry no '..' segment.
+        $base = $root !== null ? realpath($root) : getcwd();
+        $isAbsolute = str_starts_with($path, DIRECTORY_SEPARATOR)
+            || (bool)preg_match('/^[A-Za-z]:[\\\\\/]/', $path);
+
+        $forbidden = false;
+        foreach (preg_split('#[\\\\/]#', $path) as $segment) {
+            if ($segment === '..') {
+                $forbidden = true;
+                break;
+            }
+        }
+
+        $resolved = $forbidden ? false : realpath($isAbsolute ? $path : $base . DIRECTORY_SEPARATOR . $path);
+        if (!$forbidden && $resolved !== false && $base !== false && $base !== DIRECTORY_SEPARATOR) {
+            if ($resolved !== $base && !str_starts_with($resolved, $base . DIRECTORY_SEPARATOR)) {
+                $forbidden = true;
+            }
+        }
+
+        if ($forbidden) {
+            // Refuse BEFORE reading: never load bytes we will not send.
+            $this->statusCode = 403;
+            $this->headers['Content-Type'] = 'text/plain; charset=UTF-8';
+            $this->body = 'Forbidden';
+            return $this;
+        }
+
+        $path = $resolved !== false ? $resolved : $path;
+
         if (!file_exists($path) || !is_readable($path)) {
             $this->statusCode = 404;
             $this->headers['Content-Type'] = 'text/plain; charset=UTF-8';
-            $this->body = "File not found: {$path}";
+            // Do NOT echo the path back: it leaked the absolute filesystem
+            // layout to anyone who could probe a missing file. The other three
+            // return a bare message and now so does this.
+            $this->body = 'File not found';
             return $this;
         }
 
