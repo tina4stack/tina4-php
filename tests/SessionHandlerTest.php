@@ -75,7 +75,11 @@ class SessionHandlerTest extends TestCase
         $read = $ref->getMethod('read');
         $this->assertSame(1, $read->getNumberOfParameters());
         $this->assertSame('sessionId', $read->getParameters()[0]->getName());
-        $this->assertSame(2, $ref->getMethod('write')->getNumberOfParameters());
+        // write(sessionId, data, ttl) — the ttl is part of the cross-framework
+        // contract: every handler in every framework takes it and honours it.
+        $write = $ref->getMethod('write');
+        $this->assertSame(3, $write->getNumberOfParameters());
+        $this->assertSame('ttl', $write->getParameters()[2]->getName());
     }
 
     public function testValkeySessionHandlerContract(): void
@@ -108,8 +112,9 @@ class SessionHandlerTest extends TestCase
         $read = $ref->getMethod('read');
         $this->assertSame('sessionId', $read->getParameters()[0]->getName());
         $write = $ref->getMethod('write');
-        $this->assertSame(2, $write->getNumberOfParameters());
+        $this->assertSame(3, $write->getNumberOfParameters());
         $this->assertSame('data', $write->getParameters()[1]->getName());
+        $this->assertSame('ttl', $write->getParameters()[2]->getName());
     }
 
     // =====================================================================

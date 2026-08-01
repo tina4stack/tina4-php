@@ -74,9 +74,17 @@ class MongoSessionHandler
             return [];
         }
 
-        // Check TTL expiry
-        $lastAccessed = $result['last_accessed'] ?? 0;
-        if (time() - $lastAccessed > $this->ttl) {
+        // Expiry is an ABSOLUTE deadline stamped at write time, and an absent or
+        // zero stamp means "never expires" — so it is guarded OUT of the
+        // comparison, never fed INTO it.
+        //
+        // This previously read `time() - ($result['last_accessed'] ?? 0) > $this->ttl`,
+        // which puts a missing stamp (0) into a subtraction that is then always
+        // true, so an unstamped document was DESTROYED on read. It survived only
+        // because this handler's own write() always stamps; any document written
+        // by another framework, an older version, or a direct insert was destroyed.
+        $expiresAt = (float)($result['expires_at'] ?? 0);
+        if ($expiresAt > 0 && $expiresAt < microtime(true)) {
             $this->destroy($sessionId);
             return [];
         }
@@ -90,13 +98,18 @@ class MongoSessionHandler
      * @param string $sessionId The session ID
      * @param array  $data      Session data to store
      */
-    public function write(string $sessionId, array $data): void
+    public function write(string $sessionId, array $data, int $ttl = 0): void
     {
         $this->ensureConnected();
 
+        // The ttl is consumed HERE, at write time, and baked into an absolute
+        // deadline. Nothing at read time needs to know what the ttl was, so a
+        // read can never fabricate an expiry for a record that carries none.
+        $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
         $doc = [
             '_id' => $sessionId,
             'data' => $data,
+            'expires_at' => $effectiveTtl > 0 ? microtime(true) + $effectiveTtl : 0,
             'last_accessed' => time(),
             'created_at' => time(),
         ];

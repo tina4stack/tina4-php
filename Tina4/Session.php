@@ -105,6 +105,17 @@ class Session
     private bool $strict = false;
 
     /**
+     * @var bool Whether the last load() actually FOUND a stored record.
+     *
+     * read() needs to tell "no such session" from "a live session that happens to
+     * be empty", and every loadFrom*() collapses both into the same default meta
+     * array. This flag carries that one bit out of the load path so read() does
+     * not have to guess from the shape of the data (it used to, via a timestamp
+     * heuristic that reported a cleared-but-live session as null).
+     */
+    private bool $loadFound = false;
+
+    /**
      * @param string $backend 'file' or 'redis'
      * @param array  $config  Override defaults: 'path', 'ttl', 'redis_url'
      */
@@ -450,23 +461,17 @@ class Session
         $this->load();
         $result = $this->data;
 
+        $found = $this->loadFound;
         $this->sessionId = $previousId;
         $this->data = $previousData;
 
-        // Return null if only empty or default meta (session not found)
-        if (empty($result) || $result === ['_meta' => $result['_meta'] ?? []]) {
-            $keys = array_keys($result);
-            $nonMeta = array_filter($keys, fn($k) => $k !== '_meta');
-            if (empty($nonMeta)) {
-                // Check if the meta looks freshly initialised (created_at == last_accessed ~now)
-                $meta = $result['_meta'] ?? [];
-                if (isset($meta['created_at']) && abs($meta['created_at'] - $meta['last_accessed']) < 2) {
-                    return null;
-                }
-            }
-        }
-
-        return $result ?: null;
+        // "Not found" is reported by the load path, not guessed from the shape of
+        // the data. This used to compare _meta.created_at against
+        // _meta.last_accessed and call anything within 2 seconds "freshly
+        // initialised, therefore absent" — which is exactly what a session that
+        // was just clear()ed looks like, so a LIVE cleared session read as null
+        // while its record sat on disk. An empty session is a session.
+        return $found ? $result : null;
     }
 
     /**
@@ -761,8 +766,9 @@ class Session
                     continue;
                 }
 
-                $lastAccessed = $data['_meta']['last_accessed'] ?? 0;
-                if ($lastAccessed > 0 && ($now - $lastAccessed) > $this->ttl) {
+                // Same contract as the read path, via the same helper: an absent
+                // or zero stamp is never a GC candidate.
+                if ($this->fileRecordHasExpired($data['_meta'] ?? [])) {
                     unlink($file);
                 }
             } catch (\Throwable) {
@@ -783,6 +789,59 @@ class Session
     }
 
     // ── File Backend ──────────────────────────────────────────────
+
+    /**
+     * Decide whether a stored file record has expired, from its _meta alone.
+     *
+     * THE CONTRACT: an ABSENT or ZERO stamp means "never expires". It is guarded
+     * OUT of the comparison, never fed INTO it. This read path used to do
+     * `time() - ($meta['last_accessed'] ?? 0) > $ttl`, which puts a missing stamp
+     * (0) into a subtraction that is then unconditionally true for any sane ttl —
+     * so a record carrying no stamp was judged infinitely old and UNLINKED on
+     * read. Every mainstream implementation measured (PHP's own native files
+     * handler, Django, Rails, Laravel, express-session, connect-mongo,
+     * connect-redis) treats a missing expiry as valid, and none of them deletes.
+     *
+     * expires_at (absolute, stamped at write time) is authoritative. last_accessed
+     * is only consulted for records written by an older version that carry no
+     * expires_at — without that fallback every already-stored session would become
+     * immortal on upgrade, which trades data loss for a security bug.
+     *
+     * @param array $meta The record's _meta block (may be empty)
+     * @return bool True only when a stamp is genuinely PRESENT and in the PAST
+     */
+    private function fileRecordHasExpired(array $meta): bool
+    {
+        $expiresAt = (int)($meta['expires_at'] ?? 0);
+        if ($expiresAt > 0) {
+            return $expiresAt < time();
+        }
+
+        // Legacy record (pre-expires_at): fall back to the relative comparison.
+        $lastAccessed = (int)($meta['last_accessed'] ?? 0);
+        return $lastAccessed > 0 && (time() - $lastAccessed) > $this->ttl;
+    }
+
+    /**
+     * Adopt the payload an external handler just returned.
+     *
+     * One helper for redis/valkey/memcached/mongo/database, which all previously
+     * carried the same three lines. Records whether anything was actually found
+     * so read() can report a genuine miss without inspecting the payload.
+     *
+     * @param array|null $data The handler's payload, or null/[] when there is no record
+     */
+    private function applyLoadedData(?array $data): void
+    {
+        // Two names for one fact, introduced independently on two branches:
+        // loadFound (session-backend-defects) and backendHadRecord (ADR-0021,
+        // which gates the auth decision). Both are read, so both are set here.
+        // Unifying the name is a follow-up, not a merge-time decision.
+        $this->loadFound = !empty($data);
+        $this->backendHadRecord = !empty($data);
+        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
+        $this->data['_meta']['last_accessed'] = time();
+    }
 
     /**
      * Get the file path for the current session.
@@ -821,6 +880,7 @@ class Session
      */
     private function loadFromFile(): void
     {
+        $this->loadFound = false;
         $path = $this->getFilePath();
         if (!file_exists($path)) {
             $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
@@ -835,15 +895,13 @@ class Session
             return;
         }
 
-        // Check TTL
-        $lastAccessed = $decoded['_meta']['last_accessed'] ?? 0;
-        if (time() - $lastAccessed > $this->ttl) {
-            // Session expired
+        if ($this->fileRecordHasExpired($decoded['_meta'] ?? [])) {
             $this->removeFromFile();
             $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
             return;
         }
 
+        $this->loadFound = true;
         $this->data = $decoded;
         $this->data['_meta']['last_accessed'] = time();
         $this->backendHadRecord = true;
@@ -857,6 +915,21 @@ class Session
         if (!is_dir($this->storagePath)) {
             mkdir($this->storagePath, 0755, true);
         }
+
+        // The PERSISTENCE LAYER owns the expiry stamp, never the caller's payload.
+        // Session::write($id, $data) assigns $data verbatim, so without this a
+        // record written through the public write()/read() facade carried no
+        // stamp at all — and the read path then had to guess what that meant.
+        // Every mainstream implementation stamps on its own write; so do we.
+        //
+        // expires_at is an ABSOLUTE deadline computed from the ttl HERE, at write
+        // time. That is what makes a per-call ttl durable: read() compares against
+        // the stored deadline and never needs to know what the ttl was, so it can
+        // no longer judge a record against whatever ttl the READER happens to
+        // carry. A ttl of 0 stores 0, which means "never expires".
+        $this->data['_meta']['last_accessed'] = time();
+        $this->data['_meta']['created_at'] ??= time();
+        $this->data['_meta']['expires_at'] = $this->ttl > 0 ? time() + $this->ttl : 0;
 
         file_put_contents(
             $this->getFilePath(),
@@ -893,10 +966,7 @@ class Session
      */
     private function loadFromRedis(): void
     {
-        $data = $this->getRedisHandler()->read($this->sessionId);
-        $this->backendHadRecord = !empty($data);
-        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-        $this->data['_meta']['last_accessed'] = time();
+        $this->applyLoadedData($this->getRedisHandler()->read($this->sessionId));
     }
 
     /**
@@ -904,7 +974,7 @@ class Session
      */
     private function saveToRedis(): void
     {
-        $this->getRedisHandler()->write($this->sessionId, $this->data);
+        $this->getRedisHandler()->write($this->sessionId, $this->data, $this->ttl);
     }
 
     /**
@@ -929,15 +999,12 @@ class Session
 
     private function loadFromValkey(): void
     {
-        $data = $this->getValkeyHandler()->read($this->sessionId);
-        $this->backendHadRecord = !empty($data);
-        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-        $this->data['_meta']['last_accessed'] = time();
+        $this->applyLoadedData($this->getValkeyHandler()->read($this->sessionId));
     }
 
     private function saveToValkey(): void
     {
-        $this->getValkeyHandler()->write($this->sessionId, $this->data);
+        $this->getValkeyHandler()->write($this->sessionId, $this->data, $this->ttl);
     }
 
     private function removeFromValkey(): void
@@ -959,15 +1026,12 @@ class Session
 
     private function loadFromMemcached(): void
     {
-        $data = $this->getMemcachedHandler()->read($this->sessionId);
-        $this->backendHadRecord = !empty($data);
-        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-        $this->data['_meta']['last_accessed'] = time();
+        $this->applyLoadedData($this->getMemcachedHandler()->read($this->sessionId));
     }
 
     private function saveToMemcached(): void
     {
-        $this->getMemcachedHandler()->write($this->sessionId, $this->data);
+        $this->getMemcachedHandler()->write($this->sessionId, $this->data, $this->ttl);
     }
 
     private function removeFromMemcached(): void
@@ -989,15 +1053,12 @@ class Session
 
     private function loadFromMongo(): void
     {
-        $data = $this->getMongoHandler()->read($this->sessionId);
-        $this->backendHadRecord = !empty($data);
-        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-        $this->data['_meta']['last_accessed'] = time();
+        $this->applyLoadedData($this->getMongoHandler()->read($this->sessionId));
     }
 
     private function saveToMongo(): void
     {
-        $this->getMongoHandler()->write($this->sessionId, $this->data);
+        $this->getMongoHandler()->write($this->sessionId, $this->data, $this->ttl);
     }
 
     private function removeFromMongo(): void
@@ -1019,15 +1080,12 @@ class Session
 
     private function loadFromDatabase(): void
     {
-        $data = $this->getDbHandler()->read($this->sessionId);
-        $this->backendHadRecord = !empty($data);
-        $this->data = $data ?: ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
-        $this->data['_meta']['last_accessed'] = time();
+        $this->applyLoadedData($this->getDbHandler()->read($this->sessionId));
     }
 
     private function saveToDatabase(): void
     {
-        $this->getDbHandler()->write($this->sessionId, $this->data);
+        $this->getDbHandler()->write($this->sessionId, $this->data, $this->ttl);
     }
 
     private function removeFromDatabase(): void
