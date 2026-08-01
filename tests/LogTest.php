@@ -27,16 +27,41 @@ class LogTest extends TestCase
         $_ENV['TINA4_DEBUG'] = 'true';
         @putenv('TINA4_DEBUG=true');
 
+        // Since 2026-08-01 the shipped default format is TEXT in all four
+        // frameworks, and ONLY TINA4_LOG_FORMAT=json selects JSON — the
+        // implicit production->JSON switch was deleted (it meant four different
+        // things across the four frameworks). The JSON-shape assertions in this
+        // file predate that decision and still pin the JSON writer, so they now
+        // select JSON the way an operator would. The new default is pinned
+        // separately in LoggerContractTest, and the tests below that assert the
+        // TEXT layout override this with useText().
+        $this->useJson();
+
         Log::reset();
         Log::configure(logDir: $this->tempDir);
+    }
+
+    /** Select the JSON writer explicitly (TINA4_LOG_FORMAT=json). */
+    private function useJson(): void
+    {
+        $_ENV['TINA4_LOG_FORMAT'] = 'json';
+        @putenv('TINA4_LOG_FORMAT=json');
+    }
+
+    /** Select the TEXT writer — also the shipped default with the var unset. */
+    private function useText(): void
+    {
+        $_ENV['TINA4_LOG_FORMAT'] = 'text';
+        @putenv('TINA4_LOG_FORMAT=text');
     }
 
     protected function tearDown(): void
     {
         Log::reset();
 
-        unset($_ENV['TINA4_DEBUG']);
+        unset($_ENV['TINA4_DEBUG'], $_ENV['TINA4_LOG_FORMAT']);
         @putenv('TINA4_DEBUG');
+        @putenv('TINA4_LOG_FORMAT');
 
         // Clean up log files
         $files = glob($this->tempDir . '/*');
@@ -207,6 +232,7 @@ class LogTest extends TestCase
 
     public function testHumanReadableFormat(): void
     {
+        $this->useText();
         Log::configure(logDir: $this->tempDir, development: true);
         Log::info('Human readable test');
 
@@ -410,6 +436,7 @@ class LogTest extends TestCase
 
     public function testHumanReadableWithContext(): void
     {
+        $this->useText();
         Log::configure(logDir: $this->tempDir, development: true);
         Log::info('Ctx test', ['action' => 'login']);
 
@@ -423,6 +450,7 @@ class LogTest extends TestCase
 
     public function testHumanReadableWithRequestId(): void
     {
+        $this->useText();
         Log::configure(logDir: $this->tempDir, development: true);
         Log::setRequestId('req-human-123');
         Log::info('With human ID');
@@ -541,6 +569,7 @@ class LogTest extends TestCase
     public function testCallerNameInHumanReadableMode(): void
     {
         // Human format puts [caller] between [request-id] and the message.
+        $this->useText();
         Log::configure(logDir: $this->tempDir, development: true);
         Log::setRequestId('req-human');
         $this->setLogFunc('true');
@@ -715,7 +744,8 @@ class LogTest extends TestCase
         @putenv('TINA4_DEBUG=true');
         try {
             Log::reset();
-            Log::configure(logDir: $this->tempDir, development: true);
+            $this->useText();
+        Log::configure(logDir: $this->tempDir, development: true);
             Log::info('dev line');
 
             $this->assertTrue($this->logProp('fileOutput'), 'dev default must write a file');

@@ -844,6 +844,27 @@ $fake->run(callable $seeder, int $count = 10): array
 // TINA4_LOG_OUTPUT=file|both, OR an explicit TINA4_LOG_FILE path, still forces a file.
 ```
 
+**Format is TEXT by default (2026-08-01, all four frameworks).** Only
+`TINA4_LOG_FORMAT=json` selects JSON — the implicit production->JSON switch is
+DELETED (it meant four different things across the four frameworks, so one .env
+produced four formats). `configure(development: ...)` now affects CONSOLE
+PRESENTATION only (ANSI colour), never the format. An object/array passed as the
+MESSAGE is still JSON-encoded inline inside the text line.
+
+**Config is read on FIRST USE.** `Log::configure()` is optional: a worker, CLI
+tool, cron script or test that logs without booting a server resolves the same
+`TINA4_LOG_*` the server does. `configure()` remains the explicit override and
+wins for the rest of the process.
+
+**`TINA4_LOG_STRICT`** — when truthy a log-write failure RAISES
+(`\RuntimeException`) instead of being swallowed. Default stays log-and-degrade:
+a failing log sink must never be the reason a request dies.
+
+**Breaking (2026-08-01): `TINA4_LOG_MAX_SIZE` and `TINA4_LOG_KEEP` are DELETED.**
+They were legacy aliases, and the size alias took MEGABYTES while the name it
+aliased takes BYTES. Migration: `TINA4_LOG_MAX_SIZE=10` ->
+`TINA4_LOG_ROTATE_SIZE=10485760`, `TINA4_LOG_KEEP=n` -> `TINA4_LOG_ROTATE_KEEP=n`.
+
 ### Events — Decoupled pub/sub event system
 
 ```php

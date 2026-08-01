@@ -452,16 +452,27 @@ trait PdoAdapterTrait
         return self::normalizeBoolParams($params, nativeBoolean: false);
     }
 
-    /** Append engine pagination to a SELECT. Default: LIMIT/OFFSET. */
+    /**
+     * Append engine pagination to a SELECT. Default: LIMIT/OFFSET.
+     *
+     * The clause lands on a NEW LINE — appended inline it would sit inside a
+     * trailing `-- comment` in the caller's SQL and be silently swallowed,
+     * returning the whole table uncapped (see appendSqlClause).
+     */
     protected function paginate(string $sql, int $limit, int $offset): string
     {
-        return "{$sql} LIMIT {$limit} OFFSET {$offset}";
+        return self::appendSqlClause($sql, "LIMIT {$limit} OFFSET {$offset}");
     }
 
-    /** Wrap a SELECT in a COUNT(*) probe for fetch(). Default: no subquery alias. */
+    /**
+     * Wrap a SELECT in a COUNT(*) probe for fetch(). Default: no subquery alias.
+     *
+     * The closing paren lands on its OWN LINE — inline, a trailing `-- comment`
+     * comments it out and the probe fails on otherwise-valid SQL.
+     */
     protected function wrapCountSql(string $sql): string
     {
-        return "SELECT COUNT(*) as total FROM ({$sql})";
+        return self::wrapCountSubquery($sql);
     }
 
     /** RETURNING clause appended by insert(). Default: none. */

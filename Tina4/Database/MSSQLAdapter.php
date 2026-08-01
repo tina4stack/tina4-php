@@ -230,8 +230,11 @@ class MSSQLAdapter implements DatabaseAdapter
         // BY intact (OFFSET/FETCH needs it). Applies to BOTH the pdo_dblib and
         // sqlsrv backends since the probe runs through query().
         $total = 0;
+        // The closing paren goes on its OWN LINE (wrapCountSubquery): inline, a
+        // trailing `-- comment` in the user SQL comments the `)` out and the
+        // probe fails on otherwise-valid SQL.
         $countInner = self::stripTrailingOrderBy($sql);
-        $countSql = "SELECT COUNT(*) as total FROM ({$countInner}) AS _count_query";
+        $countSql = self::wrapCountSubquery($countInner, '_count_query');
         $countResult = $this->query($countSql, $params);
         if ($this->lastError === null) {
             $total = (int)($countResult[0]['total'] ?? 0);
@@ -241,12 +244,23 @@ class MSSQLAdapter implements DatabaseAdapter
         // v3.13.12: $limit <= 0 means "no pagination" (fetchAll's
         // default — give me ALL rows).
         $this->lastError = null;
+        // Skip the append when the caller's statement already ENDS with its own
+        // row cap — a second OFFSET/FETCH is a syntax error, exactly as a second
+        // LIMIT is on the LIMIT/OFFSET engines.
         $pagedSql = $sql;
-        if ($limit > 0) {
-            if (!preg_match('/\bORDER\s+BY\b/i', $pagedSql)) {
-                $pagedSql .= " ORDER BY (SELECT NULL)";
+        if ($limit > 0 && !self::hasTrailingFetch($sql)) {
+            // Look for the ORDER BY in the SCRUBBED copy: an ORDER BY that only
+            // appears inside a `-- comment` or a string literal is not one, and
+            // treating it as one omits the ORDER BY that OFFSET/FETCH requires.
+            if (!preg_match('/\bORDER\s+BY\b/i', self::scrubSqlText($pagedSql))) {
+                $pagedSql = self::appendSqlClause($pagedSql, 'ORDER BY (SELECT NULL)');
             }
-            $pagedSql .= " OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
+            // NEW LINE (appendSqlClause): appended inline the cap lands inside a
+            // trailing `-- comment` and is swallowed, returning the WHOLE table.
+            $pagedSql = self::appendSqlClause(
+                $pagedSql,
+                "OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY"
+            );
         }
 
         $data = $this->query($pagedSql, $params);

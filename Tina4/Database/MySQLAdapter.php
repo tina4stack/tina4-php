@@ -203,8 +203,11 @@ class MySQLAdapter implements DatabaseAdapter
         // probe on a SEPARATE statement (its own query() call, which uses its
         // own prepared statement) so a probe failure can't leave the main
         // query's cursor half-consumed.
+        // The closing paren goes on its OWN LINE (wrapCountSubquery): inline, a
+        // trailing `-- comment` in the user SQL comments the `)` out and the
+        // probe dies, silently reporting total = 0 next to real records.
         $total = 0;
-        $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        $countSql = self::wrapCountSubquery($sql, '_count_query');
         $countResult = $this->query($countSql, $params);
         if ($this->lastError === null) {
             $total = (int)($countResult[0]['total'] ?? 0);
@@ -216,9 +219,11 @@ class MySQLAdapter implements DatabaseAdapter
         // LIMIT clause — a second LIMIT is a syntax error that would
         // otherwise be swallowed into an empty result.
         $this->lastError = null;
+        // NEW LINE (appendSqlClause): appended inline the cap lands inside a
+        // trailing `-- comment` and is swallowed, returning the WHOLE table.
         $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
             ? $sql
-            : "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            : self::appendSqlClause($sql, "LIMIT {$limit} OFFSET {$offset}");
         $data = $this->query($pagedSql, $params);
         // query() clears lastError on entry and records the driver error on
         // failure (returning []), so a non-null lastError here means the MAIN

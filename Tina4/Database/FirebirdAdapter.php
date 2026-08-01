@@ -286,8 +286,11 @@ class FirebirdAdapter implements DatabaseAdapter
         // COUNT probe is best-effort and runs on a SEPARATE statement (its own
         // query() call), so a probe failure only defaults total to 0 and can
         // never mask a real main-query failure.
+        // The closing paren goes on its OWN LINE (wrapCountSubquery): inline, a
+        // trailing `-- comment` in the user SQL comments the `)` out and the
+        // probe dies, silently reporting total = 0 next to real records.
         $total = 0;
-        $countSql = "SELECT COUNT(*) AS total FROM ({$sql})";
+        $countSql = self::wrapCountSubquery($sql);
         $countResult = $this->query($countSql, $params);
         if ($this->lastError === null) {
             $total = (int)($countResult[0]['TOTAL'] ?? $countResult[0]['total'] ?? 0);
@@ -302,7 +305,10 @@ class FirebirdAdapter implements DatabaseAdapter
         } else {
             $startRow = $offset + 1;
             $endRow = $offset + $limit;
-            $pagedSql = "{$sql} ROWS {$startRow} TO {$endRow}";
+            // NEW LINE (appendSqlClause): appended inline the cap lands inside
+            // a trailing `-- comment` and is swallowed — the whole table then
+            // comes back uncapped.
+            $pagedSql = self::appendSqlClause($sql, "ROWS {$startRow} TO {$endRow}");
         }
         $data = $this->query($pagedSql, $params);
         // query() clears lastError on entry and records the driver error on

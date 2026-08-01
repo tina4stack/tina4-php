@@ -39,8 +39,11 @@ class EnvVarTest extends TestCase
         'TINA4_LOG_CRITICAL',
         'TINA4_LOG_ROTATE_SIZE',
         'TINA4_LOG_ROTATE_KEEP',
-        'TINA4_LOG_MAX_SIZE',
-        'TINA4_LOG_KEEP',
+        // TINA4_LOG_MAX_SIZE / TINA4_LOG_KEEP were DELETED on 2026-08-01 —
+        // legacy aliases with a different unit from the name they aliased. The
+        // canonical names above are the only rotation vars. LoggerContractTest
+        // pins that the deleted names are now inert.
+        'TINA4_LOG_STRICT',
         'TINA4_SESSION_HTTPONLY',
         'TINA4_SESSION_NAME',
         'TINA4_SESSION_SECURE',
@@ -275,13 +278,35 @@ class EnvVarTest extends TestCase
 
     public function testTina4LogFormatDefault(): void
     {
+        // Owner decision 2026-08-01: with TINA4_LOG_FORMAT unset the format is
+        // TEXT — in all four frameworks, production or not. The implicit
+        // production->JSON switch this used to assert was DELETED: it meant
+        // four different things across the four frameworks, so one .env
+        // produced four formats. JSON is still one env var away
+        // (testTina4LogFormatOverrideJson below).
         $this->enableDevLogFile();
+        Log::configure(logDir: $this->tempDir, development: false);
+        $this->assertTrue(Log::isHumanReadable(), 'TEXT is the default format');
+
+        Log::info('text default');
+        $line = trim(file_get_contents($this->tempDir . '/tina4.log'));
+        $this->assertNull(json_decode($line, true));
+        $this->assertStringContainsString('text default', $line);
+    }
+
+    public function testTina4LogFormatOverrideJson(): void
+    {
+        // The ONLY thing that selects JSON.
+        $this->enableDevLogFile();
+        $this->setEnv(['TINA4_LOG_FORMAT' => 'json']);
         Log::configure(logDir: $this->tempDir, development: false);
         $this->assertFalse(Log::isHumanReadable());
 
-        Log::info('json default');
+        Log::info('json override');
         $line = trim(file_get_contents($this->tempDir . '/tina4.log'));
-        $this->assertNotNull(json_decode($line, true));
+        $decoded = json_decode($line, true);
+        $this->assertNotNull($decoded);
+        $this->assertSame('json override', $decoded['message']);
     }
 
     public function testTina4LogFormatOverrideText(): void

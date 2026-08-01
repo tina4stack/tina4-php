@@ -102,6 +102,12 @@ class SessionBackendFailurePolicyTest extends TestCase
         // the file is dev-gated by default (prod/containers are stdout-only).
         $_ENV['TINA4_DEBUG'] = 'true';
         @putenv('TINA4_DEBUG=true');
+        // loggedErrors() below parses each line as JSON. Since 2026-08-01 the
+        // shipped default format is TEXT (only TINA4_LOG_FORMAT=json selects
+        // JSON — the implicit production->JSON switch was deleted), so this
+        // file selects the JSON writer explicitly the way an operator would.
+        $_ENV['TINA4_LOG_FORMAT'] = 'json';
+        @putenv('TINA4_LOG_FORMAT=json');
         Log::reset();
         Log::configure(logDir: $this->tempDir);
         putenv('TINA4_SESSION_STRICT');
@@ -113,8 +119,9 @@ class SessionBackendFailurePolicyTest extends TestCase
     protected function tearDown(): void
     {
         Log::reset();
-        unset($_ENV['TINA4_DEBUG']);
+        unset($_ENV['TINA4_DEBUG'], $_ENV['TINA4_LOG_FORMAT']);
         @putenv('TINA4_DEBUG');
+        @putenv('TINA4_LOG_FORMAT');
         putenv('TINA4_SESSION_STRICT');
         unset($_ENV['TINA4_SESSION_STRICT']);
         $this->removeDir($this->tempDir);

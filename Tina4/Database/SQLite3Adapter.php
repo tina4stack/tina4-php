@@ -183,7 +183,10 @@ class SQLite3Adapter implements DatabaseAdapter
         // (parity with execute() and the Python master). query() clears
         // lastError on entry, so a non-null lastError after the call means the
         // statement failed.
-        $countSql = "SELECT COUNT(*) as total FROM ({$sql})";
+        // The closing paren goes on its OWN LINE. MEASURED: inline, a trailing
+        // `-- comment` in the user SQL commented the `)` out and the probe died
+        // with "incomplete input" (see wrapCountSubquery).
+        $countSql = self::wrapCountSubquery($sql);
         $countResult = $this->query($countSql, $params);
         if ($this->lastError !== null) {
             throw new DatabaseException('SQLite3 fetch() failed: ' . $this->lastError);
@@ -193,11 +196,17 @@ class SQLite3Adapter implements DatabaseAdapter
         // Apply pagination — skip if the SQL already ends with its own
         // LIMIT clause (appending a second one is a syntax error), or if
         // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
-        $sqlNoComments = self::stripTrailingSemicolons(preg_replace('/--.*$/m', '', $sql));
-        if ($limit <= 0 || self::hasTrailingLimit($sqlNoComments)) {
+        // hasTrailingLimit() scrubs literals and BOTH comment styles itself;
+        // the old local `--`-only strip missed a trailing block comment, so
+        // `... LIMIT 3 /* c */` got a SECOND LIMIT appended and raised
+        // "near LIMIT: syntax error".
+        if ($limit <= 0 || self::hasTrailingLimit($sql)) {
             $pagedSql = $sql;
         } else {
-            $pagedSql = "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            // NEW LINE: appended inline the cap lands inside a trailing
+            // `-- comment` and is silently swallowed — the whole table then
+            // comes back uncapped (see appendSqlClause).
+            $pagedSql = self::appendSqlClause($sql, "LIMIT {$limit} OFFSET {$offset}");
         }
         $data = $this->query($pagedSql, $params);
         if ($this->lastError !== null) {

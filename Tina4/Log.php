@@ -9,8 +9,15 @@
 namespace Tina4;
 
 /**
- * Structured logger with JSON lines output and log rotation.
- * Zero dependencies — uses only PHP built-in functions.
+ * Structured logger with rotation. Zero dependencies — PHP built-ins only.
+ *
+ * TEXT is the output format by default, in all four Tina4 frameworks. Only
+ * TINA4_LOG_FORMAT=json selects JSON. An object/array passed as the message is
+ * still JSON-encoded INLINE inside the text line — that is the one implicit
+ * JSON left, and it is the useful one (see {@see coerceMessage}).
+ *
+ * Configuration is resolved from TINA4_LOG_* on FIRST USE if nothing calls
+ * {@see configure()}; configure() remains the explicit override and wins.
  */
 class Log
 {
@@ -59,8 +66,38 @@ class Log
     /** @var bool Whether to write to file */
     private static bool $fileOutput = true;
 
-    /** @var bool Whether to format as human-readable (dev mode) */
-    private static bool $humanReadable = false;
+    /**
+     * @var bool Whether the line format is human-readable TEXT (the default)
+     *   rather than JSON. Set ONLY by TINA4_LOG_FORMAT — never by an
+     *   environment guess. See {@see configure()}.
+     */
+    private static bool $humanReadable = true;
+
+    /**
+     * @var bool Development mode — CONSOLE PRESENTATION only (ANSI colour).
+     *
+     * It does NOT select the format: colour around a JSON line makes it
+     * unparseable, and "am I in production" is not a formatting decision the
+     * logger is allowed to make for you. Mirrors the Python master's
+     * `_is_production` flag (inverted).
+     */
+    private static bool $development = false;
+
+    /**
+     * @var bool TINA4_LOG_STRICT — when truthy a log-write failure RAISES
+     *   instead of being swallowed. Documented on all four env-var pages and,
+     *   until 2026-08-01, implemented only in Ruby.
+     */
+    private static bool $strict = false;
+
+    /**
+     * @var bool Whether the TINA4_LOG_* configuration has been resolved yet.
+     *
+     * Set by {@see configure()} — explicitly by the server, or lazily by
+     * {@see ensureConfigured()} on the first log call in a process that never
+     * boots one (a worker, a CLI tool, a cron script, a test).
+     */
+    private static bool $configured = false;
 
     /** @var string Minimum log level */
     private static string $minLevel = self::LEVEL_DEBUG;
@@ -80,14 +117,21 @@ class Log
      * Reads (in addition to the explicit args):
      *   TINA4_LOG_DIR        — log directory (overrides $logDir)
      *   TINA4_LOG_FILE       — primary log file path; if absolute, sets dir + filename
-     *   TINA4_LOG_FORMAT     — 'text' (human-readable) or 'json'
+     *   TINA4_LOG_FORMAT     — 'json' selects JSON; anything else is TEXT
      *   TINA4_LOG_OUTPUT     — 'stdout', 'file', or 'both'
+     *   TINA4_LOG_LEVEL      — minimum console level (overrides $minLevel)
+     *   TINA4_LOG_APPEND     — append (default) or truncate at startup
      *   TINA4_LOG_ROTATE_SIZE — rotate threshold in bytes (0 disables rotation)
      *   TINA4_LOG_ROTATE_KEEP — number of rotated files to retain
+     *   TINA4_LOG_STRICT     — raise on a log-write failure instead of swallowing it
      *
-     * @param string $logDir Directory for log files (overridden by TINA4_LOG_DIR)
-     * @param bool $development If true, enables human-readable format and stdout (overridden by TINA4_LOG_FORMAT/OUTPUT)
-     * @param string $minLevel Minimum log level to record
+     * Calling this is OPTIONAL: the same resolution runs on the first log call
+     * ({@see ensureConfigured()}). configure() is the explicit override and
+     * always wins.
+     *
+     * @param string|null $logDir Directory (or file path) for log files, overridden by TINA4_LOG_DIR
+     * @param bool $development Development mode — CONSOLE COLOUR only; it does NOT choose the format
+     * @param string $minLevel Minimum console log level (overridden by TINA4_LOG_LEVEL)
      */
     public static function configure(
         ?string $logDir = 'logs',
@@ -161,15 +205,24 @@ class Log
             self::$minLevel = $envLevel;
         }
 
-        // Format: env > development flag default
-        $envFormat = strtolower((string) (DotEnv::getEnv('TINA4_LOG_FORMAT') ?? ''));
-        if ($envFormat === 'text') {
-            self::$humanReadable = true;
-        } elseif ($envFormat === 'json') {
-            self::$humanReadable = false;
-        } else {
-            self::$humanReadable = $development;
-        }
+        // Format — TEXT BY DEFAULT, EVERYWHERE (owner decision 2026-08-01).
+        // ONLY TINA4_LOG_FORMAT=json selects JSON.
+        //
+        // The implicit production->JSON switch is deliberately GONE. It meant
+        // four different things across the four frameworks — Node keyed off
+        // TINA4_DEBUG being unset, Ruby off TINA4_ENV/RACK_ENV/RUBY_ENV, Python
+        // off configure(production=True), and PHP had no switch at all and
+        // always shipped JSON — so one machine with one .env produced four
+        // different log formats and your format was chosen by a variable you
+        // never connected to logging. An object/array passed as the message is
+        // still JSON-encoded INLINE in the text line (see coerceMessage); that
+        // is the only implicit JSON left, and it is the useful one.
+        $envFormat = strtolower(trim((string) (DotEnv::getEnv('TINA4_LOG_FORMAT') ?? '')));
+        self::$humanReadable = $envFormat !== 'json';
+
+        // Development affects the CONSOLE PRESENTATION only (ANSI colour) —
+        // see writeStdout(). It never selects the format.
+        self::$development = $development;
 
         // Output: env > development flag default
         $envOutput = strtolower((string) (DotEnv::getEnv('TINA4_LOG_OUTPUT') ?? ''));
@@ -205,29 +258,56 @@ class Log
                 break;
         }
 
-        // Rotation — bytes, 0 disables. Falls back to legacy TINA4_LOG_MAX_SIZE (MB)
-        // and TINA4_LOG_KEEP for back-compat.
+        // Rotation — TINA4_LOG_ROTATE_SIZE is in BYTES (0 disables rotation),
+        // TINA4_LOG_ROTATE_KEEP is a file count.
+        //
+        // Breaking (2026-08-01): the legacy aliases TINA4_LOG_MAX_SIZE (in
+        // MEGABYTES) and TINA4_LOG_KEEP were DELETED. They were documented for
+        // all four frameworks and implemented in only two, and the size alias
+        // took a different UNIT from the name it aliased — so the same .env
+        // rotated at 10 MB here and nowhere else. One canonical name per
+        // setting; rename the primary rather than keep an alias.
+        // Migration: TINA4_LOG_MAX_SIZE=10 -> TINA4_LOG_ROTATE_SIZE=10485760,
+        //            TINA4_LOG_KEEP=n      -> TINA4_LOG_ROTATE_KEEP=n.
         $rotateSize = DotEnv::getEnv('TINA4_LOG_ROTATE_SIZE');
-        if ($rotateSize !== null && $rotateSize !== '') {
-            self::$maxFileSize = (int) $rotateSize;
-        } else {
-            $legacyMb = DotEnv::getEnv('TINA4_LOG_MAX_SIZE');
-            if ($legacyMb !== null && $legacyMb !== '') {
-                self::$maxFileSize = (int) $legacyMb * 1024 * 1024;
-            } else {
-                self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
-            }
-        }
+        self::$maxFileSize = $rotateSize !== null && $rotateSize !== ''
+            ? (int) $rotateSize
+            : self::DEFAULT_ROTATE_SIZE;
 
         $rotateKeep = DotEnv::getEnv('TINA4_LOG_ROTATE_KEEP');
-        if ($rotateKeep !== null && $rotateKeep !== '') {
-            self::$keepFiles = (int) $rotateKeep;
-        } else {
-            $legacyKeep = DotEnv::getEnv('TINA4_LOG_KEEP');
-            self::$keepFiles = $legacyKeep !== null && $legacyKeep !== ''
-                ? (int) $legacyKeep
-                : self::DEFAULT_ROTATE_KEEP;
+        self::$keepFiles = $rotateKeep !== null && $rotateKeep !== ''
+            ? (int) $rotateKeep
+            : self::DEFAULT_ROTATE_KEEP;
+
+        // TINA4_LOG_STRICT — a log-write failure RAISES instead of being
+        // swallowed. Documented on all four env-var pages for a long time and
+        // implemented only in Ruby: a documented no-op in three frameworks.
+        self::$strict = DotEnv::isTruthy(DotEnv::getEnv('TINA4_LOG_STRICT', 'false'));
+
+        // Explicit configuration has landed — the lazy resolver stands down.
+        self::$configured = true;
+    }
+
+    /**
+     * Resolve TINA4_LOG_* on FIRST USE when nothing called {@see configure()}.
+     *
+     * MEASURED 2026-08-01: Ruby and Node resolved lazily; Python and PHP read
+     * TINA4_LOG_* only inside configure(), and only the SERVER calls it. So any
+     * script, worker, CLI tool or test that logged without booting a server
+     * silently got the class defaults and ignored the operator's .env — and the
+     * defaults were OPPOSITE across frameworks (python: stdout + text + no
+     * file; php: NO stdout + files in ./logs + json). One .env, four
+     * behaviours.
+     *
+     * configure() remains the explicit override: it sets $configured, which
+     * turns this into a no-op.
+     */
+    private static function ensureConfigured(): void
+    {
+        if (self::$configured) {
+            return;
         }
+        self::configure();
     }
 
     /**
@@ -303,6 +383,9 @@ class Log
      */
     private static function shouldLog(string $level): bool
     {
+        // The threshold is only meaningful once TINA4_LOG_LEVEL has been read,
+        // and isEnabled() can be the very first logger call in a process.
+        self::ensureConfigured();
         $key = strtoupper($level);
         return (self::LEVEL_PRIORITY[$key] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
     }
@@ -347,6 +430,11 @@ class Log
 
     private static function log(string $level, mixed $message, array $context = []): void
     {
+        // Resolve TINA4_LOG_* here, at the top of the real write path, if
+        // nothing called configure(). A worker or CLI tool must honour the same
+        // .env the server does.
+        self::ensureConfigured();
+
         // Coerce FIRST. Anything can arrive as a message: an array from a
         // handler, a binary payload off a socket, a 10MB string. See
         // coerceMessage.
@@ -584,10 +672,15 @@ class Log
             self::LEVEL_CRITICAL => "\033[35m", // Magenta
         ];
 
-        // v3.13.14: only colourise in human-readable (dev) mode. In production
-        // the line is JSON — ANSI codes would corrupt it for log aggregators.
-        $color = self::$humanReadable ? ($colors[$level] ?? '') : '';
-        $reset = self::$humanReadable ? "\033[0m" : '';
+        // No ANSI in production (a log shipper reads this) and none in JSON mode
+        // either — an escape sequence wrapped around a JSON object makes the
+        // line unparseable, which would make the one format you can explicitly
+        // ask for useless on stdout. Since 2026-08-01 TEXT is the default
+        // format, so the colour decision hangs off the development flag rather
+        // than off the format (which no longer implies an environment).
+        $plain = !self::$development || !self::$humanReadable;
+        $color = $plain ? '' : ($colors[$level] ?? '');
+        $reset = $plain ? '' : "\033[0m";
 
         if (defined('STDOUT')) {
             $stdout = \STDOUT;
@@ -620,8 +713,11 @@ class Log
     {
         $dir = self::$logDir;
 
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            // The second is_dir() covers the race where a concurrent process
+            // created the directory between the check and the mkdir.
+            self::onWriteFailure("cannot create log directory '{$dir}'");
+            return;
         }
 
         $filePath = $dir . DIRECTORY_SEPARATOR . $fileName;
@@ -631,7 +727,33 @@ class Log
             self::rotateLog($filePath);
         }
 
-        file_put_contents($filePath, $line, FILE_APPEND | LOCK_EX);
+        if (@file_put_contents($filePath, $line, FILE_APPEND | LOCK_EX) === false) {
+            self::onWriteFailure("cannot write log file '{$filePath}'");
+        }
+    }
+
+    /**
+     * React to a failed log write according to TINA4_LOG_STRICT.
+     *
+     * Default (unset/false): swallow it. A failing log sink must never be the
+     * reason a request dies — the same policy every Tina4 sink degrades under.
+     *
+     * TINA4_LOG_STRICT truthy: RAISE, so a deployment that depends on its audit
+     * trail finds out immediately instead of running blind on a full disk or a
+     * read-only volume. TINA4_LOG_STRICT was documented on all four env-var
+     * pages while only Ruby implemented it — a documented no-op in three
+     * frameworks, which is worse than an undocumented gap.
+     *
+     * @param string $reason What failed, with the path involved.
+     * @throws \RuntimeException When TINA4_LOG_STRICT is truthy.
+     */
+    private static function onWriteFailure(string $reason): void
+    {
+        if (self::$strict) {
+            throw new \RuntimeException(
+                'Tina4 log write failed: ' . $reason . ' (TINA4_LOG_STRICT is on)'
+            );
+        }
     }
 
     /**
@@ -685,10 +807,15 @@ class Log
         self::$errorFile = 'error.log';
         self::$stdout = false;
         self::$fileOutput = true;
-        self::$humanReadable = false;
+        self::$humanReadable = true;
+        self::$development = false;
+        self::$strict = false;
         self::$minLevel = self::LEVEL_DEBUG;
         self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
         self::$keepFiles = self::DEFAULT_ROTATE_KEEP;
+        // Back to "nothing has configured me": the next log call re-reads
+        // TINA4_LOG_* exactly as a fresh process would.
+        self::$configured = false;
     }
 
     /** Test helper — current rotation size in bytes (0 disables rotation). */

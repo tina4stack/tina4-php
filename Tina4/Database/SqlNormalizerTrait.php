@@ -46,6 +46,101 @@ trait SqlNormalizerTrait
     }
 
     /**
+     * Blank out string literals, quoted identifiers and comments so a keyword
+     * search sees only real SQL.
+     *
+     * Blanks are spaces of the SAME LENGTH (newlines preserved), so offsets and
+     * line structure still line up with the original — the caller keeps its own
+     * copy and only ever searches this one.
+     *
+     * MEASURED 2026-08-01 against a real 150-row table with the 100-row cap in
+     * force. A detector that looks at the raw text reads a LIMIT that is only
+     * ever mentioned in a literal or a comment as "the caller supplied their
+     * own cap", drops the cap, and returns the WHOLE TABLE:
+     *
+     *     SELECT * FROM t WHERE label != 'LIMIT' ORDER BY id     literal
+     *     SELECT * FROM t ORDER BY id -- LIMIT 5                 line comment
+     *     SELECT * FROM t ORDER BY id (slash-star LIMIT 5 star-slash)   block comment
+     *
+     * A silently uncapped read of a whole table is the production incident the
+     * cap exists to prevent. Ported from the tina4-python master
+     * (DatabaseAdapter._scrub_sql_text) so all four frameworks answer
+     * identically: `'` and `"` quoting with the doubled-quote escape, `--` to
+     * end of line, and slash-star ... star-slash blocks.
+     *
+     * @param string $sql User-supplied SQL.
+     * @return string Same-length copy with literals and comments blanked.
+     */
+    protected static function scrubSqlText(string $sql): string
+    {
+        if ($sql === '') {
+            return $sql;
+        }
+
+        $out = '';
+        $i = 0;
+        $n = strlen($sql);
+
+        while ($i < $n) {
+            $ch = $sql[$i];
+            $next = $i + 1 < $n ? $sql[$i + 1] : '';
+
+            // '...' / "..." — literal or quoted identifier. A doubled quote is
+            // the embedded-quote escape ('it''s'), not the end of the literal.
+            if ($ch === "'" || $ch === '"') {
+                $quote = $ch;
+                $out .= ' ';
+                $i++;
+                while ($i < $n) {
+                    if ($sql[$i] === $quote) {
+                        if ($i + 1 < $n && $sql[$i + 1] === $quote) {
+                            $out .= '  ';
+                            $i += 2;
+                            continue;
+                        }
+                        $out .= ' ';
+                        $i++;
+                        break;
+                    }
+                    $out .= $sql[$i] === "\n" ? "\n" : ' ';
+                    $i++;
+                }
+                continue;
+            }
+
+            // -- line comment, to end of line (the newline itself is kept).
+            if ($ch === '-' && $next === '-') {
+                while ($i < $n && $sql[$i] !== "\n") {
+                    $out .= ' ';
+                    $i++;
+                }
+                continue;
+            }
+
+            // /* block comment */ — may span lines; an unterminated one runs
+            // to end of input, exactly as the engine would treat it.
+            if ($ch === '/' && $next === '*') {
+                $out .= '  ';
+                $i += 2;
+                while ($i < $n && !($sql[$i] === '*' && $i + 1 < $n && $sql[$i + 1] === '/')) {
+                    $out .= $sql[$i] === "\n" ? "\n" : ' ';
+                    $i++;
+                }
+                if ($i < $n) {
+                    $out .= '  ';
+                    $i += 2;
+                }
+                continue;
+            }
+
+            $out .= $ch;
+            $i++;
+        }
+
+        return $out;
+    }
+
+    /**
      * Detect whether user SQL already ends with a LIMIT clause.
      *
      * fetch()/fetchOne() append `LIMIT {n} OFFSET {m}` for pagination. When
@@ -56,22 +151,93 @@ trait SqlNormalizerTrait
      * paginate with LIMIT/OFFSET (PostgreSQL, MySQL, SQLite) must skip the
      * append when this returns true.
      *
-     * Matches a trailing `LIMIT <int|?|$n|:name> [OFFSET <int|?|$n|:name>]`
-     * (with an optional trailing semicolon already stripped by
-     * stripTrailingSemicolons()). The MySQL `LIMIT offset, count` comma form
+     * Matches a trailing `LIMIT <int|?|$n|:name|%s> [OFFSET <...>]` (with an
+     * optional trailing semicolon). The MySQL `LIMIT offset, count` comma form
      * is also recognised.
+     *
+     * Two properties carry the whole contract, and each fails on its own:
+     *
+     *  - ANCHORED to the end. A bare "contains LIMIT" also matches a LIMIT
+     *    inside a SUBQUERY, where the OUTER statement still needs its cap.
+     *  - SCRUBBED first ({@see scrubSqlText}). Otherwise a LIMIT living in a
+     *    string literal, a `--` comment or a slash-star block reads as a
+     *    caller-supplied cap and the row cap is silently dropped. MEASURED:
+     *    `SELECT * FROM items LIMIT 3` + a trailing slash-star comment raised
+     *    "near LIMIT: syntax error" — the block comment hid the real trailing
+     *    LIMIT, so a SECOND one was appended.
      *
      * @param string $sql User-supplied SQL.
      * @return bool True when a LIMIT clause already terminates the statement.
      */
     protected static function hasTrailingLimit(string $sql): bool
     {
-        $val = '(?:\d+|\?|\$\d+|:\w+)';
+        $val = '(?:\d+|\?|\$\d+|:\w+|%s)';
         return (bool) preg_match(
             '/\bLIMIT\s+' . $val . '(?:\s*,\s*' . $val . ')?'
-            . '(?:\s+OFFSET\s+' . $val . ')?\s*$/i',
-            $sql
+            . '(?:\s+OFFSET\s+' . $val . ')?\s*;?\s*$/i',
+            self::scrubSqlText($sql)
         );
+    }
+
+    /**
+     * Detect whether user SQL already ends with its own SQL-standard row cap
+     * (`OFFSET n ROWS FETCH NEXT m ROWS ONLY`) — the MSSQL/ODBC spelling of
+     * {@see hasTrailingLimit}.
+     *
+     * Same two properties: anchored to the end (a FETCH inside a subquery
+     * leaves the outer statement uncapped) and scrubbed first (a FETCH named in
+     * a comment or literal must not disarm the cap).
+     *
+     * @param string $sql User-supplied SQL.
+     * @return bool True when a FETCH FIRST/NEXT clause terminates the statement.
+     */
+    protected static function hasTrailingFetch(string $sql): bool
+    {
+        $val = '(?:\d+|\?|\$\d+|:\w+|%s)';
+        return (bool) preg_match(
+            '/\bFETCH\s+(?:FIRST|NEXT)\s+' . $val . '\s+ROWS?\s+ONLY\s*;?\s*$/i',
+            self::scrubSqlText($sql)
+        );
+    }
+
+    /**
+     * Wrap user SQL in the `SELECT COUNT(*)` probe fetch() uses for its total.
+     *
+     * The closing paren goes on a NEW LINE. MEASURED: with the paren appended
+     * inline, `SELECT * FROM items LIMIT 3 -- c` produced
+     * `SELECT COUNT(*) as total FROM (SELECT * FROM items LIMIT 3 -- c)` — the
+     * trailing `--` comments out the `)` and the probe dies with "incomplete
+     * input". A newline cannot be commented out by a `--` that started on the
+     * line above. Trailing semicolons are stripped for the same reason.
+     *
+     * @param string $sql   User-supplied SQL (the inner SELECT).
+     * @param string $alias Subquery alias; engines that require one pass it.
+     * @return string The COUNT(*) probe statement.
+     */
+    protected static function wrapCountSubquery(string $sql, string $alias = ''): string
+    {
+        $inner = self::stripTrailingSemicolons($sql);
+        $suffix = $alias !== '' ? ' AS ' . $alias : '';
+        return "SELECT COUNT(*) as total FROM ({$inner}\n){$suffix}";
+    }
+
+    /**
+     * Append a pagination clause to user SQL on a NEW LINE.
+     *
+     * The newline is the fix, not cosmetics. MEASURED: appended inline,
+     * `SELECT * FROM t ORDER BY id -- note` + ` LIMIT 100 OFFSET 0` puts the
+     * cap INSIDE the trailing comment, where the engine silently ignores it and
+     * the whole table comes back — the same row-cap bug as a broken detector,
+     * but at the append site. Trailing semicolons are stripped first
+     * (`SELECT * FROM t;` + `LIMIT 100` is a syntax error).
+     *
+     * @param string $sql    User-supplied SQL.
+     * @param string $clause Engine pagination clause (LIMIT/OFFSET, ROWS, FETCH).
+     * @return string SQL with the clause on its own line.
+     */
+    protected static function appendSqlClause(string $sql, string $clause): string
+    {
+        return self::stripTrailingSemicolons($sql) . "\n" . $clause;
     }
 
     /**

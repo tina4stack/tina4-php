@@ -25,6 +25,10 @@ class ODBCAdapter implements DatabaseAdapter
 
     use AutocommitTrait;
 
+    // Shared SQL normalisation: the row-cap detectors (scrub + anchor) and the
+    // newline-safe COUNT wrapper / clause append used by fetch().
+    use SqlNormalizerTrait;
+
     /**
      * The SQL dialect this adapter speaks.
      *
@@ -125,25 +129,34 @@ class ODBCAdapter implements DatabaseAdapter
         $this->lastError = null;
 
         try {
-            // Total count
-            $countSql = "SELECT COUNT(*) AS total FROM ({$sql}) AS _tina4_count";
+            // Total count. The closing paren goes on its OWN LINE
+            // (wrapCountSubquery): inline, a trailing `-- comment` in the user
+            // SQL comments it out and the probe fails on otherwise-valid SQL.
+            $countSql = self::wrapCountSubquery($sql, '_tina4_count');
             $countRow = $this->fetchOne($countSql, $params);
             // COUNT(*) column may be uppercased by some ODBC drivers
             $total = (int) ($countRow['total'] ?? $countRow['TOTAL'] ?? 0);
 
-            // Pagination — skip if SQL already has LIMIT/FETCH or if
-            // $limit <= 0 (v3.13.12: fetchAll's "give me all rows" path).
-            $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
-            if (
-                $limit <= 0
-                || stripos($sqlNoComments, 'LIMIT') !== false
-                || stripos($sqlNoComments, 'FETCH NEXT') !== false
-                || stripos($sqlNoComments, 'FETCH FIRST') !== false
-            ) {
+            // Pagination — skip if the statement already ENDS with its own row
+            // cap, or if $limit <= 0 (v3.13.12: fetchAll's "give me all rows").
+            //
+            // This used to be a bare `stripos($sql, 'LIMIT') !== false` over a
+            // `--`-stripped copy. MEASURED: a column named `rate_limit`, or a
+            // literal `WHERE label != 'LIMIT'`, or a LIMIT inside a SUBQUERY all
+            // read as "the caller supplied their own cap", so the cap was
+            // dropped and the WHOLE TABLE came back — the production incident
+            // the cap exists to prevent. The shared detectors scrub literals and
+            // comments and anchor to the END of the statement.
+            if ($limit <= 0 || self::hasTrailingLimit($sql) || self::hasTrailingFetch($sql)) {
                 $pagedSql = $sql;
             } else {
-                // Try OFFSET/FETCH NEXT (SQL standard, supported by most ODBC targets)
-                $pagedSql = "{$sql} OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY";
+                // Try OFFSET/FETCH NEXT (SQL standard, supported by most ODBC
+                // targets). NEW LINE: appended inline the cap lands inside a
+                // trailing `-- comment` and is silently swallowed.
+                $pagedSql = self::appendSqlClause(
+                    $sql,
+                    "OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY"
+                );
             }
 
             $data = $this->query($pagedSql, $params);

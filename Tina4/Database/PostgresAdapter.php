@@ -204,7 +204,10 @@ class PostgresAdapter implements DatabaseAdapter
         // (parity with execute() and the Python master). query() clears
         // lastError on entry, so a non-null lastError after the call means the
         // statement failed.
-        $countSql = "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        // The closing paren goes on its OWN LINE (wrapCountSubquery): inline, a
+        // trailing `-- comment` in the user SQL comments the `)` out and the
+        // probe fails on otherwise-valid SQL.
+        $countSql = self::wrapCountSubquery($sql, '_count_query');
         $countResult = $this->query($countSql, $params);
         if ($this->lastError !== null) {
             throw new DatabaseException('PostgreSQL fetch() failed: ' . $this->lastError);
@@ -217,9 +220,11 @@ class PostgresAdapter implements DatabaseAdapter
         // append a second one — `... LIMIT 1 LIMIT 100 OFFSET 0` is a PG
         // syntax error that would otherwise be swallowed into an empty
         // result.
+        // NEW LINE (appendSqlClause): appended inline the cap lands inside a
+        // trailing `-- comment` and is swallowed, returning the WHOLE table.
         $pagedSql = ($limit <= 0 || self::hasTrailingLimit($sql))
             ? $sql
-            : "{$sql} LIMIT {$limit} OFFSET {$offset}";
+            : self::appendSqlClause($sql, "LIMIT {$limit} OFFSET {$offset}");
         $data = $this->query($pagedSql, $params);
         if ($this->lastError !== null) {
             throw new DatabaseException('PostgreSQL fetch() failed: ' . $this->lastError);

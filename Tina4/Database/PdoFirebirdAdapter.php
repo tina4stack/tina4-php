@@ -106,11 +106,12 @@ class PdoFirebirdAdapter implements DatabaseAdapter
         return self::normalizeBoolParams($params, nativeBoolean: false);
     }
 
+    /** ROWS pagination on a NEW LINE — inline it lands inside a trailing `--` comment. */
     protected function paginate(string $sql, int $limit, int $offset): string
     {
         $startRow = $offset + 1;
         $endRow = $offset + $limit;
-        return "{$sql} ROWS {$startRow} TO {$endRow}";
+        return self::appendSqlClause($sql, "ROWS {$startRow} TO {$endRow}");
     }
 
     protected function insertReturningClause(): string

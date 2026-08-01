@@ -105,10 +105,10 @@ class PdoPostgresAdapter implements DatabaseAdapter
         return self::normalizeBoolParams($params, nativeBoolean: true);
     }
 
-    /** PG count probe needs a subquery alias. */
+    /** PG count probe needs a subquery alias. Paren on its own line (see wrapCountSubquery). */
     protected function wrapCountSql(string $sql): string
     {
-        return "SELECT COUNT(*) as total FROM ({$sql}) AS _count_query";
+        return self::wrapCountSubquery($sql, '_count_query');
     }
 
     /** Matches PostgresAdapter::insert(), which uses RETURNING *. */
