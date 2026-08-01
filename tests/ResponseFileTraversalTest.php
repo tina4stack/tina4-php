@@ -84,11 +84,36 @@ class ResponseFileTraversalTest extends TestCase
 
     /**
      * No '..' at all - containment, not the '..' check, has to catch this.
+     * Containment applies ONLY when the caller declared a root, so the root
+     * is what makes this 403.
      */
-    public function testFileRefusesAbsolutePathOutsideRoot(): void
+    public function testFileRefusesAbsolutePathOutsideADeclaredRoot(): void
     {
-        $response = $this->serve('/etc/passwd');
+        $response = $this->serve('/etc/passwd', $this->root);
         $this->assertSame(403, $response->getStatusCode());
+    }
+
+    /**
+     * REGRESSION CONTROL. Confinement once defaulted to getcwd(), so every
+     * legitimate absolute path outside the project answered 403 - a missing
+     * file reported Forbidden instead of Not Found. Unrooted, an absolute
+     * path is the caller's business (Express res.sendFile, Rails send_file,
+     * ASP.NET PhysicalFile all serve one), so this must NOT be 403.
+     */
+    public function testFileServesAnAbsolutePathWhenNoRootIsDeclared(): void
+    {
+        $outside = sys_get_temp_dir() . '/tina4-outside-' . bin2hex(random_bytes(6)) . '.txt';
+        file_put_contents($outside, "OUTSIDE\n");
+        try {
+            $response = $this->serve($outside);
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame("OUTSIDE\n", $response->getBody());
+        } finally {
+            @unlink($outside);
+        }
+
+        $missing = $this->serve('/nonexistent/path/to/file.css');
+        $this->assertSame(404, $missing->getStatusCode());
     }
 
     public function testFileHonoursAnExplicitRoot(): void

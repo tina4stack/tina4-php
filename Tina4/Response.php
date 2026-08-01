@@ -588,7 +588,10 @@ class Response
         // the project root is exactly where .env lives. Rejecting '..' on the
         // way in is what closes it; containment then catches absolute paths and
         // symlinks, which carry no '..' segment.
-        $base = $root !== null ? realpath($root) : getcwd();
+        // Containment applies ONLY when the caller declared a root. Defaulting
+        // it to getcwd() broke every legitimate absolute path (measured on the
+        // Linux lab: a missing absolute path returned 403 instead of 404).
+        $base = $root !== null ? realpath($root) : null;
         $isAbsolute = str_starts_with($path, DIRECTORY_SEPARATOR)
             || (bool)preg_match('/^[A-Za-z]:[\\\\\/]/', $path);
 
@@ -600,8 +603,8 @@ class Response
             }
         }
 
-        $resolved = $forbidden ? false : realpath($isAbsolute ? $path : $base . DIRECTORY_SEPARATOR . $path);
-        if (!$forbidden && $resolved !== false && $base !== false && $base !== DIRECTORY_SEPARATOR) {
+        $resolved = $forbidden ? false : realpath(($isAbsolute || $base === null) ? $path : $base . DIRECTORY_SEPARATOR . $path);
+        if (!$forbidden && $base !== null && $resolved !== false && $base !== false && $base !== DIRECTORY_SEPARATOR) {
             if ($resolved !== $base && !str_starts_with($resolved, $base . DIRECTORY_SEPARATOR)) {
                 $forbidden = true;
             }
