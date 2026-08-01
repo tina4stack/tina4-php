@@ -12,8 +12,10 @@ if (version_compare(PHP_VERSION, '8.2.0', '<')) {
 }
 
 // 2. Required extensions
-$required = ['json', 'mbstring', 'openssl', 'pdo'];
-$optional = ['sqlite3', 'pdo_sqlite', 'curl', 'sockets'];
+$required = ['json', 'mbstring', 'pdo'];
+// openssl is SUGGESTED, not required — but what it silently takes with it when
+// absent is not obvious, so name each capability rather than print "MISSING".
+$optional = ['openssl', 'sqlite3', 'pdo_sqlite', 'curl', 'sockets'];
 foreach ($required as $ext) {
     echo ($ext . ': ' . (extension_loaded($ext) ? 'OK' : 'MISSING') . "\n");
 }
@@ -21,6 +23,17 @@ echo "\nOptional:\n";
 foreach ($optional as $ext) {
     echo ($ext . ': ' . (extension_loaded($ext) ? 'OK' : 'MISSING') . "\n");
 }
+
+if (!extension_loaded('openssl')) {
+    echo "\n  NOTE: without ext-openssl these are unavailable:\n";
+    echo "    - RS256 JWT signing/verification (HS256/HS384/HS512 still work — they need no extension)\n";
+    echo "    - outbound HTTPS from Tina4\\Api (PHP registers no https:// stream wrapper)\n";
+    echo "    - MQTT over TLS (mqtts://)\n";
+    echo "  Everything else, including HMAC JWT and PBKDF2 password hashing, is unaffected.\n";
+}
+// The https wrapper is what fopen() actually consults, so report it directly —
+// an openssl build with the wrapper disabled would otherwise look healthy.
+echo 'https:// stream wrapper: ' . (in_array('https', stream_get_wrappers(), true) ? "OK\n" : "MISSING (outbound HTTPS will fail)\n");
 
 // 3. Autoloader
 echo "\nAutoloader: ";

@@ -12,9 +12,12 @@ namespace Tina4;
  * Zero-dependency MQTT 3.1.1 client -- the protocol every broker and every IoT
  * device already speaks.
  *
- * Built on PHP streams (`stream_socket_client`, `pack`/`unpack`) plus `ext-openssl`
- * for TLS: no Composer package, so an app that talks to Mosquitto / EMQX / HiveMQ /
- * AWS IoT adds nothing to its dependency tree.
+ * Built on PHP streams (`stream_socket_client`, `pack`/`unpack`): no Composer
+ * package, so an app that talks to Mosquitto / EMQX / HiveMQ / AWS IoT adds
+ * nothing to its dependency tree. Plain `mqtt://` needs no extension at all;
+ * only `mqtts://` (TLS) needs `ext-openssl`, which Tina4 SUGGESTS rather than
+ * requires — a TLS connect on a build without it fails with an error naming the
+ * missing extension, never a generic handshake failure.
  *
  * Shaped like Tina4\Queue on purpose -- publish / subscribe / consume:
  *
@@ -834,6 +837,20 @@ final class Mqtt
      */
     private function enableCrypto($socket): void
     {
+        // ext-openssl is suggested, not required. Say so before the handshake:
+        // stream_socket_enable_crypto() on a build without it fails with a
+        // generic "no crypto support" that never names the extension.
+        if (!extension_loaded('openssl')) {
+            @fclose($socket);
+            $this->socket = null;
+            throw new MqttError(
+                "MQTT over TLS (mqtts://{$this->host}:{$this->port}) requires ext-openssl, which is NOT "
+                . 'loaded in this PHP build. Install it (Debian/Ubuntu: `apt install php-openssl`; '
+                . 'Alpine: `apk add php-openssl`; Docker: `docker-php-ext-install openssl`), '
+                . 'or connect over plain mqtt:// instead.'
+            );
+        }
+
         $errors = [];
         set_error_handler(static function (int $no, string $str) use (&$errors): bool {
             $errors[] = $str;
@@ -846,8 +863,14 @@ final class Mqtt
         }
         if ($ok !== true) {
             $detail = trim(implode('; ', $errors));
-            while (($e = openssl_error_string()) !== false) {
-                $detail .= ($detail !== '' ? '; ' : '') . $e;
+            // Guarded on its own: php.ini `disable_functions` can remove this one
+            // function while the extension is still loaded, and calling it then
+            // would fatal with "Call to undefined function" — burying the real
+            // handshake error under an error about our error reporting.
+            if (function_exists('openssl_error_string')) {
+                while (($e = openssl_error_string()) !== false) {
+                    $detail .= ($detail !== '' ? '; ' : '') . $e;
+                }
             }
             @fclose($socket);
             $this->socket = null;

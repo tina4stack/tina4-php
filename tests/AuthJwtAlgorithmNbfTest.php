@@ -426,13 +426,15 @@ class AuthJwtAlgorithmNbfTest extends TestCase
         $this->assertNull(Auth::validToken($token, 'not-the-secret', $alg));
     }
 
-    // ── RS256 must survive the HMAC work (PHP/Node-only extra) ───
+    // ── RS256 must survive the HMAC work (opt-in extra) ──────────
 
     /**
      * POSITIVE + NEGATIVE: RS256 still signs and verifies against a real openssl
-     * key pair, and the wrong public key still fails. Python and Ruby cannot do
-     * RS256 without a dependency, so it stays a PHP/Node extra — but it must not
-     * be collateral damage of adding the HMAC family.
+     * key pair, and the wrong public key still fails. RS256 is the OPT-IN extra
+     * in all four frameworks (PHP: suggested ext-openssl; Ruby: stdlib
+     * OpenSSL::PKey::RSA; Node: builtin node:crypto; Python: the `cryptography`
+     * package the app installs) — it must not be collateral damage of adding the
+     * HMAC family, which is the zero-dependency standard everywhere.
      */
     public function testRs256StillSignsAndVerifiesAfterTheHmacWork(): void
     {

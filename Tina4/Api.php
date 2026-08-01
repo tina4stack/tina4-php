@@ -15,6 +15,11 @@ namespace Tina4;
  * opt-in per-client cookie jar are all built on the same zero-dependency
  * stream-wrapper core. Redirects are followed with a manual loop that strips
  * the Authorization and Cookie headers on a cross-origin hop.
+ *
+ * HTTPS needs ext-openssl — it is what registers PHP's `https` stream wrapper.
+ * The extension is suggested, not required, so an https:// call on a build
+ * without it fails with {@see Api::HTTPS_UNAVAILABLE} rather than PHP's
+ * misleading "No such file or directory". Plain http:// needs nothing.
  */
 class Api
 {
@@ -40,6 +45,28 @@ class Api
      * authenticate to. Compared case-insensitively.
      */
     private const STRIP_ON_CROSS_ORIGIN = ['authorization', 'cookie'];
+
+    /**
+     * Message returned (and logged at boot) when PHP cannot open https:// URLs.
+     *
+     * THE IMPLICIT DEPENDENCY: this client is built on the stream wrapper, and
+     * PHP's `https` (and `ftps`) wrapper is registered BY ext-openssl. That
+     * extension is suggested, not required — so on a build without it every
+     * outbound HTTPS call fails while plain http keeps working. Nothing in this
+     * file calls an openssl_* function, so grepping for one does not find the
+     * dependency: it is carried by the URL scheme.
+     *
+     * It fails misleadingly, too. PHP reports the missing wrapper as
+     * "Failed to open stream: No such file or directory", which reads like a bad
+     * path and sends you hunting in the wrong place. This message names the real
+     * cause instead.
+     */
+    public const HTTPS_UNAVAILABLE = 'Outbound HTTPS is unavailable: PHP has registered no "https" stream '
+        . 'wrapper, which means ext-openssl is not loaded — that extension is what registers it. '
+        . 'Every https:// request through Tina4\Api will fail until it is installed '
+        . '(Debian/Ubuntu: `apt install php-openssl`; Alpine: `apk add php-openssl`; '
+        . 'Docker: `docker-php-ext-install openssl`). Plain http:// requests are unaffected. '
+        . 'Check `php -m | grep openssl`.';
 
     private string $baseUrl;
     private string $authHeader;
@@ -558,6 +585,19 @@ class Api
         $currentContent = $content;
 
         for ($hop = 0; ; $hop++) {
+            // Checked per hop, not once up front: a plain http:// request is
+            // allowed to redirect to https://, so the hop that actually needs
+            // TLS may not be the one the caller asked for.
+            if (self::isHttpsUrl($currentUrl) && !self::httpsAvailable()) {
+                return [
+                    'handle' => false,
+                    'status' => null,
+                    'headers' => [],
+                    'rawHeaders' => [],
+                    'error' => self::HTTPS_UNAVAILABLE . " (requested {$currentUrl})",
+                ];
+            }
+
             $httpOptions = [
                 'method' => $currentMethod,
                 'header' => $this->serializeHeaders($headers),
@@ -619,6 +659,31 @@ class Api
                 'error' => null,
             ];
         }
+    }
+
+    /**
+     * Report whether PHP can open an https:// stream at all.
+     *
+     * Asks the runtime what wrappers are registered rather than asking whether
+     * ext-openssl is loaded — the wrapper registry is the thing fopen() consults,
+     * so this cannot disagree with what actually happens on the next request.
+     *
+     * @return bool True when the "https" stream wrapper is registered
+     */
+    public static function httpsAvailable(): bool
+    {
+        return in_array('https', stream_get_wrappers(), true);
+    }
+
+    /**
+     * True when a URL uses the https scheme (case-insensitive, per RFC 3986 §3.1).
+     *
+     * @param string $url The absolute URL to inspect
+     * @return bool True when the scheme is https
+     */
+    private static function isHttpsUrl(string $url): bool
+    {
+        return str_starts_with(strtolower($url), 'https://');
     }
 
     /**

@@ -448,7 +448,7 @@ template-language convention, not a host-language one.
 ### Language-Specific Idioms
 
 **Python:** Python 3.12+ minimum (never target older versions), async/await everywhere, type hints, ASGI-based, `uv` as package manager
-**PHP:** PHP 8.5+ minimum, Swoole for WebSocket (fallback to stream_socket), ext-openssl for JWT
+**PHP:** PHP 8.5+ minimum, Swoole for WebSocket (fallback to stream_socket), `hash_hmac` (PHP core) for the HMAC JWT family — ext-openssl is needed only for opt-in RS256
 **Ruby:** Ruby 4.0.0+ minimum, `?` suffix for predicates, `!` for mutators, OptionParser for CLI
 **Node.js:** Node.js 25.8.1+ minimum, TypeScript-first, ESM-only, file-based routing
 
@@ -483,7 +483,21 @@ secure by default. This is non-negotiable.
   file operations. Use `realpath()` / `os.path.realpath()` and verify the result is inside the
   expected directory.
 - **JWT security** — Always verify signatures. Never decode without validation. Use the
-  `TINA4_SECRET` env var, never hardcode keys. Prefer RS256 for production.
+  `TINA4_SECRET` env var, never hardcode keys. **HMAC (HS256 default, HS384, HS512) is the
+  Tina4 algorithm family** — zero-dependency in all four frameworks (Python `hmac`+`hashlib`,
+  PHP core `hash_hmac`, Ruby stdlib `OpenSSL::HMAC`, Node builtin `node:crypto`).
+  **RS256 is OPT-IN and works in all four**, never as a bundled third-party dependency:
+  Ruby signs it with stdlib `OpenSSL::PKey::RSA` (NO gem — never suggest installing one),
+  Node with builtin `node:crypto`, PHP with `ext-openssl` (composer SUGGESTS it, does not
+  require it), Python with the `cryptography` package the APP installs itself (Tina4 declares
+  it nowhere). Where a backend is missing, fail loudly AT THE POINT OF USE naming the exact
+  remedy — no boot probe, no import-time check, no startup warning for the HMAC majority.
+  Pick RS256 only when a verifier must NOT be able to mint tokens (see "JWT algorithms" in
+  `references/subsystems.md`).
+- **JWT algorithm pinning** — Verify against the algorithm the app is CONFIGURED for, never
+  the one the token's `alg` header asks for. An RS256 verifier's key is public, so an attacker
+  can use it as an HMAC secret and mint a valid HS256 token; a header-trusting verifier accepts
+  it. `alg: "none"` must be rejected for the same reason. All four frameworks pin.
 - **Header injection** — Sanitize any user input that ends up in HTTP headers or redirect URLs.
 - **Dependency security** — Zero third-party deps means a smaller attack surface. Keep it that way.
   If a stdlib function has a known vulnerability in an older version, the minimum version targets

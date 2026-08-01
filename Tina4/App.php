@@ -297,6 +297,17 @@ class App
         // Generate request ID
         Log::setRequestId($this->generateRequestId());
 
+        // ext-openssl is SUGGESTED, not required — HMAC JWT, PBKDF2 passwords and
+        // random_bytes all need none of it. But PHP's `https` stream wrapper is
+        // registered by that extension, so without it EVERY outbound HTTPS call
+        // from Tina4\Api dies, and PHP blames a missing file rather than a
+        // missing extension. Nothing greps its way to that dependency — it rides
+        // on the URL scheme — so announce it once here, at boot, instead of
+        // letting each call site rediscover it.
+        if (!Api::httpsAvailable()) {
+            Log::warning(Api::HTTPS_UNAVAILABLE);
+        }
+
         // Register health check
         $this->registerHealthCheck();
 
