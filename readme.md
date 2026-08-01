@@ -74,7 +74,7 @@ Every feature is built from scratch -- no bloated vendor trees, no third-party r
 | **Core HTTP** (7) | Router with path params (`{id:int}`, `{p:path}`), Server, Request/Response, Middleware pipeline, Static file serving, CORS |
 | **Database** (6) | SQLite, PostgreSQL, MySQL, MSSQL, Firebird -- unified adapter, connection pooling, query cache, transactions, race-safe ID generation, SQL dialect translation |
 | **ORM** (7) | Active Record with typed fields, relationships (`has_one`/`has_many`/`belongs_to`), soft delete, QueryBuilder + MongoDB support, Auto-CRUD generator, migrations with rollback |
-| **Auth & Security** (5) | JWT (HS256/RS256), password hashing (PBKDF2-SHA256), API key validation, rate limiting, CSRF form tokens |
+| **Auth & Security** (5) | JWT (HS256/HS384/HS512 via core `hash_hmac`, no extension; RS256 opt-in via suggested `ext-openssl`), password hashing (PBKDF2-SHA256), API key validation, rate limiting, CSRF form tokens |
 | **Templating** (3) | Frond engine (Twig/Jinja2-compatible, pre-compiled 2.8x faster), SCSS auto-compilation, built-in CSS (~24 KB) |
 | **API & Integration** (5) | HTTP client (zero-dep), GraphQL with ORM auto-schema + GraphiQL IDE, WSDL/SOAP with auto WSDL, WebSocket (RFC 6455) + Redis backplane, MCP server (24 dev tools) |
 | **Background** (3) | Job queue (File/RabbitMQ/Kafka/MongoDB) with priority, delay, retry, dead letters -- service runner -- event system (on/emit/once/off) |

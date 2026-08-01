@@ -10,7 +10,12 @@ namespace Tina4;
 
 /**
  * JWT authentication, password hashing, and auth middleware — zero dependencies.
- * Uses only PHP built-in functions: hash_hmac, openssl_*, hash_pbkdf2, random_bytes.
+ * Uses only PHP core functions: hash_hmac, hash_pbkdf2, random_bytes. No
+ * extension beyond PHP core is needed to sign or verify a Tina4 JWT.
+ *
+ * RS256 is the one opt-in extra: it calls openssl_* and therefore needs
+ * ext-openssl, which composer SUGGESTS rather than requires. When it is absent
+ * RS256 fails loudly at the point of use — never a silent downgrade.
  *
  * Mirrors the Python implementation in tina4_python.auth.
  */
@@ -45,14 +50,40 @@ class Auth
     ];
 
     /**
-     * Supported RSA algorithms.
+     * Optional RSA algorithms. HMAC is the standard; RS256 is opt-in.
      *
-     * PHP ships ext-openssl, so RS256 is legitimately available here (and in
-     * Node). Python and Ruby cannot sign RS256 without a third-party
-     * dependency, so it stays a documented PHP/Node-only extra rather than part
-     * of the cross-framework contract.
+     * HS256/HS384/HS512 is the algorithm family for Tina4 JWT and is
+     * zero-dependency in all four frameworks (PHP hash_hmac, Python
+     * hmac+hashlib, Ruby OpenSSL::HMAC, Node crypto.createHmac). RS256 is
+     * offered only where the runtime provides asymmetric crypto NATIVELY — in
+     * PHP that is ext-openssl, which is SUGGESTED, not required. Ruby ships it
+     * natively too (OpenSSL::PKey::RSA); Python's stdlib has no asymmetric
+     * crypto at all, so Python does not offer RS256 rather than take a
+     * third-party dependency.
+     *
+     * SECURITY TRADE-OFF, stated rather than buried: HMAC is symmetric, so
+     * every service that VERIFIES a token holds the same secret that SIGNS it
+     * and can therefore mint tokens of its own. That is fine for one app or a
+     * trusted fleet, and wrong for handing tokens to a third party you do not
+     * control — that case wants RS256, where a verifier holds only the public
+     * key.
      */
     private const RSA_ALGORITHMS = ['RS256'];
+
+    /**
+     * The ext-openssl functions RS256 actually calls.
+     *
+     * Presence is probed with function_exists rather than extension_loaded
+     * because a function removed by the php.ini `disable_functions` directive
+     * is exactly as absent at the call site as a missing extension, and both
+     * produce the same "Call to undefined function" fatal.
+     */
+    private const RSA_FUNCTIONS = [
+        'openssl_sign',
+        'openssl_verify',
+        'openssl_pkey_get_private',
+        'openssl_pkey_get_public',
+    ];
 
     /**
      * Seconds of clock skew tolerated on the "nbf" (not-before) claim.
@@ -166,6 +197,8 @@ class Auth
      * @return string One of HMAC_DIGESTS or RSA_ALGORITHMS
      * @throws \InvalidArgumentException When the algorithm is not one we can sign with —
      *   a silent downgrade to HS256 would hand back a weaker token than asked for
+     * @throws \RuntimeException When an RSA algorithm is asked for on a build without
+     *   ext-openssl — RS256 is opt-in and must fail loudly, never silently
      */
     private static function resolveAlgorithm(?string $algorithm = null): string
     {
@@ -182,12 +215,62 @@ class Auth
             throw new \InvalidArgumentException(
                 "Unsupported JWT algorithm '{$chosen}'. Tina4 PHP signs with "
                 . implode(', ', array_keys(self::HMAC_DIGESTS)) . ' (HMAC, zero-dependency) and '
-                . implode(', ', self::RSA_ALGORITHMS) . ' (RSA via ext-openssl). '
+                . implode(', ', self::RSA_ALGORITHMS) . ' (RSA, opt-in — needs ext-openssl). '
                 . 'Set TINA4_JWT_ALGORITHM to one of those.'
             );
         }
 
+        // RS256 is opt-in and only exists where the runtime provides it. This is
+        // the SINGLE gate for it: getToken() and validToken() both resolve the
+        // algorithm here before signing or verifying, so neither can reach an
+        // openssl_* call on a build that has none. Refusing here turns what
+        // would be a bare "Call to undefined function openssl_sign()" fatal
+        // into an error that names the missing piece and the way out.
+        if (in_array($chosen, self::RSA_ALGORITHMS, true) && !self::rs256Available()) {
+            throw new \RuntimeException(self::rs256UnavailableMessage($chosen));
+        }
+
         return $chosen;
+    }
+
+    /**
+     * Report whether this PHP build can actually sign and verify RS256.
+     *
+     * @return bool True when every ext-openssl function RS256 needs is callable
+     */
+    public static function rs256Available(): bool
+    {
+        foreach (self::RSA_FUNCTIONS as $function) {
+            if (!function_exists($function)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Build the actionable error for an RSA algorithm on a build without ext-openssl.
+     *
+     * Names the algorithm asked for, the extension that is missing, the
+     * zero-dependency alternative, and how to install the extension — the three
+     * things an operator needs to get moving again.
+     *
+     * @param string $algorithm The RSA algorithm that was requested
+     * @return string The full error message
+     */
+    private static function rs256UnavailableMessage(string $algorithm): string
+    {
+        return "JWT algorithm '{$algorithm}' requires ext-openssl, which is NOT available in this PHP build"
+            . ' (Tina4 suggests that extension rather than requiring it).'
+            . ' Tina4 needs no extension to sign a JWT: '
+            . implode('/', array_keys(self::HMAC_DIGESTS))
+            . ' use the built-in hash_hmac and are the cross-framework standard —'
+            . ' set TINA4_JWT_ALGORITHM=HS256 (or pass $algorithm) to use them.'
+            . " To keep {$algorithm}, install ext-openssl (Debian/Ubuntu: `apt install php-openssl`;"
+            . ' Alpine: `apk add php-openssl`; Docker: `docker-php-ext-install openssl`) and make sure'
+            . ' none of ' . implode(', ', self::RSA_FUNCTIONS) . ' is listed in the php.ini'
+            . ' `disable_functions` directive.';
     }
 
     /** True when running in dev (TINA4_DEBUG truthy). */
@@ -250,6 +333,7 @@ class Auth
      * @param string|null     $algorithm Signing algorithm; null = TINA4_JWT_ALGORITHM, then HS256
      * @return string Encoded JWT (header.payload.signature)
      * @throws \InvalidArgumentException When $algorithm / TINA4_JWT_ALGORITHM names an unsupported algorithm
+     * @throws \RuntimeException When RS256 is asked for on a build without ext-openssl
      *
      * @deprecated since 3.11.22 — $expiresIn was previously seconds; it is now MINUTES
      *             to match Python (tina4_python.auth.get_token) and Ruby. Existing callers
@@ -297,6 +381,9 @@ class Auth
      * @param string|null $algorithm Expected algorithm; null = TINA4_JWT_ALGORITHM, then HS256
      * @return array<string,mixed>|null Decoded payload on success, null if invalid/expired/not-yet-valid/malformed
      * @throws \InvalidArgumentException When $algorithm / TINA4_JWT_ALGORITHM names an unsupported algorithm
+     * @throws \RuntimeException When RS256 is the CONFIGURED algorithm on a build without ext-openssl.
+     *   Note this fires on our own configuration, never on the token's header claim: a token whose
+     *   header advertises RS256 while we are configured for HMAC is REJECTED (null), not an error.
      *
      * 3.13.0 — return type changed from `bool` to `array|null`. The decoded
      * payload is returned on success, matching the convention used by
@@ -628,12 +715,27 @@ class Auth
      * @param string $secret    Secret key (HMAC) or PEM private key (RS256)
      * @param string $algorithm A resolved algorithm — HS256, HS384, HS512 or RS256
      * @return string Base64url-encoded signature
-     * @throws \InvalidArgumentException When $algorithm is not a supported algorithm
+     * @throws \InvalidArgumentException When $algorithm is not a supported algorithm, or when
+     *   an RSA algorithm is given a secret that is not a usable PEM private key
      */
     private static function sign(string $message, string $secret, string $algorithm): string
     {
         if (in_array($algorithm, self::RSA_ALGORITHMS, true)) {
+            // Availability is gated in resolveAlgorithm(), the single entry point
+            // for both signing and verification — no openssl_* call is reachable
+            // here on a build without the extension.
             $privateKey = openssl_pkey_get_private($secret);
+            if ($privateKey === false) {
+                // Without this, the false flows into openssl_sign(), $signature
+                // stays null, and the caller gets a TypeError blaming
+                // base64urlEncode() — an error naming the wrong function and
+                // never mentioning the key.
+                throw new \InvalidArgumentException(
+                    "JWT algorithm '{$algorithm}' signs with a PEM-encoded RSA PRIVATE KEY, but the secret"
+                    . ' supplied could not be parsed as one. Pass the private-key PEM (the'
+                    . ' "-----BEGIN PRIVATE KEY-----" block) as $secret, or via TINA4_SECRET.'
+                );
+            }
             openssl_sign($message, $signature, $privateKey, OPENSSL_ALGO_SHA256);
             return self::base64urlEncode($signature);
         }

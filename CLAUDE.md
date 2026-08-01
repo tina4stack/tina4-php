@@ -443,10 +443,23 @@ Auth::JWT_LEEWAY_SECONDS  // 60 — clock skew tolerated on the nbf claim
 ```
 
 **`TINA4_JWT_ALGORITHM` — supported algorithms.** `HS256` (default), `HS384`,
-`HS512` (HMAC, zero-dependency) and `RS256` (RSA via ext-openssl). RS256 is a
-PHP/Node-only extra — Python and Ruby cannot sign it without a third-party
-dependency, so cross-framework code should stay on the HMAC family. An
-unsupported value throws `\InvalidArgumentException` naming the supported set
+`HS512` (HMAC) and `RS256` (RSA). **HMAC is the standard and is zero-dependency
+in all four frameworks** — PHP signs it with core `hash_hmac`, Python with
+`hmac`+`hashlib`, Ruby with `OpenSSL::HMAC`, Node with `node:crypto`. No
+extension is needed to sign or verify a Tina4 JWT.
+
+**RS256 is opt-in, and it works in all four.** PHP reaches it through
+`ext-openssl`, which composer **suggests** rather than requires; Ruby through
+stdlib `OpenSSL::PKey::RSA` (no gem); Node through builtin `node:crypto`; Python
+through the `cryptography` package, which Tina4 never declares — Python raises
+`RS256UnavailableError` naming `pip install cryptography` if you ask for RS256
+without it. On a PHP build with no ext-openssl, `getToken()` / `validToken()`
+throw `\RuntimeException` naming the extension, the install command, and the
+zero-dependency HMAC alternative — checked at the point of use, never at boot.
+Reach for RS256 when a **verifier must not be able to mint**: HMAC is symmetric,
+so every verifier holds the signing secret.
+
+An unsupported value throws `\InvalidArgumentException` naming the supported set
 rather than silently downgrading to HS256. The header's `alg` always names the
 digest that actually signed, and `validToken()` **pins** it: a token whose header
 advertises a different algorithm (including `alg: "none"`) is rejected before any
@@ -633,9 +646,11 @@ Auth::getPayload(string $token): ?array
 ```
 
 `$algorithm = null` resolves `TINA4_JWT_ALGORITHM`, then `HS256`. Supported:
-`HS256`/`HS384`/`HS512` plus `RS256` (PHP/Node only). An unsupported value throws
-`\InvalidArgumentException`. `validToken()` pins the header's `alg` to the
-configured algorithm and honours the `nbf` claim (see the Auth section above).
+`HS256`/`HS384`/`HS512` (the zero-dependency standard, core `hash_hmac`) plus
+`RS256` (opt-in, needs ext-openssl — `\RuntimeException` at the point of use when
+it is absent). An unsupported value throws `\InvalidArgumentException`.
+`validToken()` pins the header's `alg` to the configured algorithm and honours
+the `nbf` claim (see the Auth section above).
 
 ### Api — External HTTP client
 
@@ -1242,7 +1257,7 @@ is authorised on the raw socket peer.
 
 ## Key Architecture
 
-- **Zero external dependencies** — v3 has no Composer runtime dependencies (only `ext-openssl` and `ext-json`). Database extensions are optional and suggested
+- **Zero external dependencies** — v3 has no Composer runtime dependencies (only `ext-json`). `ext-openssl` is **suggested**, not required: it is needed only for opt-in RS256 JWT, `mqtts://`, and outbound HTTPS from `Tina4\Api` (PHP's `https://` stream wrapper is registered by that extension). Database extensions are optional and suggested
 - **Unified framework** — Everything lives in the `tina4stack/tina4php` package. No separate `tina4php-core`, `tina4php-database`, `tina4php-orm` packages
 - **Default server** — Binds to `0.0.0.0:7145` by default
 - Routes auto-discovered from `src/routes/`

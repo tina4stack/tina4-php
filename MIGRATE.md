@@ -12,7 +12,9 @@ v3 is a ground-up rewrite. You get:
 - **Event system**, response caching, DI container, GraphQL, WSDL/SOAP, error overlay
 - **WebSocket routes** — `Router::ws('/chat', $handler)` alongside HTTP routes
 
-v2 required 12+ Composer packages. v3 requires only `ext-openssl` and `ext-json`.
+v2 required 12+ Composer packages. v3 requires only `ext-json`. `ext-openssl` is
+suggested, not required — it is needed only for opt-in RS256 JWT, `mqtts://`, and
+outbound HTTPS from `Tina4\Api`.
 
 ---
 
@@ -277,7 +279,9 @@ Your existing `.twig` template files work without changes. The syntax is the sam
 ## Auth
 
 v2 used `nowakowskir/php-jwt` (RSA-based, RS256) and required OpenSSL key generation.
-v3 uses built-in HMAC-SHA256 (HS256) with a shared secret. No RSA keys needed.
+v3 defaults to built-in HMAC-SHA256 (HS256) with a shared secret and no RSA keys.
+RS256 is still available as an opt-in (`TINA4_JWT_ALGORITHM=RS256`, PEM private key
+as the secret) and needs the suggested `ext-openssl`.
 
 ### Method Changes
 

@@ -21,7 +21,6 @@
     },
     "require": {
         "php": ">=8.2",
-        "ext-openssl": "*",
         "ext-json": "*"
     },
     "scripts": {
@@ -41,6 +40,7 @@
         "bin/tina4php"
     ],
     "suggest": {
+        "ext-openssl": "Enables the RS256 JWT algorithm, MQTT over TLS (mqtts://), and outbound HTTPS from Tina4\\Api (PHP's https:// stream wrapper is registered by this extension). JWT signing does NOT need it: HS256/HS384/HS512 use the built-in hash_hmac",
         "ext-sqlite3": "Required for SQLite3 database support",
         "ext-pdo": "Required for MySQL/PostgreSQL/MSSQL database support",
         "ext-pgsql": "Required for PostgreSQL database support",

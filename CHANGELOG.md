@@ -435,8 +435,7 @@ route middleware, so a global rate limiter or access log still sees 401s.
   only knew `HS256` and `RS256`, so with `HS512` configured *every* token was
   invalid. The digest is now looked up from the algorithm, so the header always
   names the digest that actually signed, and the whole HMAC family verifies.
-  `RS256` (a PHP/Node-only extra  - Python and Ruby cannot sign it without a
-  dependency) is unchanged and still works.
+  `RS256` is unchanged and still works.
 
 - **`tina4 deploy docker` produced images that could not start.** Of the eight
   Dockerfile generators in the stack (four templates in the `tina4` CLI plus one

@@ -150,7 +150,27 @@ hashed   = Auth.hash_password("mypassword")
 matches  = Auth.check_password("mypassword", hashed)   # (plaintext, hashed) — NOT (hashed, plaintext)
 ```
 
-Supports both HS256 and RS256 algorithms. Node `Auth` class wraps standalone functions:
+HS256/HS384/HS512 is the standard algorithm family in all four frameworks, and is
+zero-dependency in each (Python `hmac`, PHP `hash_hmac`, Ruby `OpenSSL::HMAC`, Node
+`createHmac`). RS256 is OPT-IN and available in all four, but never as a bundled
+third-party dependency:
+
+| Framework | RS256 comes from | Declared as a dependency? |
+|-----------|------------------|---------------------------|
+| Ruby | stdlib `OpenSSL::PKey::RSA` | No — never suggest a gem |
+| Node | builtin `node:crypto` | No |
+| PHP | `ext-openssl` | `suggest`, not `require` |
+| Python | the `cryptography` package | No — the app installs it |
+
+Where the backend is missing, each framework fails loudly AT THE POINT OF USE (signing or
+verifying) naming the exact remedy — never a silent fallback, and never a boot-time probe
+or startup warning for the HMAC majority. Python raises `RS256UnavailableError` naming
+`pip install cryptography`; PHP raises `\RuntimeException` naming `ext-openssl`.
+
+Algorithm pinning is what keeps this safe: all four verify against the CONFIGURED `alg`,
+never the token header's, and reject `alg: "none"`.
+
+Node `Auth` class wraps standalone functions:
 ```typescript
 import { Auth, getToken, validToken } from "tina4-nodejs";
 Auth.getToken(payload, secret);   // same as standalone getToken()
