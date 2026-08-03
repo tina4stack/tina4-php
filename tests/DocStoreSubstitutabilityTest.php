@@ -356,4 +356,62 @@ final class DocStoreSubstitutabilityTest extends TestCase
 
         fwrite(STDERR, "\n    array queries: " . json_encode($rows) . "\n");
     }
+
+    // ── ADR-0025 / client-lifecycle-is-bounded (ASSERTED) ───────────────────
+
+    /**
+     * docstore_contract.json :: client-lifecycle-is-bounded
+     *
+     * MEASURED 2026-08-03 against a real MongoDB, across all four frameworks:
+     * get_collection() built a NEW client on every call and never closed it, so
+     * connections grew linearly and without bound - Node +40 and Ruby +60 per 20
+     * calls. Invisible in development, because the SQLite fallback opens no
+     * connections at all; the leak existed ONLY after the swap.
+     *
+     * PHP was the one framework already BOUNDED, and not by our code: ext-mongodb
+     * pools at the libmongoc level, so many MongoDB\Client objects sharing a URI
+     * share one connection pool. Measured 0 growth over 60 calls.
+     *
+     * This test exists anyway, and asserts the same named case as the other
+     * three, because "correct for a reason we did not choose" is exactly the
+     * behaviour that regresses silently. If a future change starts passing
+     * per-call options that defeat libmongoc's pool sharing, this catches it.
+     */
+    public function testRepeatedGetCollectionDoesNotGrowConnections(): void
+    {
+        $uri = $this->resolve('__MONGO__');
+
+        $connections = static function () use ($uri): int {
+            $probe = new \MongoDB\Client($uri);
+            $status = $probe->selectDatabase('admin')->command(['serverStatus' => 1])->toArray()[0];
+
+            return (int) $status['connections']['current'];
+        };
+
+        $rounds = [];
+        for ($round = 0; $round < 3; $round++) {
+            for ($i = 0; $i < 20; $i++) {
+                [$collection] = $this->collectionFor($uri);
+                $collection->countDocuments([]);
+            }
+            $rounds[] = $connections();
+        }
+
+        $settled = end($rounds);
+        for ($i = 0; $i < 100; $i++) {
+            [$collection] = $this->collectionFor($uri);
+            $collection->countDocuments([]);
+        }
+        $afterHundred = $connections();
+
+        // POSITIVE: 100 further calls add nothing to a settled pool.
+        $this->assertLessThanOrEqual(
+            $settled + 2,
+            $afterHundred,
+            sprintf('connections still growing: settled=%d after 100 more=%d', $settled, $afterHundred)
+        );
+        // And the growth flattened rather than tracking the call count.
+        $this->assertLessThanOrEqual(2, $rounds[2] - $rounds[1], 'rounds=' . json_encode($rounds));
+        $this->assertLessThan(60, $rounds[2], 'rounds=' . json_encode($rounds));
+    }
 }
