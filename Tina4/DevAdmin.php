@@ -1791,7 +1791,15 @@ class DevAdmin
                     $key = trim($key);
                     $val = trim(trim($val), '"\'');
                     if ($key === 'TINA4_DATABASE_URL') {
-                        $url = $val;
+                        // Redacted for the same reason /__dev/api/status and
+                        // /__dev/api/system were: this is a GET on the dev
+                        // server and the URL is where a password actually
+                        // LIVES. The handler already masked
+                        // TINA4_DATABASE_PASSWORD to *** while handing this
+                        // back verbatim -- so it was thinking about
+                        // credentials and still missed the one that matters.
+                        // Engine, user, host, port and database all survive.
+                        $url = \Tina4\DatabaseUrl::redact($val);
                     } elseif ($key === 'TINA4_DATABASE_USERNAME') {
                         $username = $val;
                     } elseif ($key === 'TINA4_DATABASE_PASSWORD') {

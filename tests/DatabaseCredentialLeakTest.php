@@ -708,4 +708,68 @@ class DatabaseCredentialLeakTest extends TestCase
         $this->assertTrue($matches($offending), 'the scanner must flag serialize($url)');
         $this->assertFalse($matches($innocent), 'the scanner must not flag a redacted render');
     }
+
+    /**
+     * /__dev/api/connections handed back TINA4_DATABASE_URL VERBATIM.
+     *
+     * MEASURED 2026-08-03. The handler reads the project .env off disk and was
+     * already careful about credentials - it masked TINA4_DATABASE_PASSWORD to
+     * "***" - and then returned the URL raw, which is where a password
+     * actually lives. So a GET on the dev server disclosed
+     * postgres://user:REALPASSWORD@host/db in full.
+     *
+     * This is the THIRD endpoint with this exact shape: /__dev/api/status and
+     * /__dev/api/system were fixed the day before and this one was missed,
+     * because the fix chased the two endpoints that were reported rather than
+     * the pattern. Hence a test that names the pattern, not the endpoint.
+     *
+     * Real .env on disk in a temp directory - the handler reads the file, so
+     * the file is the dependency and there is nothing to mock.
+     */
+    public function testTheDevConnectionsEndpointRedactsTheDatabaseUrlFromDotEnv(): void
+    {
+        $dir = sys_get_temp_dir() . '/tina4_conn_' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents(
+            $dir . '/.env',
+            "TINA4_DATABASE_URL=postgres://appuser:" . self::SENTINEL_PLAIN . "@db.internal:5432/appdb\n"
+            . "TINA4_DATABASE_USERNAME=appuser\n"
+            . "TINA4_DATABASE_PASSWORD=" . self::SENTINEL_PLAIN . "\n"
+        );
+
+        $cwd = getcwd();
+        chdir($dir);
+        try {
+            Router::clear();
+            DevAdmin::register();
+
+            $callback = null;
+            foreach (Router::getRoutes() as $route) {
+                if ($route['pattern'] === '/__dev/api/connections' && $route['method'] === 'GET') {
+                    $callback = $route['callback'];
+                    break;
+                }
+            }
+            $this->assertNotNull($callback, '/__dev/api/connections should be registered');
+
+            $result = $callback(Request::create('GET', '/__dev/api/connections'), new Response(true));
+            $body = (string) $result->getBody();
+            $payload = json_decode($body, true);
+
+            // NEGATIVE - the secret is gone from the WHOLE payload, in any field.
+            $this->assertStringNotContainsString('s3ntinel', $body);
+            $this->assertStringNotContainsString('Pa55', $body);
+
+            // POSITIVE - and it is still a usable answer, not a blanked one.
+            $this->assertStringContainsString('postgres://', $payload['url']);
+            $this->assertStringContainsString('db.internal', $payload['url']);
+            $this->assertStringContainsString('appdb', $payload['url']);
+            $this->assertStringContainsString('***', $payload['url']);
+            $this->assertSame('appuser', $payload['username']);
+        } finally {
+            chdir($cwd);
+            @unlink($dir . '/.env');
+            @rmdir($dir);
+        }
+    }
 }
