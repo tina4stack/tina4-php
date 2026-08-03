@@ -56,6 +56,39 @@ This file is deliberately NOT a copy of those notes. Duplicating them is exactly
 changelog rots into claiming a version that was never cut, so this file records only
 UNRELEASED work. When a version ships, its notes go to the release notes above.
 
+### Fixed (array queries diverged from MongoDB, ADR-0025 clause 4)
+
+- A query against an ARRAY field now behaves the way MongoDB behaves. The rule is
+  one sentence: a condition on an array-valued field matches when ANY ELEMENT
+  matches it (or the whole array equals the operand), and a negation matches when
+  NO element does. Implemented over SQLite's `json_each`.
+
+  WHY: MEASURED 2026-08-03 against a real MongoDB with an 18-case matrix. EIGHT
+  behaviours diverged IDENTICALLY in all four frameworks, which is the signature
+  of a contract nobody had written down:
+
+      tags = "x" against ["x","y"]      mongo 1, fallback 0   (containment)
+      tags $in ["x"]                    mongo 1, fallback 0
+      nums = 1 against [1,2,3]          mongo 1, fallback 0
+      nums $lt 2 against [1,2,3]        mongo 1, fallback 0
+      tags $regex "^x$"                 mongo 1, fallback 0
+      tags $nin ["x"]                   mongo 0, fallback 1   <- FALSE POSITIVE
+      tags $ne "x"                      mongo 0, fallback 1   <- FALSE POSITIVE
+      nums $gt 9 against [1,2,3]        mongo 0, fallback 1   <- FALSE POSITIVE
+
+  The three false positives are the worst of it: the fallback returned documents
+  Mongo EXCLUDES. `nums $gt 9` matched [1,2,3] because json_extract of an array
+  returns its JSON TEXT and SQLite sorts any text above any number - a wrong
+  answer, not a missing feature.
+
+  Also fixed in the same pass: an object field is no longer matched by one of its
+  values, and IS matched by the whole object.
+
+  Pinned by `tests/DocStoreSubstitutabilityTest.php`, which runs a 20-case matrix against BOTH providers and
+  asserts they return the SAME counts - not a hard-coded number, so the test
+  cannot drift towards whatever the fallback happens to do. Mutation-proved by
+  removing the array branch from equality.
+
 ## Unreleased
 
 ### Breaking: the rate limiter keys on the socket peer, not X-Forwarded-For

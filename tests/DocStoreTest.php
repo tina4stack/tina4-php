@@ -182,7 +182,19 @@ class DocStoreTest extends TestCase
         [$where, $params] = DocStoreCodec::compileFilter(['customer_id' => ['$in' => [1, 2]]]);
         $this->assertStringContainsString('json_extract(doc', $where);
         $this->assertStringContainsString('IN (?,?)', $where);
-        $this->assertSame([1, 2], $params);
+        // The operands are bound ONCE PER BRANCH - the scalar-field branch and
+        // the array-element branch each carry their own placeholders. This
+        // doubled when Mongo's array rule landed; the intent the test protects
+        // is that the filter is pushed into SQL, never scanned in memory.
+        $this->assertSame([1, 2, 1, 2], $params);
+    }
+
+    /** The array rule is pushed down too, not applied after the fact. */
+    public function testPushdownCoversArrayElements(): void
+    {
+        [$where, $params] = DocStoreCodec::compileFilter(['tags' => 'x']);
+        $this->assertStringContainsString('json_each(doc', $where);
+        $this->assertSame(['x', 'x'], $params);
     }
 
     // -- cursor: sort / limit / skip / projection --------------------------

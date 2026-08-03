@@ -283,6 +283,76 @@ class DocStoreCodec
         return "json_type(doc, '" . self::path($field) . "')";
     }
 
+    /** A rowset over the field: one row per element of an array, one for a scalar. */
+    public static function each(string $field): string
+    {
+        return "json_each(doc, '" . self::path($field) . "')";
+    }
+
+    /**
+     * True when the field is an ARRAY and any element satisfies $condition.
+     *
+     * MongoDB's rule for an array-valued field is that a condition matches when
+     * ANY ELEMENT matches it. json_each yields one row per element, so EXISTS is
+     * the direct translation.
+     *
+     * The `= 'array'` guard is load-bearing: json_each over an OBJECT iterates
+     * its VALUES, and Mongo never matches an object field against one of its
+     * values - ['obj' => 'x'] must NOT match {"obj":{"city":"x"}}.
+     *
+     * @param string $field     The document field.
+     * @param string $condition SQL predicate over the json_each `value` column.
+     * @return string The SQL fragment.
+     */
+    public static function anyElement(string $field, string $condition): string
+    {
+        return '(' . self::jsonType($field) . " = 'array' AND EXISTS (SELECT 1 FROM "
+            . self::each($field) . " WHERE $condition))";
+    }
+
+    /**
+     * Compile `field == operand` under Mongo's array rule.
+     *
+     * @param string $field   The document field.
+     * @param mixed  $operand The value to compare against.
+     * @return array{0: string, 1: array} SQL fragment and its bound parameters.
+     */
+    public static function equality(string $field, mixed $operand): array
+    {
+        $ex = self::extract($field);
+        if ($operand === null) {
+            return ["$ex IS NULL", []];
+        }
+        if (is_array($operand)) {
+            // An array or object operand compares against the WHOLE value,
+            // never element-wise: ['tags' => ['x','y']] is exact-array equality.
+            return ["$ex = ?", [self::bind($operand)]];
+        }
+
+        return ["($ex = ? OR " . self::anyElement($field, 'value = ?') . ')',
+            [self::bind($operand), self::bind($operand)]];
+    }
+
+    /**
+     * Compile `field OP operand` under Mongo's array rule.
+     *
+     * The `<> 'array'` guard on the scalar branch removes a measured FALSE
+     * POSITIVE: json_extract of an array returns its JSON TEXT, and SQLite sorts
+     * any text above any number, so ['nums' => ['$gt' => 9]] matched [1,2,3].
+     *
+     * @param string $field   The document field.
+     * @param string $sqlOp   The SQL comparison operator.
+     * @param mixed  $operand The value to compare against.
+     * @return array{0: string, 1: array} SQL fragment and its bound parameters.
+     */
+    public static function compare(string $field, string $sqlOp, mixed $operand): array
+    {
+        $ex = self::extract($field);
+        return ['((' . self::jsonType($field) . " <> 'array' AND $ex $sqlOp ?) OR "
+            . self::anyElement($field, "value $sqlOp ?") . ')',
+            [self::bind($operand), self::bind($operand)]];
+    }
+
     /**
      * Compile a Mongo-style filter array into [sqlFragment, params].
      *
@@ -321,13 +391,11 @@ class DocStoreCodec
                     array_push($params, ...$p);
                 }
             } else {
-                // equality
-                if ($value === null) {
-                    $clauses[] = self::extract($key) . ' IS NULL';
-                } else {
-                    $clauses[] = self::extract($key) . ' = ?';
-                    $params[] = self::bind($value);
-                }
+                // equality - the same helper $eq uses, so the array rule applies
+                // whether the filter reads ['tags' => 'x'] or ['tags' => ['$eq' => 'x']]
+                [$frag, $p] = self::equality($key, $value);
+                $clauses[] = $frag;
+                array_push($params, ...$p);
             }
         }
 
@@ -357,19 +425,19 @@ class DocStoreCodec
     {
         $ex = self::extract($field);
         if (isset(self::COMPARATORS[$op])) {
-            return ["$ex " . self::COMPARATORS[$op] . ' ?', [self::bind($operand)]];
+            return self::compare($field, self::COMPARATORS[$op], $operand);
         }
         if ($op === '$eq') {
-            if ($operand === null) {
-                return ["$ex IS NULL", []];
-            }
-            return ["$ex = ?", [self::bind($operand)]];
+            return self::equality($field, $operand);
         }
         if ($op === '$ne') {
             if ($operand === null) {
                 return ["$ex IS NOT NULL", []];
             }
-            return ["($ex <> ? OR $ex IS NULL)", [self::bind($operand)]];
+            [$sql, $p] = self::equality($field, $operand);
+            // A MISSING field satisfies $ne in Mongo, and SQL's NOT(NULL) is NULL
+            // rather than true - so the IS NULL arm is required, not decoration.
+            return ["(NOT ($sql) OR $ex IS NULL)", $p];
         }
         if ($op === '$in') {
             $items = array_values((array)$operand);
@@ -377,7 +445,10 @@ class DocStoreCodec
                 return ['0', []];
             }
             $placeholders = implode(',', array_fill(0, count($items), '?'));
-            return ["$ex IN ($placeholders)", array_map([self::class, 'bind'], $items)];
+            $bound = array_map([self::class, 'bind'], $items);
+            return ["($ex IN ($placeholders) OR "
+                . self::anyElement($field, "value IN ($placeholders)") . ')',
+                array_merge($bound, $bound)];
         }
         if ($op === '$nin') {
             $items = array_values((array)$operand);
@@ -385,7 +456,10 @@ class DocStoreCodec
                 return ['1', []];
             }
             $placeholders = implode(',', array_fill(0, count($items), '?'));
-            return ["($ex NOT IN ($placeholders) OR $ex IS NULL)", array_map([self::class, 'bind'], $items)];
+            $bound = array_map([self::class, 'bind'], $items);
+            return ["(NOT ($ex IN ($placeholders) OR "
+                . self::anyElement($field, "value IN ($placeholders)") . ") OR $ex IS NULL)",
+                array_merge($bound, $bound)];
         }
         if ($op === '$exists') {
             $type = self::jsonType($field);
@@ -396,7 +470,9 @@ class DocStoreCodec
             if (is_array($operand)) {
                 $pattern = $operand['$regex'] ?? '';
             }
-            return ["$ex REGEXP ?", [(string)$pattern]];
+            return ['((' . self::jsonType($field) . " <> 'array' AND $ex REGEXP ?) OR "
+                . self::anyElement($field, 'value REGEXP ?') . ')',
+                [(string)$pattern, (string)$pattern]];
         }
         throw new \InvalidArgumentException("DocStore: unsupported query operator '$op'");
     }

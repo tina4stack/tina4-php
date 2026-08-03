@@ -324,37 +324,76 @@ final class DocStoreSubstitutabilityTest extends TestCase
     /**
      * docstore_contract.json :: query-semantics-match-on-both-providers
      *
-     * OPEN DEFECT, measured and reported rather than asserted.
+     * ADR-0025 clause 4, closed 2026-08-03.
      *
-     * MEASURED 2026-08-03 in Python against a real MongoDB, and reproduced here:
-     * NO query against an array field matches anything on the SQLite fallback -
-     * not containment, not exact equality, not $in - while Mongo answers all of
-     * them. An array field on the fallback is effectively write-only.
+     * MEASURED against a real MongoDB: EIGHT array-query behaviours diverged
+     * IDENTICALLY in all four frameworks - the signature of a contract nobody
+     * had written down. Three were FALSE POSITIVES, where the fallback returned
+     * a document Mongo excludes: ['nums' => ['$gt' => 9]] matched [1,2,3],
+     * because json_extract of an array returns its JSON TEXT and SQLite sorts
+     * any text above any number.
+     *
+     * MongoDB's rule is one sentence: a condition on an array-valued field
+     * matches when ANY ELEMENT matches it (or the whole array equals the
+     * operand), and a negation matches when NO element does.
+     *
+     * What is asserted is not "the fallback returns N" - it is that BOTH
+     * PROVIDERS RETURN THE SAME THING. That is ADR-0024 stated directly, and it
+     * cannot drift towards a hard-coded expectation.
      */
-    public function testArrayQueriesAreReportedForBothProviders(): void
+    public function testArrayQueriesMatchIdenticallyOnBothProviders(): void
     {
-        $rows = [];
-        foreach (['fallback' => null, 'mongo' => '__MONGO__'] as $label => $marker) {
-            if ($marker === '__MONGO__' && !self::mongoReachable()) {
-                $rows[$label] = 'skipped (no mongo)';
-                continue;
-            }
-            [$collection] = $this->collectionFor($marker === '__MONGO__' ? self::mongoUri() : null);
-            $collection->insertOne(['name' => 'arr', 'tags' => ['x', 'y']]);
+        $uri = $this->resolve('__MONGO__');
 
-            $rows[$label] = [
-                'containment' => count(iterator_to_array($collection->find(['tags' => 'x']))),
-                'exact' => count(iterator_to_array($collection->find(['tags' => ['x', 'y']]))),
-            ];
-            // The control must hold, or the probe proves nothing.
-            $this->assertNotNull(
-                $collection->findOne(['name' => 'arr']),
-                "{$label}: the control document is unfindable - the fixture itself is wrong"
-            );
+        $doc = ['name' => 'w', 'tags' => ['x', 'y'], 'nums' => [1, 2, 3],
+            'empty' => [], 'scalar' => 'x', 'obj' => ['city' => 'x']];
+        $cases = [
+            'equality containment' => ['tags' => 'x'],
+            'equality no match' => ['tags' => 'z'],
+            'exact array, right order' => ['tags' => ['x', 'y']],
+            'exact array, wrong order' => ['tags' => ['y', 'x']],
+            '$in hits one element' => ['tags' => ['$in' => ['x', 'q']]],
+            '$in hits nothing' => ['tags' => ['$in' => ['q']]],
+            '$nin excludes a present element' => ['tags' => ['$nin' => ['x']]],
+            '$nin with an absent element' => ['tags' => ['$nin' => ['q']]],
+            '$ne a present element' => ['tags' => ['$ne' => 'x']],
+            '$ne an absent element' => ['tags' => ['$ne' => 'q']],
+            'numeric containment' => ['nums' => 1],
+            '$gt any element' => ['nums' => ['$gt' => 2]],
+            '$gt no element' => ['nums' => ['$gt' => 9]],
+            '$lt any element' => ['nums' => ['$lt' => 2]],
+            '$exists on an array' => ['tags' => ['$exists' => true]],
+            'empty array exact' => ['empty' => []],
+            '$regex on an array element' => ['tags' => ['$regex' => '^x$']],
+            'scalar still works' => ['scalar' => 'x'],
+            'object field is not matched by its value' => ['obj' => 'x'],
+            'object field matches the whole object' => ['obj' => ['city' => 'x']],
+        ];
+
+        $results = [];
+        foreach (['fallback' => null, 'mongo' => $uri] as $provider => $providerUri) {
+            [$collection] = $this->collectionFor($providerUri);
+            $collection->deleteMany([]);
+            $collection->insertOne($doc);
+            foreach ($cases as $name => $query) {
+                $results[$provider][$name] = count(iterator_to_array($collection->find($query)));
+            }
             $collection->deleteMany([]);
         }
 
-        fwrite(STDERR, "\n    array queries: " . json_encode($rows) . "\n");
+        $mismatched = [];
+        foreach (array_keys($cases) as $name) {
+            if ($results['fallback'][$name] !== $results['mongo'][$name]) {
+                $mismatched[$name] = [$results['fallback'][$name], $results['mongo'][$name]];
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $mismatched,
+            'array-query semantics diverge between the providers (fallback, mongo): '
+                . json_encode($mismatched)
+        );
     }
 
     // ── ADR-0025 / client-lifecycle-is-bounded (ASSERTED) ───────────────────
