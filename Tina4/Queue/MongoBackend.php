@@ -441,6 +441,49 @@ class MongoBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
+    public function clear(string $topic): int
+    {
+        $this->ensureConnected();
+        $result = $this->collection->deleteMany(['topic' => $topic, 'status' => 'pending']);
+        return $result->getDeletedCount();
+    }
+
+    /** {@inheritDoc} */
+    public function purge(string $status, string $topic, ?int $maxRetries = null): int
+    {
+        $this->ensureConnected();
+        $result = $this->collection->deleteMany(['topic' => $topic, 'status' => $status]);
+        return $result->getDeletedCount();
+    }
+
+    /** {@inheritDoc} */
+    public function popById(string $topic, string $id): ?array
+    {
+        $this->ensureConnected();
+        $now = new \MongoDB\BSON\UTCDateTime();
+
+        // Claim THIS id the same way dequeue() claims the head: flip it to
+        // processing and stamp the reservation, so a crashed consumer's job is
+        // still reclaimed by reclaimExpired().
+        $doc = $this->collection->findOneAndUpdate(
+            ['_id' => $id, 'topic' => $topic, 'status' => 'pending'],
+            ['$set' => [
+                'status' => 'processing',
+                'reserved_at' => $now,
+                'available_at' => $this->futureDate($this->visibilityTimeout),
+                'updated_at' => $now,
+            ]],
+            ['returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER]
+        );
+
+        if ($doc === null) {
+            return null;
+        }
+
+        return $this->docToJob((array)$doc);
+    }
+
+    /** {@inheritDoc} */
     public function close(): void
     {
         $this->client = null;

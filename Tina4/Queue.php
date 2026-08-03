@@ -296,6 +296,13 @@ class Queue
      */
     public function clear(): int
     {
+        // Route to the CONFIGURED backend. This used to call the local file
+        // store unconditionally, so clearing a mongodb-backed queue emptied a
+        // local directory and left every real job in place.
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->clear($this->topic);
+        }
+
         $count = $this->liteBackend->count($this->topic, 'pending');
         $this->liteBackend->clear($this->topic);
         return $count;
@@ -443,6 +450,11 @@ class Queue
      */
     public function purge(string $status, ?int $maxRetries = null): int
     {
+        // Route to the CONFIGURED backend, same reason as clear() above.
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->purge($status, $this->topic, $maxRetries ?? $this->maxRetries);
+        }
+
         return $this->liteBackend->purge($status, $this->topic, $maxRetries ?? $this->maxRetries);
     }
 
@@ -582,8 +594,10 @@ class Queue
     public function popById(string $id): ?array
     {
         if ($this->externalBackend !== null) {
-            // External backends don't support ID-based pop natively
-            return null;
+            // Was `return null` - a SILENT no-op indistinguishable from "no such
+            // job". mongodb can claim one document by _id; the brokers cannot
+            // address a single message at all and refuse by name.
+            return $this->externalBackend->popById($this->topic, $id);
         }
 
         return $this->liteBackend->popById($this->topic, $id);

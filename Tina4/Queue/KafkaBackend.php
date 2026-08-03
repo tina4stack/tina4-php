@@ -305,6 +305,42 @@ class KafkaBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
+    public function clear(string $topic): int
+    {
+        throw new \RuntimeException(
+            'The kafka queue backend cannot perform clear(): '
+                . 'Kafka has no way to address ONE record by id and no notion of job '
+                . 'status: a log is read in offset order and records are removed only by '
+                . 'retention. Acting on the local file store instead would silently operate '
+                . 'on the wrong data. Use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function purge(string $status, string $topic, ?int $maxRetries = null): int
+    {
+        throw new \RuntimeException(
+            'The kafka queue backend cannot perform purge(): '
+                . 'Kafka has no way to address ONE record by id and no notion of job '
+                . 'status: a log is read in offset order and records are removed only by '
+                . 'retention. Acting on the local file store instead would silently operate '
+                . 'on the wrong data. Use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function popById(string $topic, string $id): ?array
+    {
+        throw new \RuntimeException(
+            'The kafka queue backend cannot perform popById(): '
+                . 'Kafka has no way to address ONE record by id and no notion of job '
+                . 'status: a log is read in offset order and records are removed only by '
+                . 'retention. Acting on the local file store instead would silently operate '
+                . 'on the wrong data. Use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
     public function close(): void
     {
         if ($this->socket) {

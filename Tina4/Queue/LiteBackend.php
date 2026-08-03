@@ -486,17 +486,21 @@ class LiteBackend implements QueueBackend
      * Clear all pending jobs from a topic queue.
      *
      * @param string $topic The queue/topic name
+     * @return int How many jobs were removed
      */
-    public function clear(string $topic): void
+    public function clear(string $topic): int
     {
+        $removed = 0;
         foreach ([$this->queuePath($topic), $this->reservedPath($topic)] as $scanDir) {
             if (!is_dir($scanDir)) {
                 continue;
             }
             foreach (glob($scanDir . '/*.queue-data') as $file) {
                 unlink($file);
+                $removed++;
             }
         }
+        return $removed;
     }
 
     /**

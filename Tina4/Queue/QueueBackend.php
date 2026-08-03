@@ -97,6 +97,41 @@ interface QueueBackend
     public function retryFailed(string $topic, ?int $maxRetries = null): int;
 
     /**
+     * Remove every pending job for a topic. Returns how many were removed.
+     *
+     * Declared here because Queue::clear() must act on the CONFIGURED backend.
+     * It used to call the local file store unconditionally, so clearing a
+     * mongodb-backed queue silently emptied a local directory and left every
+     * real job in place.
+     *
+     * @param string $topic The queue/topic name
+     * @return int
+     * @throws \RuntimeException When the backend cannot perform the operation
+     */
+    public function clear(string $topic): int;
+
+    /**
+     * Remove every job in a given status. Returns how many were removed.
+     *
+     * @param string $topic The queue/topic name
+     * @param string $status Job status to remove (pending/completed/failed)
+     * @param int|null $maxRetries Attempt limit; null uses the queue's own
+     * @return int
+     * @throws \RuntimeException When the backend cannot perform the operation
+     */
+    public function purge(string $status, string $topic, ?int $maxRetries = null): int;
+
+    /**
+     * Claim one specific job by id. Returns null when no such job is pending.
+     *
+     * @param string $topic The queue/topic name
+     * @param string $id The job id
+     * @return array<string, mixed>|null
+     * @throws \RuntimeException When the backend cannot perform the operation
+     */
+    public function popById(string $topic, string $id): ?array;
+
+    /**
      * Close the connection and clean up resources.
      */
     public function close(): void;

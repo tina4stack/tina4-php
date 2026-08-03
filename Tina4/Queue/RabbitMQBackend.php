@@ -223,6 +223,42 @@ class RabbitMQBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
+    public function clear(string $topic): int
+    {
+        throw new \RuntimeException(
+            'The rabbitmq queue backend cannot perform clear(): '
+                . 'RabbitMQ has no way to address ONE message by id (basic.get pops the '
+                . 'head of the queue) and no notion of job status to purge by. Acting on '
+                . 'the local file store instead would silently operate on the wrong data. '
+                . 'Use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function purge(string $status, string $topic, ?int $maxRetries = null): int
+    {
+        throw new \RuntimeException(
+            'The rabbitmq queue backend cannot perform purge(): '
+                . 'RabbitMQ has no way to address ONE message by id (basic.get pops the '
+                . 'head of the queue) and no notion of job status to purge by. Acting on '
+                . 'the local file store instead would silently operate on the wrong data. '
+                . 'Use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function popById(string $topic, string $id): ?array
+    {
+        throw new \RuntimeException(
+            'The rabbitmq queue backend cannot perform popById(): '
+                . 'RabbitMQ has no way to address ONE message by id (basic.get pops the '
+                . 'head of the queue) and no notion of job status to purge by. Acting on '
+                . 'the local file store instead would silently operate on the wrong data. '
+                . 'Use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
     public function close(): void
     {
         if ($this->socket) {
