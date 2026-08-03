@@ -18,7 +18,7 @@ namespace Tina4;
  *     use Tina4\ObjectId;
  *
  *     $orders = getCollection("orders");          // SqliteCollection when no Mongo configured
- *     $oid = $orders->insertOne(["customer_id" => 1, "total" => 9.99])->insertedId;
+ *     $oid = $orders->insertOne(["customer_id" => 1, "total" => 9.99])->getInsertedId();
  *     foreach ($orders->find(["customer_id" => ['$in' => [1, 2]]])->sort("created_at", -1)->limit(10) as $o) {
  *         // ...
  *     }
@@ -558,11 +558,26 @@ class DocStoreCodec
 
 /**
  * Result of an insertOne call.
+ *
+ * The accessors are METHODS, not public properties, because that is what
+ * MongoDB\InsertOneResult exposes and ADR-0025 makes the driver the shape the
+ * fallback imitates. The properties are private so there is exactly one
+ * spelling that works on both providers.
  */
 class InsertOneResult
 {
-    public function __construct(public readonly mixed $insertedId)
+    public function __construct(private readonly mixed $insertedId)
     {
+    }
+
+    /**
+     * Returns the _id of the inserted document.
+     *
+     * @return mixed The generated or supplied document id.
+     */
+    public function getInsertedId(): mixed
+    {
+        return $this->insertedId;
     }
 }
 
@@ -572,8 +587,18 @@ class InsertOneResult
 class InsertManyResult
 {
     /** @param array $insertedIds */
-    public function __construct(public readonly array $insertedIds)
+    public function __construct(private readonly array $insertedIds)
     {
+    }
+
+    /**
+     * Returns the _ids of the inserted documents, in insertion order.
+     *
+     * @return array The generated or supplied document ids.
+     */
+    public function getInsertedIds(): array
+    {
+        return $this->insertedIds;
     }
 }
 
@@ -583,10 +608,40 @@ class InsertManyResult
 class UpdateResult
 {
     public function __construct(
-        public readonly int $matchedCount,
-        public readonly int $modifiedCount,
-        public readonly mixed $upsertedId = null
+        private readonly int $matchedCount,
+        private readonly int $modifiedCount,
+        private readonly mixed $upsertedId = null
     ) {
+    }
+
+    /**
+     * Returns how many documents the filter matched.
+     *
+     * @return int The matched count.
+     */
+    public function getMatchedCount(): int
+    {
+        return $this->matchedCount;
+    }
+
+    /**
+     * Returns how many documents were actually changed.
+     *
+     * @return int The modified count, which is <= the matched count.
+     */
+    public function getModifiedCount(): int
+    {
+        return $this->modifiedCount;
+    }
+
+    /**
+     * Returns the _id of the document created by an upsert.
+     *
+     * @return mixed The upserted id, or null when no document was upserted.
+     */
+    public function getUpsertedId(): mixed
+    {
+        return $this->upsertedId;
     }
 }
 
@@ -595,8 +650,18 @@ class UpdateResult
  */
 class DeleteResult
 {
-    public function __construct(public readonly int $deletedCount)
+    public function __construct(private readonly int $deletedCount)
     {
+    }
+
+    /**
+     * Returns how many documents were removed.
+     *
+     * @return int The deleted count.
+     */
+    public function getDeletedCount(): int
+    {
+        return $this->deletedCount;
     }
 }
 

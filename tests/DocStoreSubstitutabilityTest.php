@@ -245,57 +245,81 @@ final class DocStoreSubstitutabilityTest extends TestCase
         $collection->deleteMany([]);
     }
 
-    // ── OPEN DEFECTS: measured, reported, deliberately not asserted ──────────
+    // ── ADR-0025: the fallback imitates the driver (ASSERTED) ───────────────
 
     /**
      * docstore_contract.json :: the-call-site-surface-is-identical
      *
-     * OPEN DEFECT, measured 2026-08-03 and reported rather than asserted.
+     * ADR-0025, closed 2026-08-03. This was an OPEN DEFECT reported rather than
+     * asserted; it is now a gate.
      *
-     * `$result->insertedId` is the accessor the framework's own documentation
-     * uses. MEASURED against a real MongoDB it is NULL, because
-     * MongoDB\InsertOneResult exposes NO public properties - the real accessor
-     * is getInsertedId(). So the documented example
+     * The defect: the insert-result accessors were MUTUALLY EXCLUSIVE. The
+     * fallback exposed a public `->insertedId` property and no getter; a real
+     * MongoDB\InsertOneResult exposes getInsertedId() and NO public properties
+     * at all. So the framework's own documented example
      *
      *     $res = $orders->insertOne([...]);
      *     $orders->findOne(['_id' => $res->insertedId]);
      *
-     * becomes findOne(['_id' => null]) the moment TINA4_MONGO_URI is set, and
-     * the developer simply sees "document not found". It works on the fallback,
-     * where the framework's own result object does expose the property.
+     * silently became findOne(['_id' => null]) the moment TINA4_MONGO_URI was
+     * set, and the developer just saw "document not found". There was NO
+     * spelling of the insert that worked on both providers.
      *
-     * Fixing it is a BREAKING API change - the fallback must imitate the
-     * DRIVER (getInsertedId()), because the driver is the half that cannot be
-     * changed - so it needs a decision rather than a quiet edit. Reported here
-     * so the file stays a live gate for what does hold.
+     * ADR-0025 settles it: the fallback imitates the DRIVER, because the driver
+     * is the half that cannot be changed. This test pins the outcome - ONE
+     * spelling, working identically on both.
+     *
+     * @dataProvider providerCases
      */
-    public function testTheInsertResultAccessorIsReportedForBothProviders(): void
+    public function testTheDriverSpellingWorksOnBothProviders(?string $marker): void
     {
-        $rows = [];
-        foreach (['fallback' => null, 'mongo' => '__MONGO__'] as $label => $marker) {
-            if ($marker === '__MONGO__' && !self::mongoReachable()) {
-                $rows[$label] = 'skipped (no mongo)';
-                continue;
-            }
-            [$collection] = $this->collectionFor($marker === '__MONGO__' ? self::mongoUri() : null);
-            $result = $collection->insertOne(['probe' => 'accessor']);
+        $uri = $this->resolve($marker);
+        [$collection] = $this->collectionFor($uri);
 
-            $property = $result->insertedId ?? null;
-            $getter = method_exists($result, 'getInsertedId') ? $result->getInsertedId() : null;
-            $rows[$label] = sprintf(
-                '->insertedId=%s  ->getInsertedId()=%s',
-                $property === null ? 'NULL' : 'set',
-                $getter === null ? 'absent' : 'set'
-            );
-            $collection->deleteMany([]);
-        }
+        $result = $collection->insertOne(['probe' => 'accessor']);
 
-        fwrite(STDERR, "\n    insert-result accessor: " . json_encode($rows) . "\n");
+        // POSITIVE: the driver's spelling round-trips on whichever provider is
+        // in play - the whole point of the swap.
+        $id = $result->getInsertedId();
+        $this->assertNotNull($id, 'getInsertedId() must return the new document id');
+        $found = $collection->findOne(['_id' => $id]);
+        $this->assertNotNull($found, 'the id from getInsertedId() must find the document back');
+        $this->assertSame('accessor', $found['probe']);
 
-        // The one thing asserted: SOME accessor works on each provider, so the
-        // divergence is specifically the SPELLING and not a broken insert.
-        $this->assertNotEmpty($rows, 'the probe must run on at least one provider');
+        $collection->deleteMany([]);
     }
+
+    /**
+     * docstore_contract.json :: the-call-site-surface-is-identical
+     *
+     * The NEGATIVE half of the rule above, and the one that keeps it honest.
+     *
+     * ADR-0025 corollary 1 is "no fallback-only public method": a second
+     * spelling that works ONLY on the fallback is exactly how the original
+     * defect shipped, because it let the documentation settle on an accessor
+     * the real driver had never heard of. A real MongoDB result object exposes
+     * no public properties, so neither may ours.
+     *
+     * @dataProvider providerCases
+     */
+    public function testTheFallbackOnlySpellingIsGone(?string $marker): void
+    {
+        $uri = $this->resolve($marker);
+        [$collection] = $this->collectionFor($uri);
+
+        $result = $collection->insertOne(['probe' => 'accessor']);
+
+        $public = (new \ReflectionObject($result))->getProperties(\ReflectionProperty::IS_PUBLIC);
+        $this->assertSame(
+            [],
+            array_map(static fn ($p) => $p->getName(), $public),
+            'an insert result must expose NO public properties, on either provider'
+        );
+
+        $collection->deleteMany([]);
+    }
+
+    // ── OPEN DEFECTS: measured, reported, deliberately not asserted ──────────
 
     /**
      * docstore_contract.json :: query-semantics-match-on-both-providers

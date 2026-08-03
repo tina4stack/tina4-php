@@ -547,8 +547,8 @@ use Tina4\ObjectId;
 
 $orders = getCollection('orders');
 $res = $orders->insertOne(['customer_id' => 1, 'total' => 9.99, 'status' => 'new']);
-$orders->findOne(['_id' => $res->insertedId]);
-$orders->updateOne(['_id' => $res->insertedId], ['$set' => ['status' => 'shipped']]);
+$orders->findOne(['_id' => $res->getInsertedId()]);
+$orders->updateOne(['_id' => $res->getInsertedId()], ['$set' => ['status' => 'shipped']]);
 foreach ($orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10) as $doc) {
     // ...
 }

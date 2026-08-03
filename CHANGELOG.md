@@ -1,3 +1,35 @@
+### Breaking (DocStore result accessors, ADR-0025)
+
+- The DocStore result objects (`InsertOneResult`, `InsertManyResult`,
+  `UpdateResult`, `DeleteResult`) now expose the MongoDB driver's GETTERS
+  instead of public properties. The properties are private.
+
+      $result->insertedId      ->  $result->getInsertedId()
+      $result->insertedIds     ->  $result->getInsertedIds()
+      $result->matchedCount    ->  $result->getMatchedCount()
+      $result->modifiedCount   ->  $result->getModifiedCount()
+      $result->upsertedId      ->  $result->getUpsertedId()
+      $result->deletedCount    ->  $result->getDeletedCount()
+
+  WHY: the two halves of an advertised swap exposed DISJOINT APIs. The SQLite
+  fallback offered `->insertedId` and no getter; a real `MongoDB\InsertOneResult`
+  offers `getInsertedId()` and NO public properties at all. There was no
+  spelling of the insert that worked on both providers, so the framework's own
+  documented example
+
+      $res = $orders->insertOne([...]);
+      $orders->findOne(['_id' => $res->insertedId]);
+
+  became `findOne(['_id' => null])` the moment `TINA4_MONGO_URI` was set, and
+  the developer just saw "document not found" - SILENTLY, with no error at any
+  point. Measured 2026-08-03 against a real MongoDB.
+
+  ADR-0025 settles the general rule: the fallback imitates the driver, because
+  the driver is the half that cannot be changed. Pinned by
+  `tests/DocStoreSubstitutabilityTest.php`, which runs every case against BOTH
+  providers, with a negative case asserting the fallback-only property spelling
+  stays gone.
+
 ### Fixed (session write, PHP-only defect)
 
 - `Session::saveToFile()` discarded the return value of `file_put_contents()`.

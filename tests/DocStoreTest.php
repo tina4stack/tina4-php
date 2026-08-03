@@ -86,13 +86,13 @@ class DocStoreTest extends TestCase
     public function testInsertOneReturnsObjectId(): void
     {
         $res = $this->orders->insertOne(['customer_id' => 1, 'total' => 9.99]);
-        $this->assertInstanceOf(ObjectId::class, $res->insertedId);
-        $got = $this->orders->findOne(['_id' => $res->insertedId]);
+        $this->assertInstanceOf(ObjectId::class, $res->getInsertedId());
+        $got = $this->orders->findOne(['_id' => $res->getInsertedId()]);
         $this->assertSame(1, $got['customer_id']);
         $this->assertSame(9.99, $got['total']);
         // _id rehydrated to ObjectId
         $this->assertInstanceOf(ObjectId::class, $got['_id']);
-        $this->assertTrue($got['_id']->equals($res->insertedId));
+        $this->assertTrue($got['_id']->equals($res->getInsertedId()));
     }
 
     public function testInsertMany(): void
@@ -101,7 +101,7 @@ class DocStoreTest extends TestCase
         for ($i = 0; $i < 5; $i++) {
             $docs[] = ['n' => $i];
         }
-        $ids = $this->orders->insertMany($docs)->insertedIds;
+        $ids = $this->orders->insertMany($docs)->getInsertedIds();
         $this->assertCount(5, $ids);
         $this->assertSame(5, $this->orders->countDocuments([]));
     }
@@ -248,7 +248,7 @@ class DocStoreTest extends TestCase
 
     public function testSetIncUnset(): void
     {
-        $oid = $this->orders->insertOne(['status' => 'new', 'count' => 1, 'tmp' => 'x'])->insertedId;
+        $oid = $this->orders->insertOne(['status' => 'new', 'count' => 1, 'tmp' => 'x'])->getInsertedId();
         $this->orders->updateOne(['_id' => $oid], ['$set' => ['status' => 'shipped']]);
         $this->orders->updateOne(['_id' => $oid], ['$inc' => ['count' => 5]]);
         $this->orders->updateOne(['_id' => $oid], ['$unset' => ['tmp' => '']]);
@@ -262,14 +262,14 @@ class DocStoreTest extends TestCase
     {
         $this->orders->insertMany([['s' => 'a'], ['s' => 'a'], ['s' => 'b']]);
         $res = $this->orders->updateMany(['s' => 'a'], ['$set' => ['s' => 'z']]);
-        $this->assertSame(2, $res->matchedCount);
-        $this->assertSame(2, $res->modifiedCount);
+        $this->assertSame(2, $res->getMatchedCount());
+        $this->assertSame(2, $res->getModifiedCount());
         $this->assertSame(2, $this->orders->countDocuments(['s' => 'z']));
     }
 
     public function testReplaceOneKeepsId(): void
     {
-        $oid = $this->orders->insertOne(['a' => 1])->insertedId;
+        $oid = $this->orders->insertOne(['a' => 1])->getInsertedId();
         $this->orders->replaceOne(['_id' => $oid], ['b' => 2]);
         $d = $this->orders->findOne(['_id' => $oid]);
         $this->assertSame(2, $d['b']);
@@ -280,13 +280,13 @@ class DocStoreTest extends TestCase
     public function testUpsert(): void
     {
         $res = $this->orders->updateOne(['sku' => 'X1'], ['$set' => ['qty' => 3]], upsert: true);
-        $this->assertNotNull($res->upsertedId);
+        $this->assertNotNull($res->getUpsertedId());
         $this->assertSame(3, $this->orders->findOne(['sku' => 'X1'])['qty']);
     }
 
     public function testNestedSet(): void
     {
-        $oid = $this->orders->insertOne(['a' => ['b' => 1]])->insertedId;
+        $oid = $this->orders->insertOne(['a' => ['b' => 1]])->getInsertedId();
         $this->orders->updateOne(['_id' => $oid], ['$set' => ['a.c' => 2]]);
         $d = $this->orders->findOne(['_id' => $oid]);
         $this->assertSame(['b' => 1, 'c' => 2], $d['a']);
@@ -297,8 +297,8 @@ class DocStoreTest extends TestCase
     public function testDeleteOneAndMany(): void
     {
         $this->orders->insertMany([['s' => 'a'], ['s' => 'a'], ['s' => 'b']]);
-        $this->assertSame(1, $this->orders->deleteOne(['s' => 'a'])->deletedCount);
-        $this->assertSame(1, $this->orders->deleteMany(['s' => 'a'])->deletedCount);
+        $this->assertSame(1, $this->orders->deleteOne(['s' => 'a'])->getDeletedCount());
+        $this->assertSame(1, $this->orders->deleteMany(['s' => 'a'])->getDeletedCount());
         $this->assertSame(1, $this->orders->countDocuments([]));
     }
 
