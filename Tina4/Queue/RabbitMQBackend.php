@@ -100,6 +100,17 @@ class RabbitMQBackend implements QueueBackend
     /** {@inheritDoc} */
     public function enqueue(string $topic, array $message): string
     {
+        if ((int)($message['delay_seconds'] ?? 0) > 0) {
+            throw new \RuntimeException(
+                'The rabbitmq queue backend cannot honour push(delay): RabbitMQ has '
+                . 'no per-message delay in core. The rabbitmq_delayed_message_exchange '
+                . 'plugin is not part of a standard broker, and the TTL + dead-letter '
+                . 'workaround head-of-line blocks (a long-delayed job holds up every '
+                . 'shorter one behind it in the same queue). Use the file or mongodb '
+                . 'backend for delayed jobs, or schedule the push itself.'
+            );
+        }
+
         $this->ensureConnected();
         $this->declareQueue($topic);
 

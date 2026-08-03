@@ -182,6 +182,16 @@ class KafkaBackend implements QueueBackend
     /** {@inheritDoc} */
     public function enqueue(string $topic, array $message): string
     {
+        if ((int)($message['delay_seconds'] ?? 0) > 0) {
+            throw new \RuntimeException(
+                'The kafka queue backend cannot honour push(delay): Kafka has no '
+                . 'per-message delay at all. A consumer reads a partition in offset '
+                . 'order, so a delayed record would stall every record behind it. Use '
+                . 'the file or mongodb backend for delayed jobs, or schedule the push '
+                . 'itself.'
+            );
+        }
+
         $this->ensureConnected();
         $this->ensureTopicMetadata($topic);
 

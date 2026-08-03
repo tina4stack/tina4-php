@@ -138,22 +138,21 @@ class Queue
      */
     public function push(mixed $payload, int $priority = 0, int $delay = 0): string
     {
-        // Delegate to external backend if configured
-        if ($this->externalBackend !== null) {
-            $message = [
-                'id' => $this->generateId(),
-                'payload' => $payload,
-                'topic' => $this->topic,
-            ];
-            return $this->externalBackend->enqueue($this->topic, $message);
-        }
-
+        // ONE message shape for every backend. The external branch used to build
+        // its own, omitting priority and delay_seconds, so both were dropped on
+        // the way to Mongo/RabbitMQ/Kafka and a delayed job fired immediately.
         $message = [
             'id'            => $this->generateId(),
             'payload'       => $payload,
+            'topic'         => $this->topic,
             'priority'      => $priority,
             'delay_seconds' => $delay,
         ];
+
+        if ($this->externalBackend !== null) {
+            return $this->externalBackend->enqueue($this->topic, $message);
+        }
+
         return $this->liteBackend->enqueue($this->topic, $message);
     }
 

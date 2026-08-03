@@ -115,6 +115,11 @@ class MongoBackend implements QueueBackend
         $id = $message['id'] ?? bin2hex(random_bytes(8));
         $message['id'] = $id;
 
+        // A delayed job is simply one stamped available_at in the future —
+        // dequeue() already filters on available_at <= now, so that is the whole
+        // implementation. The delay_seconds key is the same one LiteBackend reads.
+        $delaySeconds = (int)($message['delay_seconds'] ?? 0);
+
         $now = new \MongoDB\BSON\UTCDateTime();
         $document = [
             '_id' => $id,
@@ -122,7 +127,7 @@ class MongoBackend implements QueueBackend
             'status' => 'pending',
             'message' => $message,
             'attempts' => (int)($message['attempts'] ?? 0),
-            'available_at' => $now,
+            'available_at' => $delaySeconds > 0 ? $this->futureDate($delaySeconds) : $now,
             'created_at' => $now,
             'updated_at' => $now,
         ];
