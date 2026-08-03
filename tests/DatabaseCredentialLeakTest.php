@@ -632,4 +632,80 @@ class DatabaseCredentialLeakTest extends TestCase
         );
         $absent->close();
     }
+
+    /**
+     * THE BOUNDARY GUARD: no framework code may serialize or var_export a
+     * DatabaseUrl, because those two DELIBERATELY keep the password.
+     *
+     * MEASURED 2026-08-03 with a sentinel containing a space, a quote and a
+     * backslash: print_r, var_dump, json_encode, __toString and toSafeString
+     * all redact, but var_export() and serialize() still emit the password in
+     * full. That is not an oversight and masking them would be wrong - their
+     * whole contract is a FAITHFUL round trip, and a masked serialize()
+     * unserializes into an object whose password is the literal "***".
+     *
+     * The rule is therefore: DISPLAY redacts, FIDELITY does not. That rule is
+     * only safe while nothing in the framework persists one of these objects -
+     * a DatabaseUrl written into a session file, a cache entry or a queue
+     * payload would put the password on disk. This test is what keeps that
+     * true, so the boundary is enforced rather than merely documented.
+     *
+     * (print_r on an EXCEPTION also leaks, because PHP stores constructor
+     * arguments in the stack trace. Not reachable through Tina4: both
+     * getTrace() consumers - ErrorOverlay.php:67 and DevAdmin.php:3895 - read
+     * only file/line/class/type/function and never touch args. Verified.)
+     */
+    public function testNoFrameworkCodeSerializesOrVarExportsADatabaseUrl(): void
+    {
+        $root = realpath(__DIR__ . '/../Tina4');
+        $this->assertNotFalse($root, 'the framework source directory must exist');
+
+        $offenders = [];
+        $iter = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($iter as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $src = file_get_contents($file->getPathname());
+            if ($src === false) {
+                continue;
+            }
+            foreach (explode("\n", $src) as $n => $line) {
+                if (preg_match('/\b(serialize|var_export)\s*\(/i', $line)
+                    && preg_match('/\$(url|databaseUrl|dbUrl|dsn)\b/i', $line)) {
+                    $offenders[] = basename($file->getPathname()) . ':' . ($n + 1) . '  ' . trim($line);
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "serialize()/var_export() on a DatabaseUrl writes the PASSWORD verbatim - those two keep "
+            . "the secret on purpose so the round trip stays faithful. Persisting one puts a credential "
+            . "on disk. Use toSafeString() to record it, or store the redacted parts:\n  - "
+            . implode("\n  - ", $offenders)
+        );
+    }
+
+    /**
+     * Negative case - proves the guard above has TEETH.
+     *
+     * The scanner is fed a line of the exact shape it must catch. Without this,
+     * a regex that silently stopped matching would leave the guard green and
+     * guarding nothing - the same vacuous-pass that the ClassCollection guard
+     * hit this week.
+     */
+    public function testTheSerializeGuardDetectsAnOffendingLine(): void
+    {
+        $offending = '        $payload = serialize($url);';
+        $innocent  = '        $payload = json_encode($url->toSafeString());';
+
+        $matches = static fn(string $line): bool =>
+            (bool) preg_match('/\b(serialize|var_export)\s*\(/i', $line)
+            && (bool) preg_match('/\$(url|databaseUrl|dbUrl|dsn)\b/i', $line);
+
+        $this->assertTrue($matches($offending), 'the scanner must flag serialize($url)');
+        $this->assertFalse($matches($innocent), 'the scanner must not flag a redacted render');
+    }
 }

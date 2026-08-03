@@ -19,6 +19,19 @@ namespace Tina4;
  *   mysql://user:pass@host:port/dbname
  *   mssql://user:pass@host:port/dbname
  *   firebird://user:pass@host:port/path/to/database.fdb
+ *
+ * DISPLAY REDACTS, FIDELITY DOES NOT. print_r(), var_dump(), json_encode(),
+ * __toString() and toSafeString() all replace the password with REDACTED, so a
+ * log line, a dump or a status payload is safe. var_export() and serialize()
+ * DELIBERATELY do not: their contract is a faithful round trip, and a masked
+ * serialize() would unserialize into an object whose password is the literal
+ * "***".
+ *
+ * The consequence: DO NOT PERSIST THIS OBJECT. A DatabaseUrl written into a
+ * session file, a cache entry or a queue payload puts the password on disk in
+ * cleartext. Record toSafeString() instead, or store the redacted parts.
+ * DatabaseCredentialLeakTest enforces this - it fails the build if framework
+ * code ever serialize()s or var_export()s one.
  */
 class DatabaseUrl implements \JsonSerializable
 {
