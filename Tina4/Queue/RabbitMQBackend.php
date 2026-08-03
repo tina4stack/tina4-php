@@ -62,6 +62,11 @@ class RabbitMQBackend implements QueueBackend
     {
         $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
         if (!$this->socket) {
+            // Reset to null, never leave the FALSE that fsockopen returned:
+            // ensureConnected() reconnects only when the socket is null, so a
+            // stored false made every later call fwrite(false, ...) and die with
+            // a TypeError instead of this clean, reconnectable exception.
+            $this->socket = null;
             throw new \RuntimeException("RabbitMQ connection failed: [{$errno}] {$errstr}");
         }
 
@@ -176,6 +181,45 @@ class RabbitMQBackend implements QueueBackend
     {
         $this->ensureConnected();
         return $this->declareQueue($topic);
+    }
+
+    /** {@inheritDoc} */
+    public function failed(string $topic): array
+    {
+        throw new \RuntimeException(
+            'The rabbitmq queue backend cannot answer failed(): '
+                . 'RabbitMQ keeps no queryable registry of failed or dead jobs: a rejected '
+                . 'message is routed away by a dead-letter EXCHANGE to another queue, which '
+                . 'the broker does not link back to this one. Returning an empty list would '
+                . 'claim nothing has failed. Consume the dead-letter queue directly, or use '
+                . 'the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function deadLetters(string $topic, ?int $maxRetries = null): array
+    {
+        throw new \RuntimeException(
+            'The rabbitmq queue backend cannot answer deadLetters(): '
+                . 'RabbitMQ keeps no queryable registry of failed or dead jobs: a rejected '
+                . 'message is routed away by a dead-letter EXCHANGE to another queue, which '
+                . 'the broker does not link back to this one. Returning an empty list would '
+                . 'claim nothing has failed. Consume the dead-letter queue directly, or use '
+                . 'the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function retryFailed(string $topic, ?int $maxRetries = null): int
+    {
+        throw new \RuntimeException(
+            'The rabbitmq queue backend cannot perform retryFailed(): '
+                . 'RabbitMQ keeps no queryable registry of failed or dead jobs: a rejected '
+                . 'message is routed away by a dead-letter EXCHANGE to another queue, which '
+                . 'the broker does not link back to this one. Returning an empty list would '
+                . 'claim nothing has failed. Consume the dead-letter queue directly, or use '
+                . 'the file or mongodb backend. '
+        );
     }
 
     /** {@inheritDoc} */

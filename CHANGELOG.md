@@ -56,6 +56,23 @@ This file is deliberately NOT a copy of those notes. Duplicating them is exactly
 changelog rots into claiming a version that was never cut, so this file records only
 UNRELEASED work. When a version ships, its notes go to the release notes above.
 
+### Fixed (a queue method could be a fatal error instead of resolving)
+
+Every public `Queue` method must RESOLVE on every backend the framework offers. A
+method that does not exist cannot even reach a refusal, so the upgrade path is
+severed rather than degraded.
+
+- `failed()`, `deadLetters()`, `retry()` and `retryFailed()` were a FATAL
+  "Call to undefined method" on the rabbitmq AND kafka backends. The root cause was
+  structural: the `QueueBackend` INTERFACE never declared them, so only LiteBackend
+  and MongoBackend happened to define them while `Queue` called them on everything.
+  They are now on the interface, so the type system enforces this permanently, and
+  the brokers answer with a refusal naming the backend and the method rather than an
+  empty list (an empty list would claim nothing has failed).
+- A failed broker connect stored `false` in the socket while `ensureConnected()` only
+  reconnects on `null`, so every later call did `fwrite(false, ...)` and died with a
+  TypeError instead of a clean, reconnectable exception.
+
 ### Fixed (queue priority was ignored on every backend but file)
 
 - `push(..., priority)` is now honoured on the `mongodb` backend: priority is stored

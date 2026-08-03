@@ -175,6 +175,11 @@ class KafkaBackend implements QueueBackend
         }
 
         if (!$connected) {
+            // Reset to null, never leave the FALSE the last attempt returned:
+            // ensureConnected() reconnects only when the socket is null, so a
+            // stored false made every later call fwrite(false, ...) and die with
+            // a TypeError instead of this clean, reconnectable exception.
+            $this->socket = null;
             throw new \RuntimeException("Kafka connection failed: could not connect to any broker in [{$this->brokers}]");
         }
     }
@@ -258,6 +263,45 @@ class KafkaBackend implements QueueBackend
         // We return 0 as a placeholder — proper implementation would
         // query earliest and latest offsets.
         return 0;
+    }
+
+    /** {@inheritDoc} */
+    public function failed(string $topic): array
+    {
+        throw new \RuntimeException(
+            'The kafka queue backend cannot answer failed(): '
+                . 'Kafka keeps no queryable registry of failed or dead jobs: a failed record '
+                . 'is re-produced to a dead-letter TOPIC and the original offset is committed '
+                . 'past, and a log cannot be queried by job state. Returning an empty list '
+                . 'would claim nothing has failed. Consume the dead-letter topic directly, or '
+                . 'use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function deadLetters(string $topic, ?int $maxRetries = null): array
+    {
+        throw new \RuntimeException(
+            'The kafka queue backend cannot answer deadLetters(): '
+                . 'Kafka keeps no queryable registry of failed or dead jobs: a failed record '
+                . 'is re-produced to a dead-letter TOPIC and the original offset is committed '
+                . 'past, and a log cannot be queried by job state. Returning an empty list '
+                . 'would claim nothing has failed. Consume the dead-letter topic directly, or '
+                . 'use the file or mongodb backend. '
+        );
+    }
+
+    /** {@inheritDoc} */
+    public function retryFailed(string $topic, ?int $maxRetries = null): int
+    {
+        throw new \RuntimeException(
+            'The kafka queue backend cannot perform retryFailed(): '
+                . 'Kafka keeps no queryable registry of failed or dead jobs: a failed record '
+                . 'is re-produced to a dead-letter TOPIC and the original offset is committed '
+                . 'past, and a log cannot be queried by job state. Returning an empty list '
+                . 'would claim nothing has failed. Consume the dead-letter topic directly, or '
+                . 'use the file or mongodb backend. '
+        );
     }
 
     /** {@inheritDoc} */

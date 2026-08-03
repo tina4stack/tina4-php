@@ -62,6 +62,41 @@ interface QueueBackend
     public function size(string $topic): int;
 
     /**
+     * List the jobs that failed but have retries left.
+     *
+     * Declared here because Queue::failed() calls it on EVERY backend. It used
+     * to be absent from this interface while only LiteBackend and MongoBackend
+     * happened to define it, so the call was a FATAL "undefined method" on
+     * rabbitmq and kafka. A backend that keeps no such registry must throw a
+     * refusal naming itself, never a fatal and never a misleading empty list.
+     *
+     * @param string $topic The queue/topic name
+     * @return array<int, array<string, mixed>>
+     * @throws \RuntimeException When the backend cannot answer the question
+     */
+    public function failed(string $topic): array;
+
+    /**
+     * List the jobs that exhausted their retries.
+     *
+     * @param string $topic The queue/topic name
+     * @param int|null $maxRetries Attempt limit; null uses the queue's own
+     * @return array<int, array<string, mixed>>
+     * @throws \RuntimeException When the backend cannot answer the question
+     */
+    public function deadLetters(string $topic, ?int $maxRetries = null): array;
+
+    /**
+     * Re-queue every failed job still under the retry limit. Returns the count.
+     *
+     * @param string $topic The queue/topic name
+     * @param int|null $maxRetries Attempt limit; null uses the queue's own
+     * @return int
+     * @throws \RuntimeException When the backend cannot perform the operation
+     */
+    public function retryFailed(string $topic, ?int $maxRetries = null): int;
+
+    /**
      * Close the connection and clean up resources.
      */
     public function close(): void;
