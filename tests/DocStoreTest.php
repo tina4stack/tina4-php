@@ -132,7 +132,7 @@ class DocStoreTest extends TestCase
     public function testIn(): void
     {
         $this->seedFilters();
-        $got = $this->orders->find(['customer_id' => ['$in' => [1, 3]]])->toList();
+        $got = $this->orders->find(['customer_id' => ['$in' => [1, 3]]])->toArray();
         $ids = array_map(fn ($d) => $d['customer_id'], $got);
         sort($ids);
         $this->assertSame([1, 3], $ids);
@@ -171,7 +171,7 @@ class DocStoreTest extends TestCase
         $got = $this->orders->find(['$or' => [
             ['customer_id' => 1],
             ['total' => ['$gt' => 90]],
-        ]])->toList();
+        ]])->toArray();
         $ids = array_map(fn ($d) => $d['customer_id'], $got);
         sort($ids);
         $this->assertSame([1, 3], $ids);
@@ -211,7 +211,7 @@ class DocStoreTest extends TestCase
     public function testSortDesc(): void
     {
         $this->seedCursor();
-        $got = $this->orders->find(['grp' => 'g'])->sort('n', -1)->toList();
+        $got = $this->orders->find(['grp' => 'g'])->sort('n', -1)->toArray();
         $ns = array_map(fn ($d) => $d['n'], $got);
         $this->assertSame(range(9, 0), $ns);
     }
@@ -219,7 +219,7 @@ class DocStoreTest extends TestCase
     public function testLimitSkip(): void
     {
         $this->seedCursor();
-        $got = $this->orders->find(['grp' => 'g'])->sort('n', 1)->skip(2)->limit(3)->toList();
+        $got = $this->orders->find(['grp' => 'g'])->sort('n', 1)->skip(2)->limit(3)->toArray();
         $this->assertSame([2, 3, 4], array_map(fn ($d) => $d['n'], $got));
     }
 
@@ -250,7 +250,7 @@ class DocStoreTest extends TestCase
             ['k' => 'a', 'created_at' => new \DateTimeImmutable('2024-01-01T00:00:00', $utc)],
             ['k' => 'c', 'created_at' => new \DateTimeImmutable('2024-06-01T00:00:00', $utc)],
         ]);
-        $got = $this->orders->find([])->sort('created_at', -1)->toList();
+        $got = $this->orders->find([])->sort('created_at', -1)->toArray();
         $this->assertSame(['c', 'b', 'a'], array_map(fn ($d) => $d['k'], $got));
         $this->assertInstanceOf(\DateTimeInterface::class, $got[0]['created_at']);
         $this->assertSame(3, $this->orders->countDocuments(['created_at' => ['$gte' => $base]]));

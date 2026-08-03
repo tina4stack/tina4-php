@@ -181,6 +181,23 @@ class DocStoreCodec
     private const COMPARATORS = ['$gt' => '>', '$gte' => '>=', '$lt' => '<', '$lte' => '<='];
 
     /**
+     * Decodes a stored JSON document, rehydrating ObjectId and DateTime values.
+     *
+     * Lives on the codec, not the collection, because it is a PURE function of
+     * its inputs. It was a public collection method only so the Cursor could
+     * reach it, which ADR-0025 corollary 1 forbids.
+     *
+     * @param string     $docText    The stored JSON document.
+     * @param array|null $projection Optional projection spec.
+     * @return array The decoded document.
+     */
+    public static function loadDoc(string $docText, ?array $projection = null): array
+    {
+        $doc = self::decode(json_decode($docText, true));
+        return $projection ? self::project($doc, $projection) : $doc;
+    }
+
+    /**
      * A DateTime -> ISO-8601 UTC string (Z suffix).
      */
     public static function iso(\DateTimeInterface $dt): string
@@ -753,11 +770,26 @@ class Cursor implements \IteratorAggregate
     private ?int $limit = null;
     private int $skip = 0;
 
+    /**
+     * The cursor receives WHAT IT NEEDS, not the collection it came from.
+     *
+     * It used to hold the collection and reach back into it for quoted(),
+     * runDocQuery() and load() - which was the ONLY reason those three were
+     * public. ADR-0025 corollary 1: anything the fallback needs internally is
+     * private, and a real MongoDB\Driver\Cursor exposes none of them.
+     *
+     * @param string     $quoted     The quoted table name.
+     * @param string     $where      The compiled WHERE fragment.
+     * @param array      $params     Bound parameters for the WHERE.
+     * @param array|null $projection Optional projection spec.
+     * @param \Closure   $runQuery   fn(string $sql, array $params): \Generator
+     */
     public function __construct(
-        private readonly SqliteCollection $collection,
+        private readonly string $quoted,
         private readonly string $where,
         private readonly array $params,
-        private readonly ?array $projection = null
+        private readonly ?array $projection,
+        private readonly \Closure $runQuery
     ) {
     }
 
@@ -788,9 +820,9 @@ class Cursor implements \IteratorAggregate
         return $this;
     }
 
-    public function buildSql(): string
+    private function buildSql(): string
     {
-        $sql = "SELECT doc FROM {$this->collection->quoted()} WHERE {$this->where}";
+        $sql = "SELECT doc FROM {$this->quoted} WHERE {$this->where}";
         if ($this->sort) {
             $order = [];
             foreach ($this->sort as [$k, $d]) {
@@ -811,15 +843,22 @@ class Cursor implements \IteratorAggregate
 
     public function getIterator(): \Generator
     {
-        foreach ($this->collection->runDocQuery($this->buildSql(), $this->params) as $docText) {
-            yield $this->collection->load($docText, $this->projection);
+        foreach (($this->runQuery)($this->buildSql(), $this->params) as $docText) {
+            yield DocStoreCodec::loadDoc($docText, $this->projection);
         }
     }
 
     /**
-     * @return array<int, array>
+     * Materialise the cursor into a list of decoded documents.
+     *
+     * Named toArray because that is what MongoDB\Driver\Cursor spells it. The
+     * old toList had no counterpart on the driver, so code written against it
+     * broke the moment TINA4_MONGO_URI was set (ADR-0025 corollary 1).
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, array> The decoded documents.
      */
-    public function toList(?int $length = null): array
+    public function toArray(?int $length = null): array
     {
         $out = iterator_to_array($this->getIterator(), false);
         return $length === null ? $out : array_slice($out, 0, $length);
@@ -844,22 +883,11 @@ class SqliteCollection
         );
     }
 
-    public function quoted(): string
-    {
-        return $this->quoted;
-    }
-
     // -- helpers --
 
     private function dump(array $document): string
     {
         return json_encode(DocStoreCodec::encode($document), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    }
-
-    public function load(string $docText, ?array $projection = null): array
-    {
-        $doc = DocStoreCodec::decode(json_decode($docText, true));
-        return $projection ? DocStoreCodec::project($doc, $projection) : $doc;
     }
 
     /**
@@ -906,7 +934,7 @@ class SqliteCollection
      *
      * @return \Generator<int, string>
      */
-    public function runDocQuery(string $sql, array $params): \Generator
+    private function runDocQuery(string $sql, array $params): \Generator
     {
         $stmt = $this->prepare($sql, $params);
         $result = $stmt->execute();
@@ -975,12 +1003,18 @@ class SqliteCollection
     public function find(?array $filter = null, ?array $projection = null): Cursor
     {
         [$where, $params] = DocStoreCodec::compileFilter($filter ?? []);
-        return new Cursor($this, $where, $params, $projection);
+        return new Cursor(
+            $this->quoted,
+            $where,
+            $params,
+            $projection,
+            fn (string $sql, array $p): \Generator => $this->runDocQuery($sql, $p)
+        );
     }
 
     public function findOne(?array $filter = null, ?array $projection = null): ?array
     {
-        $results = $this->find($filter, $projection)->limit(1)->toList();
+        $results = $this->find($filter, $projection)->limit(1)->toArray();
         return $results[0] ?? null;
     }
 
