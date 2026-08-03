@@ -56,6 +56,23 @@ This file is deliberately NOT a copy of those notes. Duplicating them is exactly
 changelog rots into claiming a version that was never cut, so this file records only
 UNRELEASED work. When a version ships, its notes go to the release notes above.
 
+### Fixed (queue priority was ignored on every backend but file)
+
+- `push(..., priority)` is now honoured on the `mongodb` backend: priority is stored
+  top-level and the dequeue sorts highest-first, ties oldest-first — the same policy
+  the file backend already applied. An urgent job queued behind a backlog used to wait
+  for all of it in production while prioritising correctly in development. Here `Queue::push()` built a SEPARATE message array for the external-backend branch
+  carrying no priority, and even once that was unified `MongoBackend` stored
+  priority only INSIDE the `message` sub-document (where a sort cannot reach it)
+  and sorted on `created_at` alone.
+- **Breaking:** pushing with a priority to `rabbitmq` or `kafka` now RAISES, naming the
+  backend and the operation, instead of silently discarding it. A RabbitMQ queue is
+  FIFO: native priority needs the queue DECLARED with `x-max-priority`, and an existing
+  queue cannot be redeclared with one (the broker answers PRECONDITION_FAILED), so
+  switching it on would break every queue already in service. Kafka has no priority
+  concept at all. Migration: use the `file` or `mongodb` backend for prioritised jobs.
+  A push with priority 0 (the default) is unaffected.
+
 ### Fixed (a queue delay was silently dropped on every non-file backend)
 
 - `push(..., delay)` is now honoured on the `mongodb` backend. It was silently DROPPED

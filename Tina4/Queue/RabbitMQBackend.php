@@ -100,6 +100,17 @@ class RabbitMQBackend implements QueueBackend
     /** {@inheritDoc} */
     public function enqueue(string $topic, array $message): string
     {
+        if ((int)($message['priority'] ?? 0) > 0) {
+            throw new \RuntimeException(
+                'The rabbitmq queue backend cannot honour push(priority): RabbitMQ '
+                . 'orders a queue FIFO. Native priority needs the queue DECLARED with '
+                . 'an x-max-priority argument, and an existing queue cannot be '
+                . 'redeclared with one (the broker answers PRECONDITION_FAILED), so '
+                . 'enabling it would break every queue already in service. Use the '
+                . 'file or mongodb backend for prioritised jobs.'
+            );
+        }
+
         if ((int)($message['delay_seconds'] ?? 0) > 0) {
             throw new \RuntimeException(
                 'The rabbitmq queue backend cannot honour push(delay): RabbitMQ has '

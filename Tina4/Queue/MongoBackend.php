@@ -127,6 +127,9 @@ class MongoBackend implements QueueBackend
             'status' => 'pending',
             'message' => $message,
             'attempts' => (int)($message['attempts'] ?? 0),
+            // Stored TOP-LEVEL so the dequeue sort can order on it. It also
+            // lives inside 'message', but a sort cannot reach in there.
+            'priority' => (int)($message['priority'] ?? 0),
             'available_at' => $delaySeconds > 0 ? $this->futureDate($delaySeconds) : $now,
             'created_at' => $now,
             'updated_at' => $now,
@@ -166,7 +169,12 @@ class MongoBackend implements QueueBackend
                 ],
             ],
             [
-                'sort' => ['created_at' => 1],
+                // Highest priority first, ties broken oldest-first — the same
+                // ordering policy LiteBackend applies. Sorting on created_at
+                // alone made the backend pure FIFO and silently ignored
+                // priority, so an urgent job queued behind a backlog waited
+                // for all of it.
+                'sort' => ['priority' => -1, 'created_at' => 1],
                 'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
             ]
         );

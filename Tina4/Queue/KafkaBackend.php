@@ -182,6 +182,14 @@ class KafkaBackend implements QueueBackend
     /** {@inheritDoc} */
     public function enqueue(string $topic, array $message): string
     {
+        if ((int)($message['priority'] ?? 0) > 0) {
+            throw new \RuntimeException(
+                'The kafka queue backend cannot honour push(priority): Kafka has no '
+                . 'priority concept at all — a consumer reads a partition in offset '
+                . 'order. Use the file or mongodb backend for prioritised jobs.'
+            );
+        }
+
         if ((int)($message['delay_seconds'] ?? 0) > 0) {
             throw new \RuntimeException(
                 'The kafka queue backend cannot honour push(delay): Kafka has no '
