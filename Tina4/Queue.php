@@ -62,7 +62,9 @@ class Queue
      */
     public function __construct(string $backend = 'file', array $config = [], string $topic = 'default')
     {
-        $this->backend = getenv('TINA4_QUEUE_BACKEND') ?: $backend;
+        // Normalised (trimmed + lowercased) so ' RabbitMQ ' resolves, matching
+        // the Python master and Ruby. An unrecognised value RAISES below.
+        $this->backend = strtolower(trim((string)(getenv('TINA4_QUEUE_BACKEND') ?: $backend)));
         $this->basePath = $config['path'] ?? (getenv('TINA4_QUEUE_PATH') ?: 'data/queue');
         $this->maxRetries = $config['maxRetries'] ?? 3;
         // Seconds to delay a failed job's automatic re-enqueue (parity with
@@ -99,6 +101,20 @@ class Queue
             // behind the reservation expiry (Bug B).
             $resolvedConfig['retry_backoff'] = $this->retryBackoff;
             $this->externalBackend = new MongoBackend($resolvedConfig);
+        } elseif (!in_array($this->backend, ['file', 'default', 'lite'], true)) {
+            // An UNRECOGNISED backend name RAISES rather than falling through to
+            // the local file store.
+            //
+            // MEASURED 2026-08-03: a typo in TINA4_QUEUE_BACKEND produced a
+            // running app writing every job to local disk while the operator
+            // believed they were in RabbitMQ - jobs nothing consumes, on a
+            // container filesystem that vanishes on the next deploy, with no
+            // error at any point. Python and Ruby already raise here; this is
+            // the same rule the session backend adopted for the same reason.
+            throw new \InvalidArgumentException(sprintf(
+                "Unknown queue backend: '%s'. Use 'file', 'rabbitmq', 'kafka', or 'mongodb'.",
+                $this->backend
+            ));
         }
     }
 

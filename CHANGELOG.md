@@ -56,6 +56,29 @@ This file is deliberately NOT a copy of those notes. Duplicating them is exactly
 changelog rots into claiming a version that was never cut, so this file records only
 UNRELEASED work. When a version ships, its notes go to the release notes above.
 
+### Fixed (an unknown queue backend name silently used the file store)
+
+- An unrecognised `TINA4_QUEUE_BACKEND` now RAISES, naming the bad value and the
+  valid set, instead of falling through to the local file store. The name is also
+  normalised (trimmed + lowercased), so ` RabbitMQ ` resolves.
+
+  WHY: MEASURED 2026-08-03. A typo in `TINA4_QUEUE_BACKEND` produced a RUNNING app
+  writing every job to local disk while the operator believed they were in
+  RabbitMQ - jobs nothing consumes, on a container filesystem that vanishes on
+  the next deploy, with no error at any point.
+
+      python   raised, named the valid set     <- already correct
+      ruby     raised, named the valid set     <- already correct
+      php      SILENT FALLBACK to file
+      nodejs   SILENT FALLBACK to file
+
+  This is the same rule the SESSION backend already adopted, for the same
+  reason, so two of four were simply behind.
+
+  Pinned by `tests/QueueBackendValidationTest.php`, with a negative case asserting the guard still accepts
+  every documented name - without it, "make everything raise" would pass.
+  Mutation-proved in both directions (guard disabled, normalisation removed).
+
 ### Fixed (array queries diverged from MongoDB, ADR-0025 clause 4)
 
 - A query against an ARRAY field now behaves the way MongoDB behaves. The rule is
