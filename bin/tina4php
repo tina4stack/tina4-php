@@ -1554,7 +1554,12 @@ DOCKERFILE;
             $db = \Tina4\Database\Database::fromEnv();
             if ($db !== null) {
                 \Tina4\ORM::bindDatabase($db);
-                echo "  Database: " . \Tina4\DotEnv::getEnv('TINA4_DATABASE_URL') . "\n";
+                // Redacted: the banner goes to a terminal scrollback, a
+                // screen share and a piped CI log, and it printed the whole
+                // URL - password included.
+                echo "  Database: " . \Tina4\DatabaseUrl::redact(
+                    (string) \Tina4\DotEnv::getEnv('TINA4_DATABASE_URL')
+                ) . "\n";
             }
         } catch (\Throwable $e) {
             echo "  Database: failed ({$e->getMessage()})\n";

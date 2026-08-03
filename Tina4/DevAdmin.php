@@ -430,7 +430,9 @@ class DevAdmin
                 'framework_version' => App::$VERSION,
                 'debug' => getenv('TINA4_DEBUG') ?: 'false',
                 'log_level' => getenv('TINA4_LOG_LEVEL') ?: 'INFO',
-                'database' => getenv('TINA4_DATABASE_URL') ?: 'not configured',
+                // Redacted: this is a PUBLIC GET on the dev server and it
+                // returned the whole TINA4_DATABASE_URL, password and all.
+                'database' => self::redactedDatabaseUrl(),
                 'db_tables' => $dbTableCount,
                 'mailbox' => $mailboxCount,
                 'messages' => MessageLog::count(),
@@ -1761,7 +1763,9 @@ class DevAdmin
                 'cwd' => getcwd() ?: '',
                 'debug' => getenv('TINA4_DEBUG') ?: 'false',
                 'log_level' => getenv('TINA4_LOG_LEVEL') ?: 'INFO',
-                'database' => getenv('TINA4_DATABASE_URL') ?: 'not configured',
+                // Redacted: this is a PUBLIC GET on the dev server and it
+                // returned the whole TINA4_DATABASE_URL, password and all.
+                'database' => self::redactedDatabaseUrl(),
                 'memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
                 'uptime_seconds' => round(microtime(true) - self::bootTime(), 1),
                 'db_tables' => $dbTables,
@@ -2629,6 +2633,27 @@ class DevAdmin
     private static function devAdminEnvPath(): string
     {
         return self::devAdminProjectRoot() . '/.env';
+    }
+
+    /**
+     * The configured database URL as it is allowed to appear in a status
+     * payload: identifiable, never a credential.
+     *
+     * /__dev/api/status and /__dev/api/system are public GETs on the dev
+     * server and both returned getenv('TINA4_DATABASE_URL') verbatim, so a
+     * URL-embedded password was readable by anything that could reach the
+     * port. The value stays diagnostic - engine, user, host, port and database
+     * all survive; only the password becomes ***.
+     *
+     * @return string The redacted URL, or 'not configured' when unset
+     */
+    private static function redactedDatabaseUrl(): string
+    {
+        $url = getenv('TINA4_DATABASE_URL');
+        if (!is_string($url) || $url === '') {
+            return 'not configured';
+        }
+        return \Tina4\DatabaseUrl::redact($url);
     }
 
     /**

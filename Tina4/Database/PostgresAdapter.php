@@ -483,22 +483,50 @@ class PostgresAdapter implements DatabaseAdapter
     }
 
     /**
-     * Build a libpq-style DSN from either a URL or key=value string.
-     */
-    /**
      * The DSN with the password removed, safe to put in an exception message.
      *
      * The host/port/dbname/user are exactly what a maintainer needs to see; the
      * password is exactly what must never reach a log or a 500 body.
+     *
+     * Delegates to the framework's single redaction primitive. The local
+     * regex it replaced matched `password=` followed by \S-star, and \S-star
+     * stops at the first SPACE - so a password with a space had its TAIL survive into the
+     * logged message. Measured 2026-08-02 against live PostgreSQL: a connect
+     * failure with the password "s3ntinel-Pa55 word" logged
+     * "password=*** word".
      */
     private function safeDsn(string $dsn): string
     {
-        return trim((string)preg_replace('/\bpassword=\S*/i', 'password=***', $dsn));
+        return trim(\Tina4\DatabaseUrl::redact($dsn));
     }
 
+    /**
+     * Quote a value for a libpq keyword/value DSN.
+     *
+     * libpq ends an unquoted value at the first SPACE, and LAST-OCCURRENCE-WINS
+     * for a repeated keyword - so an unescaped password is a connection-string
+     * INJECTION, not a cosmetic bug. Measured 2026-08-02 against live
+     * PostgreSQL 55432: the URL asked for dbname tina4_py, and the password
+     * "tina4 dbname=postgres" connected to the "postgres" database instead. The
+     * same mechanism reaches sslmode= (dropping TLS on a connection the
+     * operator believes is encrypted), host= and hostaddr=.
+     *
+     * Single quotes delimit the value; inside them a backslash escapes a
+     * literal backslash and a literal single quote. That is the whole libpq
+     * grammar, so quoting is total - there is no character left that can end
+     * the value early.
+     */
+    private static function quoteDsnValue(string $value): string
+    {
+        return "'" . str_replace(['\\', "'"], ['\\\\', "\\'"], $value) . "'";
+    }
+
+    /**
+     * Build a libpq-style DSN from either a URL or key=value string.
+     */
     private function buildDsn(string $input): string
     {
-        // Already a key=value DSN
+        // Already a key=value DSN — the caller wrote it, so it is theirs to quote.
         if (str_contains($input, '=') && !str_contains($input, '://')) {
             return $input;
         }
@@ -509,27 +537,39 @@ class PostgresAdapter implements DatabaseAdapter
             return $input;
         }
 
+        // EVERY interpolated value is quoted, not just the password: host,
+        // dbname and user reach libpq the same way and inject the same way.
         $dsn = '';
         if (isset($parts['host'])) {
-            $dsn .= 'host=' . $parts['host'] . ' ';
+            $dsn .= 'host=' . self::quoteDsnValue((string)$parts['host']) . ' ';
         }
         if (isset($parts['port'])) {
-            $dsn .= 'port=' . $parts['port'] . ' ';
+            $dsn .= 'port=' . self::quoteDsnValue((string)$parts['port']) . ' ';
         }
         if (isset($parts['path'])) {
             $dbName = ltrim($parts['path'], '/');
             if ($dbName !== '') {
-                $dsn .= 'dbname=' . $dbName . ' ';
+                $dsn .= 'dbname=' . self::quoteDsnValue($dbName) . ' ';
             }
         }
+
         $user = isset($parts['user']) ? urldecode($parts['user']) : $this->username;
+
+        // ABSENT and BLANK are different, and the difference decides whether a
+        // fallback may fire. A URL that spells "user:@host" states an EMPTY
+        // password, so it must be sent AS an empty password; omitting the
+        // keyword lets libpq fall back to PGPASSWORD / .pgpass instead.
+        // Measured 2026-08-02: PGPASSWORD=tina4 with the URL
+        // postgres://tina4:@192.168.88.99:55432/tina4_py CONNECTED - the same
+        // .env authenticating with a password nobody put in it.
+        $passwordIsSet = isset($parts['pass']) || $this->password !== '';
         $pass = isset($parts['pass']) ? urldecode($parts['pass']) : $this->password;
 
         if ($user !== '') {
-            $dsn .= 'user=' . $user . ' ';
+            $dsn .= 'user=' . self::quoteDsnValue($user) . ' ';
         }
-        if ($pass !== '') {
-            $dsn .= 'password=' . $pass . ' ';
+        if ($passwordIsSet) {
+            $dsn .= 'password=' . self::quoteDsnValue($pass) . ' ';
         }
 
         return trim($dsn);

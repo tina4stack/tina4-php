@@ -1226,7 +1226,12 @@ class MongoDBAdapter implements DatabaseAdapter
 
         $parts = parse_url($url);
         if ($parts === false || !isset($parts['host'])) {
-            throw new \InvalidArgumentException("MongoDBAdapter: Invalid connection string: {$url}");
+            // A mongodb:// URL carries its credentials in the userinfo exactly
+            // like a postgres:// one, so the raw string can never go in the
+            // message. Redacted keeps the host/port/scheme that identify it.
+            throw new \InvalidArgumentException(
+                'MongoDBAdapter: Invalid connection string: ' . \Tina4\DatabaseUrl::redact($url)
+            );
         }
 
         $host     = $parts['host'] ?? 'localhost';

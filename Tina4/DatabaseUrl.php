@@ -20,8 +20,14 @@ namespace Tina4;
  *   mssql://user:pass@host:port/dbname
  *   firebird://user:pass@host:port/path/to/database.fdb
  */
-class DatabaseUrl
+class DatabaseUrl implements \JsonSerializable
 {
+    /**
+     * What a secret is replaced by, everywhere. One spelling so a test can pin
+     * it and a reader can recognise a redacted value at a glance.
+     */
+    public const REDACTED = '***';
+
     /**
      * @var array<string, string> URL scheme to CANONICAL engine name.
      *
@@ -137,7 +143,16 @@ class DatabaseUrl
         $parts = parse_url($url);
 
         if ($parts === false || !isset($parts['scheme'])) {
-            throw new \InvalidArgumentException("DatabaseUrl: Invalid URL format '{$url}'");
+            // NEVER interpolate the raw URL. Measured 2026-08-02 in all four
+            // frameworks: a malformed TINA4_DATABASE_URL put the PASSWORD into
+            // this message verbatim, and this message reaches the boot log, the
+            // error overlay, a crash report and a CI log. redact() keeps the
+            // scheme, user, host and port - everything needed to see WHICH
+            // character is wrong - and drops the secret.
+            throw new \InvalidArgumentException(
+                'DatabaseUrl: Invalid URL format ' . self::redact($url)
+                . " - expected 'engine://user:password@host:port/database'."
+            );
         }
 
         $scheme = strtolower($parts['scheme']);
@@ -245,6 +260,116 @@ class DatabaseUrl
         }
 
         return $url;
+    }
+
+    /**
+     * Redact the credentials out of ANY connection string, in any shape.
+     *
+     * This is the single string-level redaction primitive for the framework.
+     * `toSafeString()` is its struct-level twin (used when the URL parsed);
+     * this one is what an ERROR path calls, because an error path by definition
+     * holds a string that may not parse. Every message, log line and status
+     * payload that has to name a connection goes through one of the two - the
+     * measured failure was that the helper existed and NOTHING called it.
+     *
+     * Three shapes, because Tina4 accepts three:
+     *   URL userinfo   postgres://user:secret@host  -> postgres://user:***@host
+     *   libpq kv       password='se cret' / password=secret -> password=***
+     *   ODBC           PWD=secret; / PWD={se;cret}  -> PWD=***;
+     *
+     * It FAILS CLOSED. A string with no recognisable structure is replaced
+     * wholesale, because a malformed TINA4_DATABASE_URL such as
+     * "notaurl-with-<password>" is ENTIRELY secret - that exact value put the
+     * password into an exception message in all four frameworks.
+     *
+     * @param string $connectionString A URL, a libpq/ODBC DSN, or junk
+     * @return string The same string with every credential replaced by ***
+     */
+    public static function redact(string $connectionString): string
+    {
+        $value = trim($connectionString);
+
+        if ($value === '') {
+            return '(empty)';
+        }
+
+        $looksLikeUrl = (bool) preg_match('#^[a-zA-Z][a-zA-Z0-9+.\-]*://#', $value);
+        $looksLikeDsn = str_contains($value, '=');
+
+        if (!$looksLikeUrl && !$looksLikeDsn) {
+            return '(redacted - unrecognised connection string)';
+        }
+
+        if ($looksLikeUrl) {
+            // Userinfo runs to the LAST '@' before the path, so an unencoded
+            // '@' or ':' inside the password cannot end the match early and
+            // leave its tail exposed.
+            $value = preg_replace_callback(
+                '#^([a-zA-Z][a-zA-Z0-9+.\-]*://)([^/?\#]*)@#',
+                static function (array $matches): string {
+                    $userInfo = $matches[2];
+                    $separator = strpos($userInfo, ':');
+                    if ($separator === false) {
+                        return $matches[1] . $userInfo . '@';
+                    }
+                    return $matches[1] . substr($userInfo, 0, $separator) . ':' . self::REDACTED . '@';
+                },
+                $value,
+                1
+            ) ?? $value;
+        }
+
+        // Quoted forms are matched FIRST and as whole units. The old PHP-only
+        // redaction was /\bpassword=\S*/ , and \S* stops at the first SPACE, so
+        // a password containing a space had its TAIL survive into the logged
+        // message ("password=*** word"). A quoted libpq value, a double-quoted
+        // value and an ODBC {braced} value all end on their closing delimiter,
+        // never on a space.
+        // The UNQUOTED alternative (last) keeps eating space-separated tokens
+        // until one looks like the next `keyword=` - so an unquoted password
+        // with a space is swallowed whole instead of leaving its tail behind.
+        return preg_replace(
+            '/\b(password|passwd|pwd)\s*=\s*('
+            . '\'(?:\\\\.|[^\'\\\\])*\''            // libpq single-quoted, backslash-escaped
+            . '|"[^"]*"'                            // double-quoted
+            . '|\{[^}]*\}'                          // ODBC braced
+            . '|[^;\s]*(?:\s+(?![A-Za-z_][A-Za-z0-9_]*\s*=)[^;\s]+)*'  // bare
+            . ')/i',
+            '$1=' . self::REDACTED,
+            $value
+        ) ?? $value;
+    }
+
+    /**
+     * What print_r()/var_dump() show. The password is a secret in a dump too.
+     *
+     * Python guards the same object with __repr__ and Ruby with #inspect; PHP
+     * had no guard at all, so `print_r($url)` printed "[password] => pass".
+     *
+     * @return array<string, mixed> The public state with the password masked
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'engine' => $this->engine,
+            'host' => $this->host,
+            'port' => $this->port,
+            'database' => $this->database,
+            'username' => $this->username,
+            'password' => $this->password === null ? null : self::REDACTED,
+        ];
+    }
+
+    /**
+     * What json_encode() emits. Tina4 auto-serialises a returned object to JSON,
+     * so an un-guarded DatabaseUrl in a route response is a credential on the
+     * wire; json_encode() emitted "password":"pass" before this.
+     *
+     * @return array<string, mixed> The public state with the password masked
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__debugInfo();
     }
 
     /**

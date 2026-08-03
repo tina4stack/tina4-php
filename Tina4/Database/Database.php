@@ -1871,8 +1871,12 @@ class Database implements DatabaseAdapter
         // Parse standard URL
         $parts = parse_url($url);
         if ($parts === false || !isset($parts['scheme'])) {
+            // Redacted, never raw: this is the SECOND copy of the invalid-URL
+            // message (DatabaseUrl has the first) and it leaked the password
+            // the same way — measured 2026-08-02 with a bad port.
             throw new \InvalidArgumentException(
-                "Database: Cannot determine database type from '{$url}'. "
+                'Database: Cannot determine database type from '
+                . \Tina4\DatabaseUrl::redact($url) . '. '
                 . "Use a URL like 'postgres://user:pass@host/db' or 'sqlite:///path/to/db'."
             );
         }
