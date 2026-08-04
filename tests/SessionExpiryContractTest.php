@@ -319,19 +319,67 @@ class SessionExpiryContractTest extends TestCase
         );
     }
 
-    /** expires_at must not be float4: one ULP is 128 SECONDS at the current epoch. */
+    /**
+     * expires_at must be an EIGHT-BYTE float on EVERY engine: one ULP of a
+     * four-byte float is 128 SECONDS at the current epoch, so a short session
+     * would expire up to a minute early.
+     *
+     * This used to ban the token "expires_at REAL" anywhere in the handler and
+     * require "expires_at DOUBLE PRECISION" somewhere in it. That was right
+     * while ONE generic statement served every engine, and wrong the moment the
+     * DDL became per-engine, for two independent reasons:
+     *
+     *   - REAL is float4 on PostgreSQL but a full eight-byte IEEE-754 binary64
+     *     in SQLite, so the ban forbade the CORRECT SQLite spelling (and the
+     *     one the other three frameworks write).
+     *   - A single "DOUBLE PRECISION" anywhere in the file satisfied the
+     *     requirement on behalf of all five engines at once.
+     *
+     * Per engine is also strictly stronger: it catches FLOAT(24) on SQL Server
+     * and a bare FLOAT on Firebird, both genuinely four-byte, which a token ban
+     * over the whole file cannot see.
+     */
     public function testSessionExpiresAtColumnIsNotSinglePrecision(): void
     {
-        $source = file_get_contents(
-            dirname(__DIR__) . '/Tina4/Session/DatabaseSessionHandler.php'
+        // The eight-byte spelling on each engine, and what the four-byte trap
+        // would have been there.
+        $eightByteSpellings = [
+            'sqlite' => 'expires_at REAL NOT NULL',                 // SQLite REAL is binary64; there is no float4
+            'postgres' => 'expires_at DOUBLE PRECISION NOT NULL',   // REAL would be float4 here
+            'mysql' => 'expires_at DOUBLE NOT NULL',                // MySQL FLOAT is the four-byte one
+            'mssql' => 'expires_at FLOAT NOT NULL',                 // T-SQL FLOAT is FLOAT(53); FLOAT(24) is float4
+            'firebird' => 'EXPIRES_AT DOUBLE PRECISION NOT NULL',   // Firebird FLOAT is four-byte
+        ];
+
+        $handler = new \ReflectionClass(\Tina4\Session\DatabaseSessionHandler::class);
+        $createTable = $handler->getConstant('CREATE_TABLE');
+
+        $this->assertIsArray(
+            $createTable,
+            'DatabaseSessionHandler must declare its CREATE TABLE per engine — one statement for all '
+            . 'five is not legal SQL on SQL Server or Firebird'
         );
 
-        $this->assertStringNotContainsString(
-            'expires_at REAL',
-            $source,
-            'REAL is float4 on PostgreSQL — a 128-second ULP at the current epoch, so a short '
-            . 'session expires up to a minute early. Use DOUBLE PRECISION.'
+        foreach ($eightByteSpellings as $engine => $spelling) {
+            $this->assertArrayHasKey(
+                $engine,
+                $createTable,
+                $engine . ' has no CREATE TABLE, so its expires_at precision cannot be checked at all'
+            );
+            $this->assertStringContainsString(
+                $spelling,
+                (string)$createTable[$engine],
+                'expires_at must be an eight-byte float on ' . $engine . ' (expected "' . $spelling
+                . '") — a four-byte float has a 128-second ULP at the current epoch, so a short session '
+                . 'expires up to a minute early'
+            );
+        }
+
+        // The statement sent to an adapter with no measured DDL of its own.
+        $this->assertStringContainsString(
+            'expires_at DOUBLE PRECISION NOT NULL',
+            (string)$handler->getConstant('CREATE_TABLE_FALLBACK'),
+            'the fallback statement carries the same precision requirement as the engines that have one'
         );
-        $this->assertStringContainsString('expires_at DOUBLE PRECISION', $source);
     }
 }

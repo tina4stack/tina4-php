@@ -54,52 +54,95 @@ use Tina4\Session\DatabaseSessionHandler;
 
 class SessionDatabaseEnginesTest extends TestCase
 {
-    /** Engines that must ALL round-trip for this invariant to mean anything. */
-    private const REQUIRED_ENGINE_COUNT = 3;
+    /**
+     * Engines that must ALL round-trip for this invariant to mean anything.
+     *
+     * Unreachable counts as BROKEN here, deliberately. That refusal to treat a
+     * missing engine as an excuse is what exposed two real defects that
+     * SQLite-only testing had hidden for the whole life of this backend, so it
+     * is the property to protect, not soften.
+     *
+     * @var string[]
+     */
+    private const REQUIRED_ENGINES = ['sqlite', 'postgres', 'mysql'];
+
+    /**
+     * Engines verified OPPORTUNISTICALLY: exercised whenever this build can
+     * reach them, and a FAILURE is a real defect that fails this test - but a
+     * build with no driver for them is not a failure.
+     *
+     * The distinction is the whole point, and it is not the same as the
+     * required tier: an engine whose DRIVER IS ABSENT cannot be tested at all,
+     * while an engine that is PRESENT AND BROKEN is exactly what this invariant
+     * exists to catch. Collapsing the two would either make CI red on every
+     * machine without SQL Server, or let a genuine mssql regression pass
+     * unnoticed on the one machine that has it. Neither is acceptable, so the
+     * roster below reports which of the two actually happened, every run.
+     *
+     * mssql was a MEASURED_OPEN_DEFECTS entry until 2026-08-04.
+     *
+     * IT STAYS HERE RATHER THAN GRADUATING TO REQUIRED, and the reason is worth
+     * being explicit about because the evidence looks like a case for promotion.
+     * Measured on the lab the same day, against live SQL Server 2022: mssql
+     * round-trips through this suite, its per-engine DDL is confirmed in the
+     * catalog, and it survived the concurrent first-use race with SIX REAL
+     * PROCESSES. On correctness it has earned REQUIRED.
+     *
+     * But this tier is not about whether an engine WORKS - it is about whether
+     * every machine that runs this suite can REACH it, because REQUIRED treats
+     * unreachable as broken. SQL Server is on the lab and is not on a typical
+     * dev machine, so promoting it would turn a green suite red everywhere
+     * except one box, for a reason that says nothing about the framework. The
+     * day SQL Server is provisioned wherever this suite runs, promote it - the
+     * correctness evidence is already in.
+     *
+     * @var string[]
+     */
+    private const OPPORTUNISTIC_ENGINES = ['mssql'];
 
     /**
      * Engines whose failure is a MEASURED, OPEN framework defect - not a
      * regression this run introduced, and NOT a permission to fail.
      *
-     * mssql. DatabaseSessionHandler::ensureTable() emits
+     * EMPTY as of 2026-08-04. The one entry, mssql, is FIXED:
+     * DatabaseSessionHandler::ensureTable() no longer emits the non-T-SQL
+     * "CREATE TABLE IF NOT EXISTS", and re-checks tableExists() after a failed
+     * CREATE (with a rollback first, because a failed statement leaves
+     * PostgreSQL's transaction aborted) instead of parsing an error message
+     * every engine spells differently.
      *
-     *     CREATE TABLE IF NOT EXISTS tina4_session (
-     *         session_id VARCHAR(255) PRIMARY KEY,
-     *         data TEXT NOT NULL,
-     *         expires_at DOUBLE PRECISION NOT NULL)
-     *
-     * unconditionally, and IF NOT EXISTS is not T-SQL. MEASURED 2026-08-04
-     * against a real SQL Server 2022 on Ubuntu 24.04 / PHP 8.3.6 / ext-pdo_dblib:
-     *
-     *     Tina4\Database\DatabaseException: MSSQL execute() failed:
-     *     SQLSTATE[HY000]: General error: 20018 Incorrect syntax near
-     *     'tina4_session'. [20018] (severity 15)
-     *
-     * so the database session backend does NOT work on an engine the Database
-     * layer claims (ADAPTER_MAP carries both 'mssql' and 'sqlserver').
-     *
-     * The cost of fixing it was measured, not asserted (ADR-0028's rule). The
-     * clause is REDUNDANT: ensureTable() already guards on tableExists(), and
-     * the byte-identical DDL with those three words removed creates the table on
-     * the same live SQL Server. So the defect is 14 characters. It is left here
-     * rather than fixed because deleting them also changes CONCURRENT first-use
-     * behaviour on SQLite/PostgreSQL/MySQL (engine-side idempotency becomes a
-     * raise for the loser of the race) and has to land in all four frameworks -
-     * that is a framework change with its own parity work, not a lock-in.
-     *
-     * The assertion below requires mssql to fail for EXACTLY this reason. Any
-     * other error, or none at all, is a red test that says so - so the day the
-     * DDL is fixed, this file tells you to promote mssql into the required
-     * roster and delete this entry.
-     *
-     * Firebird is NOT listed: it has the same no-IF-NOT-EXISTS dialect and is
-     * very likely broken the same way, but this run did not measure it, so no
-     * claim is made about it here.
+     * The mechanism is kept, empty, on purpose. It is the honest way to record
+     * "we know this is broken, here is its exact signature, and this test will
+     * tell you the day it changes shape OR gets fixed" - and it worked: the
+     * tripwire is what handed the fix back for this update.
      *
      * @var array<string, string> engine name => substring its failure must carry
      */
-    private const MEASURED_OPEN_DEFECTS = [
-        'mssql' => "Incorrect syntax near 'tina4_session'",
+    private const MEASURED_OPEN_DEFECTS = [];
+
+    /**
+     * The types tina4_session must ACTUALLY be built with on each engine, as
+     * that engine's own catalog spells them.
+     *
+     * The columns are a cross-framework contract (session_id, data, expires_at),
+     * so only the type spellings differ - and they have to differ, because one
+     * spelling is not legal everywhere. SQL Server is the row to watch: NVARCHAR
+     * rather than VARCHAR because a session id is Unicode, NVARCHAR(MAX) rather
+     * than the deprecated TEXT, and FLOAT rather than DOUBLE PRECISION.
+     *
+     * SQLite is listed with its Node/Python spelling. That is NOT a schema
+     * change for an existing deployment: SQLite types are affinities, so the
+     * VARCHAR(255)/TEXT/DOUBLE PRECISION an older tina4-php wrote has exactly
+     * the same TEXT/TEXT/REAL affinities, and IF NOT EXISTS never rewrites a
+     * table that is already there.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const NATIVE_COLUMN_TYPES = [
+        'sqlite' => ['session_id' => 'text', 'data' => 'text', 'expires_at' => 'real'],
+        'postgres' => ['session_id' => 'character varying', 'data' => 'text', 'expires_at' => 'double precision'],
+        'mysql' => ['session_id' => 'varchar', 'data' => 'text', 'expires_at' => 'double'],
+        'mssql' => ['session_id' => 'nvarchar', 'data' => 'nvarchar(max)', 'expires_at' => 'float'],
     ];
 
     /** @var array<string, string|false> getenv() values captured before this test changed them. */
@@ -158,10 +201,22 @@ class SessionDatabaseEnginesTest extends TestCase
         /** @var array<string, string|null> $openDefects known-defect engines => failure reason, null when it worked */
         $openDefects = [];
         /** @var string[] $notExercised engines this build could not reach at all */
-        $notExercised = $this->enginesWithoutDrivers();
+        $notExercised = [];
+
+        $unreachableOpportunistic = $this->opportunisticEnginesWithoutDrivers();
 
         foreach ($this->engineSpecifications() as $engine) {
             $name = $engine['name'];
+
+            // An opportunistic engine this build cannot reach is REPORTED, never
+            // run and never counted broken. Running it would fail for "not
+            // reachable", which says nothing about whether the backend supports
+            // it - the failure this invariant is about.
+            if (array_key_exists($name, $unreachableOpportunistic)) {
+                $notExercised[] = $name . ' (' . $unreachableOpportunistic[$name] . ')';
+                continue;
+            }
+
             $reason = $this->roundTripThrough($engine);
 
             if (array_key_exists($name, self::MEASURED_OPEN_DEFECTS)) {
@@ -170,6 +225,9 @@ class SessionDatabaseEnginesTest extends TestCase
             }
 
             if ($reason !== null) {
+                // Reached here, an opportunistic engine is PRESENT and FAILING,
+                // which is a real defect and is treated exactly like a required
+                // one. Only unreachability buys an exemption, never brokenness.
                 $broken[] = $reason;
                 continue;
             }
@@ -189,11 +247,16 @@ class SessionDatabaseEnginesTest extends TestCase
             . ' - a backend that advertises support for an engine has to work on that engine'
         );
 
-        $this->assertGreaterThanOrEqual(
-            self::REQUIRED_ENGINE_COUNT,
-            count($ran),
-            'only ' . count($ran) . ' engine(s) ran (' . ($ran !== [] ? implode(', ', $ran) : 'none')
-            . ') - one engine passing is not the invariant; SQLite, PostgreSQL and MySQL are all required'
+        // Every REQUIRED engine must appear in $ran. Counting alone would let
+        // an opportunistic engine silently substitute for a required one that
+        // never ran, which is the same "one engine passing" hole in disguise.
+        $missingRequired = array_values(array_diff(self::REQUIRED_ENGINES, $ran));
+        $this->assertSame(
+            [],
+            $missingRequired,
+            'these REQUIRED engines did not round-trip: ' . implode(', ', $missingRequired)
+            . ' (ran: ' . ($ran !== [] ? implode(', ', $ran) : 'none') . ') - one engine passing is not'
+            . ' the invariant; SQLite, PostgreSQL and MySQL are all required, and unreachable counts as broken'
         );
 
         // The known-defect tripwire. It fails BOTH ways: if the defect changed
@@ -209,7 +272,9 @@ class SessionDatabaseEnginesTest extends TestCase
                 $observed,
                 $engineName . ' now WORKS through the database session backend. That is good news and this'
                 . ' test is the last thing standing in the way: promote ' . $engineName . ' into the required'
-                . ' roster, raise REQUIRED_ENGINE_COUNT, and delete its MEASURED_OPEN_DEFECTS entry'
+                . ' roster: add it to OPPORTUNISTIC_ENGINES (or REQUIRED_ENGINES if every build can'
+                . ' reach it) and delete its MEASURED_OPEN_DEFECTS entry. That is exactly what happened'
+                . ' to mssql on 2026-08-04 - this tripwire is what handed the fix back'
             );
 
             $this->assertStringContainsString(
@@ -304,6 +369,388 @@ class SessionDatabaseEnginesTest extends TestCase
             'a SUPPORTED engine must resolve on the same first-use path and simply report no session -'
             . ' otherwise the refusal above proves nothing about the scheme'
         );
+    }
+
+    /**
+     * Each engine gets ITS OWN column types, confirmed in the engine's own
+     * catalog after a REAL first use.
+     *
+     * WHY THIS IS NOT A STRING TEST OVER THE DDL CONSTANT. Reading the SQL back
+     * out of the class and asserting it contains "NVARCHAR" proves the constant
+     * says NVARCHAR; it does not prove SQL Server accepted the statement or
+     * built the column that way. Every type below is read from the ENGINE, on a
+     * connection the handler knows nothing about, after the handler created the
+     * table for real.
+     *
+     * WHAT IT PINS. One generic statement for all five engines is wrong on two
+     * of them: SQL Server takes TEXT only as a deprecated type, and Firebird has
+     * no TEXT at all and rejects IF NOT EXISTS outright. The mssql row is the
+     * one that goes red the moment the generic DDL comes back - varchar instead
+     * of nvarchar, text instead of nvarchar(max).
+     */
+    public function testEveryEngineGetsItsOwnNativeColumnTypes(): void
+    {
+        /** @var string[] $exercised */
+        $exercised = [];
+        /** @var string[] $wrong */
+        $wrong = [];
+
+        foreach ($this->reachableEngineSpecifications() as $engine) {
+            $name = $engine['name'];
+            $verifier = null;
+
+            try {
+                $verifier = new \PDO($engine['dsn'], $engine['username'], $engine['password'], [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                ]);
+                // A tina4_session left behind by an older run would let
+                // ensureTable() skip creation, and the types read back would
+                // describe that leftover rather than this code.
+                $verifier->exec('DROP TABLE IF EXISTS tina4_session');
+
+                $this->pointTheEnvironmentAt($engine);
+
+                // A REAL first use: write() calls ensureTable() on its way in.
+                $handler = new DatabaseSessionHandler();
+                $handler->write('types-' . $name . '-' . bin2hex(random_bytes(4)), ['engine' => $name], 60);
+
+                $declared = $this->declaredColumnTypes($verifier, $name);
+                $expected = self::NATIVE_COLUMN_TYPES[$name] ?? [];
+
+                if ($expected === []) {
+                    $wrong[] = $name . ' has no measured native column types in this test';
+                    continue;
+                }
+
+                // Rebuild in the expected key order: === on arrays is
+                // order-sensitive, and a catalog is free to answer in any order.
+                $observed = [];
+                foreach ($expected as $column => $ignored) {
+                    $observed[$column] = $declared[$column] ?? 'COLUMN MISSING';
+                }
+
+                if ($observed !== $expected) {
+                    $wrong[] = sprintf(
+                        '%s built %s, expected %s',
+                        $name,
+                        json_encode($observed),
+                        json_encode($expected)
+                    );
+                    continue;
+                }
+
+                $exercised[] = $name;
+            } catch (\Throwable $failure) {
+                $wrong[] = sprintf('%s (%s: %s)', $name, get_class($failure), $failure->getMessage());
+            } finally {
+                if ($verifier !== null) {
+                    try {
+                        $verifier->exec('DROP TABLE IF EXISTS tina4_session');
+                    } catch (\Throwable) {
+                        // Cleanup only; the assertions own the verdict.
+                    }
+                }
+                $verifier = null;
+            }
+        }
+
+        fwrite(STDERR, "\n[session-contract] per-engine session DDL confirmed in the catalog of: "
+            . ($exercised !== [] ? implode(', ', $exercised) : 'NONE') . "\n");
+
+        $this->assertSame(
+            [],
+            $wrong,
+            'these engines did not get their own native column types: ' . implode('; ', $wrong)
+            . ' - one generic CREATE TABLE for every engine is exactly what this replaced'
+        );
+
+        $missingRequired = array_values(array_diff(self::REQUIRED_ENGINES, $exercised));
+        $this->assertSame(
+            [],
+            $missingRequired,
+            'these REQUIRED engines were never exercised: ' . implode(', ', $missingRequired)
+            . ' - a green run that checked one engine cannot be told apart from one that checked all of them'
+        );
+    }
+
+    /**
+     * Concurrent FIRST USE is safe on every engine: several real processes race
+     * to create tina4_session against ONE real database, all of them survive,
+     * and the table is intact and holding every row afterwards.
+     *
+     * WHY REAL PROCESSES AND NOT THE OBVIOUS SHAPE. The obvious shape -
+     * pre-create the table, then call ensureTable() on a handler whose
+     * tableCreated flag is false - does not reach the code it means to test, for
+     * two independent reasons, both measured:
+     *
+     *   1. ensureTable() checks tableExists() FIRST, so with the table already
+     *      there the CREATE is never issued at all.
+     *   2. Even if it were issued, every per-engine statement is idempotent on
+     *      its own engine (IF NOT EXISTS on SQLite/PostgreSQL/MySQL, IF OBJECT_ID
+     *      on SQL Server, the RDB$RELATIONS check on Firebird - the last
+     *      confirmed idempotent against a live Firebird 5.0.4). A CREATE against
+     *      an existing table therefore does not raise on ANY engine, so the catch
+     *      would still never run.
+     *
+     * The catch exists for the interleave those idempotency checks cannot cover:
+     * two workers both pass the check, both CREATE, and the loser errors. That
+     * interleave needs genuine concurrency, PHP has no threads, so it needs
+     * genuine processes. Each worker is the real handler on a real connection to
+     * the real engine - see tests/fixtures/session_concurrent_first_use.php.
+     *
+     * WHAT IT WOULD CATCH. Removing the catch leaves the losing worker's
+     * exception escaping ensureTable() and its process exiting non-zero, which
+     * this test reports by name and engine. The failure is not hypothetical: it
+     * is Msg 2714 on SQL Server, SQLSTATE 42S01 on Firebird, and a
+     * pg_type_typname_nsp_index unique violation on PostgreSQL - three
+     * spellings, which is why the guard re-checks instead of matching strings.
+     */
+    public function testConcurrentFirstUseIsSafeOnEveryEngine(): void
+    {
+        $workerCount = 6;
+        $workerScript = __DIR__ . '/fixtures/session_concurrent_first_use.php';
+        $repositoryRoot = dirname(__DIR__);
+
+        $this->assertFileExists($workerScript, 'the concurrent first-use worker is missing');
+
+        /** @var string[] $exercised */
+        $exercised = [];
+        /** @var string[] $failures */
+        $failures = [];
+
+        foreach ($this->reachableEngineSpecifications() as $engine) {
+            $name = $engine['name'];
+            $verifier = null;
+
+            try {
+                $verifier = new \PDO($engine['dsn'], $engine['username'], $engine['password'], [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                ]);
+                // The race is about FIRST use, so the table has to be absent.
+                $verifier->exec('DROP TABLE IF EXISTS tina4_session');
+                $this->settleSqliteJournalMode($verifier, $name);
+
+                $childEnvironment = array_merge(getenv(), [
+                    'T4_RACE_URL' => $engine['url'],
+                    'T4_RACE_USERNAME' => $engine['username'],
+                    'T4_RACE_PASSWORD' => $engine['password'],
+                    // A cache in front of the adapter could answer tableExists()
+                    // from memory, which would decide the race instead of the
+                    // engine.
+                    'TINA4_AUTO_CACHING' => 'false',
+                    'TINA4_DB_CACHE' => 'false',
+                ]);
+
+                // Enough lead for every worker to boot PHP and CONNECT before
+                // the barrier releases - a worker still connecting is a worker
+                // not in the race.
+                $startAt = microtime(true) + 1.5;
+
+                $workers = [];
+                for ($worker = 0; $worker < $workerCount; $worker++) {
+                    $pipes = [];
+                    $process = proc_open(
+                        [
+                            PHP_BINARY,
+                            $workerScript,
+                            sprintf('%.6F', $startAt),
+                            sprintf('race-%s-%d-%s', $name, $worker, bin2hex(random_bytes(3))),
+                        ],
+                        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                        $pipes,
+                        $repositoryRoot,
+                        $childEnvironment
+                    );
+
+                    if (!is_resource($process)) {
+                        $failures[] = $name . ' could not start concurrent worker ' . $worker;
+                        continue;
+                    }
+
+                    $workers[] = ['process' => $process, 'pipes' => $pipes, 'index' => $worker];
+                }
+
+                // Reap every worker: read its pipes to EOF, close them, and wait
+                // on the process. Nothing is left running when this returns.
+                foreach ($workers as $started) {
+                    $standardOutput = trim((string)stream_get_contents($started['pipes'][1]));
+                    $standardError = trim((string)stream_get_contents($started['pipes'][2]));
+                    fclose($started['pipes'][1]);
+                    fclose($started['pipes'][2]);
+                    $exitCode = proc_close($started['process']);
+
+                    if ($exitCode !== 0) {
+                        $failures[] = sprintf(
+                            '%s worker %d exited %d: %s',
+                            $name,
+                            $started['index'],
+                            $exitCode,
+                            $standardError !== '' ? $standardError : ($standardOutput !== '' ? $standardOutput : 'no output')
+                        );
+                    }
+                }
+
+                // The table has to be there AND hold every worker's row: a
+                // survivor that swallowed its own write would look identical to
+                // a survivor that wrote, without this.
+                $rowCount = (int)$verifier->query('SELECT COUNT(*) FROM tina4_session')->fetchColumn();
+                if ($rowCount !== $workerCount) {
+                    $failures[] = sprintf(
+                        '%s ended the race with %d of %d rows in tina4_session',
+                        $name,
+                        $rowCount,
+                        $workerCount
+                    );
+                    continue;
+                }
+
+                $exercised[] = $name;
+            } catch (\Throwable $failure) {
+                $failures[] = sprintf('%s (%s: %s)', $name, get_class($failure), $failure->getMessage());
+            } finally {
+                if ($verifier !== null) {
+                    try {
+                        $verifier->exec('DROP TABLE IF EXISTS tina4_session');
+                    } catch (\Throwable) {
+                        // Cleanup only; the assertions own the verdict.
+                    }
+                }
+                $verifier = null;
+            }
+        }
+
+        fwrite(STDERR, '[session-contract] concurrent first use (' . $workerCount
+            . ' real processes per engine) survived on: '
+            . ($exercised !== [] ? implode(', ', $exercised) : 'NONE') . "\n");
+
+        $this->assertSame(
+            [],
+            $failures,
+            'concurrent first use is NOT safe on these engines: ' . implode('; ', $failures)
+            . ' - two workers racing to create tina4_session is what happens every time an app starts'
+            . ' more than one process, and the loser must not take a request down'
+        );
+
+        $missingRequired = array_values(array_diff(self::REQUIRED_ENGINES, $exercised));
+        $this->assertSame(
+            [],
+            $missingRequired,
+            'the race was never run on these REQUIRED engines: ' . implode(', ', $missingRequired)
+        );
+    }
+
+    /**
+     * The engines this build can actually exercise, under the same rules the
+     * roster test applies: an opportunistic engine with no driver is passed
+     * over, and an unreachable one FAILS under TINA4_REQUIRE_SERVICES rather
+     * than quietly shrinking the roster.
+     *
+     * @return array<int, array{name:string,url:string,username:string,password:string,host:?string,port:int,dsn:string}>
+     */
+    private function reachableEngineSpecifications(): array
+    {
+        $withoutDrivers = $this->opportunisticEnginesWithoutDrivers();
+        $reachable = [];
+
+        foreach ($this->engineSpecifications() as $engine) {
+            if (array_key_exists($engine['name'], $withoutDrivers)) {
+                continue;
+            }
+
+            if ($engine['host'] !== null) {
+                $unreachable = $this->unreachableReason($engine['name'], $engine['host'], $engine['port']);
+                if ($unreachable !== null) {
+                    if (getenv('TINA4_REQUIRE_SERVICES')) {
+                        $this->fail('TINA4_REQUIRE_SERVICES is set but ' . $unreachable);
+                    }
+                    continue;
+                }
+            }
+
+            $reachable[] = $engine;
+        }
+
+        return $reachable;
+    }
+
+    /**
+     * Convert a SQLite file to WAL up front, on the out-of-band connection.
+     *
+     * NOT a convenience. Every Tina4 SQLite adapter runs "PRAGMA
+     * journal_mode=WAL" when it opens, and converting a database that is still
+     * in rollback-journal mode needs EXCLUSIVE access - which the out-of-band
+     * verifier, held open for the whole engine, denies. SQLite answers
+     * SQLITE_BUSY for that conversion WITHOUT consulting the busy handler, so
+     * the adapter's busyTimeout(5000) does not cover it and the worker dies at
+     * CONNECT with "SQLite3: Failed to open database: database is locked".
+     *
+     * MEASURED: two of six workers died exactly that way, before the barrier,
+     * before any session code ran. A failure at connect says nothing about the
+     * session DDL, so the conversion is done ONCE here and every later opener
+     * finds the pragma already satisfied.
+     *
+     * (The underlying adapter behaviour - a cold pool of processes opening a
+     * fresh SQLite database concurrently can fail at open - is a real and
+     * separate framework question. It is deliberately NOT what this file
+     * measures.)
+     */
+    private function settleSqliteJournalMode(\PDO $verifier, string $engine): void
+    {
+        if ($engine !== 'sqlite') {
+            return;
+        }
+
+        $verifier->exec('PRAGMA journal_mode=WAL');
+    }
+
+    /**
+     * The column types tina4_session was ACTUALLY built with, read from the
+     * engine's own catalog on the out-of-band connection.
+     *
+     * @return array<string, string> lower-cased column name => lower-cased type
+     */
+    private function declaredColumnTypes(\PDO $verifier, string $engine): array
+    {
+        $types = [];
+
+        if ($engine === 'sqlite') {
+            foreach ($verifier->query('PRAGMA table_info(tina4_session)')->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $types[strtolower((string)($row['name'] ?? ''))] = strtolower((string)($row['type'] ?? ''));
+            }
+            return $types;
+        }
+
+        $sql = match ($engine) {
+            'postgres' => 'SELECT column_name, data_type, character_maximum_length'
+                . ' FROM information_schema.columns'
+                . " WHERE table_name = 'tina4_session' AND table_schema = current_schema()",
+            'mysql' => 'SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type,'
+                . ' CHARACTER_MAXIMUM_LENGTH AS character_maximum_length'
+                . ' FROM information_schema.COLUMNS'
+                . " WHERE TABLE_NAME = 'tina4_session' AND TABLE_SCHEMA = DATABASE()",
+            'mssql' => 'SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type,'
+                . ' CHARACTER_MAXIMUM_LENGTH AS character_maximum_length'
+                . " FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'tina4_session'",
+            default => '',
+        };
+
+        if ($sql === '') {
+            return $types;
+        }
+
+        foreach ($verifier->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $type = strtolower((string)($row['data_type'] ?? ''));
+            // NVARCHAR(MAX) reports as nvarchar with length -1, and that
+            // distinction is the whole point on SQL Server: a plain NVARCHAR
+            // would cap the session payload, and NVARCHAR(MAX) is what replaced
+            // the deprecated TEXT.
+            if ((int)($row['character_maximum_length'] ?? 0) === -1) {
+                $type .= '(max)';
+            }
+            $types[strtolower((string)($row['column_name'] ?? ''))] = $type;
+        }
+
+        return $types;
     }
 
     /**
@@ -462,7 +909,7 @@ class SessionDatabaseEnginesTest extends TestCase
             ],
         ];
 
-        if ($this->enginesWithoutDrivers() === []) {
+        if ($this->opportunisticEnginesWithoutDrivers() === []) {
             $mssqlHost = getenv('TINA4_TEST_MSSQL_HOST') ?: '127.0.0.1';
             $mssqlPort = (int)(getenv('TINA4_TEST_MSSQL_PORT') ?: 1433);
             $mssqlDatabase = getenv('TINA4_TEST_MSSQL_DB') ?: 'tina4_test';
@@ -491,7 +938,7 @@ class SessionDatabaseEnginesTest extends TestCase
      *
      * @return string[]
      */
-    private function enginesWithoutDrivers(): array
+    private function opportunisticEnginesWithoutDrivers(): array
     {
         $pdoDrivers = \PDO::getAvailableDrivers();
         $adapterDriver = function_exists('sqlsrv_connect') || in_array('dblib', $pdoDrivers, true);
@@ -501,8 +948,8 @@ class SessionDatabaseEnginesTest extends TestCase
             return [];
         }
 
-        return ['mssql (needs ext-sqlsrv or ext-pdo_dblib for the adapter, and ext-pdo_dblib'
-            . ' for the out-of-band verifier; this build has neither)'];
+        return ['mssql' => 'needs ext-sqlsrv or ext-pdo_dblib for the adapter, and ext-pdo_dblib'
+            . ' for the out-of-band verifier; this build has neither'];
     }
 
     /**
