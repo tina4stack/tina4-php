@@ -31,6 +31,13 @@ namespace Tina4;
  * Mongo in production runs serverless in local dev with no code change - only the
  * backend differs.
  *
+ * A configured URI with NO driver installed throws DocStoreDriverMissing
+ * (ADR-0033). It does NOT quietly use the local SQLite store: that turns a
+ * production write into a write to a container-local file nobody reads, which
+ * vanishes on the next deploy, with no error at any point. PHP needs both the
+ * 'mongodb' extension and the mongodb/mongodb composer library, and the throw
+ * names whichever is missing.
+ *
  * Design (the SQLite backend):
  *     - Each collection is a table (_id TEXT PRIMARY KEY, doc TEXT) holding JSON.
  *     - Query filters are pushed down to SQL over json_extract(doc, '$.field')
@@ -1241,30 +1248,61 @@ class SqliteDatabase
 }
 
 /**
- * The configured Mongo URI, reusing the app-wide queue/session env vars.
- * Canonical TINA4_SESSION_MONGO_URI; TINA4_SESSION_MONGO_URL is a legacy alias.
+ * A Mongo URI is configured but the MongoDB driver is not installed.
+ *
+ * ADR-0024 rule 3, settled for DocStore by ADR-0033: a provider that cannot
+ * honour an operation must RAISE, naming the provider and what is missing.
+ * Falling back to the local SQLite store here would send production writes to
+ * a container-local file nobody reads.
  */
-function docStoreMongoUri(): string
+class DocStoreDriverMissing extends \RuntimeException
 {
-    return trim(
-        (getenv('TINA4_MONGO_URI') ?: '')
-        ?: (getenv('TINA4_SESSION_MONGO_URI') ?: '')
-        ?: (getenv('TINA4_SESSION_MONGO_URL') ?: '')
-    );
 }
 
 /**
- * True when no Mongo is configured (or the driver is absent), so the SQLite
- * fallback is in effect.
+ * The env var that supplied the URI, or '' when none did.
+ *
+ * Named separately so an error can tell the operator WHICH variable to unset
+ * without ever printing its value - a Mongo URI routinely carries
+ * `user:password@`.
+ *
+ * TINA4_MONGO_URI is the canonical app-wide name; TINA4_SESSION_MONGO_URI is
+ * the session-layer name; TINA4_SESSION_MONGO_URL is a legacy alias.
+ */
+function docStoreMongoUriSource(): string
+{
+    foreach (['TINA4_MONGO_URI', 'TINA4_SESSION_MONGO_URI', 'TINA4_SESSION_MONGO_URL'] as $name) {
+        if (trim((string) (getenv($name) ?: '')) !== '') {
+            return $name;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * The configured Mongo URI, reusing the app-wide queue/session env vars.
+ */
+function docStoreMongoUri(): string
+{
+    $source = docStoreMongoUriSource();
+
+    return $source === '' ? '' : trim((string) getenv($source));
+}
+
+/**
+ * True when no Mongo is configured, so the SQLite fallback is in effect.
+ *
+ * CONFIGURATION ONLY. Before 3.13.95 this also returned true when a URI was set
+ * but ext-mongodb was absent, and that is precisely what made getCollection()
+ * hand back the local SQLite store while the operator believed they were on
+ * Mongo. A missing driver is now an error (ADR-0033), not a second way to be
+ * serverless - otherwise an app branching on this would take the local path and
+ * never reach the throw.
  */
 function isServerless(): bool
 {
-    if (docStoreMongoUri() === '') {
-        return true;
-    }
-    // A URI is set but the ext-mongodb driver is absent: degrade to the local
-    // store rather than crash.
-    return !class_exists('\MongoDB\Driver\Manager');
+    return docStoreMongoUri() === '';
 }
 
 /** @var SqliteDatabase|null */
@@ -1293,16 +1331,36 @@ function getCollection(string $name): object
     if (isServerless()) {
         return docStoreDefaultDb()->getCollection($name);
     }
-    // Real-Mongo path: hand back a MongoDB\Collection if the high-level library
-    // is present (it brings its own ObjectId). The SQLite path never needs it.
+
+    // A missing driver is resolved HERE, before any socket is opened: it is a
+    // static fact and needs no network to establish. PHP needs TWO pieces and
+    // each can go missing on its own, so each is named separately - telling an
+    // operator with the extension installed to "install the driver" sends them
+    // looking in the wrong place.
+    $source = docStoreMongoUriSource() ?: 'TINA4_MONGO_URI';
+    if (!class_exists('\MongoDB\Driver\Manager')) {
+        throw new DocStoreDriverMissing(
+            "Tina4 DocStore: {$source} is set, so the MongoDB provider is selected, but its "
+            . "driver is not installed (PHP extension 'mongodb'). Install it with "
+            . "`pecl install mongodb`, or unset {$source} to use the local SQLite store."
+        );
+    }
+    if (!class_exists('\MongoDB\Client')) {
+        throw new DocStoreDriverMissing(
+            "Tina4 DocStore: {$source} is set, so the MongoDB provider is selected, and the "
+            . "'mongodb' PHP extension is loaded, but the high-level library is not installed "
+            . "(composer package 'mongodb/mongodb'). Install it with "
+            . "`composer require mongodb/mongodb`, or unset {$source} to use the local SQLite store."
+        );
+    }
+
+    // Real-Mongo path: the high-level library brings its own ObjectId. The
+    // SQLite path never needs it.
     $uri = docStoreMongoUri();
     $dbName = (getenv('TINA4_MONGO_DB') ?: '') ?: ((getenv('TINA4_SESSION_MONGO_DB') ?: '') ?: 'tina4');
-    if (class_exists('\MongoDB\Client')) {
-        $client = new \MongoDB\Client($uri);
-        return $client->selectCollection($dbName, $name);
-    }
-    // Driver present but no high-level library: fall back to the local store.
-    return docStoreDefaultDb()->getCollection($name);
+    $client = new \MongoDB\Client($uri);
+
+    return $client->selectCollection($dbName, $name);
 }
 
 /**
