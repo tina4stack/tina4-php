@@ -414,9 +414,23 @@ class FirebirdAdapter implements DatabaseAdapter
 
     public function tableExists(string $table): bool
     {
+        // Firebird's folding rule is ASYMMETRIC:
+        //     CREATE TABLE foo     -> stored as FOO   (unquoted folds to UPPER)
+        //     CREATE TABLE "Foo"   -> stored as Foo   (quoted keeps its case)
+        //
+        // So uppercasing is CORRECT for the unquoted case - the common one - and
+        // WRONG for a quoted mixed-case table, which is a real thing on Firebird.
+        // Dropping the uppercase would not fix that, it would just invert which
+        // half is broken.
+        //
+        // tableExists('Foo') is genuinely AMBIGUOUS: the caller could mean the
+        // quoted `Foo` or the unquoted `FOO`. Match EITHER and report present if
+        // either exists. Do not "simplify" this back to a single comparison -
+        // that is the bug this replaces (a quoted mixed-case table was reported
+        // absent, so the CREATE TABLE idempotency guard never fired).
         $rows = $this->query(
-            "SELECT RDB\$RELATION_NAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND RDB\$VIEW_BLR IS NULL AND TRIM(RDB\$RELATION_NAME) = ?",
-            [strtoupper($table)]
+            "SELECT RDB\$RELATION_NAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND RDB\$VIEW_BLR IS NULL AND (TRIM(RDB\$RELATION_NAME) = ? OR TRIM(RDB\$RELATION_NAME) = ?)",
+            [$table, strtoupper($table)]
         );
         return count($rows) > 0;
     }
