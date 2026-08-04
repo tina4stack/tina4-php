@@ -336,9 +336,9 @@ class FirebirdUrlTest extends TestCase
 
         $url = sprintf(
             'firebird://SYSDBA:masterkey@%s:%d%s',
-            self::FIREBIRD_HOST,
-            self::FIREBIRD_PORT,
-            self::LIVE_DB_PATH // begins with "/"
+            self::firebirdHost(),
+            self::firebirdPort(),
+            self::liveDbPath() // begins with "/"
         );
         $adapter = $this->tryConnect($url);
         $row = $adapter->fetchOne('SELECT 1 AS x FROM rdb$database');
@@ -356,9 +356,9 @@ class FirebirdUrlTest extends TestCase
         // path component. Normalisation strips one slash.
         $url = sprintf(
             'firebird://SYSDBA:masterkey@%s:%d/%s',
-            self::FIREBIRD_HOST,
-            self::FIREBIRD_PORT,
-            self::LIVE_DB_PATH // already starts with "/" — gives "//..." when joined
+            self::firebirdHost(),
+            self::firebirdPort(),
+            self::liveDbPath() // already starts with "/" — gives "//..." when joined
         );
         $adapter = $this->tryConnect($url);
         $row = $adapter->fetchOne('SELECT 1 AS x FROM rdb$database');
@@ -376,11 +376,11 @@ class FirebirdUrlTest extends TestCase
         // at the real DB. The framework must connect to the real one.
         $wrongUrl = sprintf(
             'firebird://SYSDBA:masterkey@%s:%d/this/path/does/not/exist.fdb',
-            self::FIREBIRD_HOST,
-            self::FIREBIRD_PORT
+            self::firebirdHost(),
+            self::firebirdPort()
         );
-        putenv('TINA4_DATABASE_FIREBIRD_PATH=' . self::LIVE_DB_PATH);
-        $_ENV['TINA4_DATABASE_FIREBIRD_PATH'] = self::LIVE_DB_PATH;
+        putenv('TINA4_DATABASE_FIREBIRD_PATH=' . self::liveDbPath());
+        $_ENV['TINA4_DATABASE_FIREBIRD_PATH'] = self::liveDbPath();
 
         $adapter = $this->tryConnect($wrongUrl);
         $row = $adapter->fetchOne('SELECT 1 AS x FROM rdb$database');
