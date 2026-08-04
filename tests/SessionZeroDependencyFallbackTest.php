@@ -793,9 +793,13 @@ class SessionZeroDependencyFallbackTest extends TestCase
      */
     private function expectedChildExtensionCount(): int
     {
-        $baseline = PhpChild::childExtensionBaseline(self::OPTIONAL_CLIENT_EXTENSIONS);
+        // Leading backslash: this file lives in namespace Tina4\Tests, and the
+        // shared test helpers are deliberately in the GLOBAL namespace (the repo
+        // maps PSR-4 Tina4\ -> Tina4/, so a Tina4\Tests\... helper would never
+        // autoload).
+        $baseline = \PhpChild::childExtensionBaseline(self::OPTIONAL_CLIENT_EXTENSIONS);
 
-        return PhpChild::expectedCountWithout($baseline, self::OPTIONAL_CLIENT_EXTENSIONS);
+        return \PhpChild::expectedCountWithout($baseline, self::OPTIONAL_CLIENT_EXTENSIONS);
     }
 
     // ---- the child programs --------------------------------------------------

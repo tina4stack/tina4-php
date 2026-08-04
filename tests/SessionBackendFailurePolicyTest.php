@@ -791,12 +791,18 @@ class SessionBackendFailurePolicyTest extends TestCase
         );
         // Exit 0 is also what a SKIPPED child produces, and a skip here would
         // mean the delegation reported success while asserting nothing. Demand
-        // the run that actually passed a test.
-        $this->assertStringContainsString(
-            'OK (1 test',
+        // evidence that one test really ran and really asserted.
+        //
+        // Matched on PHPUnit's own summary line rather than "OK (1 test", because
+        // this case legitimately provokes a PHP warning (file_put_contents on the
+        // read-only file), so PHPUnit prints "OK, but there were issues!" instead
+        // of "OK (1 test, ...)" - and the earlier, stricter assertion failed on a
+        // child that had in fact passed with 8 assertions.
+        $this->assertMatchesRegularExpression(
+            '/^Tests: 1, Assertions: [1-9]\d*/m',
             $stdout,
-            "the child exited 0 without running {$testMethod} to a pass (a skip exits 0 too), so "
-            . "the delegation proved nothing.\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
+            "the child exited 0 without running {$testMethod} to a real, asserting pass (a skip "
+            . "exits 0 too), so the delegation proved nothing.\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
         );
     }
 
