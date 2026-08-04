@@ -758,6 +758,7 @@ $queue->purge(string $status, ?int $maxRetries = null): int
 $queue->produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0): string
 $queue->consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0, int $iterations = 0, int $batchSize = 1): \Generator
 $queue->process(callable|string $handlerOrQueue, callable|string|array $queueOrHandlerOrOptions = '', array $options = []): void
+$queue->close(): void  // Release the backend connection. No-op on the file backend, idempotent, discard the queue afterwards.
 $queue->getTopic(): string
 
 // Job methods (yielded by consume() / returned by pop() as array, or wrapped via Job class)
