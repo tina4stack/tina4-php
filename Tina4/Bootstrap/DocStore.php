@@ -657,15 +657,84 @@ class DocStoreCodec
 }
 
 /**
+ * Read a result's value by its uniform Tina4 property spelling.
+ *
+ * The result objects keep the driver's GETTERS as the authoritative accessors
+ * (ADR-0025 corollary 2, unchanged). This adds the property spelling ALONGSIDE
+ * them, because DocStoreDelegator supplies the same spelling on the real
+ * driver's result objects - so `$result->insertedId` and
+ * `$result->getInsertedId()` both answer, on both providers (ADR-0035).
+ *
+ * The backing properties stay PRIVATE. A public property would be readable
+ * without passing through this trait and would reappear in the reflection the
+ * contract harness runs, so one mechanism stays one mechanism.
+ */
+trait DocStoreResultAccessors
+{
+    /**
+     * Resolves a uniform property name to the driver-spelled getter behind it.
+     *
+     * @param string $name The property name, e.g. insertedId.
+     * @return mixed The accessor's value.
+     * @throws \InvalidArgumentException When no accessor of that name exists.
+     */
+    public function __get(string $name): mixed
+    {
+        $getter = 'get' . ucfirst($name);
+        if (method_exists($this, $getter)) {
+            return $this->$getter();
+        }
+
+        throw new \InvalidArgumentException(
+            'Tina4 DocStore: ' . static::class . " has no accessor '{$name}'. "
+            . 'Available: ' . implode(', ', self::accessorNames()) . '.'
+        );
+    }
+
+    /**
+     * Reports whether a uniform property name resolves to a non-null value.
+     *
+     * @param string $name The property name, e.g. insertedId.
+     * @return bool True when the accessor exists and its value is not null.
+     */
+    public function __isset(string $name): bool
+    {
+        $getter = 'get' . ucfirst($name);
+
+        return method_exists($this, $getter) && $this->$getter() !== null;
+    }
+
+    /**
+     * Returns the uniform property names this result answers to.
+     *
+     * @return array<int, string> The accessor names, e.g. ['insertedId'].
+     */
+    private static function accessorNames(): array
+    {
+        $names = [];
+        foreach (get_class_methods(static::class) as $method) {
+            if (str_starts_with($method, 'get') && strlen($method) > 3) {
+                $names[] = lcfirst(substr($method, 3));
+            }
+        }
+
+        return $names;
+    }
+}
+
+/**
  * Result of an insertOne call.
  *
- * The accessors are METHODS, not public properties, because that is what
- * MongoDB\InsertOneResult exposes and ADR-0025 makes the driver the shape the
- * fallback imitates. The properties are private so there is exactly one
- * spelling that works on both providers.
+ * The GETTERS are authoritative, because that is what MongoDB\InsertOneResult
+ * exposes and ADR-0025 makes the driver the shape the fallback imitates. The
+ * backing properties are private; the uniform `->insertedId` spelling is
+ * supplied by DocStoreResultAccessors on this side and by DocStoreDelegator on
+ * the driver side, so one spelling works on both (ADR-0035).
  */
 class InsertOneResult
 {
+    use DocStoreResultAccessors;
+
     public function __construct(private readonly mixed $insertedId)
     {
     }
@@ -686,6 +755,8 @@ class InsertOneResult
  */
 class InsertManyResult
 {
+    use DocStoreResultAccessors;
+
     /** @param array $insertedIds */
     public function __construct(private readonly array $insertedIds)
     {
@@ -707,6 +778,8 @@ class InsertManyResult
  */
 class UpdateResult
 {
+    use DocStoreResultAccessors;
+
     public function __construct(
         private readonly int $matchedCount,
         private readonly int $modifiedCount,
@@ -750,6 +823,8 @@ class UpdateResult
  */
 class DeleteResult
 {
+    use DocStoreResultAccessors;
+
     public function __construct(private readonly int $deletedCount)
     {
     }
@@ -763,6 +838,44 @@ class DeleteResult
     {
         return $this->deletedCount;
     }
+}
+
+/**
+ * Normalise the driver's three sort spellings to a list of [key, direction].
+ *
+ * ADR-0036. The framework documents `sort('total', -1)`; a list of pairs is
+ * what pymongo and the Node driver also take; and a MAP (`['total' => -1]`) is
+ * what a MongoDB sort document actually is. Measured 2026-08-04 against a real
+ * MongoDB, the map spelling raised
+ *
+ *     TypeError: DocStoreCodec::extract(): Argument #1 ($field) must be of type string
+ *
+ * on the fallback while working on the driver - the same defect class this ADR
+ * closes, one layer down. All three now mean the same thing on both providers.
+ *
+ * @param string|array $keyOrList A field name, a list of [field, direction] pairs, or a field => direction map.
+ * @param int          $direction The direction, used only with a string field name.
+ * @return array<int, array{0:string,1:int}> The normalised [field, direction] pairs.
+ */
+function docStoreSortSpec(string|array $keyOrList, int $direction = 1): array
+{
+    if (is_string($keyOrList)) {
+        return [[$keyOrList, $direction]];
+    }
+
+    $spec = [];
+    foreach ($keyOrList as $key => $value) {
+        // A LIST of pairs has integer keys and array values; a MAP has the
+        // field name as the key. Both are legal driver input, so both resolve
+        // here rather than at four call sites.
+        if (is_int($key) && is_array($value)) {
+            $spec[] = [(string) $value[0], (int) $value[1]];
+        } else {
+            $spec[] = [(string) $key, (int) $value];
+        }
+    }
+
+    return $spec;
 }
 
 /**
@@ -801,16 +914,16 @@ class Cursor implements \IteratorAggregate
     }
 
     /**
-     * @param string|array<array{0:string,1:int}> $keyOrList
+     * Orders the result. Accepts all three driver spellings (ADR-0036).
+     *
+     * @param string|array $keyOrList A field name, a list of [field, direction] pairs, or a field => direction map.
+     * @param int          $direction The direction, used only with a string field name.
+     * @return self This cursor, for chaining.
      */
     public function sort(string|array $keyOrList, int $direction = 1): self
     {
-        if (is_string($keyOrList)) {
-            $this->sort[] = [$keyOrList, $direction];
-        } else {
-            foreach ($keyOrList as $pair) {
-                $this->sort[] = [$pair[0], $pair[1]];
-            }
+        foreach (docStoreSortSpec($keyOrList, $direction) as $pair) {
+            $this->sort[] = $pair;
         }
         return $this;
     }
@@ -869,6 +982,23 @@ class Cursor implements \IteratorAggregate
     {
         $out = iterator_to_array($this->getIterator(), false);
         return $length === null ? $out : array_slice($out, 0, $length);
+    }
+
+    /**
+     * The uniform Tina4 spelling, ADDITIVE to toArray (ADR-0035).
+     *
+     * ADR-0025 corollary 1 removed this because MongoDB\Driver\Cursor has no
+     * toList. ADR-0035 amends that corollary: a method may exist here when it
+     * also exists on WHAT getCollection RETURNS for the real provider, and
+     * DocStoreDelegator supplies it there. toArray stays - it is the driver's
+     * spelling - so both work on both providers.
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, array> The decoded documents.
+     */
+    public function toList(?int $length = null): array
+    {
+        return $this->toArray($length);
     }
 }
 
@@ -1260,6 +1390,376 @@ class DocStoreDriverMissing extends \RuntimeException
 }
 
 /**
+ * A DEFERRED find() on the real MongoDB driver (ADR-0036).
+ *
+ * WHY THIS EXISTS
+ *
+ * The fallback's Cursor is lazy and chainable: find() builds no SQL, sort() /
+ * limit() / skip() accumulate, and the query runs on iteration. PHP's driver is
+ * the opposite - MongoDB\Collection::find($filter, $options) EXECUTES, and the
+ * MongoDB\Driver\Cursor it returns has no sort(), limit() or skip() at all,
+ * because by then the query is already on the wire.
+ *
+ * So the framework's own documented example
+ *
+ *     $orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10)
+ *
+ * worked on the SQLite fallback and FATALLED on a real MongoDB with
+ * "Call to undefined method MongoDB\Driver\Cursor::sort()". Measured
+ * 2026-08-04. That is ADR-0025's defect class - a spelling that works on the
+ * fallback and breaks on the swap - and it also broke the First Principle,
+ * because it is a PUBLISHED example that does not run.
+ *
+ * The fix is to defer: this object accumulates the chain and only calls
+ * find($filter, $options) when it is actually materialised, which is the shape
+ * PHP's driver wants anyway. Ruby's View and pymongo's Cursor are both already
+ * lazy, so this brings PHP to the shape the other three already have.
+ *
+ * ITERATION SEMANTICS are the fallback's, deliberately: the chain issues NO
+ * query, materialising issues exactly ONE, and iterating a second time issues
+ * another (a MongoDB\Driver\Cursor can only be walked once, and the fallback
+ * re-runs its SQL per iteration). Nothing is buffered, so a large unlimited
+ * result still streams.
+ *
+ * @implements \IteratorAggregate<int, mixed>
+ */
+final class DocStoreQuery implements \IteratorAggregate
+{
+    /** @var array<string, int> field => direction, in insertion order */
+    private array $sort = [];
+    private ?int $limit = null;
+    private int $skip = 0;
+    /** Memoised only for __call, never for iteration - see the class docblock. */
+    private ?object $executed = null;
+
+    /**
+     * @param object $collection The real MongoDB\Collection.
+     * @param array  $filter     The query filter.
+     * @param array  $options    Driver options carried from find(), e.g. projection.
+     */
+    public function __construct(
+        private readonly object $collection,
+        private readonly array $filter,
+        private readonly array $options = []
+    ) {
+    }
+
+    /**
+     * Orders the result. Accepts all three driver spellings (ADR-0036).
+     *
+     * @param string|array $keyOrList A field name, a list of [field, direction] pairs, or a field => direction map.
+     * @param int          $direction The direction, used only with a string field name.
+     * @return self This query, for chaining.
+     */
+    public function sort(string|array $keyOrList, int $direction = 1): self
+    {
+        foreach (docStoreSortSpec($keyOrList, $direction) as [$field, $fieldDirection]) {
+            $this->sort[$field] = $fieldDirection;
+        }
+        $this->executed = null;
+
+        return $this;
+    }
+
+    /**
+     * Caps the number of documents returned.
+     *
+     * @param int $n The maximum number of documents.
+     * @return self This query, for chaining.
+     */
+    public function limit(int $n): self
+    {
+        $this->limit = $n;
+        $this->executed = null;
+
+        return $this;
+    }
+
+    /**
+     * Skips the first N documents.
+     *
+     * @param int $n How many documents to skip.
+     * @return self This query, for chaining.
+     */
+    public function skip(int $n): self
+    {
+        $this->skip = $n;
+        $this->executed = null;
+
+        return $this;
+    }
+
+    /**
+     * Runs the query and returns a live driver cursor.
+     *
+     * @return object A MongoDB\Driver\Cursor.
+     */
+    private function run(): object
+    {
+        $options = $this->options;
+        if ($this->sort !== []) {
+            $options['sort'] = $this->sort;
+        }
+        if ($this->limit !== null) {
+            $options['limit'] = $this->limit;
+        }
+        if ($this->skip !== 0) {
+            $options['skip'] = $this->skip;
+        }
+
+        return $this->collection->find($this->filter, $options);
+    }
+
+    /**
+     * Iterates the documents, running the query on first use.
+     *
+     * @return \Traversable The driver's cursor.
+     */
+    public function getIterator(): \Traversable
+    {
+        return $this->run();
+    }
+
+    /**
+     * Materialises the query into a list of documents.
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, mixed> The documents.
+     */
+    public function toArray(?int $length = null): array
+    {
+        $out = $this->run()->toArray();
+
+        return $length === null ? $out : array_slice($out, 0, $length);
+    }
+
+    /**
+     * The uniform Tina4 spelling, ADDITIVE to toArray (ADR-0035).
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, mixed> The documents.
+     */
+    public function toList(?int $length = null): array
+    {
+        return $this->toArray($length);
+    }
+
+    /**
+     * Forwards any other driver-cursor call, so nothing becomes unreachable.
+     *
+     * The cursor is memoised HERE only, so repeated calls such as getId() plus
+     * setTypeMap() act on one cursor rather than issuing a query each time.
+     * Chaining sort/limit/skip discards it, because the chain no longer
+     * describes that cursor.
+     *
+     * @param string $name      The method being called.
+     * @param array  $arguments The arguments to forward.
+     * @return mixed The driver's return value.
+     */
+    public function __call(string $name, array $arguments): mixed
+    {
+        $this->executed ??= $this->run();
+
+        return $this->executed->$name(...$arguments);
+    }
+}
+
+/**
+ * The driver delegator (ADR-0035).
+ *
+ * ADR-0025 costed "wrap the driver" as a hand-written FACADE over 12-14 methods
+ * and rejected it because that makes aggregate, bulkWrite, createIndex, watch,
+ * sessions and transactions unreachable. That objection is fatal to a facade
+ * and irrelevant to a DELEGATOR: __call forwards EVERYTHING untouched, so the
+ * whole driver surface stays reachable and we add exactly two members.
+ *
+ * What it adds:
+ *   - toList()      the uniform cursor spelling, alongside the driver's toArray()
+ *   - ->insertedId  the uniform result spelling, alongside getInsertedId()
+ *
+ * Both exist natively on the SQLite fallback, so one spelling works on both
+ * providers - which is what ADR-0025 corollary 1 wanted and ADR-0035 supplies
+ * instead of deleting.
+ *
+ * Wrapping is applied to what the driver RETURNS as well, because a cursor and
+ * a result object are where those two spellings live. BSON values are never
+ * wrapped: a BSONDocument is DATA a call site subscripts, not an API surface,
+ * and wrapping it would break `$doc['field']`.
+ *
+ * @implements \IteratorAggregate<mixed, mixed>
+ */
+final class DocStoreDelegator implements \IteratorAggregate
+{
+    public function __construct(private readonly object $target)
+    {
+    }
+
+    /**
+     * Returns the wrapped driver object, for code that needs it unadorned.
+     *
+     * @return object The real MongoDB driver object.
+     */
+    public function unwrap(): object
+    {
+        return $this->target;
+    }
+
+    /**
+     * Forwards any driver call untouched, wrapping an API object it returns.
+     *
+     * @param string $name      The method being called.
+     * @param array  $arguments The arguments to forward.
+     * @return mixed The driver's return value, wrapped when it is an API object.
+     */
+    public function __call(string $name, array $arguments): mixed
+    {
+        return self::wrap($this->target->$name(...$arguments));
+    }
+
+    /**
+     * Returns a DEFERRED, chainable query instead of an executed cursor.
+     *
+     * This is the ONE method the delegator does not simply forward, and
+     * ADR-0036 says why: MongoDB\Collection::find() executes immediately and
+     * hands back a cursor with no sort/limit/skip, so the chain the fallback
+     * supports - and the framework documents - fatalled on the real provider.
+     * Deferring makes one spelling work on both.
+     *
+     * Only reached on a COLLECTION; the delegator also wraps cursors and result
+     * objects, and calling find() on one of those is already an error.
+     *
+     * @param array|null $filter  The query filter.
+     * @param array|null $options Driver options, e.g. ['projection' => [...]].
+     * @return DocStoreQuery The deferred query.
+     */
+    public function find(?array $filter = null, ?array $options = null): DocStoreQuery
+    {
+        return new DocStoreQuery($this->target, $filter ?? [], $options ?? []);
+    }
+
+    /**
+     * Reads the uniform name of a driver getter, or a public driver property.
+     *
+     * The GETTER is tried first, and that ordering is load-bearing rather than
+     * stylistic: MEASURED against ext-mongodb + mongodb/mongodb 1.x, a real
+     * MongoDB\InsertOneResult has a PRIVATE property literally named
+     * $insertedId behind getInsertedId(). property_exists() answers true for a
+     * private property, so a property-first order reached it and PHP raised
+     * "Cannot access private property" - on the real provider only.
+     *
+     * Public properties are detected with get_object_vars(), which from outside
+     * the class returns exactly the ones a call site could have read itself.
+     *
+     * @param string $name The property name, e.g. insertedId.
+     * @return mixed The accessor or property value.
+     * @throws \InvalidArgumentException When neither resolves.
+     */
+    public function __get(string $name): mixed
+    {
+        $getter = 'get' . ucfirst($name);
+        if (method_exists($this->target, $getter)) {
+            return self::wrap($this->target->$getter());
+        }
+        if (array_key_exists($name, get_object_vars($this->target))) {
+            return self::wrap($this->target->$name);
+        }
+
+        throw new \InvalidArgumentException(
+            'Tina4 DocStore: ' . get_class($this->target) . " has no accessor or public property '{$name}'."
+        );
+    }
+
+    /**
+     * Reports whether a uniform getter name or public property resolves.
+     *
+     * @param string $name The property name, e.g. insertedId.
+     * @return bool True when the value resolves and is not null.
+     */
+    public function __isset(string $name): bool
+    {
+        $getter = 'get' . ucfirst($name);
+        if (method_exists($this->target, $getter)) {
+            return $this->target->$getter() !== null;
+        }
+
+        return isset(get_object_vars($this->target)[$name]);
+    }
+
+    /**
+     * Materialises a cursor into a list of documents.
+     *
+     * The uniform Tina4 spelling. MongoDB\Driver\Cursor::toArray() takes no
+     * length argument, so the cap is applied here rather than pushed down.
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, mixed> The documents.
+     * @throws \LogicException When the wrapped object is not cursor-like.
+     */
+    public function toList(?int $length = null): array
+    {
+        if (method_exists($this->target, 'toList')) {
+            return $this->target->toList($length);
+        }
+        if (!method_exists($this->target, 'toArray')) {
+            throw new \LogicException(
+                'Tina4 DocStore: ' . get_class($this->target) . ' is not a cursor, so toList() has no meaning.'
+            );
+        }
+
+        $out = $this->target->toArray();
+
+        return $length === null ? $out : array_slice($out, 0, $length);
+    }
+
+    /**
+     * Iterates the wrapped cursor, so foreach works through the delegator.
+     *
+     * @return \Traversable The driver's own iterator.
+     * @throws \LogicException When the wrapped object is not traversable.
+     */
+    public function getIterator(): \Traversable
+    {
+        if ($this->target instanceof \IteratorAggregate) {
+            return $this->target->getIterator();
+        }
+        if ($this->target instanceof \Traversable) {
+            return $this->target;
+        }
+
+        throw new \LogicException(
+            'Tina4 DocStore: ' . get_class($this->target) . ' is not traversable.'
+        );
+    }
+
+    /**
+     * Wraps an API object, and leaves everything else exactly as it was.
+     *
+     * A BSON value is DATA - a document a call site subscripts, an ObjectId it
+     * compares - so wrapping one would break `$doc['field']` and buy nothing.
+     * Everything else the driver hands back is an API surface (a cursor, a
+     * result, another collection), and those are what carry the uniform
+     * spellings.
+     *
+     * @param mixed $value The driver's return value.
+     * @return mixed The value, wrapped when it is an API object.
+     */
+    private static function wrap(mixed $value): mixed
+    {
+        if (!is_object($value)) {
+            return $value;
+        }
+        if ($value instanceof self || $value instanceof \ArrayAccess) {
+            return $value;
+        }
+        if (interface_exists('\MongoDB\BSON\Type') && $value instanceof \MongoDB\BSON\Type) {
+            return $value;
+        }
+
+        return new self($value);
+    }
+}
+
+/**
  * The env var that supplied the URI, or '' when none did.
  *
  * Named separately so an error can tell the operator WHICH variable to unset
@@ -1324,7 +1824,12 @@ function docStoreDefaultDb(): SqliteDatabase
  * ext-mongodb driver is installed. Same call sites either way - only the backend
  * differs.
  *
- * @return SqliteCollection|\MongoDB\Driver\Manager|object
+ * The Mongo collection is handed back through DocStoreDelegator, which adds the
+ * uniform Tina4 spellings and forwards everything else untouched (ADR-0035).
+ * What this function RETURNS is the surface a call site sees, so it is the
+ * surface the contract compares.
+ *
+ * @return SqliteCollection|DocStoreDelegator|object
  */
 function getCollection(string $name): object
 {
@@ -1360,7 +1865,7 @@ function getCollection(string $name): object
     $dbName = (getenv('TINA4_MONGO_DB') ?: '') ?: ((getenv('TINA4_SESSION_MONGO_DB') ?: '') ?: 'tina4');
     $client = new \MongoDB\Client($uri);
 
-    return $client->selectCollection($dbName, $name);
+    return new DocStoreDelegator($client->selectCollection($dbName, $name));
 }
 
 /**

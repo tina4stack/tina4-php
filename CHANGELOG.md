@@ -1,3 +1,94 @@
+### Fixed (the documented cursor chain fatalled on real MongoDB, ADR-0036)
+
+**This was a PUBLISHED example that did not run.** From this file's own DocStore
+section:
+
+```php
+foreach ($orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10) as $doc)
+```
+
+It worked on the SQLite fallback and died on a real MongoDB with
+
+```
+Error: Call to undefined method MongoDB\Driver\Cursor::sort()
+```
+
+`MongoDB\Collection::find()` EXECUTES and returns a cursor with no `sort`,
+`limit` or `skip` - PHP's driver takes those as `find()` OPTIONS, so by the time
+find() returned there was nothing left to chain.
+
+`getCollection()->find()` now returns `Tina4\DocStoreQuery`, a DEFERRED
+chainable query: it issues NO query, accumulates `sort`/`limit`/`skip`, and calls
+`find($filter, $options)` exactly once when you iterate it or call
+`toArray()`/`toList()`. Nothing is buffered, so a large result still streams, and
+anything else on the driver cursor is still reachable through `__call`. This is
+the shape `Mongo::Collection::View` and pymongo's `Cursor` already had.
+
+`sort()` also now accepts all three driver spellings on both providers -
+`sort('total', -1)`, `sort(['total' => -1])`, `sort([['total', -1]])`. The MAP
+form used to raise `TypeError: DocStoreCodec::extract(): Argument #1 ($field)
+must be of type string` on the fallback while working on the driver.
+
+  **Breaking: `find()` on the Mongo path returns `Tina4\DocStoreQuery`**, not a
+  wrapped `MongoDB\Driver\Cursor`. Every documented operation is unchanged;
+  a CLASS check on the return value is not. Same consequence ADR-0035 already
+  carries for the collection itself.
+
+  MEASURED 2026-08-04 against a real MongoDB 7.0.39: 4 chain cases x 2 providers
+  x 4 frameworks = 32 combinations, of which **10 failed** before this change and
+  0 fail after. Pinned by the substitutability suite in all four frameworks,
+  which asserts every spelling on BOTH providers, that `skip` composes, that an
+  ASCENDING sort actually ascends (a direction ignored outright would pass a
+  descending-only test), and that the chain is LAZY - a document inserted after
+  the chain is built but before it is iterated must appear.
+
+### Fixed (the uniform DocStore spellings now work on the real provider, ADR-0035)
+
+- `$cursor->toList()` and `$result->insertedId` worked on the SQLite fallback and
+  did not exist on the MongoDB driver, so code that used them broke the moment
+  `TINA4_MONGO_URI` was set. They now work on BOTH providers.
+
+  `getCollection` returns `Tina4\DocStoreDelegator` on the Mongo path, which adds
+  `toList()` plus a `__get` that resolves a uniform property name to the driver's
+  getter, and forwards the entire driver surface untouched. `aggregate`,
+  `bulkWrite`, `createIndex`, `watch`, `withOptions`, sessions and transactions
+  are all still reachable; measured 2026-08-04 against a real MongoDB 7.0.39 with 0
+  fallback-only collection methods. `->unwrap()` returns the bare driver object.
+
+  ADDITIVE, not a replacement. `toArray()` and `getInsertedId()` are the driver's
+  spellings, they are unchanged, and both forms return the same value. On the
+  fallback the backing properties stay PRIVATE - the property spelling is served
+  by the `DocStoreResultAccessors` trait, so there is still one mechanism.
+
+  ADR-0025 corollary 1 said to DELETE a method the driver lacks. ADR-0035
+  supersedes that corollary only: a method may exist on the fallback when it also
+  exists on what `getCollection` RETURNS, and Tina4 may supply it on both sides.
+  The core rule and corollaries 2, 3 and 4 stand.
+
+  Pinned by `tests/DocStoreSubstitutabilityTest.php`, which reads a document back
+  through every spelling on BOTH providers and measures the fallback's public
+  methods against the wrapped driver rather than a hand-kept list.
+
+  **Breaking: on the Mongo path `getCollection` now returns a delegator, so a
+  CLASS check answers differently.** Every method call and the whole driver
+  surface behave exactly as before, but
+
+      getCollection('x') instanceof \MongoDB\Collection   // was true, now false
+      get_class(getCollection('x'))                       // was MongoDB\Collection
+
+  **Migration:** stop type-checking the return, or reach the real object with
+  `->unwrap()`:
+
+      getCollection('x')->unwrap() instanceof \MongoDB\Collection   // true
+
+  Nothing in the framework type-checks it; this is stated because a user
+  application might.
+
+  KNOWN and NOT fixed here: the fallback `Cursor` carries `sort`, `limit` and
+  `skip`, which `MongoDB\Driver\Cursor` does not have, so
+  `find([...])->sort('total', -1)` still works locally and fatals on Mongo. That
+  needs a `find()`/`Cursor` redesign, not a delegator method.
+
 ### Fixed (redis/valkey stats() size on the zero-dependency transport, ADR-0004)
 
 - `Tina4\Cache\RedisBackend::stats()` computed `size` only when the ext-redis
@@ -112,38 +203,6 @@
   shared Redis plus real SQLite and real PostgreSQL, with negative cases
   asserting the key is STABLE for the same database (not per-connection) and
   that credentials never reach it.
-
-### Breaking (DocStore result accessors, ADR-0025)
-
-- The DocStore result objects (`InsertOneResult`, `InsertManyResult`,
-  `UpdateResult`, `DeleteResult`) now expose the MongoDB driver's GETTERS
-  instead of public properties. The properties are private.
-
-      $result->insertedId      ->  $result->getInsertedId()
-      $result->insertedIds     ->  $result->getInsertedIds()
-      $result->matchedCount    ->  $result->getMatchedCount()
-      $result->modifiedCount   ->  $result->getModifiedCount()
-      $result->upsertedId      ->  $result->getUpsertedId()
-      $result->deletedCount    ->  $result->getDeletedCount()
-
-  WHY: the two halves of an advertised swap exposed DISJOINT APIs. The SQLite
-  fallback offered `->insertedId` and no getter; a real `MongoDB\InsertOneResult`
-  offers `getInsertedId()` and NO public properties at all. There was no
-  spelling of the insert that worked on both providers, so the framework's own
-  documented example
-
-      $res = $orders->insertOne([...]);
-      $orders->findOne(['_id' => $res->insertedId]);
-
-  became `findOne(['_id' => null])` the moment `TINA4_MONGO_URI` was set, and
-  the developer just saw "document not found" - SILENTLY, with no error at any
-  point. Measured 2026-08-03 against a real MongoDB.
-
-  ADR-0025 settles the general rule: the fallback imitates the driver, because
-  the driver is the half that cannot be changed. Pinned by
-  `tests/DocStoreSubstitutabilityTest.php`, which runs every case against BOTH
-  providers, with a negative case asserting the fallback-only property spelling
-  stays gone.
 
 ### Fixed (session write, PHP-only defect)
 
