@@ -262,7 +262,7 @@ PHP;
      * ADR-0024 rule 3, settled for DocStore by ADR-0033: a provider that cannot
      * honour an operation must RAISE, naming the provider and what is missing.
      */
-    public function testAMissingExtensionRaisesInsteadOfUsingTheLocalFile(): void
+    public function testAMissingDriverRaisesInsteadOfUsingTheLocalFile(): void
     {
         // A password in the URI, so the credential-leak assertion has something
         // real to catch.
@@ -288,7 +288,7 @@ PHP;
         $this->assertStringContainsString('TINA4_MONGO_URI', $report['message']);
 
         // NEGATIVE: naming the variable must not mean printing its value.
-        $this->assertStringNotContainsString('s3cr3t-p4ssw0rd', $report['message'], 'the message leaked the URI credentials');
+        $this->assertStringNotContainsString('s3cr3t-p4ssw0rd', $report['message'], 'the message does not leak the uri credentials, but it did');
         // NEGATIVE, and the one that matters most: nothing was written locally.
         $this->assertFalse($report['store_file_exists'], 'the local SQLite store was created anyway');
     }
@@ -321,7 +321,7 @@ PHP;
         $this->assertSame('DocStoreDriverMissing', $report['error_type']);
         $this->assertStringContainsString('mongodb/mongodb', $report['message']);
         $this->assertStringContainsString('composer require mongodb/mongodb', $report['message']);
-        $this->assertStringNotContainsString('s3cr3t-p4ssw0rd', $report['message']);
+        $this->assertStringNotContainsString('s3cr3t-p4ssw0rd', $report['message'], 'the message does not leak the uri credentials, but it did');
         $this->assertFalse($report['store_file_exists'], 'the local SQLite store was created anyway');
     }
 
