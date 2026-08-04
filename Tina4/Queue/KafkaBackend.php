@@ -279,16 +279,47 @@ class KafkaBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
+    /**
+     * Dead-lettered jobs for a topic, read back from the '<topic>.dead_letter'
+     * topic THIS BACKEND produces to itself (see deadLetter()).
+     *
+     * This used to throw, on the grounds that "a log cannot be queried by job
+     * state". True - but it does not need to be QUERIED, only READ: every
+     * record on the dead-letter topic is a dead letter by construction, so
+     * reading it from offset 0 enumerates them exactly. Invariant 3 requires
+     * that "a dead-letter handler written locally must find the same jobs after
+     * deploying onto a broker", so this ANSWERS.
+     *
+     * A read is naturally non-destructive on Kafka (consuming does not remove),
+     * and the dead-letter topic's tracked offset is rewound to 0 and then
+     * RESTORED, so repeated calls return the same set and the caller's position
+     * on the main topic is untouched.
+     *
+     * @param string   $topic      Topic whose dead letters to read.
+     * @param int|null $maxRetries Accepted for interface parity; a job only
+     *                             reaches this topic by exhausting its retries.
+     * @return array<int, array<string, mixed>> Dead-lettered job payloads.
+     */
     public function deadLetters(string $topic, ?int $maxRetries = null): array
     {
-        throw new \RuntimeException(
-            'The kafka queue backend cannot answer deadLetters(): '
-                . 'Kafka keeps no queryable registry of failed or dead jobs: a failed record '
-                . 'is re-produced to a dead-letter TOPIC and the original offset is committed '
-                . 'past, and a log cannot be queried by job state. Returning an empty list '
-                . 'would claim nothing has failed. Consume the dead-letter topic directly, or '
-                . 'use the file or mongodb backend. '
-        );
+        $dlq = $topic . '.dead_letter';
+        $savedOffset = $this->offsets[$dlq] ?? null;
+        $out = [];
+
+        try {
+            $this->offsets[$dlq] = 0;
+            while (($message = $this->dequeue($dlq)) !== null) {
+                $out[] = $message;
+            }
+        } finally {
+            if ($savedOffset === null) {
+                unset($this->offsets[$dlq]);
+            } else {
+                $this->offsets[$dlq] = $savedOffset;
+            }
+        }
+
+        return $out;
     }
 
     /** {@inheritDoc} */
