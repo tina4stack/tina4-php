@@ -415,17 +415,47 @@ final class DocStoreSubstitutabilityTest extends TestCase
      * three, because "correct for a reason we did not choose" is exactly the
      * behaviour that regresses silently. If a future change starts passing
      * per-call options that defeat libmongoc's pool sharing, this catches it.
+     *
+     * EVERY COUNT HERE IS SCOPED TO THE CONNECTIONS THIS TEST OWNS.
+     * serverStatus.connections.current, which this test used to read, is a
+     * SERVER-GLOBAL counter across every client on that mongod, so any other
+     * process moves it and the assertion becomes a coin flip rather than a
+     * gate. Measured 2026-08-04 against the shared lab MongoDB 7.0.39 with the
+     * docstore code UNCHANGED and correct, the global count read [88, 89, 90]
+     * with one other agent connected and [193, 194, 195] with 45 further real
+     * clients held open, against an idle baseline near 6.
+     *
+     * $currentOp with idleConnections is the per-client view: an appName in
+     * the connection string tags every socket this test's client opens, and
+     * nobody else's carry it.
      */
     public function testRepeatedGetCollectionDoesNotGrowConnections(): void
     {
-        $uri = $this->resolve('__MONGO__');
+        $baseUri = $this->resolve('__MONGO__');
+        $appName = 'tina4_docstore_lifecycle_' . bin2hex(random_bytes(5));
+        $uri = $baseUri . (str_contains($baseUri, '?') ? '&' : '/?') . 'appName=' . $appName;
 
-        $connections = static function () use ($uri): int {
-            $probe = new \MongoDB\Client($uri);
-            $status = $probe->selectDatabase('admin')->command(['serverStatus' => 1])->toArray()[0];
+        $ownConnections = static function () use ($baseUri, $appName): int {
+            $probe = new \MongoDB\Client($baseUri);
+            $rows = $probe->selectDatabase('admin')->aggregate([
+                ['$currentOp' => ['allUsers' => true, 'idleConnections' => true, 'localOps' => true]],
+                ['$match' => ['appName' => $appName]],
+                ['$count' => 'n'],
+            ])->toArray();
 
-            return (int) $status['connections']['current'];
+            // $count emits NO document when nothing matched, which is 0.
+            return $rows === [] ? 0 : (int) $rows[0]['n'];
         };
+
+        // The measurement must be able to SEE this client, or every assertion
+        // below is vacuously true and proves nothing.
+        [$warmup] = $this->collectionFor($uri);
+        $warmup->countDocuments([]);
+        $this->assertGreaterThan(
+            0,
+            $ownConnections(),
+            'appName scoping saw none of our own connections - the probe is blind'
+        );
 
         $rounds = [];
         for ($round = 0; $round < 3; $round++) {
@@ -433,7 +463,7 @@ final class DocStoreSubstitutabilityTest extends TestCase
                 [$collection] = $this->collectionFor($uri);
                 $collection->countDocuments([]);
             }
-            $rounds[] = $connections();
+            $rounds[] = $ownConnections();
         }
 
         $settled = end($rounds);
@@ -441,16 +471,17 @@ final class DocStoreSubstitutabilityTest extends TestCase
             [$collection] = $this->collectionFor($uri);
             $collection->countDocuments([]);
         }
-        $afterHundred = $connections();
+        $afterHundred = $ownConnections();
 
         // POSITIVE: 100 further calls add nothing to a settled pool.
         $this->assertLessThanOrEqual(
-            $settled + 2,
+            $settled,
             $afterHundred,
             sprintf('connections still growing: settled=%d after 100 more=%d', $settled, $afterHundred)
         );
-        // And the growth flattened rather than tracking the call count.
+        // And the growth flattened rather than tracking the call count. Both
+        // halves are scoped, so the ceiling measures OUR pool.
         $this->assertLessThanOrEqual(2, $rounds[2] - $rounds[1], 'rounds=' . json_encode($rounds));
-        $this->assertLessThan(60, $rounds[2], 'rounds=' . json_encode($rounds));
+        $this->assertLessThanOrEqual(10, $rounds[2], 'our own pool is not bounded: rounds=' . json_encode($rounds));
     }
 }
