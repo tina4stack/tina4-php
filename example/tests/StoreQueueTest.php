@@ -122,7 +122,9 @@ class StoreQueueTest extends TestCase
         $q->push(["order_id" => 123, "customer_id" => 2]);
         $job = $q->pop();
 
-        $this->assertIsArray($job);
+        // pop() returns a Tina4\Job (ADR-0024 parity). The array reads below
+        // still resolve through ArrayAccess - that is the non-breaking promise.
+        $this->assertInstanceOf(\Tina4\Job::class, $job);
         $this->assertArrayNotHasKey("order_id", $job);
         $this->assertSame(123, $job["payload"]["order_id"]);
     }
