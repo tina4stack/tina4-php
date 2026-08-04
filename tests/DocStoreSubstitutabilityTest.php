@@ -594,7 +594,11 @@ PHP;
         $uri = $this->resolve($marker);
         [$collection] = $this->collectionFor($uri);
 
-        foreach ([9, 7, 3] as $total) {
+        // Inserted OUT of the expected order on purpose. With [9, 7, 3] a sort
+        // that silently did NOTHING still returned [9, 7] for the descending
+        // case, so the assertion passed on a broken sort - found by mutating
+        // the map branch out of docStoreSortSpec() and watching this stay green.
+        foreach ([3, 9, 7] as $total) {
             $collection->insertOne(['total' => $total, 'grp' => 'chain']);
         }
 
