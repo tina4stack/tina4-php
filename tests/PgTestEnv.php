@@ -7,11 +7,14 @@
  *
  * Shared PostgreSQL connection settings for the live-PG integration tests.
  *
- * Resolves host/port/user/pass from TINA4_TEST_POSTGRES_URL when set (CI and the
+ * Resolves host/port/user/pass from TINA4_TEST_PG_URL when set (CI and the
  * local docker harness expose PG on 55432), falling back to the historical
  * localhost defaults so a bare `phpunit` still works against a default-port PG.
  * Each test keeps its own database name (tests use tina4_php, tina4_rb, tina4)
  * but shares the host/port/credentials so they all hit the provisioned server.
+ * The database in the URL's PATH is therefore IGNORED on purpose - resolve()
+ * reads only the credentials and the host:port, and url($database) spells the
+ * database back in per test. Do not "fix" that by honouring the path.
  *
  * This is a plain test helper (NOT a mock) — it only computes connection
  * parameters; every test still talks to the REAL PostgreSQL.
@@ -27,7 +30,7 @@ final class PgTestEnv
     {
         $env = new self();
 
-        $url = getenv('TINA4_TEST_POSTGRES_URL');
+        $url = getenv('TINA4_TEST_PG_URL');
         if ($url !== false && $url !== '') {
             $rest = preg_replace('#^postgres(ql)?://#', '', $url);
 

@@ -119,7 +119,7 @@ class MigrationV3Test extends TestCase
      * the regression guard for the bug where createV3Table() emitted
      * SQLite-only DDL for every non-Firebird engine, so `new Migration($pg,...)`
      * fataled with "syntax error at or near AUTOINCREMENT" and migrations were
-     * entirely unusable on Postgres. Gated on TINA4_TEST_POSTGRES_URL so CI
+     * entirely unusable on Postgres. Gated on TINA4_TEST_PG_URL so CI
      * without a live Postgres just no-ops (mirrors DatabaseDriversTest).
      */
     public function testMigrationRunnerWorksOnLivePostgres(): void
@@ -127,9 +127,9 @@ class MigrationV3Test extends TestCase
         if (!extension_loaded('pdo_pgsql') && !function_exists('pg_connect')) {
             $this->markTestSkipped('no PostgreSQL driver (pdo_pgsql / ext-pgsql) installed');
         }
-        $url = getenv('TINA4_TEST_POSTGRES_URL');
+        $url = getenv('TINA4_TEST_PG_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL to run the live PostgreSQL migration test (e.g. postgres://tina4:tina4@localhost:55432/tina4_php)');
+            $this->markTestSkipped('Set TINA4_TEST_PG_URL to run the live PostgreSQL migration test (e.g. postgres://tina4:tina4@localhost:55432/tina4_php)');
         }
 
         // Construct via the Database facade -- exactly how apps wire migrations

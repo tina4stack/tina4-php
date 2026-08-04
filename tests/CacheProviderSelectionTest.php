@@ -38,9 +38,9 @@
  *     real sink on the real filesystem, so that is what is asserted.
  *
  * SERVICE ADDRESSES
- *     TINA4_TEST_CACHE_REDIS_URL      (default redis://127.0.0.1:6379)
- *     TINA4_TEST_CACHE_VALKEY_URL     (default valkey://127.0.0.1:6380)
- *     TINA4_TEST_CACHE_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
+ *     TINA4_TEST_REDIS_URL      (default redis://127.0.0.1:6379)
+ *     TINA4_TEST_VALKEY_URL     (default valkey://127.0.0.1:6380)
+ *     TINA4_TEST_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
  */
 
 use PHPUnit\Framework\TestCase;
@@ -54,17 +54,17 @@ class CacheProviderSelectionTest extends TestCase
 
     private function redisUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_REDIS_URL') ?: 'redis://127.0.0.1:6379';
+        return getenv('TINA4_TEST_REDIS_URL') ?: 'redis://127.0.0.1:6379';
     }
 
     private function valkeyUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_VALKEY_URL') ?: 'valkey://127.0.0.1:6380';
+        return getenv('TINA4_TEST_VALKEY_URL') ?: 'valkey://127.0.0.1:6380';
     }
 
     private function memcachedUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_MEMCACHED_URL') ?: 'memcached://127.0.0.1:11211';
+        return getenv('TINA4_TEST_MEMCACHED_URL') ?: 'memcached://127.0.0.1:11211';
     }
 
     private function setEnv(string $key, string $value): void

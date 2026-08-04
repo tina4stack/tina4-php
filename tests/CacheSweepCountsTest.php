@@ -31,10 +31,10 @@
  * simulated.
  *
  * SERVICE ADDRESSES
- *     TINA4_TEST_CACHE_REDIS_URL      (default redis://127.0.0.1:6379)
- *     TINA4_TEST_CACHE_VALKEY_URL     (default valkey://127.0.0.1:6380)
- *     TINA4_TEST_CACHE_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
- *     TINA4_TEST_CACHE_MONGO_URL      (default mongodb://127.0.0.1:27017)
+ *     TINA4_TEST_REDIS_URL      (default redis://127.0.0.1:6379)
+ *     TINA4_TEST_VALKEY_URL     (default valkey://127.0.0.1:6380)
+ *     TINA4_TEST_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
+ *     TINA4_TEST_MONGO_URI      (default mongodb://127.0.0.1:27017)
  */
 
 use PHPUnit\Framework\TestCase;
@@ -51,22 +51,22 @@ class CacheSweepCountsTest extends TestCase
 
     private function redisUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_REDIS_URL') ?: 'redis://127.0.0.1:6379';
+        return getenv('TINA4_TEST_REDIS_URL') ?: 'redis://127.0.0.1:6379';
     }
 
     private function valkeyUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_VALKEY_URL') ?: 'valkey://127.0.0.1:6380';
+        return getenv('TINA4_TEST_VALKEY_URL') ?: 'valkey://127.0.0.1:6380';
     }
 
     private function memcachedUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_MEMCACHED_URL') ?: 'memcached://127.0.0.1:11211';
+        return getenv('TINA4_TEST_MEMCACHED_URL') ?: 'memcached://127.0.0.1:11211';
     }
 
     private function mongoUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_MONGO_URL') ?: 'mongodb://127.0.0.1:27017';
+        return getenv('TINA4_TEST_MONGO_URI') ?: 'mongodb://127.0.0.1:27017';
     }
 
     protected function setUp(): void

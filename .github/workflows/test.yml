@@ -69,7 +69,7 @@ jobs:
 
       # PostgreSQL for the live ORM / migration / create-table / boolean-binding /
       # UUID-PK / two-database-routing integration tests. Port 55432 mirrors the
-      # local harness so the same TINA4_TEST_POSTGRES_URL works everywhere.
+      # local harness so the same TINA4_TEST_PG_URL works everywhere.
       postgres:
         image: postgres:16
         ports:
@@ -134,7 +134,7 @@ jobs:
 
     env:
       # Enable the real-service integration tests (they skip when unset).
-      TINA4_TEST_POSTGRES_URL: postgres://tina4:tina4@localhost:55432/tina4_php
+      TINA4_TEST_PG_URL: postgres://tina4:tina4@localhost:55432/tina4_php
       TINA4_TEST_PG_HOST: localhost
       TINA4_TEST_PG_PORT: '55432'
       TINA4_TEST_PG_USERNAME: tina4
@@ -142,7 +142,7 @@ jobs:
       TINA4_TEST_PG_DB: tina4_php
       TINA4_TEST_RABBITMQ_URL: amqp://guest:guest@localhost:5672
       TINA4_MONGO_URI: mongodb://localhost:27017
-      TINA4_TEST_MONGO_URL: mongodb://localhost:27017
+      TINA4_TEST_MONGO_URI: mongodb://localhost:27017
       TINA4_KAFKA_BROKERS: localhost:9092
       TINA4_TEST_KAFKA_URL: localhost:9092
       # MQTT 3.1.1 brokers started by the "Start MQTT brokers" step below;
@@ -480,7 +480,7 @@ jobs:
       # A skip because a provisioned service is missing becomes a hard FAILURE,
       # so this leg cannot go quietly green by not running.
       TINA4_REQUIRE_SERVICES: 1
-      TINA4_TEST_POSTGRES_URL: postgres://tina4:tina4@localhost:55432/tina4_php
+      TINA4_TEST_PG_URL: postgres://tina4:tina4@localhost:55432/tina4_php
 
     steps:
       - uses: actions/checkout@v4
