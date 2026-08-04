@@ -528,6 +528,7 @@ class SessionDatabaseEnginesTest extends TestCase
                 ]);
                 // The race is about FIRST use, so the table has to be absent.
                 $verifier->exec('DROP TABLE IF EXISTS tina4_session');
+                $this->settleSqliteJournalMode($verifier, $name);
 
                 $childEnvironment = array_merge(getenv(), [
                     'T4_RACE_URL' => $engine['url'],
@@ -670,6 +671,36 @@ class SessionDatabaseEnginesTest extends TestCase
         }
 
         return $reachable;
+    }
+
+    /**
+     * Convert a SQLite file to WAL up front, on the out-of-band connection.
+     *
+     * NOT a convenience. Every Tina4 SQLite adapter runs "PRAGMA
+     * journal_mode=WAL" when it opens, and converting a database that is still
+     * in rollback-journal mode needs EXCLUSIVE access - which the out-of-band
+     * verifier, held open for the whole engine, denies. SQLite answers
+     * SQLITE_BUSY for that conversion WITHOUT consulting the busy handler, so
+     * the adapter's busyTimeout(5000) does not cover it and the worker dies at
+     * CONNECT with "SQLite3: Failed to open database: database is locked".
+     *
+     * MEASURED: two of six workers died exactly that way, before the barrier,
+     * before any session code ran. A failure at connect says nothing about the
+     * session DDL, so the conversion is done ONCE here and every later opener
+     * finds the pragma already satisfied.
+     *
+     * (The underlying adapter behaviour - a cold pool of processes opening a
+     * fresh SQLite database concurrently can fail at open - is a real and
+     * separate framework question. It is deliberately NOT what this file
+     * measures.)
+     */
+    private function settleSqliteJournalMode(\PDO $verifier, string $engine): void
+    {
+        if ($engine !== 'sqlite') {
+            return;
+        }
+
+        $verifier->exec('PRAGMA journal_mode=WAL');
     }
 
     /**
