@@ -54,53 +54,59 @@ use Tina4\Session\DatabaseSessionHandler;
 
 class SessionDatabaseEnginesTest extends TestCase
 {
-    /** Engines that must ALL round-trip for this invariant to mean anything. */
-    private const REQUIRED_ENGINE_COUNT = 3;
+    /**
+     * Engines that must ALL round-trip for this invariant to mean anything.
+     *
+     * Unreachable counts as BROKEN here, deliberately. That refusal to treat a
+     * missing engine as an excuse is what exposed two real defects that
+     * SQLite-only testing had hidden for the whole life of this backend, so it
+     * is the property to protect, not soften.
+     *
+     * @var string[]
+     */
+    private const REQUIRED_ENGINES = ['sqlite', 'postgres', 'mysql'];
+
+    /**
+     * Engines verified OPPORTUNISTICALLY: exercised whenever this build can
+     * reach them, and a FAILURE is a real defect that fails this test - but a
+     * build with no driver for them is not a failure.
+     *
+     * The distinction is the whole point, and it is not the same as the
+     * required tier: an engine whose DRIVER IS ABSENT cannot be tested at all,
+     * while an engine that is PRESENT AND BROKEN is exactly what this invariant
+     * exists to catch. Collapsing the two would either make CI red on every
+     * machine without SQL Server, or let a genuine mssql regression pass
+     * unnoticed on the one machine that has it. Neither is acceptable, so the
+     * roster below reports which of the two actually happened, every run.
+     *
+     * mssql was a MEASURED_OPEN_DEFECTS entry until 2026-08-04. It is promoted
+     * here rather than into REQUIRED_ENGINES because SQL Server is not present
+     * on every dev machine, whereas sqlite/postgres/mysql are on the lab and in
+     * CI. Promote it further the day that stops being true.
+     *
+     * @var string[]
+     */
+    private const OPPORTUNISTIC_ENGINES = ['mssql'];
 
     /**
      * Engines whose failure is a MEASURED, OPEN framework defect - not a
      * regression this run introduced, and NOT a permission to fail.
      *
-     * mssql. DatabaseSessionHandler::ensureTable() emits
+     * EMPTY as of 2026-08-04. The one entry, mssql, is FIXED:
+     * DatabaseSessionHandler::ensureTable() no longer emits the non-T-SQL
+     * "CREATE TABLE IF NOT EXISTS", and re-checks tableExists() after a failed
+     * CREATE (with a rollback first, because a failed statement leaves
+     * PostgreSQL's transaction aborted) instead of parsing an error message
+     * every engine spells differently.
      *
-     *     CREATE TABLE IF NOT EXISTS tina4_session (
-     *         session_id VARCHAR(255) PRIMARY KEY,
-     *         data TEXT NOT NULL,
-     *         expires_at DOUBLE PRECISION NOT NULL)
-     *
-     * unconditionally, and IF NOT EXISTS is not T-SQL. MEASURED 2026-08-04
-     * against a real SQL Server 2022 on Ubuntu 24.04 / PHP 8.3.6 / ext-pdo_dblib:
-     *
-     *     Tina4\Database\DatabaseException: MSSQL execute() failed:
-     *     SQLSTATE[HY000]: General error: 20018 Incorrect syntax near
-     *     'tina4_session'. [20018] (severity 15)
-     *
-     * so the database session backend does NOT work on an engine the Database
-     * layer claims (ADAPTER_MAP carries both 'mssql' and 'sqlserver').
-     *
-     * The cost of fixing it was measured, not asserted (ADR-0028's rule). The
-     * clause is REDUNDANT: ensureTable() already guards on tableExists(), and
-     * the byte-identical DDL with those three words removed creates the table on
-     * the same live SQL Server. So the defect is 14 characters. It is left here
-     * rather than fixed because deleting them also changes CONCURRENT first-use
-     * behaviour on SQLite/PostgreSQL/MySQL (engine-side idempotency becomes a
-     * raise for the loser of the race) and has to land in all four frameworks -
-     * that is a framework change with its own parity work, not a lock-in.
-     *
-     * The assertion below requires mssql to fail for EXACTLY this reason. Any
-     * other error, or none at all, is a red test that says so - so the day the
-     * DDL is fixed, this file tells you to promote mssql into the required
-     * roster and delete this entry.
-     *
-     * Firebird is NOT listed: it has the same no-IF-NOT-EXISTS dialect and is
-     * very likely broken the same way, but this run did not measure it, so no
-     * claim is made about it here.
+     * The mechanism is kept, empty, on purpose. It is the honest way to record
+     * "we know this is broken, here is its exact signature, and this test will
+     * tell you the day it changes shape OR gets fixed" - and it worked: the
+     * tripwire is what handed the fix back for this update.
      *
      * @var array<string, string> engine name => substring its failure must carry
      */
-    private const MEASURED_OPEN_DEFECTS = [
-        'mssql' => "Incorrect syntax near 'tina4_session'",
-    ];
+    private const MEASURED_OPEN_DEFECTS = [];
 
     /** @var array<string, string|false> getenv() values captured before this test changed them. */
     private array $savedGetenv = [];
@@ -158,10 +164,22 @@ class SessionDatabaseEnginesTest extends TestCase
         /** @var array<string, string|null> $openDefects known-defect engines => failure reason, null when it worked */
         $openDefects = [];
         /** @var string[] $notExercised engines this build could not reach at all */
-        $notExercised = $this->enginesWithoutDrivers();
+        $notExercised = [];
+
+        $unreachableOpportunistic = $this->opportunisticEnginesWithoutDrivers();
 
         foreach ($this->engineSpecifications() as $engine) {
             $name = $engine['name'];
+
+            // An opportunistic engine this build cannot reach is REPORTED, never
+            // run and never counted broken. Running it would fail for "not
+            // reachable", which says nothing about whether the backend supports
+            // it - the failure this invariant is about.
+            if (array_key_exists($name, $unreachableOpportunistic)) {
+                $notExercised[] = $name . ' (' . $unreachableOpportunistic[$name] . ')';
+                continue;
+            }
+
             $reason = $this->roundTripThrough($engine);
 
             if (array_key_exists($name, self::MEASURED_OPEN_DEFECTS)) {
@@ -170,6 +188,9 @@ class SessionDatabaseEnginesTest extends TestCase
             }
 
             if ($reason !== null) {
+                // Reached here, an opportunistic engine is PRESENT and FAILING,
+                // which is a real defect and is treated exactly like a required
+                // one. Only unreachability buys an exemption, never brokenness.
                 $broken[] = $reason;
                 continue;
             }
@@ -189,11 +210,16 @@ class SessionDatabaseEnginesTest extends TestCase
             . ' - a backend that advertises support for an engine has to work on that engine'
         );
 
-        $this->assertGreaterThanOrEqual(
-            self::REQUIRED_ENGINE_COUNT,
-            count($ran),
-            'only ' . count($ran) . ' engine(s) ran (' . ($ran !== [] ? implode(', ', $ran) : 'none')
-            . ') - one engine passing is not the invariant; SQLite, PostgreSQL and MySQL are all required'
+        // Every REQUIRED engine must appear in $ran. Counting alone would let
+        // an opportunistic engine silently substitute for a required one that
+        // never ran, which is the same "one engine passing" hole in disguise.
+        $missingRequired = array_values(array_diff(self::REQUIRED_ENGINES, $ran));
+        $this->assertSame(
+            [],
+            $missingRequired,
+            'these REQUIRED engines did not round-trip: ' . implode(', ', $missingRequired)
+            . ' (ran: ' . ($ran !== [] ? implode(', ', $ran) : 'none') . ') - one engine passing is not'
+            . ' the invariant; SQLite, PostgreSQL and MySQL are all required, and unreachable counts as broken'
         );
 
         // The known-defect tripwire. It fails BOTH ways: if the defect changed
@@ -209,7 +235,9 @@ class SessionDatabaseEnginesTest extends TestCase
                 $observed,
                 $engineName . ' now WORKS through the database session backend. That is good news and this'
                 . ' test is the last thing standing in the way: promote ' . $engineName . ' into the required'
-                . ' roster, raise REQUIRED_ENGINE_COUNT, and delete its MEASURED_OPEN_DEFECTS entry'
+                . ' roster: add it to OPPORTUNISTIC_ENGINES (or REQUIRED_ENGINES if every build can'
+                . ' reach it) and delete its MEASURED_OPEN_DEFECTS entry. That is exactly what happened'
+                . ' to mssql on 2026-08-04 - this tripwire is what handed the fix back'
             );
 
             $this->assertStringContainsString(
@@ -462,7 +490,7 @@ class SessionDatabaseEnginesTest extends TestCase
             ],
         ];
 
-        if ($this->enginesWithoutDrivers() === []) {
+        if ($this->opportunisticEnginesWithoutDrivers() === []) {
             $mssqlHost = getenv('TINA4_TEST_MSSQL_HOST') ?: '127.0.0.1';
             $mssqlPort = (int)(getenv('TINA4_TEST_MSSQL_PORT') ?: 1433);
             $mssqlDatabase = getenv('TINA4_TEST_MSSQL_DB') ?: 'tina4_test';
@@ -491,7 +519,7 @@ class SessionDatabaseEnginesTest extends TestCase
      *
      * @return string[]
      */
-    private function enginesWithoutDrivers(): array
+    private function opportunisticEnginesWithoutDrivers(): array
     {
         $pdoDrivers = \PDO::getAvailableDrivers();
         $adapterDriver = function_exists('sqlsrv_connect') || in_array('dblib', $pdoDrivers, true);
@@ -501,8 +529,8 @@ class SessionDatabaseEnginesTest extends TestCase
             return [];
         }
 
-        return ['mssql (needs ext-sqlsrv or ext-pdo_dblib for the adapter, and ext-pdo_dblib'
-            . ' for the out-of-band verifier; this build has neither)'];
+        return ['mssql' => 'needs ext-sqlsrv or ext-pdo_dblib for the adapter, and ext-pdo_dblib'
+            . ' for the out-of-band verifier; this build has neither'];
     }
 
     /**
