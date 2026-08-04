@@ -550,19 +550,21 @@ $res = $orders->insertOne(['customer_id' => 1, 'total' => 9.99, 'status' => 'new
 $orders->findOne(['_id' => $res->getInsertedId()]);   // the driver's spelling
 $orders->findOne(['_id' => $res->insertedId]);        // the uniform Tina4 spelling - same id
 $orders->updateOne(['_id' => $res->insertedId], ['$set' => ['status' => 'shipped']]);
-foreach ($orders->find(['total' => ['$gt' => 5]]) as $doc) {
+foreach ($orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10) as $doc) {
     // ...
 }
-$docs = $orders->find(['total' => ['$gt' => 5]])->toList();   // toArray() also works
+$docs = $orders->find(['total' => ['$gt' => 5]])->sort(['total' => -1])->toList();   // toArray() also works
 $orders->countDocuments(['status' => 'shipped']);
 isServerless();   // true when running on the SQLite fallback
 ```
 
-Filter operators: equality, `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$exists`, `$regex`, implicit AND, `$or`, `$and`, and dotted nested keys (`addr.city`). Updates: `$set`, `$unset`, `$inc`, replace, upsert. Cursors: projection, `toArray()` and `toList()`. Values round-trip (DateTime to/from ISO-8601, `ObjectId` to/from 24-hex) and stay queryable via `json_extract`. Non-goals: aggregation pipelines, `$elemMatch`, geo queries.
+Filter operators: equality, `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$exists`, `$regex`, implicit AND, `$or`, `$and`, and dotted nested keys (`addr.city`). Updates: `$set`, `$unset`, `$inc`, replace, upsert. Cursors: `sort`, `limit`, `skip`, projection, `toArray()` and `toList()`. Values round-trip (DateTime to/from ISO-8601, `ObjectId` to/from 24-hex) and stay queryable via `json_extract`. Non-goals: aggregation pipelines, `$elemMatch`, geo queries.
 
 **One spelling, both providers (ADR-0035).** `$cursor->toList()` and the result property `$res->insertedId` are the uniform Tina4 spellings and work on the SQLite fallback AND on a real MongoDB. The driver has neither, so on the Mongo path `getCollection` returns `Tina4\DocStoreDelegator`, which adds them and forwards the entire driver surface untouched (`aggregate`, `bulkWrite`, `createIndex`, `watch`, `withOptions`, sessions and transactions all stay reachable). The driver spellings `toArray()` and `getInsertedId()` are unchanged and equally valid - this is additive, and the two always return the same value. Call `->unwrap()` for the bare driver object.
 
-**Cursor chaining is FALLBACK-ONLY, measured 2026-08-04 against a real MongoDB.** `$cursor->sort(...)`, `->limit(...)` and `->skip(...)` exist on `Tina4\Cursor` and NOT on `MongoDB\Driver\Cursor` - PHP's driver takes them as `find()` options and hands back an already-executed cursor. So `find([...])->sort('total', -1)->limit(10)` works locally and fatals the moment `TINA4_MONGO_URI` is set. This predates ADR-0035 and closing it needs a `find()`/`Cursor` redesign, not a delegator method; until then, do not chain if the app will ever run on Mongo.
+**The cursor chain is DEFERRED and works on both providers (ADR-0036).** `find()` issues no query - it returns a chainable query that accumulates `sort`/`limit`/`skip` and runs once, when you iterate it or call `toArray()`/`toList()`. On the Mongo path that is `Tina4\DocStoreQuery`, which turns the chain into the `find($filter, $options)` call PHP's driver actually wants; `MongoDB\Driver\Cursor` has no `sort`/`limit`/`skip` of its own, because by the time the driver returns a cursor the query has already executed. Before ADR-0036 the documented chain above fatalled the moment `TINA4_MONGO_URI` was set. Nothing is buffered, so a large result still streams, and iterating the same query twice re-runs it on both providers.
+
+**`sort()` takes all three spellings, on both providers.** `sort('total', -1)`, `sort(['total' => -1])` (a Mongo sort document) and `sort([['total', -1]])` (a list of pairs) are equivalent everywhere. The map form used to raise a `TypeError` on the fallback while working on the driver.
 
 Selection and configuration:
 - `TINA4_MONGO_URI` — app-wide Mongo URI. Falls back to `TINA4_SESSION_MONGO_URI`, then the legacy `TINA4_SESSION_MONGO_URL`. When one is set and the driver is present, `getCollection` returns a real Mongo collection.

@@ -1,3 +1,47 @@
+### Fixed (the documented cursor chain fatalled on real MongoDB, ADR-0036)
+
+**This was a PUBLISHED example that did not run.** From this file's own DocStore
+section:
+
+```php
+foreach ($orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10) as $doc)
+```
+
+It worked on the SQLite fallback and died on a real MongoDB with
+
+```
+Error: Call to undefined method MongoDB\Driver\Cursor::sort()
+```
+
+`MongoDB\Collection::find()` EXECUTES and returns a cursor with no `sort`,
+`limit` or `skip` - PHP's driver takes those as `find()` OPTIONS, so by the time
+find() returned there was nothing left to chain.
+
+`getCollection()->find()` now returns `Tina4\DocStoreQuery`, a DEFERRED
+chainable query: it issues NO query, accumulates `sort`/`limit`/`skip`, and calls
+`find($filter, $options)` exactly once when you iterate it or call
+`toArray()`/`toList()`. Nothing is buffered, so a large result still streams, and
+anything else on the driver cursor is still reachable through `__call`. This is
+the shape `Mongo::Collection::View` and pymongo's `Cursor` already had.
+
+`sort()` also now accepts all three driver spellings on both providers -
+`sort('total', -1)`, `sort(['total' => -1])`, `sort([['total', -1]])`. The MAP
+form used to raise `TypeError: DocStoreCodec::extract(): Argument #1 ($field)
+must be of type string` on the fallback while working on the driver.
+
+  **Breaking: `find()` on the Mongo path returns `Tina4\DocStoreQuery`**, not a
+  wrapped `MongoDB\Driver\Cursor`. Every documented operation is unchanged;
+  a CLASS check on the return value is not. Same consequence ADR-0035 already
+  carries for the collection itself.
+
+  MEASURED 2026-08-04 against a real MongoDB 7.0.39: 4 chain cases x 2 providers
+  x 4 frameworks = 32 combinations, of which **10 failed** before this change and
+  0 fail after. Pinned by the substitutability suite in all four frameworks,
+  which asserts every spelling on BOTH providers, that `skip` composes, that an
+  ASCENDING sort actually ascends (a direction ignored outright would pass a
+  descending-only test), and that the chain is LAZY - a document inserted after
+  the chain is built but before it is iterated must appear.
+
 ### Fixed (the uniform DocStore spellings now work on the real provider, ADR-0035)
 
 - `$cursor->toList()` and `$result->insertedId` worked on the SQLite fallback and
