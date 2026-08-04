@@ -43,6 +43,13 @@ class MemcachedSessionHandler
      */
     private const MAX_KEY_BYTES = 250;
 
+    /**
+     * memcached's exptime field changes meaning at 30 days: at or below this it
+     * is RELATIVE seconds, above it the server reads an ABSOLUTE UNIX TIMESTAMP.
+     * See expTime() for why we convert instead of clamping.
+     */
+    private const MAX_RELATIVE_EXPTIME = 2592000;
+
     private string $host;
     private int $port;
     private string $keyPrefix;
@@ -167,7 +174,7 @@ class MemcachedSessionHandler
      */
     public function write(string $sessionId, array $data, int $ttl = 0): void
     {
-        $effectiveTtl = $ttl > 0 ? $ttl : $this->ttl;
+        $effectiveTtl = $this->expTime($ttl > 0 ? $ttl : $this->ttl);
         $payload = json_encode($data, JSON_UNESCAPED_SLASHES);
         $cmd = sprintf("set %s 0 %d %d\r\n", $this->key($sessionId), $effectiveTtl, strlen($payload));
 
@@ -213,7 +220,33 @@ class MemcachedSessionHandler
      */
     public function touch(string $sessionId): void
     {
-        $this->command("touch {$this->key($sessionId)} {$this->ttl}\r\n", ["TOUCHED\r\n", "NOT_FOUND\r\n"]);
+        $expTime = $this->expTime($this->ttl);
+        $this->command("touch {$this->key($sessionId)} {$expTime}\r\n", ["TOUCHED\r\n", "NOT_FOUND\r\n"]);
+    }
+
+    /**
+     * Convert a ttl in SECONDS to memcached's dual-meaning exptime field.
+     *
+     * memcached documents exptime as RELATIVE seconds up to 2592000 (30 days),
+     * and as an ABSOLUTE UNIX TIMESTAMP for anything larger. Sending a raw ttl
+     * of 2592001 therefore does not mean "30 days and one second" — it means
+     * 1970-01-31, which is already past, so the item expires the instant it is
+     * stored. memcached still replies STORED, so the write looks successful and
+     * the very next read is a miss: a silent logout on every request.
+     *
+     * Measured against real memcached 1.6.45: ttl=2592000 survives,
+     * ttl=2592001 vanishes instantly.
+     *
+     * We CONVERT rather than CLAMP. Clamping a 60-day session down to 30 days
+     * would silently shorten a lifetime the operator explicitly asked to be
+     * longer, which is the same class of lie in the other direction.
+     *
+     * @param int $ttl Lifetime in seconds
+     * @return int The value to put in the exptime field
+     */
+    private function expTime(int $ttl): int
+    {
+        return $ttl > self::MAX_RELATIVE_EXPTIME ? time() + $ttl : $ttl;
     }
 
     /**

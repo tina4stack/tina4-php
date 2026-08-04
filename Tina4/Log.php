@@ -587,7 +587,7 @@ class Log
     private static function coerceMessage(mixed $message): string
     {
         if (is_string($message)) {
-            if (!mb_check_encoding($message, 'UTF-8')) {
+            if (!Str::isUtf8($message)) {
                 return '<binary ' . strlen($message) . ' bytes>';
             }
             $text = $message;
@@ -606,12 +606,13 @@ class Log
     /** Cap a console line. The file keeps the full line. */
     private static function truncateForStdout(string $line): string
     {
-        $len = mb_strlen($line);
+        $len = Str::length($line);
         if ($len <= self::STDOUT_MAX_CHARS) {
             return $line;
         }
-        return mb_substr($line, 0, self::STDOUT_MAX_CHARS) . "... (truncated, {$len} chars)";
+        return Str::substr($line, 0, self::STDOUT_MAX_CHARS) . "... (truncated, {$len} chars)";
     }
+
 
     /**
      * Is this target a FILE PATH or a DIRECTORY?

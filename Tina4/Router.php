@@ -667,13 +667,42 @@ class Router
         // exact-name match (a renamed "tina4_session_foo" can never collide).
         $sessionCookieName = Session::cookieName();
         $sessionCookie = $_COOKIE[$sessionCookieName] ?? null;
-        $session = new Session();
-        $session->start($sessionCookie);
+        // LOG LOUD, THEN DEGRADE (ADR-0021). Session's own read/write policy
+        // already logs and degrades, but CONSTRUCTION sits outside it: a
+        // refused TINA4_SESSION_BACKEND throws from the constructor, and a
+        // handler that cannot be built throws from start(). Both were unguarded
+        // here, so an unusable session backend returned a 500 for EVERY request
+        // instead of serving the page without a session.
+        //
+        // An EMPTY session never reaches this catch. start() returns an empty
+        // session for an id the store has never heard of, which is an ordinary
+        // outcome and not an error - logging that would put a line in the log
+        // for every new visitor and bury the real outage.
+        $session = null;
+        try {
+            $session = new Session();
+            $session->start($sessionCookie);
+        } catch (\Throwable $sessionError) {
+            // Log::error, the same sink Session's own backend-failure policy
+            // writes to, so an outage reads as one story rather than two.
+            Log::error(
+                'Session unavailable for this request ('
+                . get_class($sessionError) . '): ' . $sessionError->getMessage()
+            );
+            if (DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_STRICT', 'false'))) {
+                throw $sessionError;
+            }
+            $session = null;
+        }
         $request->session = $session;
 
         $result = self::dispatchInner($request, $response);
 
-        self::saveSessionAndSetCookie($session, $sessionCookie, $sessionCookieName, $result);
+        // No session means nothing to persist and no cookie to emit. The
+        // request still serves - that is the degrade half of the policy.
+        if ($session !== null) {
+            self::saveSessionAndSetCookie($session, $sessionCookie, $sessionCookieName, $result);
+        }
 
         $result = self::stripHeadBody($request, $result);
 

@@ -144,19 +144,29 @@ class DatabaseSessionHandlerTest extends TestCase
         $adapter->close();
     }
 
-    // -- Constructor throws without database ------------------------------------
+    // -- Missing database surfaces on FIRST USE, not at construction -------------
 
-    public function testConstructorThrowsWithoutDatabase(): void
+    /**
+     * A missing database must be reported by the first OPERATION, never by the
+     * constructor (session contract #4, ADR-0021). The constructor sits outside
+     * the log-loud-and-degrade policy, so a throw there cannot be logged,
+     * degraded, or re-raised by TINA4_SESSION_STRICT; thrown from read() it is
+     * caught by the Session boundary and handled like any other backend outage.
+     */
+    public function testMissingDatabaseThrowsOnFirstUseNotAtConstruction(): void
     {
         // Ensure no TINA4_DATABASE_URL env var is set
         putenv('TINA4_DATABASE_URL');
         unset($_ENV['TINA4_DATABASE_URL'], $_SERVER['TINA4_DATABASE_URL']);
         \Tina4\DotEnv::resetEnv();
 
+        // Constructing resolves nothing and must not throw.
+        $handler = new DatabaseSessionHandler();
+
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('No database connection available');
 
-        new DatabaseSessionHandler();
+        $handler->read('any-session-id');
     }
 
     // -- Table creation ---------------------------------------------------------

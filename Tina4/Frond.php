@@ -2880,12 +2880,12 @@ class Frond
             switch ($filterName) {
                 case 'upper':      return strtoupper((string)$value);
                 case 'lower':      return strtolower((string)$value);
-                case 'length':     return is_array($value) ? count($value) : (is_string($value) ? mb_strlen($value) : 0);
+                case 'length':     return is_array($value) ? count($value) : (is_string($value) ? Str::length($value) : 0);
                 case 'trim':       return trim((string)$value);
                 case 'ltrim':      return ltrim((string)$value);
                 case 'rtrim':      return rtrim((string)$value);
                 case 'capitalize': return ucfirst(strtolower((string)$value));
-                case 'title':      return mb_convert_case((string)$value, MB_CASE_TITLE);
+                case 'title':      return Str::titleCase((string)$value);
                 case 'string':     return (string)$value;
                 case 'int':        return (int)$value;
                 case 'float':      return (float)$value;
@@ -3210,7 +3210,7 @@ class Frond
         $this->filters['upper'] = fn($v) => strtoupper((string)$v);
         $this->filters['lower'] = fn($v) => strtolower((string)$v);
         $this->filters['capitalize'] = fn($v) => ucfirst(strtolower((string)$v));
-        $this->filters['title'] = fn($v) => mb_convert_case((string)$v, MB_CASE_TITLE);
+        $this->filters['title'] = fn($v) => Str::titleCase((string)$v);
         $this->filters['trim'] = fn($v) => trim((string)$v);
         $this->filters['ltrim'] = fn($v) => ltrim((string)$v);
         $this->filters['rtrim'] = fn($v) => rtrim((string)$v);
@@ -3269,7 +3269,7 @@ class Frond
         };
 
         // Arrays
-        $this->filters['length'] = fn($v) => is_array($v) ? count($v) : (is_string($v) ? mb_strlen($v) : 0);
+        $this->filters['length'] = fn($v) => is_array($v) ? count($v) : (is_string($v) ? Str::length($v) : 0);
         $this->filters['first'] = function($v) {
             if (is_array($v)) return !empty($v) ? reset($v) : '';
             if (is_string($v)) return $v !== '' ? $v[0] : '';
@@ -3342,8 +3342,8 @@ class Frond
         $this->filters['string'] = fn($v) => (string)$v;
         $this->filters['truncate'] = function($v, $length = 255) {
             $s = (string)$v;
-            if (mb_strlen($s) <= $length) return $s;
-            return mb_substr($s, 0, $length) . '...';
+            if (Str::length($s) <= $length) return $s;
+            return Str::substr($s, 0, $length) . '...';
         };
         $this->filters['wordwrap'] = fn($v, $width = 75) => wordwrap((string)$v, (int)$width, "\n", true);
         $this->filters['slug'] = function($v) {
