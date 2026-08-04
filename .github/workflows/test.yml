@@ -400,3 +400,139 @@ jobs:
           done
           if [ -n "$failed" ]; then echo "Firebird test files failed/hung:$failed"; exit 1; fi
           echo "All Firebird test files passed (native ext-interbase)."
+
+  # The redis/valkey CACHE DRIVER path runs in its OWN job, because it is the one
+  # transport nothing else in this pipeline exercises.
+  #
+  # RedisBackend has TWO transports: ext-redis when the extension is loaded, and a
+  # raw RESP socket otherwise. NOTHING installed ext-redis - not this workflow
+  # (see the `extensions:` list in `test`), not composer.json (no predis), not the
+  # lab, not a developer laptop - so every cache test the project has ever run took
+  # the RAW path and the driver branch was executed by nothing at all. That branch
+  # is not dead in the field: ext-redis is common on production PHP, so real users
+  # take it every day. The gap was our test coverage, so the coverage is what gets
+  # fixed here. The branch is NOT deleted (ADR-0004) - deleting it would break
+  # working installations.
+  #
+  # This leg is the mirror image of the Python master's zero-dependency leg:
+  # Python REMOVES its redis driver to gate the raw path, PHP ADDS its driver to
+  # gate the driver path. The `test` job above already covers the raw path by
+  # default (no extension present), so the two legs together cover both.
+  cache-driver:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      valkey:
+        image: valkey/valkey:8
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      memcached:
+        image: memcached:1.6
+        ports:
+          - 11211:11211
+        options: >-
+          --health-cmd "timeout 2 bash -c '</dev/tcp/127.0.0.1/11211'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1}).ok' || mongo --quiet --eval 'db.runCommand({ping:1}).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      postgres:
+        image: postgres:16
+        ports:
+          - 55432:5432
+        env:
+          POSTGRES_USER: tina4
+          POSTGRES_PASSWORD: tina4
+          POSTGRES_DB: tina4_php
+        options: >-
+          --health-cmd "pg_isready -U tina4 -d tina4_php"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      # A skip because a provisioned service is missing becomes a hard FAILURE,
+      # so this leg cannot go quietly green by not running.
+      TINA4_REQUIRE_SERVICES: 1
+      TINA4_TEST_POSTGRES_URL: postgres://tina4:tina4@localhost:55432/tina4_php
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          # `redis` is the WHOLE POINT of this job (PECL phpredis). The rest are
+          # what the cache suites touch: pdo_pgsql/pgsql for the database-identity
+          # case, mongodb for the mongo backend, sqlite3/pdo_sqlite for the
+          # database backend and the SQLite fixtures.
+          extensions: redis, pdo_pgsql, pgsql, mongodb, sqlite3, pdo_sqlite
+
+      # WITHOUT THIS ASSERTION THE JOB PROVES NOTHING. If the PECL build fails,
+      # setup-php can continue and every test would silently fall back to the raw
+      # RESP transport - the exact path the `test` job already covers - and this
+      # leg would report a meaningless green. Fail loudly instead.
+      - name: Assert ext-redis is actually loaded
+        run: |
+          php -m | grep -qx redis || { echo "ext-redis is NOT in php -m"; php -m; exit 1; }
+          php -r 'exit(class_exists("Redis") ? 0 : 1);' \
+            || { echo "ext-redis loaded but class Redis is missing"; exit 1; }
+          php -r 'printf("phpredis %s loaded%s", phpversion("redis"), PHP_EOL);'
+
+      # CacheBackendsTest covers the wrong-credentials fallback against a REAL
+      # password-protected Redis on 6381.
+      - name: Start password-protected Redis (redis-auth)
+        run: |
+          docker run -d --name redis-auth -p 6381:6379 redis:7 redis-server --requirepass s3cret
+          for i in $(seq 1 15); do
+            if docker exec redis-auth redis-cli -a s3cret ping 2>/dev/null | grep -q PONG; then
+              echo "redis-auth ready"; break
+            fi
+            sleep 1
+          done
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run cache suites on the ext-redis DRIVER transport
+        run: |
+          vendor/bin/phpunit --colors=never \
+            tests/CacheTest.php \
+            tests/CacheBackendsTest.php \
+            tests/ResponseCacheTest.php \
+            tests/QueryCacheTest.php \
+            tests/DbQueryCacheTest.php \
+            tests/ResponseCacheRfc9111Test.php \
+            tests/CacheClearInvalidatesTest.php \
+            tests/CacheKeyDatabaseIdentityTest.php \
+            tests/CacheSweepCountsTest.php \
+            tests/CacheNullRoundTripTest.php \
+            tests/CacheClearPersistentLayerTest.php \
+            tests/CacheProviderSelectionTest.php \
+            tests/CacheMemcachedExptimeTest.php

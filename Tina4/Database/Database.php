@@ -152,7 +152,7 @@ class Database implements DatabaseAdapter
         } else {
             // Single-connection mode — current behavior
             $adapter = self::createAdapter($url, $autoCommit, $username, $password);
-            $this->adapter = self::wrapWithCache($adapter);
+            $this->adapter = self::wrapWithCache($adapter, $url);
         }
     }
 
@@ -220,7 +220,7 @@ class Database implements DatabaseAdapter
                 $adapter = self::createAdapter(
                     $this->url, $this->autoCommit, $this->dbUsername, $this->dbPassword
                 );
-                $this->pool[$idx] = self::wrapWithCache($adapter);
+                $this->pool[$idx] = self::wrapWithCache($adapter, $this->url);
             }
 
             return $this->pool[$idx];
@@ -1618,12 +1618,21 @@ class Database implements DatabaseAdapter
      * @param DatabaseAdapter $adapter
      * @return DatabaseAdapter Original adapter or CachedDatabase wrapper
      */
-    private static function wrapWithCache(DatabaseAdapter $adapter): DatabaseAdapter
+    /**
+     * Wrap an adapter in the query cache when either cache layer is enabled.
+     *
+     * The connection URL is passed through because the cache key must carry
+     * DATABASE IDENTITY: without it, two databases sharing one backend
+     * cross-serve each other's rows (ADR-0024).
+     *
+     * @param  string $url Connection URL of the database being wrapped
+     */
+    private static function wrapWithCache(DatabaseAdapter $adapter, string $url): DatabaseAdapter
     {
         $persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
         $requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'false');
         if ($persistent || $requestScoped) {
-            return new CachedDatabase($adapter);
+            return new CachedDatabase($adapter, url: $url);
         }
         return $adapter;
     }
