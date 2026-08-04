@@ -26,7 +26,12 @@ use Tina4\Database\Database;
 
 class DatabaseSessionHandler
 {
-    private DatabaseAdapter $db;
+    /** @var DatabaseAdapter|null Resolved on FIRST USE, never in the constructor. */
+    private ?DatabaseAdapter $db = null;
+
+    /** @var mixed The caller's config['db'], held unresolved until first use. */
+    private mixed $configuredDb;
+
     private int $ttl;
     private bool $tableCreated = false;
 
@@ -39,20 +44,53 @@ class DatabaseSessionHandler
     {
         $this->ttl = (int)($config['ttl'] ?? (getenv('TINA4_SESSION_TTL') ?: 3600));
 
-        if (isset($config['db']) && $config['db'] instanceof DatabaseAdapter) {
-            $this->db = $config['db'];
-        } elseif (isset($config['db']) && $config['db'] instanceof Database) {
-            $this->db = $config['db']->getAdapter();
-        } else {
-            $db = Database::fromEnv();
-            if ($db === null) {
-                throw new \RuntimeException(
-                    'DatabaseSessionHandler: No database connection available. '
-                    . 'Pass a DatabaseAdapter via config["db"] or set the TINA4_DATABASE_URL env var.'
-                );
-            }
-            $this->db = $db->getAdapter();
+        // NO NETWORK I/O IN A CONSTRUCTOR (session contract #4, ADR-0021). This
+        // used to call Database::fromEnv() right here, and EVERY Tina4 adapter
+        // constructor calls $this->open() - a real pg_connect / mysqli /
+        // sqlsrv_connect / ibase_connect. So merely constructing the handler
+        // dialled the database. MEASURED against a real counting TCP listener:
+        // constructing it accepted 1 connection before this was made lazy.
+        //
+        // A constructor sits OUTSIDE the log-loud-and-degrade policy, so what it
+        // does cannot be logged, cannot be degraded, and cannot be re-raised by
+        // TINA4_SESSION_STRICT - an unreachable database took the app down at
+        // construction instead of degrading per request, which is the very
+        // scenario the policy exists for. The config is held as given and
+        // resolved by db() on first use, inside the policy.
+        $this->configuredDb = $config['db'] ?? null;
+    }
+
+    /**
+     * Resolve the database adapter, on FIRST USE rather than at construction.
+     *
+     * A Database wrapper satisfies DatabaseAdapter, so an injected wrapper is
+     * kept AS GIVEN (its pool, cache and transaction bookkeeping stay in play)
+     * exactly as before; only the env fallback builds a connection, and it now
+     * does so here instead of in the constructor.
+     *
+     * @return DatabaseAdapter The adapter every query runs through
+     * @throws \RuntimeException When no adapter was injected and no
+     *         TINA4_DATABASE_URL is configured
+     */
+    private function db(): DatabaseAdapter
+    {
+        if ($this->db !== null) {
+            return $this->db;
         }
+
+        if ($this->configuredDb instanceof DatabaseAdapter) {
+            return $this->db = $this->configuredDb;
+        }
+
+        $database = Database::fromEnv();
+        if ($database === null) {
+            throw new \RuntimeException(
+                'DatabaseSessionHandler: No database connection available. '
+                . 'Pass a DatabaseAdapter via config["db"] or set the TINA4_DATABASE_URL env var.'
+            );
+        }
+
+        return $this->db = $database->getAdapter();
     }
 
     /**
@@ -65,7 +103,7 @@ class DatabaseSessionHandler
     {
         $this->ensureTable();
 
-        $result = $this->db->fetch(
+        $result = $this->db()->fetch(
             "SELECT data, expires_at FROM tina4_session WHERE session_id = ?",
             [$sessionId],
             1
@@ -112,25 +150,25 @@ class DatabaseSessionHandler
         $expiresAt = $effectiveTtl > 0 ? microtime(true) + $effectiveTtl : 0.0;
 
         // Check if session already exists — parameterised.
-        $existing = $this->db->fetch(
+        $existing = $this->db()->fetch(
             "SELECT session_id FROM tina4_session WHERE session_id = ?",
             [$sessionId],
             1
         );
 
         if ($this->firstRow($existing) !== null) {
-            $this->db->execute(
+            $this->db()->execute(
                 "UPDATE tina4_session SET data = ?, expires_at = ? WHERE session_id = ?",
                 [$encoded, $expiresAt, $sessionId]
             );
         } else {
-            $this->db->execute(
+            $this->db()->execute(
                 "INSERT INTO tina4_session (session_id, data, expires_at) VALUES (?, ?, ?)",
                 [$sessionId, $encoded, $expiresAt]
             );
         }
 
-        $this->db->commit();
+        $this->db()->commit();
     }
 
     /**
@@ -152,11 +190,11 @@ class DatabaseSessionHandler
     {
         $this->ensureTable();
 
-        $this->db->execute(
+        $this->db()->execute(
             "DELETE FROM tina4_session WHERE session_id = ?",
             [$sessionId]
         );
-        $this->db->commit();
+        $this->db()->commit();
     }
 
     /**
@@ -169,11 +207,11 @@ class DatabaseSessionHandler
         $this->ensureTable();
 
         $now = microtime(true);
-        $this->db->execute(
+        $this->db()->execute(
             "DELETE FROM tina4_session WHERE expires_at > 0 AND expires_at < ?",
             [$now]
         );
-        $this->db->commit();
+        $this->db()->commit();
     }
 
     /**
@@ -225,15 +263,15 @@ class DatabaseSessionHandler
             return;
         }
 
-        if (!$this->db->tableExists('tina4_session')) {
-            $this->db->execute(
+        if (!$this->db()->tableExists('tina4_session')) {
+            $this->db()->execute(
                 "CREATE TABLE IF NOT EXISTS tina4_session ("
                 . "session_id VARCHAR(255) PRIMARY KEY, "
                 . "data TEXT NOT NULL, "
                 . "expires_at DOUBLE PRECISION NOT NULL"
                 . ")"
             );
-            $this->db->commit();
+            $this->db()->commit();
         }
 
         $this->tableCreated = true;

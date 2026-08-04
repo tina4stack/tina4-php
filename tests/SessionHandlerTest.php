@@ -637,7 +637,13 @@ class SessionHandlerTest extends TestCase
         $adapter->close();
     }
 
-    public function testDatabaseThrowsWithoutDbConfiguration(): void
+    /**
+     * Without a database the failure surfaces on the FIRST OPERATION, not at
+     * construction - the constructor performs no resolution and no I/O
+     * (session contract #4, ADR-0021), so the throw lands inside the
+     * log-loud-and-degrade policy where the Session boundary can handle it.
+     */
+    public function testDatabaseThrowsOnFirstUseWithoutDbConfiguration(): void
     {
         $prev = getenv('TINA4_DATABASE_URL');
         putenv('TINA4_DATABASE_URL');
@@ -645,9 +651,11 @@ class SessionHandlerTest extends TestCase
         \Tina4\DotEnv::resetEnv();
 
         try {
+            $handler = new DatabaseSessionHandler();
+
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('No database connection available');
-            new DatabaseSessionHandler();
+            $handler->read('any-session-id');
         } finally {
             if ($prev !== false) {
                 putenv("TINA4_DATABASE_URL={$prev}");
