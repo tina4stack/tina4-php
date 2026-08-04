@@ -544,29 +544,107 @@ PHP;
             'fallback-only collection methods (they break the swap): ' . implode(', ', $missing)
         );
 
-        // MEASURED 2026-08-04 against a real MongoDB and RECORDED rather than
-        // asserted: the fallback CURSOR still carries sort/limit/skip, which
-        // MongoDB\Driver\Cursor does not have - PHP's driver takes those as
-        // find() options and returns an already-executed cursor. So the
-        // framework's own documented chain
+        // THE FLIPPED CANARY (ADR-0036).
+        //
+        // This assertion used to record a DEFECT: it pinned ['sort','limit',
+        // 'skip'] as fallback-only, because MongoDB\Driver\Cursor has none of
+        // them - PHP's driver takes them as find() OPTIONS and returns an
+        // already-executed cursor. The framework's own documented chain
         //
         //     $orders->find([...])->sort('total', -1)->limit(10)
         //
-        // works on the fallback and fatals on the real provider. That is a
-        // genuine open defect, it PREDATES ADR-0035, and closing it means
-        // redesigning find()/Cursor rather than adding a delegator method - so
-        // it is reported here instead of being quietly widened into this gate.
+        // therefore worked on the fallback and fatalled on the real provider.
+        //
+        // find() on the Mongo path now returns a DEFERRED DocStoreQuery that
+        // accumulates the chain and executes once, so the gap is CLOSED and
+        // this asserts ZERO rather than documenting three.
         $cursorOnly = array_values(array_filter(
             get_class_methods(\Tina4\Cursor::class),
             static fn (string $m) => !self::resolvesOn($wrapped->find([]), $m)
         ));
         $this->assertSame(
-            ['sort', 'limit', 'skip'],
+            [],
             $cursorOnly,
-            'the KNOWN pre-existing cursor gap changed; re-measure before editing this expectation'
+            'fallback-only cursor methods (they break the chain on the swap): ' . implode(', ', $cursorOnly)
         );
 
         $wrapped->deleteMany([]);
+    }
+
+    /**
+     * docstore_contract.json :: the-call-site-surface-is-identical
+     *
+     * ADR-0036. The chain the framework DOCUMENTS must run on both providers.
+     *
+     * MEASURED 2026-08-04 against a real MongoDB, before the fix: every one of
+     * these fatalled with "Call to undefined method
+     * MongoDB\Driver\Cursor::sort()" while passing on the SQLite fallback. That
+     * is ADR-0025's defect class and a First Principle violation at once - a
+     * PUBLISHED example that does not run.
+     *
+     * All three sort spellings are asserted because fixing only the documented
+     * one would MOVE the incompatibility rather than remove it: the map form is
+     * what a Mongo sort document actually is, and it used to raise a TypeError
+     * on the fallback.
+     *
+     * @dataProvider providerCases
+     */
+    public function testTheCursorChainWorksOnBothProviders(?string $marker): void
+    {
+        $uri = $this->resolve($marker);
+        [$collection] = $this->collectionFor($uri);
+
+        foreach ([9, 7, 3] as $total) {
+            $collection->insertOne(['total' => $total, 'grp' => 'chain']);
+        }
+
+        $spellings = [
+            'sort(field, direction)' => static fn (object $c) => $c->find(['grp' => 'chain'])->sort('total', -1)->limit(2),
+            'sort(map)'              => static fn (object $c) => $c->find(['grp' => 'chain'])->sort(['total' => -1])->limit(2),
+            'sort(pairs)'            => static fn (object $c) => $c->find(['grp' => 'chain'])->sort([['total', -1]])->limit(2),
+        ];
+
+        foreach ($spellings as $label => $chain) {
+            $viaForeach = [];
+            foreach ($chain($collection) as $doc) {
+                $viaForeach[] = (int) $doc['total'];
+            }
+            $this->assertSame([9, 7], $viaForeach, "{$label}: foreach over the chain must order and cap");
+
+            $this->assertSame(
+                [9, 7],
+                array_map(static fn ($d) => (int) $d['total'], $chain($collection)->toArray()),
+                "{$label}: toArray() over the chain must order and cap"
+            );
+            $this->assertSame(
+                [9, 7],
+                array_map(static fn ($d) => (int) $d['total'], $chain($collection)->toList()),
+                "{$label}: toList() over the chain must order and cap"
+            );
+        }
+
+        // skip composes with sort and limit, and ascending is not just the
+        // absence of descending - a direction that is ignored would pass a
+        // descending-only test.
+        $skipped = $collection->find(['grp' => 'chain'])->sort('total', -1)->skip(1)->limit(1);
+        $this->assertSame([7], array_map(static fn ($d) => (int) $d['total'], $skipped->toArray()));
+
+        $ascending = $collection->find(['grp' => 'chain'])->sort('total', 1)->limit(2);
+        $this->assertSame([3, 7], array_map(static fn ($d) => (int) $d['total'], $ascending->toArray()));
+
+        // LAZY: building the chain must not execute. A query object that ran on
+        // find() would still pass every assertion above while issuing N queries
+        // for one chain, so laziness is asserted directly.
+        $pending = $collection->find(['grp' => 'chain'])->sort('total', -1);
+        $collection->insertOne(['total' => 99, 'grp' => 'chain']);
+        $this->assertSame(
+            99,
+            (int) $pending->toArray()[0]['total'],
+            'the chain must run at materialisation, not at find() - a document inserted after '
+            . 'the chain was built but before it was iterated must appear'
+        );
+
+        $collection->deleteMany([]);
     }
 
     /**

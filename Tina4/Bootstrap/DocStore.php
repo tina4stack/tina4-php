@@ -841,6 +841,44 @@ class DeleteResult
 }
 
 /**
+ * Normalise the driver's three sort spellings to a list of [key, direction].
+ *
+ * ADR-0036. The framework documents `sort('total', -1)`; a list of pairs is
+ * what pymongo and the Node driver also take; and a MAP (`['total' => -1]`) is
+ * what a MongoDB sort document actually is. Measured 2026-08-04 against a real
+ * MongoDB, the map spelling raised
+ *
+ *     TypeError: DocStoreCodec::extract(): Argument #1 ($field) must be of type string
+ *
+ * on the fallback while working on the driver - the same defect class this ADR
+ * closes, one layer down. All three now mean the same thing on both providers.
+ *
+ * @param string|array $keyOrList A field name, a list of [field, direction] pairs, or a field => direction map.
+ * @param int          $direction The direction, used only with a string field name.
+ * @return array<int, array{0:string,1:int}> The normalised [field, direction] pairs.
+ */
+function docStoreSortSpec(string|array $keyOrList, int $direction = 1): array
+{
+    if (is_string($keyOrList)) {
+        return [[$keyOrList, $direction]];
+    }
+
+    $spec = [];
+    foreach ($keyOrList as $key => $value) {
+        // A LIST of pairs has integer keys and array values; a MAP has the
+        // field name as the key. Both are legal driver input, so both resolve
+        // here rather than at four call sites.
+        if (is_int($key) && is_array($value)) {
+            $spec[] = [(string) $value[0], (int) $value[1]];
+        } else {
+            $spec[] = [(string) $key, (int) $value];
+        }
+    }
+
+    return $spec;
+}
+
+/**
  * Lazy result cursor. Builds and runs SQL only when iterated.
  *
  * @implements \IteratorAggregate<int, array>
@@ -876,16 +914,16 @@ class Cursor implements \IteratorAggregate
     }
 
     /**
-     * @param string|array<array{0:string,1:int}> $keyOrList
+     * Orders the result. Accepts all three driver spellings (ADR-0036).
+     *
+     * @param string|array $keyOrList A field name, a list of [field, direction] pairs, or a field => direction map.
+     * @param int          $direction The direction, used only with a string field name.
+     * @return self This cursor, for chaining.
      */
     public function sort(string|array $keyOrList, int $direction = 1): self
     {
-        if (is_string($keyOrList)) {
-            $this->sort[] = [$keyOrList, $direction];
-        } else {
-            foreach ($keyOrList as $pair) {
-                $this->sort[] = [$pair[0], $pair[1]];
-            }
+        foreach (docStoreSortSpec($keyOrList, $direction) as $pair) {
+            $this->sort[] = $pair;
         }
         return $this;
     }
@@ -1352,6 +1390,181 @@ class DocStoreDriverMissing extends \RuntimeException
 }
 
 /**
+ * A DEFERRED find() on the real MongoDB driver (ADR-0036).
+ *
+ * WHY THIS EXISTS
+ *
+ * The fallback's Cursor is lazy and chainable: find() builds no SQL, sort() /
+ * limit() / skip() accumulate, and the query runs on iteration. PHP's driver is
+ * the opposite - MongoDB\Collection::find($filter, $options) EXECUTES, and the
+ * MongoDB\Driver\Cursor it returns has no sort(), limit() or skip() at all,
+ * because by then the query is already on the wire.
+ *
+ * So the framework's own documented example
+ *
+ *     $orders->find(['total' => ['$gt' => 5]])->sort('total', -1)->limit(10)
+ *
+ * worked on the SQLite fallback and FATALLED on a real MongoDB with
+ * "Call to undefined method MongoDB\Driver\Cursor::sort()". Measured
+ * 2026-08-04. That is ADR-0025's defect class - a spelling that works on the
+ * fallback and breaks on the swap - and it also broke the First Principle,
+ * because it is a PUBLISHED example that does not run.
+ *
+ * The fix is to defer: this object accumulates the chain and only calls
+ * find($filter, $options) when it is actually materialised, which is the shape
+ * PHP's driver wants anyway. Ruby's View and pymongo's Cursor are both already
+ * lazy, so this brings PHP to the shape the other three already have.
+ *
+ * ITERATION SEMANTICS are the fallback's, deliberately: the chain issues NO
+ * query, materialising issues exactly ONE, and iterating a second time issues
+ * another (a MongoDB\Driver\Cursor can only be walked once, and the fallback
+ * re-runs its SQL per iteration). Nothing is buffered, so a large unlimited
+ * result still streams.
+ *
+ * @implements \IteratorAggregate<int, mixed>
+ */
+final class DocStoreQuery implements \IteratorAggregate
+{
+    /** @var array<string, int> field => direction, in insertion order */
+    private array $sort = [];
+    private ?int $limit = null;
+    private int $skip = 0;
+    /** Memoised only for __call, never for iteration - see the class docblock. */
+    private ?object $executed = null;
+
+    /**
+     * @param object $collection The real MongoDB\Collection.
+     * @param array  $filter     The query filter.
+     * @param array  $options    Driver options carried from find(), e.g. projection.
+     */
+    public function __construct(
+        private readonly object $collection,
+        private readonly array $filter,
+        private readonly array $options = []
+    ) {
+    }
+
+    /**
+     * Orders the result. Accepts all three driver spellings (ADR-0036).
+     *
+     * @param string|array $keyOrList A field name, a list of [field, direction] pairs, or a field => direction map.
+     * @param int          $direction The direction, used only with a string field name.
+     * @return self This query, for chaining.
+     */
+    public function sort(string|array $keyOrList, int $direction = 1): self
+    {
+        foreach (docStoreSortSpec($keyOrList, $direction) as [$field, $fieldDirection]) {
+            $this->sort[$field] = $fieldDirection;
+        }
+        $this->executed = null;
+
+        return $this;
+    }
+
+    /**
+     * Caps the number of documents returned.
+     *
+     * @param int $n The maximum number of documents.
+     * @return self This query, for chaining.
+     */
+    public function limit(int $n): self
+    {
+        $this->limit = $n;
+        $this->executed = null;
+
+        return $this;
+    }
+
+    /**
+     * Skips the first N documents.
+     *
+     * @param int $n How many documents to skip.
+     * @return self This query, for chaining.
+     */
+    public function skip(int $n): self
+    {
+        $this->skip = $n;
+        $this->executed = null;
+
+        return $this;
+    }
+
+    /**
+     * Runs the query and returns a live driver cursor.
+     *
+     * @return object A MongoDB\Driver\Cursor.
+     */
+    private function run(): object
+    {
+        $options = $this->options;
+        if ($this->sort !== []) {
+            $options['sort'] = $this->sort;
+        }
+        if ($this->limit !== null) {
+            $options['limit'] = $this->limit;
+        }
+        if ($this->skip !== 0) {
+            $options['skip'] = $this->skip;
+        }
+
+        return $this->collection->find($this->filter, $options);
+    }
+
+    /**
+     * Iterates the documents, running the query on first use.
+     *
+     * @return \Traversable The driver's cursor.
+     */
+    public function getIterator(): \Traversable
+    {
+        return $this->run();
+    }
+
+    /**
+     * Materialises the query into a list of documents.
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, mixed> The documents.
+     */
+    public function toArray(?int $length = null): array
+    {
+        $out = $this->run()->toArray();
+
+        return $length === null ? $out : array_slice($out, 0, $length);
+    }
+
+    /**
+     * The uniform Tina4 spelling, ADDITIVE to toArray (ADR-0035).
+     *
+     * @param int|null $length Optional cap on the number of documents returned.
+     * @return array<int, mixed> The documents.
+     */
+    public function toList(?int $length = null): array
+    {
+        return $this->toArray($length);
+    }
+
+    /**
+     * Forwards any other driver-cursor call, so nothing becomes unreachable.
+     *
+     * The cursor is memoised HERE only, so repeated calls such as getId() plus
+     * setTypeMap() act on one cursor rather than issuing a query each time.
+     * Chaining sort/limit/skip discards it, because the chain no longer
+     * describes that cursor.
+     *
+     * @param string $name      The method being called.
+     * @param array  $arguments The arguments to forward.
+     * @return mixed The driver's return value.
+     */
+    public function __call(string $name, array $arguments): mixed
+    {
+        $this->executed ??= $this->run();
+
+        return $this->executed->$name(...$arguments);
+    }
+}
+
+/**
  * The driver delegator (ADR-0035).
  *
  * ADR-0025 costed "wrap the driver" as a hand-written FACADE over 12-14 methods
@@ -1401,6 +1614,27 @@ final class DocStoreDelegator implements \IteratorAggregate
     public function __call(string $name, array $arguments): mixed
     {
         return self::wrap($this->target->$name(...$arguments));
+    }
+
+    /**
+     * Returns a DEFERRED, chainable query instead of an executed cursor.
+     *
+     * This is the ONE method the delegator does not simply forward, and
+     * ADR-0036 says why: MongoDB\Collection::find() executes immediately and
+     * hands back a cursor with no sort/limit/skip, so the chain the fallback
+     * supports - and the framework documents - fatalled on the real provider.
+     * Deferring makes one spelling work on both.
+     *
+     * Only reached on a COLLECTION; the delegator also wraps cursors and result
+     * objects, and calling find() on one of those is already an error.
+     *
+     * @param array|null $filter  The query filter.
+     * @param array|null $options Driver options, e.g. ['projection' => [...]].
+     * @return DocStoreQuery The deferred query.
+     */
+    public function find(?array $filter = null, ?array $options = null): DocStoreQuery
+    {
+        return new DocStoreQuery($this->target, $filter ?? [], $options ?? []);
     }
 
     /**
