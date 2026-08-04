@@ -61,7 +61,94 @@ final class PhpChild
     {
         $environment['PHP_INI_SCAN_DIR'] = self::scanDirectoryWithout($withoutExtensions);
 
-        return self::run([PHP_BINARY, '-d', 'display_startup_errors=0'], $source, $environment);
+        $command = [PHP_BINARY, '-d', 'display_startup_errors=0'];
+
+        // conf.d is only half the story: an extension can equally be loaded by
+        // an `extension=` line in php.ini itself, which PHP_INI_SCAN_DIR does
+        // not touch. Measured on macOS/Homebrew PHP 8.5.7, ext-interbase is
+        // loaded exactly that way while ext-mongodb sits in conf.d, so
+        // filtering only conf.d silently failed to remove it - and a filter
+        // that silently fails is how a negative test goes vacuous. Point the
+        // child at a filtered copy of php.ini as well.
+        $iniFile = self::phpIniWithout($withoutExtensions);
+        if ($iniFile !== null) {
+            $command[] = '-c';
+            $command[] = $iniFile;
+        }
+
+        return self::run($command, $source, $environment);
+    }
+
+    /**
+     * A copy of this host's loaded php.ini with every `extension=` line naming
+     * one of $extensions removed, or null when this build loads no php.ini.
+     *
+     * @param string[] $extensions
+     */
+    public static function phpIniWithout(array $extensions): ?string
+    {
+        $source = php_ini_loaded_file();
+        if ($source === false || !is_readable($source)) {
+            return null;
+        }
+
+        $extensions = array_map('strtolower', $extensions);
+        $kept = [];
+        foreach (explode("\n", (string)file_get_contents($source)) as $line) {
+            if (preg_match('/^\s*(?:zend_)?extension\s*=\s*"?([^"\s;]+)/i', $line, $match) === 1) {
+                $name = strtolower((string)preg_replace('/\.so$/i', '', basename($match[1])));
+                if (in_array($name, $extensions, true)) {
+                    continue;   // this line loads a target - drop it
+                }
+            }
+            $kept[] = $line;
+        }
+
+        $target = self::temporaryDirectory('php-ini') . '/php.ini';
+        file_put_contents($target, implode("\n", $kept));
+        self::$temporaryPaths[] = $target;
+
+        return $target;
+    }
+
+    /**
+     * Can this host's absence of $extension actually be created?
+     *
+     * False when the extension is compiled statically INTO the php binary, in
+     * which case no ini manipulation can unload it and the missing-extension
+     * branch is genuinely unreachable on this host. Detected by elimination: it
+     * is loaded, but nothing in php.ini or conf.d claims to load it.
+     *
+     * On Debian/Ubuntu (and the lab) every optional extension is a shared object
+     * with its own conf.d .ini, so this returns true and the cases run. On
+     * macOS/Homebrew, pgsql and mysqli are built in and this returns false.
+     */
+    public static function extensionCanBeRemoved(string $extension): bool
+    {
+        if (!extension_loaded($extension)) {
+            return true;   // already absent; nothing to remove
+        }
+
+        $extension = strtolower($extension);
+        $files = (array)glob(rtrim(PHP_CONFIG_FILE_SCAN_DIR, '/') . '/*.ini');
+        $loadedIni = php_ini_loaded_file();
+        if ($loadedIni !== false) {
+            $files[] = $loadedIni;
+        }
+
+        foreach ($files as $file) {
+            $body = (string)@file_get_contents((string)$file);
+            if (preg_match_all('/^\s*(?:zend_)?extension\s*=\s*"?([^"\s;]+)/mi', $body, $matches) === 0) {
+                continue;
+            }
+            foreach ($matches[1] as $name) {
+                if (strtolower((string)preg_replace('/\.so$/i', '', basename($name))) === $extension) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

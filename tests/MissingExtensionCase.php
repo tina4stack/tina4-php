@@ -40,6 +40,26 @@ trait MissingExtensionCase
      */
     private function assertConstructionReportsMissingExtension(string $extension, string $construction, string $needle): void
     {
+        // The one host shape where this genuinely cannot run: an extension
+        // compiled STATICALLY into the php binary. No ini manipulation can
+        // unload it, so the absence cannot be created at all. Measured on
+        // macOS/Homebrew PHP 8.5.7, where pgsql and mysqli are built in.
+        //
+        // Every Debian/Ubuntu build - including the lab and CI - ships these as
+        // shared objects with their own conf.d .ini, so this branch does not
+        // fire there and the case runs for real. The reason names the extension
+        // AND says "not available", so RequireServicesGate turns it into a hard
+        // FAILURE under TINA4_REQUIRE_SERVICES: if this ever starts firing on a
+        // gated run it cannot pass quietly, which is the whole point.
+        if (!PhpChild::extensionCanBeRemoved($extension)) {
+            $this->markTestSkipped(
+                "ext-{$extension} is compiled statically into this PHP build (no extension= line in "
+                . 'php.ini or conf.d loads it), so its absence cannot be created and the '
+                . 'missing-extension branch is not available here. On a build that ships it as a '
+                . 'shared object this case runs.'
+            );
+        }
+
         // Measured by a CHILD moments before the one under test, so both counts
         // come from the same conf.d as it exists now (see PhpChild).
         $baseline = PhpChild::childExtensionBaseline([$extension]);
