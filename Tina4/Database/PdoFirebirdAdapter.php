@@ -190,9 +190,23 @@ class PdoFirebirdAdapter implements DatabaseAdapter
 
     public function tableExists(string $table): bool
     {
+        // Firebird's folding rule is ASYMMETRIC:
+        //     CREATE TABLE foo     -> stored as FOO   (unquoted folds to UPPER)
+        //     CREATE TABLE "Foo"   -> stored as Foo   (quoted keeps its case)
+        //
+        // So uppercasing is CORRECT for the unquoted case - the common one - and
+        // WRONG for a quoted mixed-case table. Dropping it would not fix that, it
+        // would invert which half is broken. tableExists('Foo') is genuinely
+        // AMBIGUOUS, so match EITHER spelling.
+        //
+        // This class is the one that actually runs on PHP 8: ext-interbase has no
+        // PHP 8 build (Ubuntu's php8.3-interbase ships only pdo_firebird.so), so
+        // the native FirebirdAdapter's ibase_*/fbird_* path is unreachable and
+        // every live Firebird test goes through PDO. Fixing only the native class
+        // fixes nothing here - which is exactly what happened first time round.
         $rows = $this->query(
-            "SELECT RDB\$RELATION_NAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND RDB\$VIEW_BLR IS NULL AND TRIM(RDB\$RELATION_NAME) = ?",
-            [strtoupper($table)]
+            "SELECT RDB\$RELATION_NAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND RDB\$VIEW_BLR IS NULL AND (TRIM(RDB\$RELATION_NAME) = ? OR TRIM(RDB\$RELATION_NAME) = ?)",
+            [$table, strtoupper($table)]
         );
         return count($rows) > 0;
     }
