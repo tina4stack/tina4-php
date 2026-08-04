@@ -789,6 +789,15 @@ class SessionBackendFailurePolicyTest extends TestCase
             "{$testMethod} FAILED in the capability-dropped child (this is the run that actually "
             . "exercises it).\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
         );
+        // Exit 0 is also what a SKIPPED child produces, and a skip here would
+        // mean the delegation reported success while asserting nothing. Demand
+        // the run that actually passed a test.
+        $this->assertStringContainsString(
+            'OK (1 test',
+            $stdout,
+            "the child exited 0 without running {$testMethod} to a pass (a skip exits 0 too), so "
+            . "the delegation proved nothing.\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
+        );
     }
 
     // ── the mid-request death case, produced rather than simulated ──────────
