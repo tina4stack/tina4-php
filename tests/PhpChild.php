@@ -130,7 +130,10 @@ final class PhpChild
         }
 
         $extension = strtolower($extension);
-        $files = (array)glob(rtrim(PHP_CONFIG_FILE_SCAN_DIR, '/') . '/*.ini');
+        $scanDir = trim(PHP_CONFIG_FILE_SCAN_DIR);
+        $files = $scanDir !== '' && is_dir($scanDir)
+            ? (array)glob(rtrim($scanDir, '/') . '/*.ini')
+            : [];
         $loadedIni = php_ini_loaded_file();
         if ($loadedIni !== false) {
             $files[] = $loadedIni;
@@ -181,7 +184,10 @@ final class PhpChild
     {
         $extensions = array_map('strtolower', $extensions);
         $target = self::temporaryDirectory('conf.d');
-        $source = PHP_CONFIG_FILE_SCAN_DIR;
+        $source = trim(PHP_CONFIG_FILE_SCAN_DIR);
+        if ($source === '' || !is_dir($source)) {
+            return $target;   // this build has no scan dir; an empty one is faithful
+        }
 
         foreach ((array)glob(rtrim($source, '/') . '/*.ini') as $file) {
             $file = (string)$file;
