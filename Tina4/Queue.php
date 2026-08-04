@@ -309,6 +309,30 @@ class Queue
     }
 
     /**
+     * Release the backend's connection and free its resources.
+     *
+     * A queue on RabbitMQ, Kafka or MongoDB holds a REAL client and socket.
+     * Until 3.13.95 there was no way to hand it back: close() was declared on
+     * the QueueBackend interface and implemented by all four backends, but was
+     * surfaced on NOTHING — so an app that built a Queue per request leaked one
+     * connection per request, invisibly, until the broker refused new ones.
+     * Same class of leak as ADR-0025 corollary 4 (client-lifecycle-is-bounded).
+     *
+     * Safe on EVERY backend: the file backend holds no connection and closes as
+     * a documented no-op, so a TINA4_QUEUE_BACKEND change never turns a working
+     * shutdown path into an error. Idempotent — each backend drops its handles
+     * on the first call, so a second call finds nothing to close and returns.
+     *
+     * Treat the queue as spent afterwards and build a new one to keep working.
+     *
+     * @return void
+     */
+    public function close(): void
+    {
+        ($this->externalBackend ?? $this->liteBackend)->close();
+    }
+
+    /**
      * Record a failed attempt for a job and apply the auto retry → dead-letter
      * lifecycle (called by Job::fail() and the process() error handler).
      *
