@@ -793,6 +793,23 @@ class FirebirdAdapter implements DatabaseAdapter
             // to '' — same class of bug as PG).
             $values = self::normalizeBoolParams(array_values($params), nativeBoolean: false);
             $result = @$executeFn($stmt, ...$values);
+
+            // Free the PREPARED STATEMENT once it can no longer be needed.
+            // ibase_execute() returns a result RESOURCE for a statement with a
+            // result set (SELECT, or INSERT .. RETURNING), and that resource is
+            // backed by this statement handle - freeing it here would pull the
+            // rug out from under the caller, which frees the RESULT via
+            // ibase_free_result(). For everything else (plain INSERT/UPDATE/
+            // DELETE/DDL) it returns true and the handle has no further use.
+            //
+            // Leaving it unfreed keeps the statement's reference to the tables it
+            // touched, which is what blocks a later DROP/RECREATE TABLE. Results
+            // were already freed here; statements never were - ibase_free_query
+            // did not appear anywhere in this file.
+            if (!is_resource($result)) {
+                $freeQueryFn = $this->fn . 'free_query';
+                @$freeQueryFn($stmt);
+            }
         }
 
         if ($result === false) {
