@@ -37,6 +37,12 @@ class MemcachedBackend extends CacheBackend
     private array $own = [];
     private bool $available = false;
 
+    /**
+     * The SHARED namespace generation counter. clear() bumps it; every real key
+     * carries it, so one bump invalidates every instance at once.
+     */
+    private string $generationKey;
+
     public function __construct(string $url = 'memcached://localhost:11211', int $maxEntries = 1000)
     {
         $this->maxEntries = $maxEntries;
@@ -46,6 +52,7 @@ class MemcachedBackend extends CacheBackend
         $parts = explode(':', $hostPort);
         $this->host = ($parts[0] ?? '') !== '' ? $parts[0] : 'localhost';
         $this->port = isset($parts[1]) && $parts[1] !== '' ? (int)$parts[1] : 11211;
+        $this->generationKey = $this->prefix . 'generation';
 
         $this->available = str_starts_with($this->command("version\r\n", "\r\n"), 'VERSION');
     }
@@ -55,9 +62,44 @@ class MemcachedBackend extends CacheBackend
         return $this->available;
     }
 
+    /**
+     * Read the SHARED namespace generation from the server.
+     *
+     * memcached has no KEYS scan and no prefix delete, so the only way to
+     * invalidate globally without destroying other tenants is the documented
+     * namespace idiom: every real key carries a generation, and clear() bumps
+     * it. Every instance then computes a different key and the old entries
+     * become unreachable at once, expiring under the server's own TTL/LRU.
+     *
+     * The generation is read from the server on every key computation,
+     * deliberately. Caching it in-process would reintroduce exactly the bug
+     * this fixes: an instance holding a stale generation keeps computing the
+     * OLD key, and the old key still holds the old value, so it serves a stale
+     * hit after another instance cleared. One extra round trip on a
+     * sub-millisecond local service is the price of cross-instance
+     * invalidation.
+     */
+    private function generation(): string
+    {
+        $response = $this->command('get ' . $this->generationKey . "\r\n", "END\r\n");
+        if (str_starts_with($response, 'VALUE')) {
+            $split = explode("\r\n", $response, 2);
+            if (count($split) === 2) {
+                $headerParts = preg_split('/\s+/', $split[0]);
+                if (isset($headerParts[3])) {
+                    return substr($split[1], 0, (int)$headerParts[3]);
+                }
+            }
+        }
+        return '0';
+    }
+
     private function mcKey(string $key): string
     {
-        return $this->prefix . hash('sha256', $key);
+        // Hash to a safe, bounded key (memcached keys: no spaces/control chars,
+        // 250 chars max). The generation sits IN the key so a clear() on ANY
+        // instance orphans it for every instance at once.
+        return $this->prefix . $this->generation() . ':' . hash('sha256', $key);
     }
 
     private function command(string $payload, string $terminator): string
@@ -129,15 +171,23 @@ class MemcachedBackend extends CacheBackend
     }
 
     /**
-     * Remove OUR entries, not the whole server's.
+     * Invalidate EVERY entry this cache can serve, on EVERY instance.
      *
-     * This used to send `flush_all`, which wipes EVERY key on the memcached
-     * instance - including every other application sharing it. cacheClear() is
-     * public API, so calling it destroyed other tenants' data. No other backend
-     * does that: they each clear only what they own.
+     * Two wrong answers were shipped before this one. `flush_all` wipes EVERY
+     * key on the instance including every other application's - cacheClear() is
+     * public API, so calling it destroyed other tenants' data. Deleting only
+     * the keys THIS process wrote fixed that but broke the contract the other
+     * way: a second instance kept serving rows the first had just invalidated,
+     * because it had never seen those keys.
      *
-     * Now that the backend tracks the keys it wrote, it deletes exactly those.
-     * A key it never wrote is not its to remove.
+     * The namespace generation does both. Bumping the shared counter orphans
+     * every previously-written entry for every instance at once, and touches
+     * nothing outside our own prefix. The orphans are reclaimed by memcached's
+     * own TTL and LRU - unreachable is what "removed" means for a cache.
+     *
+     * The local write log is still cleared so stats() reports honestly, and its
+     * keys are deleted eagerly so the space comes back immediately rather than
+     * waiting for eviction.
      */
     public function clear(): void
     {
@@ -147,6 +197,15 @@ class MemcachedBackend extends CacheBackend
             $this->command('delete ' . $mcKey . "\r\n", "\r\n");
         }
         $this->own = [];
+
+        // incr is atomic, so two instances clearing at once still both advance.
+        $response = $this->command('incr ' . $this->generationKey . " 1\r\n", "\r\n");
+        if (!ctype_digit(trim($response))) {
+            // No counter yet: create it. `add` fails harmlessly if another
+            // instance created it in the gap, and the incr then applies.
+            $this->command('add ' . $this->generationKey . " 0 0 1\r\n1\r\n", "\r\n");
+            $this->command('incr ' . $this->generationKey . " 1\r\n", "\r\n");
+        }
     }
 
     /**
