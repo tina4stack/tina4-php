@@ -370,7 +370,7 @@ class SmokeTest extends TestCase
 
         // Pop
         $job = $q->pop();
-        $this->assertIsArray($job);
+        $this->assertInstanceOf(\Tina4\Job::class, $job);
         $this->assertSame('alice@test.com', $job['payload']['to']);
         $this->assertSame('Hello', $job['payload']['subject']);
         $this->assertSame('pending', $job['status']);

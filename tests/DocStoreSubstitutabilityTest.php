@@ -174,6 +174,175 @@ final class DocStoreSubstitutabilityTest extends TestCase
         $this->assertNotInstanceOf(\Tina4\SqliteCollection::class, $collection);
     }
 
+    // ── the driverless environment (ADR-0033) ───────────────────────────────
+    //
+    // NO MOCKS, and this is the case where that rule bites hardest: faking a
+    // missing class is exactly the forbidden thing, because the bug being
+    // pinned IS how the absence is handled.
+    //
+    // So the driver is made GENUINELY absent, twice, because PHP needs TWO
+    // pieces and each can go missing on its own:
+    //
+    //   ext        `php -n` starts a real interpreter with no php.ini, so
+    //              ext-mongodb is genuinely not loaded.
+    //   library    a bootstrap that requires ONLY Tina4/Bootstrap/DocStore.php
+    //              runs with the extension present and no composer autoloader,
+    //              so MongoDB\Client genuinely does not exist. This is not
+    //              hypothetical - mongodb/mongodb is require-dev plus a
+    //              suggest, so `composer install --no-dev` on a box that does
+    //              have the extension lands exactly here.
+    //
+    // Each probe reports what it actually found, so an environment that is NOT
+    // driverless FAILS the test instead of quietly proving nothing.
+
+    /** The probe program, run in a separate real PHP process. */
+    private const DRIVER_ABSENCE_PROBE = <<<'PHP'
+<?php
+$bootstrap = $argv[1];
+$repo = $argv[2];
+if ($bootstrap === 'autoload') {
+    require $repo . '/vendor/autoload.php';
+} else {
+    require $repo . '/Tina4/Bootstrap/DocStore.php';
+}
+$report = [
+    'ext_present' => class_exists('\MongoDB\Driver\Manager'),
+    'library_present' => class_exists('\MongoDB\Client'),
+];
+putenv('TINA4_MONGO_URI=' . $argv[3]);
+putenv('TINA4_DOC_STORE_PATH=' . $argv[4]);
+$report['is_serverless'] = \Tina4\isServerless();
+try {
+    $collection = \Tina4\getCollection('driver_absence_probe');
+    $report['outcome'] = 'returned';
+    $report['returned_type'] = get_class($collection);
+} catch (\Throwable $e) {
+    $report['outcome'] = 'raised';
+    $report['error_type'] = (new \ReflectionClass($e))->getShortName();
+    $report['message'] = $e->getMessage();
+}
+$report['store_file_exists'] = file_exists($argv[4]);
+echo '__PROBE__' . json_encode($report);
+PHP;
+
+    /**
+     * Run the probe in a separate PHP process and decode its report.
+     *
+     * @param string $bootstrap 'autoload' (composer) or 'standalone' (DocStore.php only)
+     * @param array<int, string> $phpFlags extra interpreter flags, e.g. ['-n']
+     * @return array<string, mixed>
+     */
+    private function runDriverAbsenceProbe(string $bootstrap, array $phpFlags, string $uri): array
+    {
+        $repo = dirname(__DIR__);
+        $probePath = tempnam(sys_get_temp_dir(), 'tina4_probe_') . '.php';
+        file_put_contents($probePath, self::DRIVER_ABSENCE_PROBE);
+        $storePath = tempnam(sys_get_temp_dir(), 'tina4_store_') . '.db';
+        @unlink($storePath);
+
+        $command = array_merge([PHP_BINARY], $phpFlags, [$probePath, $bootstrap, $repo, $uri, $storePath]);
+        $quoted = implode(' ', array_map('escapeshellarg', $command));
+        $output = shell_exec($quoted . ' 2>&1');
+        @unlink($probePath);
+        @unlink($storePath);
+
+        $this->assertStringContainsString('__PROBE__', (string) $output, "probe did not report: {$output}");
+
+        return json_decode(explode('__PROBE__', (string) $output, 2)[1], true);
+    }
+
+    /**
+     * docstore_contract.json :: a-missing-driver-has-one-outcome-in-all-four
+     *
+     * MEASURED 2026-08-01 and re-measured 2026-08-04 at v3 HEAD: with the
+     * extension absent, isServerless() answered true and getCollection() handed
+     * back the local SQLite store. Production writes went to a container-local
+     * file nobody reads, with no error at any point.
+     *
+     * ADR-0024 rule 3, settled for DocStore by ADR-0033: a provider that cannot
+     * honour an operation must RAISE, naming the provider and what is missing.
+     */
+    public function testAMissingDriverRaisesInsteadOfUsingTheLocalFile(): void
+    {
+        // A password in the URI, so the credential-leak assertion has something
+        // real to catch.
+        $uri = 'mongodb://docstore_user:s3cr3t-p4ssw0rd@192.0.2.1:27017';
+        $report = $this->runDriverAbsenceProbe('autoload', ['-n'], $uri);
+
+        // The environment must really be driverless, or nothing below means
+        // anything. This FAILS rather than skipping, on purpose.
+        $this->assertFalse(
+            $report['ext_present'],
+            'php -n still loaded ext-mongodb, so this test would have proved nothing'
+        );
+
+        $this->assertFalse($report['is_serverless'], 'a configured URI must mean not-serverless');
+        $this->assertSame(
+            'raised',
+            $report['outcome'],
+            'expected a raise, got ' . ($report['returned_type'] ?? '?')
+        );
+        $this->assertSame('DocStoreDriverMissing', $report['error_type']);
+        $this->assertStringContainsString('mongodb', $report['message']);
+        $this->assertStringContainsString('pecl install mongodb', $report['message']);
+        $this->assertStringContainsString('TINA4_MONGO_URI', $report['message']);
+
+        // NEGATIVE: naming the variable must not mean printing its value.
+        $this->assertStringNotContainsString('s3cr3t-p4ssw0rd', $report['message'], 'the message does not leak the uri credentials, but it did');
+        // NEGATIVE, and the one that matters most: nothing was written locally.
+        $this->assertFalse($report['store_file_exists'], 'the local SQLite store was created anyway');
+    }
+
+    /**
+     * docstore_contract.json :: a-missing-driver-has-one-outcome-in-all-four
+     *
+     * PHP's SECOND door, measured 2026-08-04 at v3 HEAD: with ext-mongodb
+     * PRESENT but the mongodb/mongodb library absent, isServerless() reported
+     * FALSE and getCollection() STILL returned Tina4\SqliteCollection - the
+     * two disagreeing exactly as a-configured-uri-selects-the-real-provider
+     * forbids, through a door that invariant's own test never opened.
+     */
+    public function testAMissingLibraryRaisesInsteadOfUsingTheLocalFile(): void
+    {
+        $uri = 'mongodb://docstore_user:s3cr3t-p4ssw0rd@192.0.2.1:27017';
+        $report = $this->runDriverAbsenceProbe('standalone', [], $uri);
+
+        if ($report['library_present']) {
+            $this->fail('the standalone bootstrap still saw MongoDB\Client, so this test would have proved nothing');
+        }
+        $this->assertTrue($report['ext_present'], 'this case needs the EXTENSION present and the LIBRARY absent');
+
+        $this->assertFalse($report['is_serverless']);
+        $this->assertSame(
+            'raised',
+            $report['outcome'],
+            'expected a raise, got ' . ($report['returned_type'] ?? '?')
+        );
+        $this->assertSame('DocStoreDriverMissing', $report['error_type']);
+        $this->assertStringContainsString('mongodb/mongodb', $report['message']);
+        $this->assertStringContainsString('composer require mongodb/mongodb', $report['message']);
+        $this->assertStringNotContainsString('s3cr3t-p4ssw0rd', $report['message'], 'the message does not leak the uri credentials, but it did');
+        $this->assertFalse($report['store_file_exists'], 'the local SQLite store was created anyway');
+    }
+
+    /**
+     * POSITIVE half: the raise must be about the DRIVER, not the URI.
+     *
+     * Same configuration, driver installed, and the real provider is selected
+     * with no exception. Without this, deleting the whole real-Mongo path
+     * would satisfy the negative cases above.
+     */
+    public function testTheSameUriWithTheDriverPresentStillSelectsMongo(): void
+    {
+        $uri = $this->resolve('__MONGO__');
+        [$collection] = $this->collectionFor($uri);
+
+        $this->assertFalse(isServerless());
+        $this->assertNotInstanceOf(\Tina4\SqliteCollection::class, $collection);
+        $collection->insertOne(['proof' => 'driver-present']);
+        $collection->deleteMany([]);
+    }
+
     // ── the shared round trip, on BOTH providers ────────────────────────────
 
     /**
@@ -415,17 +584,47 @@ final class DocStoreSubstitutabilityTest extends TestCase
      * three, because "correct for a reason we did not choose" is exactly the
      * behaviour that regresses silently. If a future change starts passing
      * per-call options that defeat libmongoc's pool sharing, this catches it.
+     *
+     * EVERY COUNT HERE IS SCOPED TO THE CONNECTIONS THIS TEST OWNS.
+     * serverStatus.connections.current, which this test used to read, is a
+     * SERVER-GLOBAL counter across every client on that mongod, so any other
+     * process moves it and the assertion becomes a coin flip rather than a
+     * gate. Measured 2026-08-04 against the shared lab MongoDB 7.0.39 with the
+     * docstore code UNCHANGED and correct, the global count read [88, 89, 90]
+     * with one other agent connected and [193, 194, 195] with 45 further real
+     * clients held open, against an idle baseline near 6.
+     *
+     * $currentOp with idleConnections is the per-client view: an appName in
+     * the connection string tags every socket this test's client opens, and
+     * nobody else's carry it.
      */
     public function testRepeatedGetCollectionDoesNotGrowConnections(): void
     {
-        $uri = $this->resolve('__MONGO__');
+        $baseUri = $this->resolve('__MONGO__');
+        $appName = 'tina4_docstore_lifecycle_' . bin2hex(random_bytes(5));
+        $uri = $baseUri . (str_contains($baseUri, '?') ? '&' : '/?') . 'appName=' . $appName;
 
-        $connections = static function () use ($uri): int {
-            $probe = new \MongoDB\Client($uri);
-            $status = $probe->selectDatabase('admin')->command(['serverStatus' => 1])->toArray()[0];
+        $ownConnections = static function () use ($baseUri, $appName): int {
+            $probe = new \MongoDB\Client($baseUri);
+            $rows = $probe->selectDatabase('admin')->aggregate([
+                ['$currentOp' => ['allUsers' => true, 'idleConnections' => true, 'localOps' => true]],
+                ['$match' => ['appName' => $appName]],
+                ['$count' => 'n'],
+            ])->toArray();
 
-            return (int) $status['connections']['current'];
+            // $count emits NO document when nothing matched, which is 0.
+            return $rows === [] ? 0 : (int) $rows[0]['n'];
         };
+
+        // The measurement must be able to SEE this client, or every assertion
+        // below is vacuously true and proves nothing.
+        [$warmup] = $this->collectionFor($uri);
+        $warmup->countDocuments([]);
+        $this->assertGreaterThan(
+            0,
+            $ownConnections(),
+            'appName scoping saw none of our own connections - the probe is blind'
+        );
 
         $rounds = [];
         for ($round = 0; $round < 3; $round++) {
@@ -433,7 +632,7 @@ final class DocStoreSubstitutabilityTest extends TestCase
                 [$collection] = $this->collectionFor($uri);
                 $collection->countDocuments([]);
             }
-            $rounds[] = $connections();
+            $rounds[] = $ownConnections();
         }
 
         $settled = end($rounds);
@@ -441,16 +640,17 @@ final class DocStoreSubstitutabilityTest extends TestCase
             [$collection] = $this->collectionFor($uri);
             $collection->countDocuments([]);
         }
-        $afterHundred = $connections();
+        $afterHundred = $ownConnections();
 
         // POSITIVE: 100 further calls add nothing to a settled pool.
         $this->assertLessThanOrEqual(
-            $settled + 2,
+            $settled,
             $afterHundred,
             sprintf('connections still growing: settled=%d after 100 more=%d', $settled, $afterHundred)
         );
-        // And the growth flattened rather than tracking the call count.
+        // And the growth flattened rather than tracking the call count. Both
+        // halves are scoped, so the ceiling measures OUR pool.
         $this->assertLessThanOrEqual(2, $rounds[2] - $rounds[1], 'rounds=' . json_encode($rounds));
-        $this->assertLessThan(60, $rounds[2], 'rounds=' . json_encode($rounds));
+        $this->assertLessThanOrEqual(10, $rounds[2], 'our own pool is not bounded: rounds=' . json_encode($rounds));
     }
 }

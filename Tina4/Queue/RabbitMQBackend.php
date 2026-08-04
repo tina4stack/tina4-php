@@ -196,17 +196,49 @@ class RabbitMQBackend implements QueueBackend
         );
     }
 
-    /** {@inheritDoc} */
+    /**
+     * Dead-lettered jobs for a topic, read back from the '<topic>.dead_letter'
+     * queue THIS BACKEND writes itself (see deadLetter()).
+     *
+     * This used to throw, on the grounds that "RabbitMQ keeps no queryable
+     * registry of failed or dead jobs". That is true of the broker's own
+     * dead-letter EXCHANGE, which routes a rejected message to a queue the
+     * broker does not link back to the original - but it is NOT true of the
+     * queue Tina4 maintains, which is an ordinary queue and perfectly readable.
+     * Invariant 3 requires that "a dead-letter handler written locally must
+     * find the same jobs after deploying onto a broker", so this ANSWERS.
+     *
+     * A READ MUST NOT CONSUME: this is called by dashboards and health checks,
+     * and a read that emptied the queue would destroy the backlog it reports
+     * on. Each message is drained, acked, and immediately re-published, so the
+     * queue is unchanged by the read. lastDeliveryTag is saved and restored so
+     * draining never steals the ack of a delivery already in flight on the
+     * caller's main topic.
+     *
+     * @param string   $topic      Topic whose dead letters to read.
+     * @param int|null $maxRetries Accepted for interface parity; a job only
+     *                             reaches this queue by exhausting its retries.
+     * @return array<int, array<string, mixed>> Dead-lettered job payloads.
+     */
     public function deadLetters(string $topic, ?int $maxRetries = null): array
     {
-        throw new \RuntimeException(
-            'The rabbitmq queue backend cannot answer deadLetters(): '
-                . 'RabbitMQ keeps no queryable registry of failed or dead jobs: a rejected '
-                . 'message is routed away by a dead-letter EXCHANGE to another queue, which '
-                . 'the broker does not link back to this one. Returning an empty list would '
-                . 'claim nothing has failed. Consume the dead-letter queue directly, or use '
-                . 'the file or mongodb backend. '
-        );
+        $dlq = $topic . '.dead_letter';
+        $savedTag = $this->lastDeliveryTag;
+        $out = [];
+
+        try {
+            while (($message = $this->dequeue($dlq)) !== null) {
+                $this->acknowledge($dlq, (string)($message['id'] ?? ''));
+                $out[] = $message;
+            }
+            foreach ($out as $message) {
+                $this->enqueue($dlq, $message);
+            }
+        } finally {
+            $this->lastDeliveryTag = $savedTag;
+        }
+
+        return $out;
     }
 
     /** {@inheritDoc} */

@@ -120,69 +120,148 @@ class RedisBackend extends CacheBackend
     }
 
     /**
-     * Send a command using the raw RESP protocol over TCP.
+     * Encode one command as a RESP array of bulk strings.
      */
-    protected function respCommand(string ...$args): ?string
+    private static function respEncode(string ...$args): string
     {
+        $wire = '*' . count($args) . "\r\n";
+        foreach ($args as $arg) {
+            $wire .= '$' . strlen($arg) . "\r\n" . $arg . "\r\n";
+        }
+        return $wire;
+    }
+
+    /**
+     * Read exactly $length bytes, however many reads that takes.
+     *
+     * fread() on a socket returns whatever has ARRIVED, not what was asked for,
+     * so a single call is only ever a lower bound on a large payload.
+     *
+     * @param  resource $stream
+     */
+    private static function respReadExact($stream, int $length): string
+    {
+        $buffer = '';
+        while (strlen($buffer) < $length) {
+            $chunk = fread($stream, $length - strlen($buffer));
+            if ($chunk === false || $chunk === '') {
+                break;  // EOF or read timeout - return what arrived.
+            }
+            $buffer .= $chunk;
+        }
+        return $buffer;
+    }
+
+    /**
+     * Read ONE complete RESP reply from an open stream.
+     *
+     * Returns a string for a simple, bulk or integer reply, null for a nil or
+     * an error reply, and an ARRAY for a multi-bulk reply (nested arrays
+     * recurse). The reply is assembled in full: a bulk string is read by its
+     * declared byte length and a multi-bulk by its declared element count.
+     *
+     * The previous implementation did a single fread(65536) and string-split
+     * the result, which silently truncated any reply bigger than one read - so
+     * a large cached value came back corrupt and a key scan came back short.
+     *
+     * @param  resource $stream
+     */
+    private static function respRead($stream): string|array|null
+    {
+        $line = fgets($stream);
+        if ($line === false || $line === '') {
+            return null;
+        }
+        $prefix = $line[0];
+        $body = rtrim(substr($line, 1), "\r\n");
+
+        if ($prefix === '+' || $prefix === ':') {
+            return $body;
+        }
+        if ($prefix === '-') {
+            return null;
+        }
+        if ($prefix === '$') {
+            $length = (int)$body;
+            if ($length < 0) {
+                return null;  // $-1 nil
+            }
+            // Value plus its trailing CRLF, which is consumed but not returned.
+            return substr(self::respReadExact($stream, $length + 2), 0, $length);
+        }
+        if ($prefix === '*') {
+            $count = (int)$body;
+            if ($count < 0) {
+                return null;  // *-1 nil array
+            }
+            $items = [];
+            for ($index = 0; $index < $count; $index++) {
+                $items[] = self::respRead($stream);
+            }
+            return $items;
+        }
+        return $body;
+    }
+
+    /**
+     * Open an authenticated RESP socket. The caller closes it.
+     *
+     * Kept separate from respCommand() so a multi-step conversation (the SCAN
+     * cursor loop) runs over ONE connection instead of reconnecting per
+     * command. Returns null when the server is unreachable or rejects AUTH.
+     *
+     * @return resource|null
+     */
+    private function respSession()
+    {
+        $sock = @fsockopen($this->host, $this->port, $errno, $errstr, 5);
+        if (!$sock) {
+            return null;
+        }
+        stream_set_timeout($sock, 5);
+
+        if ($this->password !== null) {
+            if ($this->username !== null) {
+                fwrite($sock, self::respEncode('AUTH', $this->username, $this->password));
+            } else {
+                fwrite($sock, self::respEncode('AUTH', $this->password));
+            }
+            if (self::respRead($sock) !== 'OK') {
+                fclose($sock);
+                return null;
+            }
+        }
+
+        if ($this->db !== 0) {
+            fwrite($sock, self::respEncode('SELECT', (string)$this->db));
+            self::respRead($sock);
+        }
+
+        return $sock;
+    }
+
+    /**
+     * Send one command using the raw RESP protocol over TCP.
+     *
+     * @return string|array|null string for simple/bulk/integer replies, null
+     *                           for a nil or an error, array for multi-bulk.
+     */
+    protected function respCommand(string ...$args): string|array|null
+    {
+        $sock = null;
         try {
-            $cmd = '*' . count($args) . "\r\n";
-            foreach ($args as $arg) {
-                $cmd .= '$' . strlen($arg) . "\r\n" . $arg . "\r\n";
-            }
-
-            $sock = @fsockopen($this->host, $this->port, $errno, $errstr, 5);
-            if (!$sock) {
+            $sock = $this->respSession();
+            if ($sock === null) {
                 return null;
             }
-            stream_set_timeout($sock, 5);
-
-            if ($this->password !== null) {
-                if ($this->username !== null) {
-                    $auth = "*3\r\n\$4\r\nAUTH\r\n\$" . strlen($this->username) . "\r\n" . $this->username
-                        . "\r\n\$" . strlen($this->password) . "\r\n" . $this->password . "\r\n";
-                } else {
-                    $auth = "*2\r\n\$4\r\nAUTH\r\n\$" . strlen($this->password) . "\r\n" . $this->password . "\r\n";
-                }
-                fwrite($sock, $auth);
-                $authResp = fread($sock, 1024);
-                if ($authResp === false || !str_starts_with($authResp, '+')) {
-                    fclose($sock);
-                    return null;
-                }
-            }
-
-            if ($this->db !== 0) {
-                $select = "*2\r\n\$6\r\nSELECT\r\n\$" . strlen((string)$this->db) . "\r\n" . $this->db . "\r\n";
-                fwrite($sock, $select);
-                fread($sock, 1024);
-            }
-
-            fwrite($sock, $cmd);
-            $response = fread($sock, 65536);
-            fclose($sock);
-
-            if ($response === false) {
-                return null;
-            }
-            if (str_starts_with($response, '+')) {
-                return trim(substr($response, 1));
-            }
-            if (str_starts_with($response, '$-1')) {
-                return null;
-            }
-            if (str_starts_with($response, '$')) {
-                $lines = explode("\r\n", $response);
-                return $lines[1] ?? null;
-            }
-            if (str_starts_with($response, ':')) {
-                return trim(substr($response, 1));
-            }
-            if (str_starts_with($response, '-')) {
-                return null;
-            }
-            return trim($response);
+            fwrite($sock, self::respEncode(...$args));
+            return self::respRead($sock);
         } catch (\Throwable) {
             return null;
+        } finally {
+            if (is_resource($sock)) {
+                fclose($sock);
+            }
         }
     }
 
@@ -201,7 +280,9 @@ class RedisBackend extends CacheBackend
             $raw = $this->respCommand('GET', $fullKey);
         }
 
-        if ($raw === null) {
+        // GET never answers with a multi-bulk, but respCommand() can return one
+        // now, so anything that is not a string is a miss rather than a crash.
+        if (!is_string($raw)) {
             $this->misses++;
             return null;
         }
@@ -249,39 +330,143 @@ class RedisBackend extends CacheBackend
         return false;
     }
 
+    /**
+     * Remove EVERY entry this cache can serve - on BOTH transports.
+     *
+     * The raw RESP path used to do nothing at all: "no easy pattern delete, let
+     * TTL handle cleanup". That made clear() a no-op on the ZERO-DEPENDENCY
+     * default install, so a write never invalidated the persistent DB query
+     * cache and every instance kept serving pre-write rows until the TTL ran
+     * out (ADR-0024 rule 4: the default provider counts double).
+     *
+     * SCAN, not KEYS: clear() runs on every write in persistent DB-cache mode,
+     * and KEYS is O(N) and blocks the whole server for its duration - Redis's
+     * own documentation says to prefer SCAN. The scan is scoped to our prefix,
+     * so another application sharing the server is untouched; FLUSHALL/FLUSHDB
+     * would take their data with it and is never used here.
+     */
     public function clear(): void
     {
         $this->hits = 0;
         $this->misses = 0;
+        $this->walkPrefixedKeys(true);
+    }
+
+    /**
+     * Walk every key under our prefix, optionally deleting as it goes.
+     *
+     * ONE walk drives BOTH clear() and stats(), on BOTH transports, so the two
+     * can never disagree about what this cache holds. stats() used to compute
+     * size only on the ext-redis client path and returned a hard 0 on the raw
+     * RESP transport - the zero-dependency default install - so every reader of
+     * that number (a dashboard, cacheStats(), an operator checking whether a
+     * clear worked) was reading a constant. Same root cause as the clear()
+     * no-op: the default transport had no coverage.
+     *
+     * SCAN, not KEYS, on both paths: clear() runs on every write in persistent
+     * DB-cache mode, and KEYS is O(N) and blocks the whole server for its
+     * duration - Redis's own documentation says to prefer SCAN. The walk is
+     * scoped to our prefix, so another application sharing the server is
+     * untouched; FLUSHALL/FLUSHDB would take their data with it and is never
+     * used here.
+     *
+     * @param  bool $delete DELETE each page as it is walked
+     * @return int  How many keys were seen (0 when deleting - clear() has no
+     *              use for a count, and accumulating every key of a large cache
+     *              purely to count it would be a needless allocation). When
+     *              counting, keys are de-duplicated: SCAN guarantees it never
+     *              MISSES a key that was present throughout, but it may return
+     *              one twice if the keyspace is resized mid-walk.
+     */
+    private function walkPrefixedKeys(bool $delete): int
+    {
+        $seen = [];
+
         if ($this->client !== null) {
             try {
-                $keys = $this->client->keys($this->prefix . '*');
-                if (!empty($keys)) {
-                    $this->client->del(...$keys);
-                }
+                $cursor = null;
+                do {
+                    $keys = $this->client->scan($cursor, $this->prefix . '*', 500);
+                    if ($keys === false) {
+                        break;
+                    }
+                    if ($keys !== []) {
+                        if ($delete) {
+                            $this->client->del(...$keys);
+                        } else {
+                            foreach ($keys as $key) {
+                                $seen[$key] = true;
+                            }
+                        }
+                    }
+                    // A page may legitimately come back empty while the cursor
+                    // is still open, so the cursor - not the page - ends this.
+                } while ((int)$cursor !== 0);
             } catch (\Throwable) {
-                // ignore
+                // An unreachable cache is not a crash; the entries expire.
+            }
+            return count($seen);
+        }
+
+        if (!$this->useRaw) {
+            return 0;
+        }
+
+        $sock = null;
+        try {
+            // The whole cursor loop runs over ONE connection, so a DEL batch
+            // never reconnects mid-walk.
+            $sock = $this->respSession();
+            if ($sock === null) {
+                return 0;
+            }
+            $cursor = '0';
+            do {
+                fwrite($sock, self::respEncode(
+                    'SCAN',
+                    $cursor,
+                    'MATCH',
+                    $this->prefix . '*',
+                    'COUNT',
+                    '500'
+                ));
+                $reply = self::respRead($sock);
+                if (!is_array($reply) || count($reply) !== 2) {
+                    break;
+                }
+                [$cursor, $keys] = $reply;
+                if (is_array($keys) && $keys !== []) {
+                    if ($delete) {
+                        fwrite($sock, self::respEncode('DEL', ...$keys));
+                        self::respRead($sock);
+                    } else {
+                        foreach ($keys as $key) {
+                            if (is_string($key)) {
+                                $seen[$key] = true;
+                            }
+                        }
+                    }
+                }
+            } while (is_string($cursor) && $cursor !== '' && $cursor !== '0');
+        } catch (\Throwable) {
+            // An unreachable cache is not a crash; the entries expire.
+        } finally {
+            if (is_resource($sock)) {
+                fclose($sock);
             }
         }
-        // Raw RESP path: no easy pattern delete — let TTL handle cleanup
-        // (parity with Python's _RedisBackend.clear()).
+
+        return count($seen);
     }
 
     public function stats(): array
     {
-        $size = 0;
-        if ($this->client !== null) {
-            try {
-                $keys = $this->client->keys($this->prefix . '*');
-                $size = is_array($keys) ? count($keys) : 0;
-            } catch (\Throwable) {
-                // ignore
-            }
-        }
         return [
             'hits' => $this->hits,
             'misses' => $this->misses,
-            'size' => $size,
+            // The SAME scoped walk clear() uses, so size is a real number on
+            // BOTH transports rather than a hard 0 on the default install.
+            'size' => $this->walkPrefixedKeys(false),
             'backend' => $this->backendName,
         ];
     }

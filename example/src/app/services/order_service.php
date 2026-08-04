@@ -16,17 +16,16 @@ function processOrders(\Tina4\Queue $queue): void
         return;
     }
 
-    // pop() returns the job record as an array; the pushed payload lives under
-    // the "payload" key (see Tina4\Job / QueueV3Test). Wrap it in a Job so we
-    // can acknowledge the reservation via complete()/fail().
-    $wrapped = new \Tina4\Job($job, $queue, $queue->getTopic());
-
+    // pop() returns a Tina4\Job carrying its own lifecycle, so the manual
+    // `new \Tina4\Job($job, $queue, $queue->getTopic())` re-wrap this used to
+    // need is gone - that workaround existed only because pop() handed back the
+    // backend's raw array.
     $db = \Tina4\App::getDatabase();
-    $payload = $wrapped->payload;
+    $payload = $job->payload;
     $orderId = is_array($payload) ? ($payload["order_id"] ?? null) : null;
 
     if (!$orderId) {
-        $wrapped->complete();
+        $job->complete();
         return;
     }
 
@@ -49,7 +48,7 @@ function processOrders(\Tina4\Queue $queue): void
         $db->execute("UPDATE orders SET status = 'failed' WHERE id = ?", [$orderId]);
         $db->commit();
         \Tina4\Events::emit("order.failed", ["order_id" => $orderId, "reason" => "insufficient stock"]);
-        $wrapped->complete();
+        $job->complete();
         return;
     }
 
@@ -71,5 +70,5 @@ function processOrders(\Tina4\Queue $queue): void
     $db->execute("UPDATE orders SET status = 'processing' WHERE id = ?", [$orderId]);
     $db->commit();
     \Tina4\Events::emit("order.processing", ["order_id" => $orderId]);
-    $wrapped->complete();
+    $job->complete();
 }

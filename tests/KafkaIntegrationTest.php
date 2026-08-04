@@ -128,7 +128,14 @@ class KafkaIntegrationTest extends TestCase
             usleep(400000);
         }
 
-        $this->assertIsArray($msg, 'pop() must return the produced message from the real broker.');
+        // pop() returns a Tina4\Job now (ADR-0024 parity), and the array read
+        // below still resolves through ArrayAccess - both halves asserted so
+        // neither can regress alone.
+        $this->assertInstanceOf(
+            \Tina4\Job::class,
+            $msg,
+            'pop() must return the produced message from the real broker, as a Job.'
+        );
         $body = $msg['payload'] ?? $msg;
         $this->assertSame('kafka-integration', $body['task'] ?? null, 'The produced task must round-trip.');
         $this->assertSame(98765, $body['value'] ?? null, 'The produced value must round-trip.');

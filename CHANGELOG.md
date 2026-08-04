@@ -1,3 +1,118 @@
+### Fixed (redis/valkey stats() size on the zero-dependency transport, ADR-0004)
+
+- `Tina4\Cache\RedisBackend::stats()` computed `size` only when the ext-redis
+  CLIENT was loaded. On the raw RESP transport - the zero-dependency default
+  install - it returned 0 no matter how many entries were cached, so every
+  reader of that number was reading a constant: a monitoring dashboard,
+  `cacheStats()`, or an operator checking whether a clear had worked.
+
+  Same root cause as the earlier `clear()` no-op: the default transport had no
+  coverage.
+
+  `size` and `clear()` now drive ONE scoped SCAN walk (`walkPrefixedKeys()`) on
+  BOTH transports, so the two can never disagree about what the cache holds.
+  The client path moves off `keys()` for the same reason `clear()` did: KEYS is
+  O(N) and blocks the whole server, and Redis's documentation says to prefer
+  SCAN. When counting, keys are de-duplicated - SCAN never MISSES a key that was
+  present throughout the walk, but it may return one twice if the keyspace is
+  resized mid-walk.
+
+  Pinned by `testStatsReportsARealSizeOnBothTransports` in
+  `tests/CacheClearInvalidatesTest.php` against a real Redis.
+
+### Fixed (memcached TTL beyond 30 days vanished instantly, ADR-0024)
+
+- `Tina4\Cache\MemcachedBackend::set()` interpolated the caller's TTL into the
+  memcached `set` exptime field RAW. memcached reads that field as RELATIVE
+  seconds at or below 2592000 (30 days) and as an ABSOLUTE UNIX TIMESTAMP above
+  it, so any `TINA4_CACHE_TTL` over 30 days was read as a date in 1970 and the
+  entry expired the instant it was written. memcached still answers `STORED`,
+  so this presented as a 100% miss rate with nothing logged - a cache that looks
+  like it is working and never returns a hit.
+
+  MEASURED on real memcached 1.6.45: exptime 2592000 survives; 2592001 and
+  5184000 vanish immediately despite STORED.
+
+  The fix CONVERTS, it does not CLAMP. Clamping to 2592000 also makes the entry
+  survive and is also wrong: it silently discards more than half the lifetime
+  the operator explicitly configured, which is the same class of
+  silent-wrong-answer as the bug it would replace. `MAX_RELATIVE_EXPTIME` is a
+  public class constant; `exptime()` maps ttl <= 0 to 0, ttl > MAX to
+  `time() + ttl`, and leaves everything else alone.
+
+  The local write log deliberately keeps the RAW ttl. Building it from the
+  converted value would set the deadline to `now + <a unix timestamp>` - about
+  166 years out - so the map would never expire anything and `stats()` would
+  report expired entries as live forever.
+
+  Pinned by `tests/CacheMemcachedExptimeTest.php` against a real memcached. The
+  load-bearing case reads the SERVER's own remaining lifetime (`mg <key> t` ->
+  `HD t<seconds>`, memcached 1.6+), because a survival check alone passes under
+  a clamp exactly as it does under a convert.
+
+### Fixed (cache sweep on the database backend, ADR-0024)
+
+- `Tina4\Cache\DatabaseBackend` had no `sweep()`, so it inherited the base
+  class's `return 0`. redis, valkey, memcached and mongodb expire entries
+  SERVER-SIDE, so 0 is the honest answer for them - nothing was evicted because
+  there was nothing left to evict. A SQL table expires nothing by itself: rows
+  were deleted only when someone happened to re-read that exact key, so expired
+  rows accumulated forever while the one API whose job is reclaiming that space
+  reported success having done nothing.
+
+  `sweep()` now counts and deletes rows matching `expires_at > 0 AND expires_at
+  < now`, returning the real number evicted. The `expires_at > 0` guard is
+  load-bearing: an entry stored with `ttl <= 0` is permanent and carries 0, so a
+  bare `now > expires_at` would evict every permanent entry on the first sweep.
+
+  Pinned by `tests/CacheSweepCountsTest.php` against real backends (in-process,
+  a real directory on disk, a real SQLite database, plus live Redis, Valkey,
+  memcached and MongoDB), with negative cases for "nothing expired reports 0"
+  and "an entry with no TTL is never swept".
+
+### Breaking (query-cache key carries database identity, ADR-0024)
+
+- The persistent DB query-cache key now includes the DATABASE IDENTITY of the
+  connection it came from. It was `sha256(sql . params)` with nothing naming the
+  connection.
+
+      before:  sha256(sql . json_encode(params))
+      after:   sha256(identity . "\0" . sql . "\0" . json_encode(params))
+      identity: engine://host:port/database   (NO username, NO password)
+
+  WHY: with no database identity in the key, two databases sharing ONE cache
+  backend cross-served each other's rows. Two apps pointed at one Redis, or a
+  single app with a primary and an analytics connection, silently read each
+  other's data. Identical SQL text is exactly what a multi-tenant deployment
+  runs, so the collision was the COMMON case, not an edge case. This is a
+  data-isolation failure that looked like a caching optimisation. Measured
+  2026-08-04 against a real shared Redis with two real SQLite files AND two real
+  PostgreSQL databases: database B was served database A's row in both.
+
+  The identity carries NO credentials, deliberately. A password in a key means
+  every rotation silently cold-starts the cache, and a shared backend's key
+  namespace is visible to every tenant of that backend. It also carries nothing
+  per-process (no pid, no object id, no salt) - that would isolate databases by
+  accident and destroy the point of a shared cache, since no instance would ever
+  hit another instance's entry.
+
+  MIGRATION: every entry already in a persistent cache backend becomes a MISS on
+  upgrade, because its key no longer matches. Nothing needs to be done - the
+  cache refills on the next read, and the stale entries expire under their own
+  TTL. A cold cache is safe; cross-served rows are not. If you want the space
+  back immediately, call `cacheClear()` on any connection (or `FLUSHDB` the
+  cache database if it is dedicated to Tina4) during the deploy.
+
+  `CachedDatabase::__construct()` takes a new optional trailing `$url` argument
+  (the connection URL). Code that builds the decorator by hand keeps working -
+  the argument defaults to an empty string - but SHOULD pass the URL, or every
+  hand-built wrapper shares one identity. `Database` passes it automatically.
+
+  Pinned by `tests/CacheKeyDatabaseIdentityTest.php`, which runs against a real
+  shared Redis plus real SQLite and real PostgreSQL, with negative cases
+  asserting the key is STABLE for the same database (not per-connection) and
+  that credentials never reach it.
+
 ### Breaking (DocStore result accessors, ADR-0025)
 
 - The DocStore result objects (`InsertOneResult`, `InsertManyResult`,
@@ -55,6 +170,42 @@ https://tina4.com/php/36-releases
 This file is deliberately NOT a copy of those notes. Duplicating them is exactly how a
 changelog rots into claiming a version that was never cut, so this file records only
 UNRELEASED work. When a version ships, its notes go to the release notes above.
+
+### Breaking (DocStore: a missing MongoDB driver now raises)
+
+`TINA4_MONGO_URI` set with the `mongodb` extension or the `mongodb/mongodb` library NOT installed used to return the local SQLite collection. It now
+raises `Tina4\DocStoreDriverMissing`, naming the provider and what is missing (ADR-0033,
+applying ADR-0024 rule 3).
+
+Re-measured 2026-08-04 at `v3` HEAD in a REAL driverless environment - no mock, no
+faked import - one env produced two shapes and four messages across the family:
+Python, PHP and Ruby silently returned the local SQLite store, Node threw a bare
+`ERR_MODULE_NOT_FOUND`. Silent degradation here means production writes landing in a
+container-local file nobody reads, which vanishes on the next deploy, with no error at
+any point.
+
+**Migration - one of two lines:**
+
+```
+pecl install mongodb              # the PHP extension
+composer require mongodb/mongodb  # the high-level library
+unset TINA4_MONGO_URI             # or use the local SQLite store, explicitly
+```
+
+Also changed: `isServerless()` is now CONFIGURATION ONLY. It used to also return true when ext-mongodb was absent, which is
+what routed the call into the local branch; without this an app branching on it would
+take the local path and never reach the raise. The error message names the env var that
+supplied the URI and never its VALUE, because a Mongo URI routinely carries
+`user:password@` and an error string is the most-logged text a framework emits.
+
+PHP had a **second door** that no test had opened: with `ext-mongodb` PRESENT but the
+`mongodb/mongodb` library absent - the shape a production `composer install --no-dev`
+produces, since that package is `require-dev` plus a `suggest` - `isServerless()`
+reported FALSE while `getCollection()` still returned `Tina4\SqliteCollection`. The two
+disagreed exactly as the DocStore contract forbids. Each piece is now named separately,
+because telling an operator who already has the extension to "install the driver" sends
+them looking in the wrong place.
+
 
 ### Fixed (queue operations acted on the local file store, not the configured backend)
 

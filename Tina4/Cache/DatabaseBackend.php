@@ -127,6 +127,43 @@ class DatabaseBackend extends CacheBackend
         }
     }
 
+    /**
+     * Delete expired rows and return how many went.
+     *
+     * The base class returns 0 because redis, valkey, memcached and mongodb
+     * expire entries SERVER-SIDE - nothing was evicted because there was
+     * nothing left to evict, and 0 is the honest answer. A SQL table expires
+     * nothing by itself. Before this override the database backend inherited
+     * that 0, so expired rows were removed only when someone happened to read
+     * that exact key again: the table grew without bound and the one API whose
+     * job is reclaiming that space reported success having done nothing.
+     *
+     * `expires_at > 0` is load-bearing: an entry stored with ttl <= 0 is
+     * permanent and carries 0, so a bare `now > expires_at` would evict every
+     * permanent entry on the first sweep.
+     *
+     * @return int How many expired rows were deleted
+     */
+    public function sweep(): int
+    {
+        if (!$this->available) {
+            return 0;
+        }
+        $now = microtime(true);
+        $row = $this->adapter->fetchOne(
+            'SELECT COUNT(*) AS c FROM tina4_cache WHERE expires_at > 0 AND expires_at < ?',
+            [$now]
+        );
+        $expired = $row !== null && isset($row['c']) ? (int)$row['c'] : 0;
+        if ($expired > 0) {
+            $this->adapter->execute(
+                'DELETE FROM tina4_cache WHERE expires_at > 0 AND expires_at < ?',
+                [$now]
+            );
+        }
+        return $expired;
+    }
+
     public function stats(): array
     {
         $size = 0;
