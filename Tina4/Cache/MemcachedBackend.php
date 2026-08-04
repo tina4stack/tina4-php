@@ -19,6 +19,12 @@ namespace Tina4\Cache;
 
 class MemcachedBackend extends CacheBackend
 {
+    /**
+     * memcached's own boundary: an exptime at or below this is RELATIVE
+     * seconds, above it is an ABSOLUTE unix timestamp. See exptime().
+     */
+    public const MAX_RELATIVE_EXPTIME = 2592000;  // 30 days
+
     private string $host = 'localhost';
     private int $port = 11211;
     private string $prefix = 'tina4:cache:';
@@ -152,14 +158,47 @@ class MemcachedBackend extends CacheBackend
         return null;
     }
 
+    /**
+     * Convert a TTL in seconds to memcached's exptime field.
+     *
+     * memcached reads exptime as RELATIVE seconds at or below 2592000 (30 days)
+     * and as an ABSOLUTE UNIX TIMESTAMP above it. Interpolating the caller's
+     * ttl raw meant any TTL over 30 days was read as a date in 1970, so the
+     * entry expired the instant it was written - and memcached still answers
+     * STORED, so it presented as a 100% miss rate with nothing logged.
+     *
+     * CONVERT, never CLAMP. Clamping to 2592000 also makes the entry survive
+     * and is also wrong: it silently discards more than half the lifetime the
+     * operator explicitly configured, which is the same class of
+     * silent-wrong-answer as the bug it would be replacing.
+     *
+     * @param  int $ttl Lifetime in seconds; 0 or less means "never expires"
+     * @return int The exptime field to send to memcached
+     */
+    private static function exptime(int $ttl): int
+    {
+        if ($ttl <= 0) {
+            return 0;
+        }
+        if ($ttl > self::MAX_RELATIVE_EXPTIME) {
+            return time() + $ttl;
+        }
+        return $ttl;
+    }
+
     public function set(string $key, mixed $value, int $ttl): void
     {
         $data = json_encode($value);
-        $exptime = $ttl > 0 ? $ttl : 0;
+        $exptime = self::exptime($ttl);
         $mcKey = $this->mcKey($key);
         $payload = 'set ' . $mcKey . ' 0 ' . $exptime . ' ' . strlen($data) . "\r\n" . $data . "\r\n";
         $this->command($payload, "\r\n");
-        $this->own[$mcKey] = $exptime > 0 ? microtime(true) + $exptime : 0.0;
+        // The write log keeps the RAW ttl, NEVER $exptime. Above the cliff
+        // $exptime is already an ABSOLUTE stamp, so microtime(true) + $exptime
+        // would put this deadline about 166 years out - the map would then
+        // never expire anything and stats() would report expired entries as
+        // live forever.
+        $this->own[$mcKey] = $ttl > 0 ? microtime(true) + $ttl : 0.0;
     }
 
     public function delete(string $key): bool

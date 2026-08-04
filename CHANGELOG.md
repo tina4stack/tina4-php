@@ -1,3 +1,33 @@
+### Fixed (memcached TTL beyond 30 days vanished instantly, ADR-0024)
+
+- `Tina4\Cache\MemcachedBackend::set()` interpolated the caller's TTL into the
+  memcached `set` exptime field RAW. memcached reads that field as RELATIVE
+  seconds at or below 2592000 (30 days) and as an ABSOLUTE UNIX TIMESTAMP above
+  it, so any `TINA4_CACHE_TTL` over 30 days was read as a date in 1970 and the
+  entry expired the instant it was written. memcached still answers `STORED`,
+  so this presented as a 100% miss rate with nothing logged - a cache that looks
+  like it is working and never returns a hit.
+
+  MEASURED on real memcached 1.6.45: exptime 2592000 survives; 2592001 and
+  5184000 vanish immediately despite STORED.
+
+  The fix CONVERTS, it does not CLAMP. Clamping to 2592000 also makes the entry
+  survive and is also wrong: it silently discards more than half the lifetime
+  the operator explicitly configured, which is the same class of
+  silent-wrong-answer as the bug it would replace. `MAX_RELATIVE_EXPTIME` is a
+  public class constant; `exptime()` maps ttl <= 0 to 0, ttl > MAX to
+  `time() + ttl`, and leaves everything else alone.
+
+  The local write log deliberately keeps the RAW ttl. Building it from the
+  converted value would set the deadline to `now + <a unix timestamp>` - about
+  166 years out - so the map would never expire anything and `stats()` would
+  report expired entries as live forever.
+
+  Pinned by `tests/CacheMemcachedExptimeTest.php` against a real memcached. The
+  load-bearing case reads the SERVER's own remaining lifetime (`mg <key> t` ->
+  `HD t<seconds>`, memcached 1.6+), because a survival check alone passes under
+  a clamp exactly as it does under a convert.
+
 ### Fixed (cache sweep on the database backend, ADR-0024)
 
 - `Tina4\Cache\DatabaseBackend` had no `sweep()`, so it inherited the base
