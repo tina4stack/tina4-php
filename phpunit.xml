@@ -8,11 +8,13 @@
       Real-service test gate (parity with the Python master's conftest.py hook).
       When TINA4_REQUIRE_SERVICES is truthy (CI sets it to '1'), a test that
       SKIPS because a PROVISIONED service (PostgreSQL/MySQL/MSSQL/Redis/Valkey/
-      Memcached/MongoDB/RabbitMQ/Kafka) or its client library is missing is turned
-      into a hard FAILURE. MySQL and MSSQL/SQL Server joined the provisioned set
-      in 3.13.44 (#262) and are in RequireServicesGate::SERVICE_KEYWORDS; only
-      Firebird is NOT provisioned, so its skips stay green. With the flag unset
-      (local default), skips are unchanged.
+      Memcached/MongoDB/RabbitMQ/Kafka/Firebird) or its client library is missing
+      is turned into a hard FAILURE. MySQL and MSSQL/SQL Server joined the
+      provisioned set in 3.13.44 (#262). Firebird joined it once the belief that
+      it was unprovisioned was measured and found FALSE — a live Firebird 5.0.4
+      answers on 3050 and ext-interbase builds on PHP 8.3 — so Firebird skips are
+      violations like any other. With the flag unset (local default), skips are
+      unchanged.
 
       The extension subscribes to BOTH Test\Skipped and TestSuite\Skipped: a skip
       from setUpBeforeClass() emits only the latter, so listening to the per-test

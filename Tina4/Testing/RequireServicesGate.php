@@ -19,8 +19,11 @@ namespace Tina4\Testing;
  * MySQL and MSSQL / SQL Server joined the provisioned set in 3.13.44 (#262), so
  * their reachability / boolean round-trip skips now turn into failures too.
  *
- * Firebird is deliberately NOT in the keyword set — it is not provisioned, so
- * its "set TINA4_TEST_FIREBIRD_URL" / "not reachable" skips stay green.
+ * Firebird IS provisioned and IS in the keyword set. It used to be excluded on
+ * the stated belief that no Firebird server was available — a belief that was
+ * simply false, and that quietly protected 17 Firebird skips from the gate for
+ * as long as it stood. A skip the gate refuses to look at is a green skip by
+ * another name, which is the exact hole this class exists to close.
  *
  * Mechanism: a PHPUnit 11 event Extension subscribes to BOTH Test\Skipped and
  * TestSuite\Skipped to collect offending skips, then fails the whole run from
@@ -43,8 +46,10 @@ final class RequireServicesGate
     /**
      * Provisioned real services (and their client-library names). A skip whose
      * reason mentions one of these AND an unavailable hint is a violation.
-     * MySQL + MSSQL/SQL Server joined the provisioned set in 3.13.44 (#262).
-     * EXCLUDES firebird on purpose (not provisioned — its skips stay green).
+     * MySQL + MSSQL/SQL Server joined the provisioned set in 3.13.44 (#262);
+     * Firebird joined it once the belief that it was unprovisioned was measured
+     * and found false (a live Firebird 5.0.4 answers on 3050, and ext-interbase
+     * builds and installs on PHP 8.3).
      */
     private const SERVICE_KEYWORDS = [
         'postgres', 'postgresql', 'psycopg2', 'pg_connect', 'ext-pgsql',
@@ -59,12 +64,24 @@ final class RequireServicesGate
         // tests, plus ext-imap which those tests require. No mail keyword
         // existed here before, so a "not reachable" mail skip passed green.
         'greenmail', 'smtp', 'imap',
+        // Firebird: the engine, the native client (ext-interbase, whose
+        // functions are ibase_*/fbird_*) and the PDO driver (pdo_firebird).
+        'firebird', 'interbase', 'ibase',
     ];
 
-    /** Phrases that mean "the provisioned thing is not there right now". */
+    /**
+     * Phrases that mean "the provisioned thing is not there right now".
+     *
+     * 'not configured' and 'not present' were missing, and each one was a live
+     * leak: tests/DatabaseUrlCredentialsTest.php skips with the literal reason
+     * "live PostgreSQL not configured (TINA4_TEST_PG_URL)", which names a
+     * provisioned service on the keyword axis but matched NO hint, so the gate
+     * never fired and the test skipped green against a running PostgreSQL.
+     */
     private const UNAVAILABLE_HINTS = [
         'not reachable', 'unreachable', 'not running', 'not set',
         'not installed', 'could not connect', 'not available', 'refused',
+        'not configured', 'not present',
     ];
 
     /** @var array<int, array{id:string, reason:string}> */

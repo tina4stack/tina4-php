@@ -33,3 +33,5 @@ require __DIR__ . '/PgTestEnv.php';
 require __DIR__ . '/AppTestSupport.php';
 require __DIR__ . '/FreePort.php';
 require __DIR__ . '/TestServer.php';
+require __DIR__ . '/PhpChild.php';
+require __DIR__ . '/MissingExtensionCase.php';

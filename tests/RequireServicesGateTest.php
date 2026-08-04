@@ -214,14 +214,23 @@ class RequireServicesGateTest extends TestCase
         $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
     }
 
-    public function testUnprovisionedServiceSkipStaysGreenEvenWhenArmed(): void
+    /**
+     * A skip for something genuinely NOT provisioned must still stay green, so
+     * the suite-level subscriber cannot over-reach.
+     *
+     * This used to use Firebird as its example of "not provisioned". That was
+     * false - a live Firebird 5.0.4 has been answering on 3050 the whole time -
+     * and while it stood, this test actively ENFORCED the hole: it asserted that
+     * Firebird skips must pass, so 17 of them did. Firebird is now provisioned
+     * and gated like every other service (see the case below); the over-reach
+     * guard uses a service Tina4 genuinely does not provision instead.
+     */
+    public function testGenuinelyUnprovisionedServiceSkipStaysGreenEvenWhenArmed(): void
     {
-        // Firebird is deliberately NOT provisioned in CI, so its skips must stay
-        // green. Guards against the new suite-level subscriber over-reaching.
         [$output, $code] = $this->runPhpunit(
             ['GateFixtureUnprovisioned' => $this->beforeClassFixture(
                 'GateFixtureUnprovisioned',
-                'Firebird not reachable on localhost:3050',
+                'Cassandra not reachable on localhost:9042',
                 1,
             )],
             true,
@@ -229,6 +238,30 @@ class RequireServicesGateTest extends TestCase
 
         $this->assertSame(0, $code, $output);
         $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
+    }
+
+    /**
+     * REGRESSION GUARD: a Firebird skip must FAIL the armed run.
+     *
+     * Firebird is provisioned. Until 2026-08-05 the gate excluded it by keyword
+     * and this file asserted the exclusion, so every "ext-interbase not
+     * installed" / "Firebird not reachable" skip passed green and stayed
+     * invisible. If anyone ever drops firebird/interbase from SERVICE_KEYWORDS
+     * again, this goes red.
+     */
+    public function testFirebirdSkipFailsTheArmedRun(): void
+    {
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureFirebird' => $this->beforeClassFixture(
+                'GateFixtureFirebird',
+                'Firebird not reachable on localhost:3050',
+                1,
+            )],
+            true,
+        );
+
+        $this->assertNotSame(0, $code, "a Firebird skip must fail the armed run.\n" . $output);
+        $this->assertStringContainsString('TINA4_REQUIRE_SERVICES is set', $output);
     }
 
     // ── The keyword matcher itself (pure predicate, no dependency) ───────────
@@ -243,8 +276,25 @@ class RequireServicesGateTest extends TestCase
 
     public function testMatcherRejectsAnUnprovisionedServiceOrAPlainSkip(): void
     {
-        $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip('Firebird not reachable on localhost:3050'));
+        $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip('Cassandra not reachable on localhost:9042'));
         $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip('Kafka test is slow, run it manually'));
         $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip(''));
+    }
+
+    /**
+     * Firebird and its two clients are matched, and so are the hint phrases that
+     * used to leak. Every string here is a VERBATIM skip reason this suite
+     * produced while the gate looked the other way.
+     */
+    public function testMatcherAcceptsFirebirdAndThePreviouslyLeakingHints(): void
+    {
+        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('ext-interbase not installed'));
+        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('Firebird not reachable at localhost:53050'));
+        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
+            'pdo_firebird driver not present - PDO Firebird fallback UNVERIFIED here.'
+        ));
+        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
+            'live PostgreSQL not configured (TINA4_TEST_PG_URL)'
+        ));
     }
 }

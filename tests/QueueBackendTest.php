@@ -14,6 +14,8 @@ use Tina4\Queue\MongoBackend;
 
 class QueueBackendTest extends TestCase
 {
+    use MissingExtensionCase;
+
     // -- Interface contract (ONE consolidated rename guard) ------------------
     //
     // The Queue facade calls a fixed method set on whatever backend is active;
@@ -419,15 +421,37 @@ class QueueBackendTest extends TestCase
 
     // -- MongoBackend extension guard ----------------------------------------
 
+    /**
+     * The missing-extension error is CREATED, not waited for.
+     *
+     * This read "if ext-mongodb IS installed, skip", so on any box that can run
+     * the live Mongo queue tests it skipped green and the error a developer with
+     * a bare PHP actually hits was asserted by nobody. The absence is produced
+     * instead, in a REAL php subprocess whose conf.d simply omits the .ini that
+     * loads ext-mongodb. See tests/MissingExtensionCase.php.
+     */
     public function testMongoBackendRequiresMongodbExtension(): void
     {
-        if (extension_loaded('mongodb')) {
-            $this->markTestSkipped('ext-mongodb is installed — cannot test missing extension error');
-        }
+        $this->assertConstructionReportsMissingExtension(
+            'mongodb',
+            "new \\Tina4\\Queue\\MongoBackend();",
+            'The mongodb extension is required'
+        );
+    }
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('mongodb');
-        new MongoBackend();
+    /**
+     * NEGATIVE CONTROL: with ext-mongodb present, constructing MongoBackend in
+     * the same kind of child must NOT report the extension missing. Without it,
+     * a subprocess broken in a way that made every construction fail would still
+     * pass the case above.
+     */
+    public function testMongoBackendDoesNotReportTheExtensionMissingWhenItIsPresent(): void
+    {
+        $this->assertConstructionDoesNotReportMissingExtension(
+            'mongodb',
+            "new \\Tina4\\Queue\\MongoBackend();",
+            'The mongodb extension is required'
+        );
     }
 
     // -- Batch dequeue (popBatch) -------------------------------------------

@@ -20,6 +20,8 @@ use Tina4\Database\SQLite3Adapter;
 
 class DatabaseDriversTest extends TestCase
 {
+    use MissingExtensionCase;
+
     // ── Live-service connection helpers (#262) ───────────────────────
     //
     // MySQL + MSSQL are provisioned in CI since 3.13.44, so the live tests
@@ -103,99 +105,83 @@ class DatabaseDriversTest extends TestCase
 
     // ── Extension Detection ──────────────────────────────────────────
 
+    /**
+     * The missing-extension error is CREATED, not waited for.
+     *
+     * These three cases (pgsql / mysqli / interbase) used to read "if the
+     * extension IS installed, skip", so the better the host the less they
+     * tested: on CI and on the lab all three skipped green and the error a user
+     * with a bare PHP actually hits was asserted by nobody. Inverting the gate
+     * only moves the green skip to the other kind of host.
+     *
+     * So the absence is produced instead: a REAL php subprocess runs with
+     * PHP_INI_SCAN_DIR pointed at a copy of this host's conf.d minus the one
+     * .ini that loads the extension. Nothing is stubbed - the shared object is
+     * simply never dlopen'd, so extension_loaded() genuinely answers false and
+     * the adapter takes the same branch it takes on a machine that never had
+     * the extension. See tests/PhpChild.php.
+     *
+     * The instrument is asserted FIRST (assertExtensionReallyAbsent), because
+     * every assertion here is vacuous if the child quietly kept the extension.
+     */
     public function testPostgresThrowsWithoutExtension(): void
     {
-        if (function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql is installed — cannot test missing extension error');
-        }
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('ext-pgsql');
-        new PostgresAdapter('pgsql://localhost/test');
+        $this->assertConstructionReportsMissingExtension(
+            'pgsql',
+            "new \\Tina4\\Database\\PostgresAdapter('pgsql://localhost/test');",
+            'ext-pgsql'
+        );
     }
 
     public function testMySQLThrowsWithoutExtension(): void
     {
-        if (extension_loaded('mysqli')) {
-            $this->markTestSkipped('ext-mysqli is installed — cannot test missing extension error');
-        }
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('ext-mysqli');
-        new MySQLAdapter('mysql://localhost/test');
+        $this->assertConstructionReportsMissingExtension(
+            'mysqli',
+            "new \\Tina4\\Database\\MySQLAdapter('mysql://localhost/test');",
+            'ext-mysqli'
+        );
     }
 
     /**
-     * The MSSQLAdapter constructor now picks a backend automatically: it prefers
-     * ext-sqlsrv (the Microsoft driver) and falls back to ext-pdo_dblib (FreeTDS,
-     * the 'dblib' PDO driver — the same stack tina4-python/tina4-ruby use). It
-     * only throws when NEITHER backend is available.
+     * NEGATIVE CONTROL for the missing-extension cases above.
      *
-     * So this is now two assertions in one (driven by what the host actually
-     * provides):
-     *   - neither sqlsrv NOR pdo_dblib  → constructor STILL throws (clear error
-     *     naming both ext-sqlsrv and ext-pdo_dblib).
-     *   - pdo_dblib IS available (no sqlsrv) → constructor SUCCEEDS and the
-     *     instance reports the 'pdo' driver (it must not throw just because the
-     *     Microsoft driver is missing).
-     *
-     * The constructor connects in open(), so on a host with dblib but no live
-     * server we tolerate the "failed to connect" RuntimeException — what we are
-     * asserting is that it did NOT throw the missing-extension error and that
-     * the backend selection landed on 'pdo'. The live round-trip lives in
-     * MySQLMSSQLLiveTest.
+     * "The child threw naming ext-pgsql" is also true of a child that cannot
+     * construct ANY adapter. This runs the same construction in the same kind of
+     * child with the extension KEPT, so a subprocess broken in a way that made
+     * every construction fail cannot pass the cases above.
      */
-    public function testMSSQLBackendSelection(): void
+    public function testAdapterDoesNotReportAMissingExtensionWhenItIsPresent(): void
     {
-        $hasSqlsrv = function_exists('sqlsrv_connect');
-        $hasDblib = in_array('dblib', \PDO::getAvailableDrivers(), true);
-
-        if (!$hasSqlsrv && !$hasDblib) {
-            // Neither backend present — must throw the missing-extension error
-            // naming both options.
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('ext-sqlsrv');
-            new MSSQLAdapter('mssql://localhost/test');
-            return;
-        }
-
-        if ($hasSqlsrv) {
-            $this->markTestSkipped(
-                'ext-sqlsrv is installed — this host exercises the primary '
-                . 'driver, not the pdo_dblib fallback selection path.'
+        $present = PhpChild::loadedAmong(['pgsql', 'mysqli']);
+        if ($present === []) {
+            self::fail(
+                'this host has neither ext-pgsql nor ext-mysqli, so the negative control cannot run. '
+                . 'Install one (apt-get install php-pgsql) - a suite that can only ever prove the '
+                . 'ABSENCE branch is half a test.'
             );
         }
 
-        // pdo_dblib present, sqlsrv absent: the constructor must NOT throw a
-        // missing-extension error — it must select the 'pdo' backend. It may
-        // still raise a "failed to connect" RuntimeException if nothing is
-        // listening; that is fine — only the missing-extension error is wrong.
-        try {
-            $adapter = new MSSQLAdapter('mssql://localhost/test');
-            $this->assertSame('pdo', $adapter->getDriver(),
-                'with only pdo_dblib available the adapter must use the pdo backend');
-            $adapter->close();
-        } catch (\RuntimeException $e) {
-            $this->assertStringNotContainsString('ext-sqlsrv', $e->getMessage(),
-                'a missing-extension error is wrong when pdo_dblib is available — '
-                . 'the adapter must fall back to pdo, not refuse to construct'
-            );
-            $this->assertStringContainsString('Failed to connect', $e->getMessage(),
-                'the only acceptable RuntimeException here is a connection failure, '
-                . 'not a backend-availability error'
-            );
-        }
+        $extension = $present[0];
+        [$construction, $needle] = $extension === 'pgsql'
+            ? ["new \\Tina4\\Database\\PostgresAdapter('pgsql://127.0.0.1:1/test');", 'ext-pgsql']
+            : ["new \\Tina4\\Database\\MySQLAdapter('mysql://127.0.0.1:1/test');", 'ext-mysqli'];
+
+        $this->assertConstructionDoesNotReportMissingExtension($extension, $construction, $needle);
     }
 
+    /**
+     * Only ext-interbase is removed, deliberately: FirebirdAdapter's constructor
+     * selects ibase_* / fbird_* and raises when NEITHER exists, so pdo_firebird
+     * staying loaded in the child is correct - it proves the native adapter
+     * refuses on its own terms rather than being rescued by the PDO driver.
+     */
     public function testFirebirdThrowsWithoutExtension(): void
     {
-        if (function_exists('ibase_connect') || function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase is installed — cannot test missing extension error');
-        }
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('ext-interbase');
-        new FirebirdAdapter('firebird://localhost/test');
+        $this->assertConstructionReportsMissingExtension(
+            'interbase',
+            "new \\Tina4\\Database\\FirebirdAdapter('firebird://localhost/test');",
+            'ext-interbase'
+        );
     }
 
     // ── DatabaseFactory ──────────────────────────────────────────────
