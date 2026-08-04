@@ -97,7 +97,7 @@ class Validator
         if ($value === null) {
             return $this;
         }
-        if (!is_string($value) || mb_strlen($value) < $length) {
+        if (!is_string($value) || Str::length($value) < $length) {
             $this->validationErrors[] = [
                 'field' => $field,
                 'message' => "{$field} must be at least {$length} characters",
@@ -117,7 +117,7 @@ class Validator
         if ($value === null) {
             return $this;
         }
-        if (!is_string($value) || mb_strlen($value) > $length) {
+        if (!is_string($value) || Str::length($value) > $length) {
             $this->validationErrors[] = [
                 'field' => $field,
                 'message' => "{$field} must be at most {$length} characters",

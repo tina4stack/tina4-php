@@ -437,7 +437,7 @@ ends of the contract were inverted against the other three frameworks:
 **Migration.** A block that relied on `0` meaning "cache forever" needs an
 explicit positive TTL: `{% cache "key" 86400 %}`.
 
-### Breaking: ->middleware([ResponseCache::class]) now actually caches
+### Fixed: ->middleware([ResponseCache::class]) now actually caches
 
 It was a silent no-op: `Middleware::discoverMethods()` collects only PUBLIC
 STATIC methods and `beforeCache`/`afterCache` are instance methods, so no hook

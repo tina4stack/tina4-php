@@ -706,7 +706,7 @@ class WebSocketBackplaneManager
     /** True if $s is not valid UTF-8 (so it must travel as base64). */
     private static function isBinary(string $s): bool
     {
-        return $s !== '' && !mb_check_encoding($s, 'UTF-8');
+        return $s !== '' && !\Tina4\Str::isUtf8($s);
     }
 
     public function close(): void
