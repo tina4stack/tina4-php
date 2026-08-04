@@ -83,9 +83,14 @@ final class QueuePriorityInvariantTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed>|null $job
+     * pop() returns a Tina4\Job, not an array. The BODY needed no change - Job
+     * implements ArrayAccess so `$job['payload']` still resolves - only this
+     * parameter type did, which is exactly the non-breaking guarantee working
+     * as intended.
+     *
+     * @param array<string, mixed>|\Tina4\Job|null $job
      */
-    private function payload(?array $job): mixed
+    private function payload(array|\Tina4\Job|null $job): mixed
     {
         $p = $job['payload'] ?? $job;
         return is_array($p) ? ($p['m'] ?? null) : $p;
