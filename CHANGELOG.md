@@ -8,7 +8,7 @@
   `toList()` plus a `__get` that resolves a uniform property name to the driver's
   getter, and forwards the entire driver surface untouched. `aggregate`,
   `bulkWrite`, `createIndex`, `watch`, `withOptions`, sessions and transactions
-  are all still reachable; measured 2026-08-04 against a real MongoDB 7.x with 0
+  are all still reachable; measured 2026-08-04 against a real MongoDB 7.0.39 with 0
   fallback-only collection methods. `->unwrap()` returns the bare driver object.
 
   ADDITIVE, not a replacement. `toArray()` and `getInsertedId()` are the driver's
@@ -24,6 +24,21 @@
   Pinned by `tests/DocStoreSubstitutabilityTest.php`, which reads a document back
   through every spelling on BOTH providers and measures the fallback's public
   methods against the wrapped driver rather than a hand-kept list.
+
+  **Breaking: on the Mongo path `getCollection` now returns a delegator, so a
+  CLASS check answers differently.** Every method call and the whole driver
+  surface behave exactly as before, but
+
+      getCollection('x') instanceof \MongoDB\Collection   // was true, now false
+      get_class(getCollection('x'))                       // was MongoDB\Collection
+
+  **Migration:** stop type-checking the return, or reach the real object with
+  `->unwrap()`:
+
+      getCollection('x')->unwrap() instanceof \MongoDB\Collection   // true
+
+  Nothing in the framework type-checks it; this is stated because a user
+  application might.
 
   KNOWN and NOT fixed here: the fallback `Cursor` carries `sort`, `limit` and
   `skip`, which `MongoDB\Driver\Cursor` does not have, so
