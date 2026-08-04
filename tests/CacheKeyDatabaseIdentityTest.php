@@ -41,9 +41,18 @@ class CacheKeyDatabaseIdentityTest extends TestCase
 {
     private const DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379';
 
-    /** Databases this contract OWNS. Never touch one we did not create. */
-    private const PG_DB_A = 'tina4_cache_contract_a';
-    private const PG_DB_B = 'tina4_cache_contract_b';
+    /**
+     * Databases this contract OWNS, created on demand and never dropped.
+     *
+     * PHP-specific names on purpose. The shared `tina4_cache_contract_a/b` pair
+     * was dropped out from under a run by a sibling framework's suite mid-flight
+     * - measured, the run errored with 'database "tina4_cache_contract_a" does
+     * not exist' seconds after the same databases had been listed as present.
+     * Depending on a database somebody else creates is also why this would have
+     * ERRORED on a fresh CI PostgreSQL, where neither name exists at all.
+     */
+    private const PG_DB_A = 'tina4_cache_ident_php_a';
+    private const PG_DB_B = 'tina4_cache_ident_php_b';
 
     /** @var array<int, string> files created by a test, removed in tearDown */
     private array $temporaryFiles = [];
@@ -157,6 +166,53 @@ class CacheKeyDatabaseIdentityTest extends TestCase
         return (new ReflectionObject($adapter))
             ->getMethod('cacheKey')
             ->invoke($adapter, $sql, $params);
+    }
+
+    /**
+     * Create the two contract databases if they are absent.
+     *
+     * WHY THIS EXISTS: the case used to assume both databases already existed,
+     * which was only ever true because somebody had created them by hand. A
+     * fresh CI PostgreSQL has neither, so the case would have been RED in CI and
+     * GREEN locally - the worst possible split, and exactly the
+     * environment-dependent false green this contract exists to stamp out. It
+     * was not theoretical: a sibling framework's suite dropped the shared pair
+     * mid-run and this file errored on the spot.
+     *
+     * CREATE DATABASE cannot run inside a transaction block, so this uses a
+     * plain PDO connection to the `postgres` maintenance database, which is in
+     * autocommit unless a transaction is opened. That is a REAL connection to
+     * the REAL server doing real DDL - no stand-in anywhere.
+     *
+     * Creating is idempotent and cheap; DROPPING is not done at all, because
+     * that would make concurrent runs fight each other.
+     */
+    private function ensurePostgresDatabases(PgTestEnv $postgres): void
+    {
+        $admin = new PDO(
+            "pgsql:host={$postgres->host};port={$postgres->port};dbname=postgres",
+            $postgres->user,
+            $postgres->pass,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        );
+        foreach ([self::PG_DB_A, self::PG_DB_B] as $database) {
+            $exists = $admin->prepare('SELECT 1 FROM pg_database WHERE datname = ?');
+            $exists->execute([$database]);
+            if ($exists->fetchColumn() !== false) {
+                continue;
+            }
+            try {
+                // The name is a private const in this file, never user input.
+                $admin->exec('CREATE DATABASE ' . $database);
+            } catch (\PDOException $caught) {
+                // 42P04 = duplicate_database: another runner won the race
+                // between the SELECT and the CREATE. That is success, not
+                // failure - the database we need is there either way.
+                if ($caught->getCode() !== '42P04') {
+                    throw $caught;
+                }
+            }
+        }
     }
 
     private function seedSqlite(string $path, string $marker): Database
@@ -303,6 +359,7 @@ class CacheKeyDatabaseIdentityTest extends TestCase
                 "postgresql service not reachable at {$postgres->host}:{$postgres->port}"
             );
         }
+        $this->ensurePostgresDatabases($postgres);
         $this->useSharedRedisCache();
 
         $table = 'widget_' . bin2hex(random_bytes(4));
