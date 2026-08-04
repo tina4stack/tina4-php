@@ -5,65 +5,128 @@ namespace Tina4;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The logger must work on a PHP with no ext-mbstring.
+ * Tina4 core must work on a PHP with no ext-mbstring.
  *
  * WHY THIS EXISTS
  *
  * composer.json requires only ext-json - that is v3's zero-runtime-dependency
- * promise - and ext-mbstring is NOT enabled in a stock php-src build. Log
- * called mb_check_encoding(), mb_strlen() and mb_substr() unguarded, so on an
- * ordinary PHP every log write was a fatal "call to undefined function".
+ * promise - and ext-mbstring is NOT enabled in a stock php-src build. Every
+ * unguarded mb_* call is therefore a fatal "call to undefined function" on an
+ * ordinary PHP, not a rare edge case.
  *
- * The logger is the worst place for that. Log::error() is what
- * Session::safeWrite() calls when a session backend fails, so a DEGRADABLE
- * backend failure became a FATAL that hid its own cause - the operator saw
- * "Call to undefined function Tina4\mb_check_encoding()" instead of the real
- * Redis/Mongo error underneath. Measured stack, 2026-08-04:
+ * The measured one that forced the fix: Log::coerceMessage() called
+ * mb_check_encoding(), and Log::error() is what Session::safeWrite() calls when
+ * a session backend fails. So a DEGRADABLE backend failure became a FATAL that
+ * hid its own cause - the operator saw the undefined-function error instead of
+ * the Redis/Mongo failure underneath:
  *
  *     Error: Call to undefined function Tina4\mb_check_encoding()
  *       Log.php(441) <- Session.php(549) safeWrite <- Session.php(673)
  *
- * Log's own docblock already promises it "must never be the reason a request
- * dies". These cases are what make that true rather than aspirational.
+ * Every mb_* call in core now lives behind a function_exists() guard inside
+ * Tina4\Str, which falls back to ext-pcre - the one text extension PHP cannot
+ * disable.
  */
 class LogWithoutMbstringTest extends TestCase
 {
     /**
-     * NEGATIVE: no mb_* call may sit outside a function_exists() guard.
+     * NEGATIVE, and the load-bearing case: no unguarded mb_* anywhere in core.
      *
-     * This is the gate that survives the environment. Every machine this suite
-     * runs on so far HAS mbstring - macOS has it compiled statically, so even
-     * `php -n` cannot remove it - which means a purely behavioural test would
-     * exercise the mbstring branch and report green while the fallback rots.
-     * Reading the source is the one check that cannot be fooled by the host.
+     * This is a SOURCE check on purpose. Every machine this suite runs on has
+     * mbstring - macOS compiles it in statically, so even `php -n` cannot remove
+     * it - which means a purely behavioural test would exercise the mbstring
+     * branch, report green, and let the fallback rot unnoticed. Reading the
+     * source is the one check the host cannot fool.
+     *
+     * The scan covers the whole tree rather than one file, so a NEW unguarded
+     * call in any future file is caught the day it lands.
      */
-    public function testNoUnguardedMbstringCallInTheLogger(): void
+    public function testNoUnguardedMbstringCallAnywhereInCore(): void
     {
-        $source = file_get_contents(__DIR__ . '/../Tina4/Log.php');
-        $this->assertNotFalse($source, 'Log.php must be readable');
+        $root = realpath(__DIR__ . '/../Tina4');
+        $this->assertNotFalse($root, 'Tina4/ must exist');
 
-        preg_match_all('/\bmb_[a-z_]+\s*\(/', $source, $matches, PREG_OFFSET_CAPTURE);
-        $this->assertNotEmpty(
-            $matches[0],
-            'Expected Log.php to still PREFER mbstring when present. If every mb_* call '
-            . 'is gone this assertion is stale - but so is the risk, so relax it deliberately.'
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+        $offenders = [];
+        $guarded = 0;
+
+        foreach ($files as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $source = file_get_contents($file->getPathname());
+            if ($source === false) {
+                continue;
+            }
+            // Scan CODE only. A first cut regexed the raw source and flagged
+            // "mb_check_encoding()" written in a docblock explaining this very
+            // rule - the gate reporting its own documentation. PHP's tokenizer
+            // is the precise instrument: blank out comments and string literals
+            // (newlines preserved so line numbers stay true) and match on what
+            // actually executes.
+            $source = self::codeOnly($source);
+            if (!preg_match_all('/\bmb_[a-z_]+\s*\(/', $source, $m, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+            foreach ($m[0] as [$call, $offset]) {
+                // A guard is a function_exists() close above the call, or on the
+                // same line for the inline ternary form.
+                $window = substr($source, max(0, $offset - 220), min(220, $offset));
+                if (str_contains($window, 'function_exists')) {
+                    $guarded++;
+                    continue;
+                }
+                $line = substr_count(substr($source, 0, $offset), "\n") + 1;
+                $offenders[] = str_replace($root, 'Tina4', $file->getPathname()) . ":{$line} {$call}";
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "Unguarded mb_* call(s) in core. On a PHP without ext-mbstring each is a fatal, "
+            . "and inside an error path it hides the very failure it was called to report. "
+            . "Use Tina4\\Str (isUtf8/length/substr/titleCase/lower) instead:\n  "
+            . implode("\n  ", $offenders)
         );
 
-        foreach ($matches[0] as [$call, $offset]) {
-            // The guard is the nearest preceding function_exists on the same helper.
-            $before = substr($source, max(0, $offset - 220), min(220, $offset));
-            $this->assertStringContainsString(
-                'function_exists',
-                $before,
-                "Unguarded {$call} in Log.php at offset {$offset}. On a PHP without "
-                . 'ext-mbstring this is a fatal, and inside Log it hides the error it '
-                . 'was called to report.'
-            );
-        }
+        $this->assertGreaterThan(
+            0,
+            $guarded,
+            'Expected core to still PREFER mbstring where present. Zero guarded calls means '
+            . 'the helpers stopped using it at all - relax this deliberately if that was intended.'
+        );
     }
 
     /**
-     * POSITIVE: the coercion and truncation behaviour itself is correct.
+     * Replace comments and string literals with equivalent whitespace.
+     *
+     * Newlines are kept so a reported line number still points at the real
+     * line. Everything else becomes spaces, so a mention of mb_something() in
+     * prose or inside a quoted string cannot be mistaken for a call.
+     *
+     * @param string $source PHP source.
+     * @return string The same source with comments and strings blanked.
+     */
+    private static function codeOnly(string $source): string
+    {
+
+        $out = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_string($token)) {
+                $out .= $token;
+                continue;
+            }
+            [$id, $text] = $token;
+            $isNoise = in_array($id, [T_COMMENT, T_DOC_COMMENT, T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE, T_INLINE_HTML], true);
+            $out .= $isNoise ? preg_replace('/[^\n]/', ' ', $text) : $text;
+        }
+
+        return $out;
+    }
+
+    /**
+     * POSITIVE: the helpers behave correctly.
      *
      * Pure functions over their inputs - no service, no double. Non-UTF-8 bytes
      * are DESCRIBED rather than dumped (raw bytes garble a terminal and can emit
@@ -97,5 +160,24 @@ class LogWithoutMbstringTest extends TestCase
             'The truncated line must still be valid UTF-8 - a byte-based cut would '
             . 'split the last 3-byte glyph and produce a replacement character'
         );
+    }
+
+    /**
+     * POSITIVE: Str's own surface, including the two Frond relies on.
+     *
+     * titleCase is checked on ASCII because that is the part the fallback keeps
+     * fully correct; its documented degradation is that a leading NON-ASCII
+     * letter is not uppercased without mbstring. Asserting Unicode title-casing
+     * here would pass on every machine we have and fail only in the field.
+     */
+    public function testStrHelpersMatchTheirMbstringMeaning(): void
+    {
+        $this->assertTrue(Str::isUtf8("caf\u{00e9}"));
+        $this->assertFalse(Str::isUtf8("\xff\xfe"));
+        $this->assertSame(0, Str::length(''));
+        $this->assertSame(3, Str::length("\u{4e16}\u{754c}!"), 'Characters, not bytes');
+        $this->assertSame("\u{4e16}\u{754c}", Str::substr("\u{4e16}\u{754c}!", 0, 2), 'Never splits a glyph');
+        $this->assertSame('Hello World', Str::titleCase('hELLO wORLD'));
+        $this->assertSame('abc', Str::lower('ABC'));
     }
 }

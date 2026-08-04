@@ -587,7 +587,7 @@ class Log
     private static function coerceMessage(mixed $message): string
     {
         if (is_string($message)) {
-            if (!self::isUtf8($message)) {
+            if (!Str::isUtf8($message)) {
                 return '<binary ' . strlen($message) . ' bytes>';
             }
             $text = $message;
@@ -606,67 +606,13 @@ class Log
     /** Cap a console line. The file keeps the full line. */
     private static function truncateForStdout(string $line): string
     {
-        $len = self::charLength($line);
+        $len = Str::length($line);
         if ($len <= self::STDOUT_MAX_CHARS) {
             return $line;
         }
-        return self::charSubstr($line, self::STDOUT_MAX_CHARS) . "... (truncated, {$len} chars)";
+        return Str::substr($line, 0, self::STDOUT_MAX_CHARS) . "... (truncated, {$len} chars)";
     }
 
-    /*
-     * WHY THESE THREE HELPERS EXIST INSTEAD OF mb_check_encoding/mb_strlen/mb_substr
-     *
-     * ext-mbstring is NOT enabled in a stock php-src build, and composer.json
-     * requires only ext-json - v3's zero-runtime-dependency promise. So on a
-     * perfectly ordinary PHP the mb_* calls were a fatal "call to undefined
-     * function", and the logger is the worst possible place for that: Log::error
-     * is what Session::safeWrite() calls when a session backend fails, so a
-     * DEGRADABLE backend failure became a fatal that HID ITS OWN CAUSE. The
-     * docblock above already promised the logger "must never be the reason a
-     * request dies"; this is what makes that true.
-     *
-     * The fallback is ext-pcre, which cannot be disabled in PHP - unlike
-     * mbstring it is always there. mbstring is still PREFERRED when present: it
-     * is faster and it is what the rest of the framework uses.
-     *
-     * Declaring ext-mbstring in composer.json was the other option and was
-     * rejected: it would make a suggested extension a hard requirement and break
-     * the zero-dependency promise. ext-openssl is already handled this way -
-     * suggested, checked at the point of use - and this follows that precedent.
-     */
-
-    /** True when the bytes are valid UTF-8. */
-    private static function isUtf8(string $value): bool
-    {
-        if (function_exists('mb_check_encoding')) {
-            return mb_check_encoding($value, 'UTF-8');
-        }
-        // The empty pattern with /u makes PCRE validate the subject as UTF-8 and
-        // return false on malformed bytes. This is the canonical mbstring-free check.
-        return $value === '' || preg_match('//u', $value) === 1;
-    }
-
-    /** Length in CHARACTERS, not bytes, so a multi-byte line is not cut mid-glyph. */
-    private static function charLength(string $value): int
-    {
-        if (function_exists('mb_strlen')) {
-            return mb_strlen($value);
-        }
-        $count = preg_match_all('/./us', $value);
-        // preg_match_all returns false on malformed input; byte length is the
-        // honest floor there, and coerceMessage has already rejected non-UTF-8.
-        return $count === false ? strlen($value) : $count;
-    }
-
-    /** First $chars characters, counted in characters. */
-    private static function charSubstr(string $value, int $chars): string
-    {
-        if (function_exists('mb_substr')) {
-            return mb_substr($value, 0, $chars);
-        }
-        $parts = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
-        return $parts === false ? substr($value, 0, $chars) : implode('', array_slice($parts, 0, $chars));
-    }
 
     /**
      * Is this target a FILE PATH or a DIRECTORY?
