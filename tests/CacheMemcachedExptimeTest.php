@@ -34,7 +34,7 @@
  * Everything here runs against a REAL memcached over a real socket.
  *
  * SERVICE ADDRESS
- *     TINA4_TEST_CACHE_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
+ *     TINA4_TEST_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
  */
 
 use PHPUnit\Framework\TestCase;
@@ -47,7 +47,7 @@ class CacheMemcachedExptimeTest extends TestCase
 
     private function memcachedUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_MEMCACHED_URL') ?: 'memcached://127.0.0.1:11211';
+        return getenv('TINA4_TEST_MEMCACHED_URL') ?: 'memcached://127.0.0.1:11211';
     }
 
     /** @return array{0: string, 1: int} */

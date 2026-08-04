@@ -87,7 +87,7 @@ class DatabaseCredentialLeakTest extends TestCase
 
     private static function pgDatabase(): string
     {
-        return (string) (getenv('TINA4_TEST_PG_DATABASE') ?: 'tina4_py');
+        return (string) (getenv('TINA4_TEST_PG_DB') ?: 'tina4_py');
     }
 
     private static function pgUser(): string

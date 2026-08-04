@@ -26,8 +26,8 @@
  * under test, it does not stand in for it.
  *
  * SERVICE ADDRESSES
- *     TINA4_TEST_CACHE_REDIS_URL  (default redis://127.0.0.1:6379)
- *     TINA4_TEST_POSTGRES_URL     (via the shared PgTestEnv helper)
+ *     TINA4_TEST_REDIS_URL  (default redis://127.0.0.1:6379)
+ *     TINA4_TEST_PG_URL     (via the shared PgTestEnv helper)
  *
  * A skip reason below names its service, so under TINA4_REQUIRE_SERVICES=1 an
  * unreachable service is a hard FAILURE, never a quiet green.
@@ -59,7 +59,7 @@ class CacheKeyDatabaseIdentityTest extends TestCase
 
     private function redisUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_REDIS_URL') ?: self::DEFAULT_REDIS_URL;
+        return getenv('TINA4_TEST_REDIS_URL') ?: self::DEFAULT_REDIS_URL;
     }
 
     private function setEnv(string $key, string $value): void

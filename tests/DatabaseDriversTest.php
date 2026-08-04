@@ -397,9 +397,9 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('ext-pgsql not installed');
         }
 
-        $url = getenv('TINA4_TEST_POSTGRES_URL');
+        $url = getenv('TINA4_TEST_PG_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL to run live PostgreSQL tests (e.g. postgres://user:pass@localhost:5432/testdb)');
+            $this->markTestSkipped('Set TINA4_TEST_PG_URL to run live PostgreSQL tests (e.g. postgres://user:pass@localhost:5432/testdb)');
         }
 
         $db = new PostgresAdapter($url);
@@ -526,9 +526,9 @@ class DatabaseDriversTest extends TestCase
             $this->markTestSkipped('ext-pgsql not installed');
         }
 
-        $url = getenv('TINA4_TEST_POSTGRES_URL');
+        $url = getenv('TINA4_TEST_PG_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_POSTGRES_URL for live factory test');
+            $this->markTestSkipped('Set TINA4_TEST_PG_URL for live factory test');
         }
 
         // Database::create() returns the Database facade (v3); the concrete

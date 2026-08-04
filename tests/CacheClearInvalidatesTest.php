@@ -29,9 +29,9 @@
  * SERVICE ADDRESSES
  *     Default to localhost; override per service so a developer (or a parallel
  *     agent) can point at their own isolated containers:
- *         TINA4_TEST_CACHE_REDIS_URL      (default redis://127.0.0.1:6379)
- *         TINA4_TEST_CACHE_VALKEY_URL     (default valkey://127.0.0.1:6380)
- *         TINA4_TEST_CACHE_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
+ *         TINA4_TEST_REDIS_URL      (default redis://127.0.0.1:6379)
+ *         TINA4_TEST_VALKEY_URL     (default valkey://127.0.0.1:6380)
+ *         TINA4_TEST_MEMCACHED_URL  (default memcached://127.0.0.1:11211)
  *
  *     A skip reason below names its service, so under TINA4_REQUIRE_SERVICES=1
  *     an unreachable service is a hard FAILURE, never a quiet green.
@@ -50,17 +50,17 @@ class CacheClearInvalidatesTest extends TestCase
 
     private function redisUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_REDIS_URL') ?: self::DEFAULT_REDIS_URL;
+        return getenv('TINA4_TEST_REDIS_URL') ?: self::DEFAULT_REDIS_URL;
     }
 
     private function valkeyUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_VALKEY_URL') ?: self::DEFAULT_VALKEY_URL;
+        return getenv('TINA4_TEST_VALKEY_URL') ?: self::DEFAULT_VALKEY_URL;
     }
 
     private function memcachedUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_MEMCACHED_URL') ?: self::DEFAULT_MEMCACHED_URL;
+        return getenv('TINA4_TEST_MEMCACHED_URL') ?: self::DEFAULT_MEMCACHED_URL;
     }
 
     /**

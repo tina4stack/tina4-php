@@ -34,7 +34,7 @@
  *     changes.
  *
  * SERVICE ADDRESS
- *     TINA4_TEST_CACHE_REDIS_URL  (default redis://127.0.0.1:6379)
+ *     TINA4_TEST_REDIS_URL  (default redis://127.0.0.1:6379)
  */
 
 use PHPUnit\Framework\TestCase;
@@ -50,7 +50,7 @@ class CacheClearPersistentLayerTest extends TestCase
 
     private function redisUrl(): string
     {
-        return getenv('TINA4_TEST_CACHE_REDIS_URL') ?: 'redis://127.0.0.1:6379';
+        return getenv('TINA4_TEST_REDIS_URL') ?: 'redis://127.0.0.1:6379';
     }
 
     private function setEnv(string $key, string $value): void
