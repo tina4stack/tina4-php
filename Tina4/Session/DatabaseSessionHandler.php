@@ -264,14 +264,40 @@ class DatabaseSessionHandler
         }
 
         if (!$this->db()->tableExists('tina4_session')) {
-            $this->db()->execute(
-                "CREATE TABLE IF NOT EXISTS tina4_session ("
-                . "session_id VARCHAR(255) PRIMARY KEY, "
-                . "data TEXT NOT NULL, "
-                . "expires_at DOUBLE PRECISION NOT NULL"
-                . ")"
-            );
-            $this->db()->commit();
+            // NO "IF NOT EXISTS" HERE. It is not T-SQL, so the whole statement
+            // was a syntax error on SQL Server and the database session backend
+            // did not work on MSSQL AT ALL - measured against live SQL Server
+            // 2022. The clause was redundant anyway: tableExists() above is the
+            // real guard.
+            //
+            // What the clause DID buy was the concurrent first-use race - two
+            // workers both passing tableExists(), both issuing CREATE TABLE, the
+            // loser erroring. Dropping it without replacing that would trade an
+            // MSSQL failure for a startup race on the other four engines, so the
+            // catch below covers it engine-agnostically: RE-CHECK rather than
+            // parse the error message, because "already exists" is spelled
+            // differently by every engine and a string match would rot.
+            try {
+                $this->db()->execute(
+                    "CREATE TABLE tina4_session ("
+                    . "session_id VARCHAR(255) PRIMARY KEY, "
+                    . "data TEXT NOT NULL, "
+                    . "expires_at DOUBLE PRECISION NOT NULL"
+                    . ")"
+                );
+                $this->db()->commit();
+            } catch (\Throwable $e) {
+                // A failed statement leaves PostgreSQL's transaction aborted, so
+                // the re-check below would fail for the wrong reason without this.
+                try {
+                    $this->db()->rollback();
+                } catch (\Throwable) {
+                    // Best effort - an engine with no open transaction is fine.
+                }
+                if (!$this->db()->tableExists('tina4_session')) {
+                    throw $e;
+                }
+            }
         }
 
         $this->tableCreated = true;
