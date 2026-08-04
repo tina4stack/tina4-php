@@ -81,6 +81,46 @@ class ServerParityTest extends TestCase
     }
 
     /**
+     * stop() on a NEVER-STARTED server must not arm a real SIGALRM fuse.
+     *
+     * MEASURED 2026-08-04: stop() called pcntl_alarm($this->shutdownTimeout)
+     * unconditionally, but the SIGALRM handler that catches it is installed only
+     * inside start(). The test directly above constructs a Server and calls
+     * stop() without ever starting it, so it lit a real 30-second alarm in the
+     * PHPUnit PARENT process with no handler attached - and SIGALRM's default
+     * action is to terminate. Thirty seconds later the whole run died at
+     * whatever unrelated test was executing: exit 142 (128 + SIGALRM), no
+     * summary line, no failing test named, and nothing pointing back here.
+     *
+     * It only surfaced when the suite grew slow enough to still be running when
+     * the fuse burned down, which makes it a landmine for the next person who
+     * adds any slow test rather than a bug in the test that adds it.
+     *
+     * pcntl_alarm(0) CANCELS any pending alarm and returns the seconds that were
+     * left on it - so a non-zero return here is the real, live fuse itself, not
+     * a proxy for it. No mocks: this reads actual process signal state.
+     */
+    public function testStopOnANeverStartedServerArmsNoUnhandledAlarm(): void
+    {
+        if (!function_exists('pcntl_alarm')) {
+            $this->markTestSkipped('pcntl_alarm is not available in this PHP build');
+        }
+
+        pcntl_alarm(0); // clear anything an earlier test left behind
+
+        $server = new Server();
+        $server->stop();
+
+        $remaining = pcntl_alarm(0); // cancel and report what stop() armed
+        $this->assertSame(
+            0,
+            $remaining,
+            'stop() armed a ' . $remaining . 's SIGALRM with no handler installed; '
+            . 'the default action would terminate this process'
+        );
+    }
+
+    /**
      * Constructor + getHost()/getPort() expose the real bind target. The
      * explicit host/port arguments are returned verbatim — the safe, observable
      * behaviour mirroring Python's resolve_config output.

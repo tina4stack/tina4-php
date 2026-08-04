@@ -97,6 +97,19 @@ class Server
     /** @var bool True once a shutdown has begun — makes stop() idempotent under a repeated signal */
     private bool $shuttingDown = false;
 
+    /**
+     * True once start() has actually INSTALLED the SIGALRM handler.
+     *
+     * stop() arms pcntl_alarm() to bound the drain, but the handler that catches
+     * that alarm is registered only inside start(). Calling stop() on a server
+     * that was never started therefore lit a real 30-second fuse in the calling
+     * process with NO handler attached, and SIGALRM's default action is to
+     * terminate. In the PHPUnit parent that killed the entire run 30 seconds
+     * later, at whatever unrelated test happened to be executing - exit 142
+     * (128 + SIGALRM), no summary, no failing test named.
+     */
+    private bool $shutdownAlarmArmable = false;
+
     /** @var int Seconds the current drain may take, resolved from TINA4_SHUTDOWN_TIMEOUT */
     private int $shutdownTimeout = self::DEFAULT_SHUTDOWN_TIMEOUT;
 
@@ -349,6 +362,7 @@ class Server
                 pcntl_signal(SIGALRM, function () {
                     $this->forceShutdown();
                 });
+                $this->shutdownAlarmArmable = true;
             }
         }
 
@@ -483,7 +497,11 @@ class Server
             $this->shutdownTimeout
         ));
 
-        if (function_exists('pcntl_alarm') && defined('SIGALRM')) {
+        // Never arm a fuse we have no handler for. The SIGALRM handler is
+        // installed by start(); without it the default action terminates the
+        // process, so a stop() on a never-started server would kill its caller
+        // shutdownTimeout seconds later.
+        if ($this->shutdownAlarmArmable && function_exists('pcntl_alarm') && defined('SIGALRM')) {
             pcntl_alarm($this->shutdownTimeout);
         }
     }
