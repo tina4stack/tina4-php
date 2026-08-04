@@ -675,16 +675,73 @@ class Database implements DatabaseAdapter
      * @param array<mixed> $params Bound parameters for the WHERE clause
      * @return DatabaseResult Truthy result carrying affectedRows (lastId null for updates)
      */
+    /**
+     * Map each introspected key column to the caller's own key for it.
+     *
+     * Returns [[engineColumn => callerKey], [engine columns absent from data]].
+     *
+     * The engines disagree about identifier case BY DESIGN and always will:
+     * Firebird folds an unquoted identifier to UPPER, PostgreSQL folds it to
+     * LOWER, MySQL and SQLite preserve what was typed. Introspection therefore
+     * hands back the ENGINE's spelling while $data carries whatever the caller
+     * typed, and comparing the two case-sensitively made a correct call fail on
+     * whichever engine folds the other way.
+     *
+     * That is a case-sensitivity bug, not a Firebird quirk - Firebird only made
+     * it visible first, because the shared write-path contract writes lower-case
+     * keys and Firebird reports upper-case ones.
+     *
+     * The fix deliberately does NOT lower-case what introspection returns: that
+     * would special-case one engine and break a genuinely quoted mixed-case
+     * table, which is a real thing on Firebird.
+     *
+     * Ambiguity is refused rather than guessed: with both `id` and `ID` present
+     * there is no defensible way to choose, and choosing wrong here writes the
+     * WHERE clause of an UPDATE.
+     *
+     * @param string[] $keyColumns
+     * @return array{0: array<string,string>, 1: string[]}
+     */
+    private function matchKeyColumns(string $table, array $keyColumns, array $data): array
+    {
+        $resolved = [];
+        $missing = [];
+        foreach ($keyColumns as $column) {
+            $folded = strtolower((string)$column);
+            $matches = [];
+            foreach (array_keys($data) as $key) {
+                if (strtolower((string)$key) === $folded) {
+                    $matches[] = (string)$key;
+                }
+            }
+            if (count($matches) > 1) {
+                sort($matches);
+                throw new DatabaseException(sprintf(
+                    'Database::update() was given more than one key for the primary-key '
+                    . 'column %s: [%s] (table=%s). These differ only by case, so which one '
+                    . 'identifies the row is ambiguous - pass exactly one, or pass an '
+                    . 'explicit filter.',
+                    $column,
+                    implode(', ', $matches),
+                    $table
+                ));
+            }
+            if ($matches !== []) {
+                $resolved[$column] = $matches[0];
+            } else {
+                $missing[] = $column;
+            }
+        }
+        return [$resolved, $missing];
+    }
+
     public function update(string $table, array $data, string|array $filterSql = '', array $params = []): DatabaseResult
     {
         [$filterSql, $params] = $this->asWhere($filterSql, $params);
 
         if ($filterSql === '') {
             $pkColumns = $this->primaryKey($table);
-            $missing = array_values(array_filter(
-                $pkColumns,
-                static fn(string $c): bool => !array_key_exists($c, $data)
-            ));
+            [$resolved, $missing] = $this->matchKeyColumns($table, $pkColumns, $data);
 
             if ($pkColumns === [] || $missing !== []) {
                 throw new DatabaseException(sprintf(
@@ -701,12 +758,15 @@ class Database implements DatabaseAdapter
             // EVERY key column goes into the WHERE. A composite key built from
             // only its first column would match every row sharing that value -
             // the data-loss bug this method exists to prevent, reintroduced.
+            // The WHERE is built from the ENGINE's column name and the CALLER's
+            // value, which is why the lookup goes through $resolved.
             $params = [];
             $where = [];
             foreach ($pkColumns as $column) {
-                $params[] = $data[$column];
+                $callerKey = $resolved[$column];
+                $params[] = $data[$callerKey];
                 $where[] = $column . ' = ?';
-                unset($data[$column]);
+                unset($data[$callerKey]);
             }
 
             if ($data === []) {
