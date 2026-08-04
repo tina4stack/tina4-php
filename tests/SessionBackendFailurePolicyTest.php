@@ -641,8 +641,20 @@ class SessionBackendFailurePolicyTest extends TestCase
     // child correct: inside it euid is STILL 0, so a euid test would have sent
     // it into an infinite delegation loop.
 
-    /** Env marker telling a child it is the delegated, capability-dropped run. */
-    private const PRIVILEGE_DROP_MARKER = 'TINA4_TEST_DAC_ENFORCED_CHILD';
+    /**
+     * Env marker telling a child it is the delegated, capability-dropped run.
+     *
+     * Deliberately NOT in the TINA4_TEST_ namespace. That namespace is the
+     * cross-framework test-environment contract (ADR-0038,
+     * tests/fixtures/test_env_contract.json), whose fixture is byte-identical in
+     * all four frameworks and whose purpose is to stop a SERVICE's connection
+     * details acquiring divergent spellings. This name configures no service,
+     * never crosses a framework boundary, and is set and read inside a single
+     * process tree by this file alone - so it belongs outside the contract
+     * rather than as a PHP-only entry that would break the fixture's
+     * byte-identical invariant.
+     */
+    private const PRIVILEGE_DROP_MARKER = 'TINA4_DAC_ENFORCED_CHILD';
 
     /** What the delegated child prints so the parent can prove the drop happened. */
     private const PRIVILEGE_DROP_SIGNAL = 'TINA4_DAC_INSTRUMENT';
