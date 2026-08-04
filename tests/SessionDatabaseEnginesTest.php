@@ -79,10 +79,22 @@ class SessionDatabaseEnginesTest extends TestCase
      * unnoticed on the one machine that has it. Neither is acceptable, so the
      * roster below reports which of the two actually happened, every run.
      *
-     * mssql was a MEASURED_OPEN_DEFECTS entry until 2026-08-04. It is promoted
-     * here rather than into REQUIRED_ENGINES because SQL Server is not present
-     * on every dev machine, whereas sqlite/postgres/mysql are on the lab and in
-     * CI. Promote it further the day that stops being true.
+     * mssql was a MEASURED_OPEN_DEFECTS entry until 2026-08-04.
+     *
+     * IT STAYS HERE RATHER THAN GRADUATING TO REQUIRED, and the reason is worth
+     * being explicit about because the evidence looks like a case for promotion.
+     * Measured on the lab the same day, against live SQL Server 2022: mssql
+     * round-trips through this suite, its per-engine DDL is confirmed in the
+     * catalog, and it survived the concurrent first-use race with SIX REAL
+     * PROCESSES. On correctness it has earned REQUIRED.
+     *
+     * But this tier is not about whether an engine WORKS - it is about whether
+     * every machine that runs this suite can REACH it, because REQUIRED treats
+     * unreachable as broken. SQL Server is on the lab and is not on a typical
+     * dev machine, so promoting it would turn a green suite red everywhere
+     * except one box, for a reason that says nothing about the framework. The
+     * day SQL Server is provisioned wherever this suite runs, promote it - the
+     * correctness evidence is already in.
      *
      * @var string[]
      */
