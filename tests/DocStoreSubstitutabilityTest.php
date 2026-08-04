@@ -461,31 +461,134 @@ PHP;
     /**
      * docstore_contract.json :: the-call-site-surface-is-identical
      *
-     * The NEGATIVE half of the rule above, and the one that keeps it honest.
+     * ADR-0035, the amendment to ADR-0025 corollary 1.
      *
-     * ADR-0025 corollary 1 is "no fallback-only public method": a second
-     * spelling that works ONLY on the fallback is exactly how the original
-     * defect shipped, because it let the documentation settle on an accessor
-     * the real driver had never heard of. A real MongoDB result object exposes
-     * no public properties, so neither may ours.
+     * The goal was always "no method that works on the fallback and breaks on
+     * the driver". ADR-0025 reached it by DELETING the method; ADR-0035
+     * SUPPLIES it on both sides instead, through DocStoreDelegator - which
+     * forwards the whole driver surface untouched, so nothing else is lost.
+     *
+     * Asserted by USE, not by reflection: a delegator that answers
+     * method_exists and then fatals would sail through a reflection check.
      *
      * @dataProvider providerCases
      */
-    public function testTheFallbackOnlySpellingIsGone(?string $marker): void
+    public function testTheUniformSpellingWorksOnBothProviders(?string $marker): void
     {
         $uri = $this->resolve($marker);
         [$collection] = $this->collectionFor($uri);
 
-        $result = $collection->insertOne(['probe' => 'accessor']);
+        $result = $collection->insertOne(['probe' => 'uniform']);
 
-        $public = (new \ReflectionObject($result))->getProperties(\ReflectionProperty::IS_PUBLIC);
-        $this->assertSame(
-            [],
-            array_map(static fn ($p) => $p->getName(), $public),
-            'an insert result must expose NO public properties, on either provider'
+        // The uniform PROPERTY spelling, on whichever provider is in play.
+        $id = $result->insertedId;
+        $this->assertNotNull($id, '->insertedId must return the new document id');
+        $this->assertEquals(
+            $result->getInsertedId(),
+            $id,
+            '->insertedId and getInsertedId() must be the SAME id - additive, not a second answer'
+        );
+        $this->assertTrue(isset($result->insertedId), 'isset() must agree with the accessor');
+
+        $found = $collection->findOne(['_id' => $id]);
+        $this->assertNotNull($found, 'the id from ->insertedId must find the document back');
+        $this->assertSame('uniform', $found['probe']);
+
+        // The uniform CURSOR spelling, alongside the driver's toArray().
+        $listed = $collection->find(['probe' => 'uniform'])->toList();
+        $this->assertCount(1, $listed, 'toList() must materialise the documents');
+        $this->assertSame('uniform', $listed[0]['probe']);
+        $this->assertCount(
+            1,
+            $collection->find(['probe' => 'uniform'])->toArray(),
+            'toArray() must keep working alongside toList()'
         );
 
+        // NEGATIVE: a name that exists on NEITHER half must still fail loudly.
+        // Without this the delegator could be swallowing everything.
+        $threw = false;
+        try {
+            $result->thereIsNoSuchAccessor;
+        } catch (\Throwable $e) {
+            $threw = true;
+        }
+        $this->assertTrue($threw, 'an unknown accessor must still fail loudly, not read as null');
+
         $collection->deleteMany([]);
+    }
+
+    /**
+     * docstore_contract.json :: the-call-site-surface-is-identical
+     *
+     * The measurement ADR-0025 made by hand, now a gate - and pointed at the
+     * WRAPPED surface (ADR-0035) rather than the raw driver, because the object
+     * getCollection RETURNS is the only surface a call site ever touches.
+     *
+     * Measured rather than listed: a hand-kept list of method names is exactly
+     * the thing that drifts away from the code it describes.
+     */
+    public function testTheFallbackSurfaceResolvesOnTheWrappedDriver(): void
+    {
+        $uri = $this->resolve('__MONGO__');
+        [$wrapped] = $this->collectionFor($uri);
+
+        $fallbackMethods = get_class_methods(\Tina4\SqliteCollection::class);
+        $missing = array_values(array_filter(
+            $fallbackMethods,
+            static fn (string $m) => !self::resolvesOn($wrapped, $m)
+        ));
+
+        $this->assertSame(
+            [],
+            $missing,
+            'fallback-only collection methods (they break the swap): ' . implode(', ', $missing)
+        );
+
+        // MEASURED 2026-08-04 against a real MongoDB and RECORDED rather than
+        // asserted: the fallback CURSOR still carries sort/limit/skip, which
+        // MongoDB\Driver\Cursor does not have - PHP's driver takes those as
+        // find() options and returns an already-executed cursor. So the
+        // framework's own documented chain
+        //
+        //     $orders->find([...])->sort('total', -1)->limit(10)
+        //
+        // works on the fallback and fatals on the real provider. That is a
+        // genuine open defect, it PREDATES ADR-0035, and closing it means
+        // redesigning find()/Cursor rather than adding a delegator method - so
+        // it is reported here instead of being quietly widened into this gate.
+        $cursorOnly = array_values(array_filter(
+            get_class_methods(\Tina4\Cursor::class),
+            static fn (string $m) => !self::resolvesOn($wrapped->find([]), $m)
+        ));
+        $this->assertSame(
+            ['sort', 'limit', 'skip'],
+            $cursorOnly,
+            'the KNOWN pre-existing cursor gap changed; re-measure before editing this expectation'
+        );
+
+        $wrapped->deleteMany([]);
+    }
+
+    /**
+     * Reports whether a method resolves on what getCollection returns.
+     *
+     * A delegator forwards through __call, so method_exists() on the wrapper
+     * alone answers false for every forwarded name. The surface a call site can
+     * actually reach is the wrapper's own methods PLUS the wrapped object's -
+     * which is what this reports.
+     *
+     * @param object $object The object getCollection returned.
+     * @param string $method The method name to resolve.
+     * @return bool True when a call site can reach that method.
+     */
+    private static function resolvesOn(object $object, string $method): bool
+    {
+        if (method_exists($object, $method)) {
+            return true;
+        }
+
+        return $object instanceof \Tina4\DocStoreDelegator
+            && method_exists($object->unwrap(), $method);
     }
 
     // ── OPEN DEFECTS: measured, reported, deliberately not asserted ──────────
