@@ -322,7 +322,8 @@ class FirebirdUrlTest extends TestCase
                 || str_contains($msg, 'unsupported')
             ) {
                 $this->markTestSkipped(
-                    'Host ext-interbase cannot speak to Firebird container: ' . $msg
+                    'Host ext-interbase cannot connect to the Firebird server (wire-protocol '
+                    . 'mismatch) — native Firebird UNVERIFIED here: ' . $msg
                 );
             }
             throw $e;

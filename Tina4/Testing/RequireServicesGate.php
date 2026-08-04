@@ -81,7 +81,14 @@ final class RequireServicesGate
     private const UNAVAILABLE_HINTS = [
         'not reachable', 'unreachable', 'not running', 'not set',
         'not installed', 'could not connect', 'not available', 'refused',
-        'not configured', 'not present',
+        'not configured', 'not present', 'cannot connect', 'connect failed',
+        // The escape-hatch phrase. A whole family of Firebird skips reads
+        // "<driver> present but cannot connect (...) - native Firebird
+        // UNVERIFIED here", i.e. the test is telling you in plain words that it
+        // proved nothing. Against a PROVISIONED service that is a failure, not a
+        // pass: the escape exists for a genuinely broken client on a dev box,
+        // and it must never be how CI reports success.
+        'unverified',
     ];
 
     /** @var array<int, array{id:string, reason:string}> */
