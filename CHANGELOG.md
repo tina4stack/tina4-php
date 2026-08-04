@@ -1,3 +1,25 @@
+### Fixed (redis/valkey stats() size on the zero-dependency transport, ADR-0004)
+
+- `Tina4\Cache\RedisBackend::stats()` computed `size` only when the ext-redis
+  CLIENT was loaded. On the raw RESP transport - the zero-dependency default
+  install - it returned 0 no matter how many entries were cached, so every
+  reader of that number was reading a constant: a monitoring dashboard,
+  `cacheStats()`, or an operator checking whether a clear had worked.
+
+  Same root cause as the earlier `clear()` no-op: the default transport had no
+  coverage.
+
+  `size` and `clear()` now drive ONE scoped SCAN walk (`walkPrefixedKeys()`) on
+  BOTH transports, so the two can never disagree about what the cache holds.
+  The client path moves off `keys()` for the same reason `clear()` did: KEYS is
+  O(N) and blocks the whole server, and Redis's documentation says to prefer
+  SCAN. When counting, keys are de-duplicated - SCAN never MISSES a key that was
+  present throughout the walk, but it may return one twice if the keyspace is
+  resized mid-walk.
+
+  Pinned by `testStatsReportsARealSizeOnBothTransports` in
+  `tests/CacheClearInvalidatesTest.php` against a real Redis.
+
 ### Fixed (memcached TTL beyond 30 days vanished instantly, ADR-0024)
 
 - `Tina4\Cache\MemcachedBackend::set()` interpolated the caller's TTL into the

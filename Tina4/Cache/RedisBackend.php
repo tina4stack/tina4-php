@@ -349,6 +349,38 @@ class RedisBackend extends CacheBackend
     {
         $this->hits = 0;
         $this->misses = 0;
+        $this->walkPrefixedKeys(true);
+    }
+
+    /**
+     * Walk every key under our prefix, optionally deleting as it goes.
+     *
+     * ONE walk drives BOTH clear() and stats(), on BOTH transports, so the two
+     * can never disagree about what this cache holds. stats() used to compute
+     * size only on the ext-redis client path and returned a hard 0 on the raw
+     * RESP transport - the zero-dependency default install - so every reader of
+     * that number (a dashboard, cacheStats(), an operator checking whether a
+     * clear worked) was reading a constant. Same root cause as the clear()
+     * no-op: the default transport had no coverage.
+     *
+     * SCAN, not KEYS, on both paths: clear() runs on every write in persistent
+     * DB-cache mode, and KEYS is O(N) and blocks the whole server for its
+     * duration - Redis's own documentation says to prefer SCAN. The walk is
+     * scoped to our prefix, so another application sharing the server is
+     * untouched; FLUSHALL/FLUSHDB would take their data with it and is never
+     * used here.
+     *
+     * @param  bool $delete DELETE each page as it is walked
+     * @return int  How many keys were seen (0 when deleting - clear() has no
+     *              use for a count, and accumulating every key of a large cache
+     *              purely to count it would be a needless allocation). When
+     *              counting, keys are de-duplicated: SCAN guarantees it never
+     *              MISSES a key that was present throughout, but it may return
+     *              one twice if the keyspace is resized mid-walk.
+     */
+    private function walkPrefixedKeys(bool $delete): int
+    {
+        $seen = [];
 
         if ($this->client !== null) {
             try {
@@ -359,7 +391,13 @@ class RedisBackend extends CacheBackend
                         break;
                     }
                     if ($keys !== []) {
-                        $this->client->del(...$keys);
+                        if ($delete) {
+                            $this->client->del(...$keys);
+                        } else {
+                            foreach ($keys as $key) {
+                                $seen[$key] = true;
+                            }
+                        }
                     }
                     // A page may legitimately come back empty while the cursor
                     // is still open, so the cursor - not the page - ends this.
@@ -367,18 +405,20 @@ class RedisBackend extends CacheBackend
             } catch (\Throwable) {
                 // An unreachable cache is not a crash; the entries expire.
             }
-            return;
+            return count($seen);
         }
 
         if (!$this->useRaw) {
-            return;
+            return 0;
         }
 
         $sock = null;
         try {
+            // The whole cursor loop runs over ONE connection, so a DEL batch
+            // never reconnects mid-walk.
             $sock = $this->respSession();
             if ($sock === null) {
-                return;
+                return 0;
             }
             $cursor = '0';
             do {
@@ -396,8 +436,16 @@ class RedisBackend extends CacheBackend
                 }
                 [$cursor, $keys] = $reply;
                 if (is_array($keys) && $keys !== []) {
-                    fwrite($sock, self::respEncode('DEL', ...$keys));
-                    self::respRead($sock);
+                    if ($delete) {
+                        fwrite($sock, self::respEncode('DEL', ...$keys));
+                        self::respRead($sock);
+                    } else {
+                        foreach ($keys as $key) {
+                            if (is_string($key)) {
+                                $seen[$key] = true;
+                            }
+                        }
+                    }
                 }
             } while (is_string($cursor) && $cursor !== '' && $cursor !== '0');
         } catch (\Throwable) {
@@ -407,23 +455,18 @@ class RedisBackend extends CacheBackend
                 fclose($sock);
             }
         }
+
+        return count($seen);
     }
 
     public function stats(): array
     {
-        $size = 0;
-        if ($this->client !== null) {
-            try {
-                $keys = $this->client->keys($this->prefix . '*');
-                $size = is_array($keys) ? count($keys) : 0;
-            } catch (\Throwable) {
-                // ignore
-            }
-        }
         return [
             'hits' => $this->hits,
             'misses' => $this->misses,
-            'size' => $size,
+            // The SAME scoped walk clear() uses, so size is a real number on
+            // BOTH transports rather than a hard 0 on the default install.
+            'size' => $this->walkPrefixedKeys(false),
             'backend' => $this->backendName,
         ];
     }

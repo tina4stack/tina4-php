@@ -384,6 +384,57 @@ class CacheClearInvalidatesTest extends TestCase
         );
     }
 
+    /**
+     * stats() must report a REAL size on every transport.
+     *
+     * PARITY FIX, not one of the eight declared contract invariants: size was
+     * computed only when the ext-redis client was loaded, so on the raw RESP
+     * transport - the zero-dependency default install, and the only transport
+     * that exists on this machine - it returned 0 no matter how many entries
+     * were cached. Every reader of that number was reading a constant: a
+     * monitoring dashboard, cacheStats(), or an operator checking whether a
+     * clear had worked. Same root cause as the clear() no-op above: the default
+     * transport had no coverage.
+     *
+     * size and clear() now drive the SAME scoped SCAN walk, so the two can
+     * never disagree about what the cache holds.
+     */
+    public function testStatsReportsARealSizeOnBothTransports(): void
+    {
+        $this->requireService($this->redisUrl(), 6379, 'redis');
+
+        foreach ($this->redisTransports() as $transport) {
+            $backend = $this->pin(new RedisBackend($this->redisUrl()), $transport);
+            $backend->clear();
+
+            $this->assertSame(
+                0,
+                $backend->stats()['size'],
+                "a cleared cache reports a non-zero size on the {$transport} transport"
+            );
+
+            for ($index = 0; $index < 3; $index++) {
+                $backend->set($this->key(), ['i' => $index], 300);
+            }
+
+            $this->assertSame(
+                3,
+                $backend->stats()['size'],
+                "three entries were written but the {$transport} transport reports a "
+                . 'different size - on the raw transport this used to be a hard 0 '
+                . 'regardless of what the cache actually held'
+            );
+
+            $backend->clear();
+
+            $this->assertSame(
+                0,
+                $backend->stats()['size'],
+                "size did not return to 0 after clear() on the {$transport} transport"
+            );
+        }
+    }
+
     /** The same rule on Valkey - a second provider on the same wire protocol. */
     public function testClearInvalidatesOnValkeyToo(): void
     {
