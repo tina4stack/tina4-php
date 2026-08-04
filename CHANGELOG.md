@@ -1,3 +1,23 @@
+### Fixed (cache sweep on the database backend, ADR-0024)
+
+- `Tina4\Cache\DatabaseBackend` had no `sweep()`, so it inherited the base
+  class's `return 0`. redis, valkey, memcached and mongodb expire entries
+  SERVER-SIDE, so 0 is the honest answer for them - nothing was evicted because
+  there was nothing left to evict. A SQL table expires nothing by itself: rows
+  were deleted only when someone happened to re-read that exact key, so expired
+  rows accumulated forever while the one API whose job is reclaiming that space
+  reported success having done nothing.
+
+  `sweep()` now counts and deletes rows matching `expires_at > 0 AND expires_at
+  < now`, returning the real number evicted. The `expires_at > 0` guard is
+  load-bearing: an entry stored with `ttl <= 0` is permanent and carries 0, so a
+  bare `now > expires_at` would evict every permanent entry on the first sweep.
+
+  Pinned by `tests/CacheSweepCountsTest.php` against real backends (in-process,
+  a real directory on disk, a real SQLite database, plus live Redis, Valkey,
+  memcached and MongoDB), with negative cases for "nothing expired reports 0"
+  and "an entry with no TTL is never swept".
+
 ### Breaking (query-cache key carries database identity, ADR-0024)
 
 - The persistent DB query-cache key now includes the DATABASE IDENTITY of the
