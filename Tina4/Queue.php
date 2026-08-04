@@ -157,38 +157,61 @@ class Queue
     }
 
     /**
+     * Wrap a backend record in a Job so the caller gets the lifecycle with it.
+     *
+     * @param array|null $data Raw backend record, or null when nothing was claimed
+     * @return Job|null The job, or null when $data was null
+     */
+    private function asJob(?array $data): ?Job
+    {
+        return $data === null ? null : new Job($data, $this, $data['topic'] ?? $this->topic);
+    }
+
+    /**
      * Pop the next available job from the queue.
      *
-     * @return array|null Job data or null if empty
+     * Returns a Job, not the raw array. Until 3.13.95 it returned the backend
+     * record, so `$queue->pop()->fail('boom')` was a fatal in PHP while the
+     * identical line worked in Python, Ruby and Node — the lifecycle was
+     * reachable from consume() and unreachable from pop(). ADR-0024 requires
+     * the same concept to be the same shape in all four.
+     *
+     * NON-BREAKING: Job implements ArrayAccess, so `$job['id']`,
+     * `$job['payload']` and every other existing array read still resolve, and
+     * a `=== null` empty-queue check is unchanged.
+     *
+     * @return Job|null The claimed job, or null if the queue is empty
      */
-    public function pop(): ?array
+    public function pop(): ?Job
     {
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
-            return $this->externalBackend->dequeue($this->topic);
+            return $this->asJob($this->externalBackend->dequeue($this->topic));
         }
 
-        return $this->liteBackend->dequeue($this->topic);
+        return $this->asJob($this->liteBackend->dequeue($this->topic));
     }
 
     /**
      * Pop up to $count jobs at once. Returns a partial batch if fewer available.
      *
+     * Each element is a Job (ArrayAccess-compatible, see pop()).
+     *
      * @param int $count Maximum number of jobs to return.
-     * @return array<int, array> Array of job arrays (may be shorter than $count).
+     * @return array<int, Job> Jobs (may be shorter than $count).
      */
     public function popBatch(int $count): array
     {
         $backend = $this->externalBackend ?? $this->liteBackend;
         if (method_exists($backend, 'dequeueBatch')) {
-            return $backend->dequeueBatch($this->topic, $count);
+            return array_map(fn(array $data) => $this->asJob($data), $backend->dequeueBatch($this->topic, $count));
         }
         // Fallback for external backends
         $jobs = [];
         for ($i = 0; $i < $count; $i++) {
             $job = $backend->dequeue($this->topic);
             if ($job === null) break;
-            $jobs[] = $job;
+            $jobs[] = $this->asJob($job);
         }
         return $jobs;
     }
@@ -254,12 +277,16 @@ class Queue
             }
         } else {
             while ($maxJobs === null || $processed < $maxJobs) {
-                $job = $this->externalBackend !== null
+                $data = $this->externalBackend !== null
                     ? $this->externalBackend->dequeue($queue)
                     : $this->liteBackend->dequeue($queue);
-                if ($job === null) {
+                if ($data === null) {
                     break;
                 }
+                // A Job, like consume() and the batch branch above yield. The
+                // handler used to get a raw array here and a Job from consume(),
+                // so the same callback could not be used with both.
+                $job = new Job($data, $this, $queue);
 
                 try {
                     $handler($job);
@@ -340,10 +367,18 @@ class Queue
      * retries remain (after retryBackoff), otherwise moves to the dead-letter
      * store once attempts >= maxRetries.
      *
+     * Accepts either the raw backend record or a Job — pop() now hands back a
+     * Job, and `$queue->failJob($topic, $queue->pop(), 'boom')` must keep
+     * working for callers that use this directly instead of `$job->fail()`.
+     *
+     * @param string     $topic   Queue/topic name
+     * @param array|Job  $jobData The job, as a Job or the raw backend record
+     * @param string     $error   Failure reason recorded on the job
      * @internal Used by Job and process() — not a primary public Queue verb
      */
-    public function failJob(string $topic, array $jobData, string $error = ''): void
+    public function failJob(string $topic, array|Job $jobData, string $error = ''): void
     {
+        $jobData = $jobData instanceof Job ? $jobData->toHash() : $jobData;
         if ($this->externalBackend !== null) {
             // Reservation-based backends (Mongo): the active store owns the
             // requeue-or-dead-letter decision so a failed job is retried (visible
@@ -385,10 +420,17 @@ class Queue
      * Explicitly re-queue a job (called by Job::retry()). Always re-enqueues
      * regardless of the retry limit — a manual override, distinct from failJob().
      *
+     * Accepts either the raw backend record or a Job, for the same reason
+     * failJob() does.
+     *
+     * @param string    $topic         Queue/topic name
+     * @param array|Job $jobData       The job, as a Job or the raw backend record
+     * @param int       $delaySeconds  Seconds to wait before it is claimable again
      * @internal Used by Job — not a primary public Queue verb
      */
-    public function retryJob(string $topic, array $jobData, int $delaySeconds = 0): void
+    public function retryJob(string $topic, array|Job $jobData, int $delaySeconds = 0): void
     {
+        $jobData = $jobData instanceof Job ? $jobData->toHash() : $jobData;
         if ($this->externalBackend !== null) {
             // Manual re-queue: always re-enqueue (reset availability) on the
             // active store. Brokers ignore requeue (they own redelivery).
@@ -559,8 +601,18 @@ class Queue
         $topic = $topic ?: $this->topic;
 
         if ($id !== null) {
-            // Consume a specific job by ID — single yield, no polling
-            $data = $this->popById($topic, $id);
+            // Consume a specific job by ID — single yield, no polling.
+            //
+            // This read `$this->popById($topic, $id)`. popById() takes ONE
+            // argument, and PHP accepts surplus arguments on a user function
+            // without complaint, so the TOPIC NAME was used as the job id and
+            // the real id was silently discarded — consume($topic, id: 'abc')
+            // could never find 'abc'. Going to the backend directly (the same
+            // shape the non-id branch below uses) fixes the argument AND honours
+            // the $topic argument, which popById()'s own signature cannot.
+            $data = $this->externalBackend !== null
+                ? $this->externalBackend->popById($topic, $id)
+                : $this->liteBackend->popById($topic, $id);
             if ($data !== null) {
                 yield new Job($data, $this, $topic);
             }
@@ -611,20 +663,22 @@ class Queue
     /**
      * Pop a specific job by ID from the queue.
      *
-     * @param string $queue Queue/topic name
-     * @param string $id    Job ID to find
-     * @return array|null Job data or null if not found
+     * Returns a Job, not the raw array — see pop() for why, and for the
+     * ArrayAccess guarantee that keeps existing `$job['id']` callers working.
+     *
+     * @param string $id Job ID to find
+     * @return Job|null The claimed job, or null if no such job is pending
      */
-    public function popById(string $id): ?array
+    public function popById(string $id): ?Job
     {
         if ($this->externalBackend !== null) {
             // Was `return null` - a SILENT no-op indistinguishable from "no such
             // job". mongodb can claim one document by _id; the brokers cannot
             // address a single message at all and refuse by name.
-            return $this->externalBackend->popById($this->topic, $id);
+            return $this->asJob($this->externalBackend->popById($this->topic, $id));
         }
 
-        return $this->liteBackend->popById($this->topic, $id);
+        return $this->asJob($this->liteBackend->popById($this->topic, $id));
     }
 
     /**

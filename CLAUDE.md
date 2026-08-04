@@ -745,9 +745,9 @@ use Tina4\Queue;
 
 $queue = new Queue(string $backend = 'file', array $config = [], string $topic = 'default');
 $queue->push(mixed $payload, int $priority = 0, int $delay = 0): string  // returns job id
-$queue->pop(): ?array
-$queue->popBatch(int $count): array
-$queue->popById(string $id): ?array
+$queue->pop(): ?Job          // a Job, not an array - see the note below
+$queue->popBatch(int $count): array   // array<int, Job>
+$queue->popById(string $id): ?Job
 $queue->size(string $status = 'pending'): int
 $queue->clear(): int
 $queue->failed(): array
@@ -761,7 +761,15 @@ $queue->process(callable|string $handlerOrQueue, callable|string|array $queueOrH
 $queue->close(): void  // Release the backend connection. No-op on the file backend, idempotent, discard the queue afterwards.
 $queue->getTopic(): string
 
-// Job methods (yielded by consume() / returned by pop() as array, or wrapped via Job class)
+// Job methods. pop(), popBatch() and popById() return Job objects (they used to
+// return the backend's raw array, so $queue->pop()->fail('boom') was a fatal in
+// PHP while the identical line worked in Python, Ruby and Node - ADR-0024).
+// NON-BREAKING: Job implements ArrayAccess, so $job['id'] / $job['payload'] and
+// every other existing array READ still resolves, an empty queue still returns
+// null, json_encode($job) produces the toHash() shape (JsonSerializable), and
+// new \Tina4\Job($queue->pop(), $queue, $topic) still works. WRITES are refused:
+// $job['x'] = 1 throws \LogicException - a job is a claim on a message, not a
+// bag; use complete()/fail()/retry() to change it.
 $job->complete(): void
 $job->fail(string $reason = ''): void
 $job->reject(string $reason = ''): void           // alias for fail()

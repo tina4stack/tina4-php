@@ -12,8 +12,21 @@ namespace Tina4;
 
 /**
  * Job — Wraps a queue job with lifecycle methods.
+ *
+ * ARRAY-COMPATIBLE ON PURPOSE. Queue::pop(), popBatch() and popById() used to
+ * hand back the backend's raw array, so the lifecycle this class exists for was
+ * reachable from consume() and unreachable from pop() — `$queue->pop()->fail()`
+ * was a fatal in PHP while the identical line worked in Python, Ruby and Node
+ * (ADR-0024: the same concept must be the same shape in all four). Those three
+ * methods now return a Job, and Job implements ArrayAccess so every existing
+ * `$job['id']` / `$job['payload']` caller keeps working unchanged.
+ *
+ * Reads see the CANONICAL field first (so `$job['attempts']` reflects a fail()
+ * that already happened) and fall back to whatever else the backend stored
+ * (created_at, delay_until, …). Writes are refused: a job is a claim on a
+ * message, not a bag you edit — use complete()/fail()/retry() to change it.
  */
-class Job
+class Job implements \ArrayAccess, \JsonSerializable
 {
     public string $id;
     public mixed $payload;
@@ -25,9 +38,29 @@ class Job
     /** Job priority (higher = dequeued first). Carried through re-enqueue. */
     public int $priority;
     private Queue $queue;
+    /**
+     * The backend record exactly as stored, so array reads of fields Job does
+     * not model (created_at, delay_until, …) keep resolving after pop() started
+     * returning a Job instead of this array.
+     *
+     * @var array<string, mixed>
+     */
+    private array $raw;
 
-    public function __construct(array $data, Queue $queue, string $topic)
+    /**
+     * @param array|Job $data  The backend record, or an existing Job to re-wrap
+     * @param Queue     $queue The queue this job's lifecycle calls route through
+     * @param string    $topic Topic/queue the job belongs to
+     */
+    public function __construct(array|Job $data, Queue $queue, string $topic)
     {
+        // A Job is accepted, not just an array, because the ONLY way to reach
+        // the lifecycle before pop() returned a Job was to re-wrap by hand -
+        // `new Job($queue->pop(), $queue, $topic)` - and the shipped example
+        // taught exactly that. Refusing it would break every app that copied
+        // the workaround, on an upgrade whose entire point was to remove the
+        // need for it. Re-wrapping a Job is now a copy.
+        $data = $data instanceof self ? $data->toHash() + $data->raw : $data;
         $this->id = $data['id'];
         $this->payload = $data['payload'] ?? ($data['data'] ?? null);
         $this->status = $data['status'] ?? 'reserved';
@@ -36,6 +69,7 @@ class Job
         $this->priority = (int)($data['priority'] ?? 0);
         $this->queue = $queue;
         $this->topic = $topic;
+        $this->raw = $data;
     }
 
     /**
@@ -131,5 +165,83 @@ class Job
     public function toJson(): string
     {
         return json_encode($this->toHash(), JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * Serialize to the same shape toJson() and toHash() produce.
+     *
+     * Without this, json_encode() of a popped job would emit only the PUBLIC
+     * properties and silently drop nothing today but drift the moment a field
+     * turns private — and it would not match toJson(). One shape, one spelling.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toHash();
+    }
+
+    /**
+     * @param mixed $offset Field name
+     */
+    public function offsetExists(mixed $offset): bool
+    {
+        return array_key_exists($offset, $this->toHash())
+            || array_key_exists($offset, $this->raw);
+    }
+
+    /**
+     * Read a field the way the raw array read before pop() returned a Job.
+     *
+     * Canonical fields win over the stored record so a read after fail() sees
+     * the NEW attempts/status/error rather than the values the backend wrote
+     * when the job was claimed. An unknown key returns null, exactly as reading
+     * a missing key off the old array did (PHP would warn on the array; here it
+     * is simply absent).
+     *
+     * @param mixed $offset Field name
+     */
+    public function offsetGet(mixed $offset): mixed
+    {
+        $canonical = $this->toHash();
+        if (array_key_exists($offset, $canonical)) {
+            return $canonical[$offset];
+        }
+        return $this->raw[$offset] ?? null;
+    }
+
+    /**
+     * Refused: a job is a claim on a message, not a bag.
+     *
+     * Silently accepting `$job['attempts'] = 9` would let a caller believe it
+     * had changed the queue when it had changed one in-memory object; the
+     * backend would never hear about it. complete()/fail()/retry() are the ways
+     * a job changes.
+     *
+     * @param mixed $offset Field name
+     * @param mixed $value  Ignored
+     * @throws \LogicException Always
+     */
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        throw new \LogicException(
+            'A Tina4\Job is read-only: $job[' . var_export($offset, true) . '] cannot be assigned. '
+            . 'Writing it would change this object and never reach the queue. '
+            . 'Use $job->complete(), $job->fail($reason) or $job->retry($delaySeconds) instead.'
+        );
+    }
+
+    /**
+     * Refused, for the same reason as offsetSet().
+     *
+     * @param mixed $offset Field name
+     * @throws \LogicException Always
+     */
+    public function offsetUnset(mixed $offset): void
+    {
+        throw new \LogicException(
+            'A Tina4\Job is read-only: $job[' . var_export($offset, true) . '] cannot be unset. '
+            . 'Use $job->complete(), $job->fail($reason) or $job->retry($delaySeconds) instead.'
+        );
     }
 }

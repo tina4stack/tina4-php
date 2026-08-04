@@ -150,6 +150,54 @@ final class QueueFailureLifecycleTest extends TestCase
         self::assertNotNull($queue->pop(), "$backend: a job with retries left must come back for another attempt");
     }
 
+    /**
+     * SHARED PARITY CASE - this method name exists VERBATIM in the Python, Ruby
+     * and Node suites, so one fixture case resolves against all four files.
+     *
+     * A job you popped must carry its own lifecycle. PHP was the last framework
+     * where it did not: pop() returned the backend's raw array, so
+     * `$queue->pop()->fail('boom')` was a fatal here while the identical line
+     * worked in Python, Ruby and Node. The lifecycle existed (Tina4\Job) and was
+     * reachable only from consume() - the shipped example even carried the
+     * `new \Tina4\Job($queue->pop(), ...)` workaround.
+     *
+     * The assertion is on the QUEUE's state after the call, never on the job's
+     * own fields: a fail() that only set an in-memory status would satisfy an
+     * object-level check while the backend never heard about it.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('lifecycleBackends')]
+    public function testAPoppedJobCarriesItsOwnLifecycleMethods(string $backend): void
+    {
+        $queue = $this->makeQueue($backend);
+        $queue->push(['m' => 'lifecycle']);
+        usleep(400000);
+
+        $job = $queue->pop();
+        self::assertNotNull($job, "$backend: nothing to pop");
+        self::assertTrue(method_exists($job, 'fail'), "$backend: a popped job must expose fail()");
+        self::assertTrue(method_exists($job, 'complete'), "$backend: a popped job must expose complete()");
+
+        // Called DIRECTLY on what pop() returned - no re-wrap, no queue->failJob.
+        $job->fail('boom-1');
+        usleep(400000);
+
+        self::assertCount(
+            1,
+            $queue->failed(),
+            "$backend: fail() called on a popped job must reach the backend"
+        );
+
+        $again = $queue->pop();
+        self::assertNotNull($again, "$backend: a job with retries left must come back");
+        $again->complete();
+        usleep(400000);
+        self::assertSame(
+            [],
+            $queue->failed(),
+            "$backend: complete() called on a popped job must reach the backend"
+        );
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('lifecycleBackends')]
     public function testAJobPastMaxRetriesBecomesADeadLetter(string $backend): void
     {

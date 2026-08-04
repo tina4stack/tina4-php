@@ -124,8 +124,13 @@ class QueueV3Test extends TestCase
         $q->push(['task' => 'process']);
         $job = $q->pop();
 
-        $this->assertIsArray($job);
+        // The name of this test was already the contract; the assertion was not.
+        // pop() returns a Job carrying its own lifecycle (ADR-0024 parity with
+        // Python/Ruby/Node), and array reads still resolve through ArrayAccess -
+        // both halves are asserted so neither can regress alone.
+        $this->assertInstanceOf(\Tina4\Job::class, $job);
         $this->assertEquals(['task' => 'process'], $job['payload']);
+        $this->assertEquals(['task' => 'process'], $job->payload);
         $this->assertEquals('pending', $job['status']);
     }
 
@@ -356,7 +361,7 @@ class QueueV3Test extends TestCase
         $q->push(['to' => 'alice@test.com']);
         $this->assertEquals(1, $q->size());
         $job = $q->pop();
-        $this->assertIsArray($job);
+        $this->assertInstanceOf(\Tina4\Job::class, $job);
         $this->assertEquals(['to' => 'alice@test.com'], $job['payload']);
     }
 
