@@ -83,9 +83,18 @@ class CachedDatabase implements DatabaseAdapter
      */
     private ?\Tina4\Cache\CacheBackend $cacheBackend = null;
 
-    public function __construct(DatabaseAdapter $adapter, ?bool $enabled = null, ?int $ttl = null)
+    /**
+     * Connection URL of the database being cached, used for cache-key identity.
+     *
+     * Empty only when a caller builds the decorator by hand without one; the
+     * framework always passes it (Database::wrapWithCache).
+     */
+    private string $url;
+
+    public function __construct(DatabaseAdapter $adapter, ?bool $enabled = null, ?int $ttl = null, string $url = '')
     {
         $this->adapter = $adapter;
+        $this->url = $url;
 
         // Both layers are opt-in / default OFF. Persistent (TINA4_DB_CACHE)
         // takes precedence over request-scoped (TINA4_AUTO_CACHING) when both
@@ -127,9 +136,61 @@ class CachedDatabase implements DatabaseAdapter
 
     // ── Cache helpers ─────────────────────────────────────────
 
+    /**
+     * Stable identity of the DATABASE a cache entry came from.
+     *
+     * `engine://host:port/database` - and deliberately NOTHING else.
+     *
+     * WHY IT EXISTS: the key used to be sha256(sql . params) with nothing
+     * naming the connection, so on any SHARED backend two databases
+     * cross-served each other's rows. Two apps pointed at one Redis, or one app
+     * with a primary and an analytics connection, silently read each other's
+     * data. Identical SQL text across tenants is the COMMON case, not an edge
+     * case, so the collision was the normal outcome.
+     *
+     * WHY NO CREDENTIALS: a password in the key means every rotation silently
+     * cold-starts the cache, and a shared backend's key namespace is visible to
+     * every tenant of that backend - a secret must never be folded into it. The
+     * username is out for the same reason plus a second: two connections
+     * differing only by role read the SAME rows and should share the entry.
+     *
+     * WHY NOTHING PER-PROCESS: no pid, no object id, no salt. Those would
+     * isolate the databases by accident and destroy the point of a shared
+     * cache, because no instance would ever hit another instance's entry.
+     *
+     * @param  string $url Connection URL of the database
+     * @return string Stable, credential-free identity
+     */
+    public static function cacheIdentity(string $url): string
+    {
+        try {
+            $parsed = new \Tina4\DatabaseUrl($url);
+            return $parsed->engine . '://' . ($parsed->host ?? '') . ':'
+                . ($parsed->port ?? '') . '/' . $parsed->database;
+        } catch (\Throwable) {
+            // An unparseable URL still needs a STABLE identity, and falling
+            // back to a constant would silently restore the cross-serving bug.
+            // The raw URL is stable and distinct; it is only reached for a URL
+            // the connection layer is about to reject anyway.
+            return $url;
+        }
+    }
+
+    /**
+     * Generate a cache key from DATABASE IDENTITY + SQL + params.
+     *
+     * The NUL separators keep the three parts from running together, so a table
+     * named after the tail of a database name cannot forge another database's
+     * key.
+     *
+     * @param  array<int|string, mixed> $params
+     */
     private function cacheKey(string $sql, array $params = []): string
     {
-        return hash('sha256', $sql . json_encode($params));
+        return hash(
+            'sha256',
+            self::cacheIdentity($this->url) . "\x00" . $sql . "\x00" . json_encode($params)
+        );
     }
 
     private function cacheGet(string $key): mixed

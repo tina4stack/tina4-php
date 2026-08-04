@@ -1,3 +1,46 @@
+### Breaking (query-cache key carries database identity, ADR-0024)
+
+- The persistent DB query-cache key now includes the DATABASE IDENTITY of the
+  connection it came from. It was `sha256(sql . params)` with nothing naming the
+  connection.
+
+      before:  sha256(sql . json_encode(params))
+      after:   sha256(identity . "\0" . sql . "\0" . json_encode(params))
+      identity: engine://host:port/database   (NO username, NO password)
+
+  WHY: with no database identity in the key, two databases sharing ONE cache
+  backend cross-served each other's rows. Two apps pointed at one Redis, or a
+  single app with a primary and an analytics connection, silently read each
+  other's data. Identical SQL text is exactly what a multi-tenant deployment
+  runs, so the collision was the COMMON case, not an edge case. This is a
+  data-isolation failure that looked like a caching optimisation. Measured
+  2026-08-04 against a real shared Redis with two real SQLite files AND two real
+  PostgreSQL databases: database B was served database A's row in both.
+
+  The identity carries NO credentials, deliberately. A password in a key means
+  every rotation silently cold-starts the cache, and a shared backend's key
+  namespace is visible to every tenant of that backend. It also carries nothing
+  per-process (no pid, no object id, no salt) - that would isolate databases by
+  accident and destroy the point of a shared cache, since no instance would ever
+  hit another instance's entry.
+
+  MIGRATION: every entry already in a persistent cache backend becomes a MISS on
+  upgrade, because its key no longer matches. Nothing needs to be done - the
+  cache refills on the next read, and the stale entries expire under their own
+  TTL. A cold cache is safe; cross-served rows are not. If you want the space
+  back immediately, call `cacheClear()` on any connection (or `FLUSHDB` the
+  cache database if it is dedicated to Tina4) during the deploy.
+
+  `CachedDatabase::__construct()` takes a new optional trailing `$url` argument
+  (the connection URL). Code that builds the decorator by hand keeps working -
+  the argument defaults to an empty string - but SHOULD pass the URL, or every
+  hand-built wrapper shares one identity. `Database` passes it automatically.
+
+  Pinned by `tests/CacheKeyDatabaseIdentityTest.php`, which runs against a real
+  shared Redis plus real SQLite and real PostgreSQL, with negative cases
+  asserting the key is STABLE for the same database (not per-connection) and
+  that credentials never reach it.
+
 ### Breaking (DocStore result accessors, ADR-0025)
 
 - The DocStore result objects (`InsertOneResult`, `InsertManyResult`,
