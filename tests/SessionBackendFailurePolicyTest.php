@@ -793,13 +793,17 @@ class SessionBackendFailurePolicyTest extends TestCase
         // mean the delegation reported success while asserting nothing. Demand
         // evidence that one test really ran and really asserted.
         //
-        // Matched on PHPUnit's own summary line rather than "OK (1 test", because
-        // this case legitimately provokes a PHP warning (file_put_contents on the
-        // read-only file), so PHPUnit prints "OK, but there were issues!" instead
-        // of "OK (1 test, ...)" - and the earlier, stricter assertion failed on a
-        // child that had in fact passed with 8 assertions.
+        // BOTH of PHPUnit's summary spellings are accepted, because these two
+        // cases legitimately produce different ones and each spelling on its own
+        // failed a child that had actually passed:
+        //   clean run    -> "OK (1 test, 5 assertions)"
+        //   with a notice-> "Tests: 1, Assertions: 8" under "OK, but there were
+        //                    issues!" (the EACCES case trips a PHP warning from
+        //                    file_put_contents on the read-only file)
+        // Either way the assertion count must be non-zero, which is the part
+        // that proves the child really exercised something.
         $this->assertMatchesRegularExpression(
-            '/^Tests: 1, Assertions: [1-9]\d*/m',
+            '/^(OK \(1 test, [1-9]\d* assertion|Tests: 1, Assertions: [1-9]\d*)/m',
             $stdout,
             "the child exited 0 without running {$testMethod} to a real, asserting pass (a skip "
             . "exits 0 too), so the delegation proved nothing.\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
