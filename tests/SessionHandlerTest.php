@@ -235,8 +235,27 @@ class SessionHandlerTest extends TestCase
         $this->assertSame(7200, $ref->getProperty('ttl')->getValue($handler));
     }
 
+    /**
+     * A test that asserts a DEFAULT must first CLEAR every name in the
+     * precedence chain, or it is asserting the ambient environment instead.
+     *
+     * MEASURED 2026-08-05 under the parallel-run isolation env, which exports
+     * TINA4_SESSION_MONGO_URI=mongodb://127.0.0.1:27017/tina4_php and
+     * TINA4_SESSION_MONGO_DB=tina4_php so the four suites cannot see each
+     * other's sessions: this case failed with 'localhost' expected, '127.0.0.1'
+     * actual - a correct handler reading a correctly-set variable, reported as a
+     * broken default. The URL alias is cleared too because
+     * MongoSessionHandler falls back TINA4_SESSION_MONGO_URI -> _MONGO_URL ->
+     * literal default, and clearing only the first would just move the problem
+     * down one rung.
+     */
     public function testMongoDefaultsAndTtlEnvVar(): void
     {
+        $restore = $this->withoutEnv([
+            'TINA4_SESSION_MONGO_URI',
+            'TINA4_SESSION_MONGO_URL',
+            'TINA4_SESSION_MONGO_DB',
+        ]);
         putenv('TINA4_SESSION_TTL=4321');
         try {
             $handler = new MongoSessionHandler();
@@ -248,6 +267,7 @@ class SessionHandlerTest extends TestCase
             $this->assertSame(4321, $ref->getProperty('ttl')->getValue($handler));
         } finally {
             putenv('TINA4_SESSION_TTL');
+            $restore();
         }
     }
 
@@ -456,23 +476,45 @@ class SessionHandlerTest extends TestCase
         $this->assertSame('myapp:sess:', $ref->getProperty('keyPrefix')->getValue($handler));
     }
 
+    /**
+     * The default half asserts against a CLEARED environment for the same reason
+     * the mongo case above does. MEASURED 2026-08-05 under the parallel-run
+     * isolation env, which gives PHP redis database 2 via
+     * TINA4_SESSION_REDIS_DB=2: the default-db assertion failed with "2 is not
+     * identical to 0" - the handler was reading a correctly-set variable and the
+     * case called it a broken default.
+     *
+     * The finally block RESTORES the pre-test values rather than blanking them.
+     * It used to putenv() every name away, so this case silently stripped the
+     * suite's redis configuration for every test that ran after it.
+     */
     public function testRedisDefaultsAndEnvOverrides(): void
     {
-        $default = new RedisSessionHandler();
-        $ref = new \ReflectionClass($default);
-        $this->assertSame('localhost', $ref->getProperty('host')->getValue($default));
-        $this->assertSame(6379, $ref->getProperty('port')->getValue($default));
-        $this->assertSame(0, $ref->getProperty('db')->getValue($default));
-        $this->assertSame(3600, $ref->getProperty('ttl')->getValue($default));
-        $this->assertSame('tina4:session:', $ref->getProperty('keyPrefix')->getValue($default));
-        $this->assertNull($ref->getProperty('password')->getValue($default));
+        $managed = [
+            'TINA4_SESSION_REDIS_HOST',
+            'TINA4_SESSION_REDIS_PORT',
+            'TINA4_SESSION_REDIS_PASSWORD',
+            'TINA4_SESSION_REDIS_DB',
+            'TINA4_SESSION_TTL',
+        ];
+        $restore = $this->withoutEnv($managed);
 
-        putenv('TINA4_SESSION_REDIS_HOST=envhost');
-        putenv('TINA4_SESSION_REDIS_PORT=6381');
-        putenv('TINA4_SESSION_REDIS_PASSWORD=envpassword');
-        putenv('TINA4_SESSION_REDIS_DB=5');
-        putenv('TINA4_SESSION_TTL=900');
         try {
+            $default = new RedisSessionHandler();
+            $ref = new \ReflectionClass($default);
+            $this->assertSame('localhost', $ref->getProperty('host')->getValue($default));
+            $this->assertSame(6379, $ref->getProperty('port')->getValue($default));
+            $this->assertSame(0, $ref->getProperty('db')->getValue($default));
+            $this->assertSame(3600, $ref->getProperty('ttl')->getValue($default));
+            $this->assertSame('tina4:session:', $ref->getProperty('keyPrefix')->getValue($default));
+            $this->assertNull($ref->getProperty('password')->getValue($default));
+
+            putenv('TINA4_SESSION_REDIS_HOST=envhost');
+            putenv('TINA4_SESSION_REDIS_PORT=6381');
+            putenv('TINA4_SESSION_REDIS_PASSWORD=envpassword');
+            putenv('TINA4_SESSION_REDIS_DB=5');
+            putenv('TINA4_SESSION_TTL=900');
+
             $fromEnv = new RedisSessionHandler();
             $r = new \ReflectionClass($fromEnv);
             $this->assertSame('envhost', $r->getProperty('host')->getValue($fromEnv));
@@ -487,12 +529,33 @@ class SessionHandlerTest extends TestCase
                 (new \ReflectionClass($override))->getProperty('host')->getValue($override)
             );
         } finally {
-            putenv('TINA4_SESSION_REDIS_HOST');
-            putenv('TINA4_SESSION_REDIS_PORT');
-            putenv('TINA4_SESSION_REDIS_PASSWORD');
-            putenv('TINA4_SESSION_REDIS_DB');
-            putenv('TINA4_SESSION_TTL');
+            $restore();
         }
+    }
+
+    /**
+     * Clear $names for the duration of a case and hand back the undo.
+     *
+     * Restoring rather than blanking matters: these variables are how the whole
+     * suite finds the lab services, and a case that clears one on the way out
+     * silently reconfigures every case that follows it.
+     *
+     * @param string[] $names
+     * @return callable(): void
+     */
+    private function withoutEnv(array $names): callable
+    {
+        $original = [];
+        foreach ($names as $name) {
+            $original[$name] = getenv($name);
+            putenv($name);
+        }
+
+        return static function () use ($original): void {
+            foreach ($original as $name => $value) {
+                $value === false ? putenv($name) : putenv($name . '=' . $value);
+            }
+        };
     }
 
     // =====================================================================

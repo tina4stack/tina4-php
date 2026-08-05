@@ -932,6 +932,26 @@ class SessionZeroDependencyFallbackTest extends TestCase
      * frame must contain. The key prefix is asserted on purpose: it proves the
      * recorded bytes are Tina4's own session write rather than any traffic.
      *
+     * EVERY COORDINATE THAT DECIDES THE BYTES IS PINNED IN THE CONFIG, not just
+     * the host and the port. Two were missing and the ambient environment
+     * answered for them, MEASURED 2026-08-05 under the parallel-run isolation
+     * env:
+     *
+     *   * TINA4_SESSION_REDIS_DB / _VALKEY_DB (2 for PHP) made the handler open
+     *     with `SELECT 2` and BLOCK on a reply this listener will never give -
+     *     it speaks no protocol, by design. The write was abandoned before SETEX
+     *     ever reached the wire, and the recorded bytes were
+     *     '*2\r\n$6\r\nSELECT\r\n$1\r\n2\r\n'. The case then reported that the
+     *     RESP transport does not speak RESP, which was not what it had measured.
+     *     Database 0 keeps the drive a single frame, so the recorded bytes ARE
+     *     the write this case is about.
+     *
+     *   * TINA4_SESSION_MEMCACHED_PREFIX (tina4_php_) renamed the key on the
+     *     wire, so the asserted 'set tina4:session:<id>' could not appear.
+     *
+     * The fix is pinning, never relaxing the needle: the needle is what proves
+     * the bytes are Tina4's own session write.
+     *
      * @return array<string, array{drive: callable(): void, contains: string[], opcode?: int}>
      */
     private function wireExpectations(int $port): array
@@ -942,22 +962,26 @@ class SessionZeroDependencyFallbackTest extends TestCase
         return [
             'redis' => [
                 'drive' => static function () use ($port, $sessionId, $data): void {
-                    (new RedisSessionHandler(['host' => '127.0.0.1', 'port' => $port, 'ttl' => 60]))
+                    (new RedisSessionHandler(['host' => '127.0.0.1', 'port' => $port, 'db' => 0, 'ttl' => 60]))
                         ->write($sessionId, $data, 60);
                 },
                 'contains' => ["*4\r\n", 'SETEX', 'tina4:session:' . $sessionId, 'zero-dependency'],
             ],
             'valkey' => [
                 'drive' => static function () use ($port, $sessionId, $data): void {
-                    (new ValkeySessionHandler(['host' => '127.0.0.1', 'port' => $port, 'ttl' => 60]))
+                    (new ValkeySessionHandler(['host' => '127.0.0.1', 'port' => $port, 'db' => 0, 'ttl' => 60]))
                         ->write($sessionId, $data, 60);
                 },
                 'contains' => ["*4\r\n", 'SETEX', 'tina4:session:' . $sessionId, 'zero-dependency'],
             ],
             'memcached' => [
                 'drive' => static function () use ($port, $sessionId, $data): void {
-                    (new MemcachedSessionHandler(['host' => '127.0.0.1', 'port' => $port, 'ttl' => 60]))
-                        ->write($sessionId, $data, 60);
+                    (new MemcachedSessionHandler([
+                        'host' => '127.0.0.1',
+                        'port' => $port,
+                        'prefix' => 'tina4:session:',
+                        'ttl' => 60,
+                    ]))->write($sessionId, $data, 60);
                 },
                 'contains' => ['set tina4:session:' . $sessionId, 'zero-dependency'],
             ],

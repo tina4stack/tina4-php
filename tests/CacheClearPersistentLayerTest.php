@@ -99,6 +99,7 @@ class CacheClearPersistentLayerTest extends TestCase
     private function requireRedis(): void
     {
         [$host, $port] = $this->endpoint();
+        // The database number is irrelevant to reachability - only the socket is.
         $sock = @fsockopen($host, $port, $errno, $errstr, 2);
         if (!$sock) {
             $this->markTestSkipped("redis service not reachable at {$host}:{$port}");
@@ -106,12 +107,36 @@ class CacheClearPersistentLayerTest extends TestCase
         fclose($sock);
     }
 
-    /** @return array{0: string, 1: int} */
+    /**
+     * Host, port AND DATABASE NUMBER, resolved from the one URL both sides use.
+     *
+     * THE DATABASE NUMBER IS NOT DECORATION. Redis serves 16 numbered databases
+     * on a single port, so a probe that connects and never issues SELECT reads
+     * database 0 no matter which one the code under test wrote to. MEASURED
+     * 2026-08-05 under the parallel-run isolation env, where each framework gets
+     * its own database (TINA4_TEST_REDIS_URL=redis://127.0.0.1:6379/2 for PHP):
+     * the cache wrote to database 2, this probe counted database 0, and all
+     * three cases failed on their PRECONDITION - "the read was cached in redis",
+     * 0 is not greater than 0 - blaming the cache for an entry that was there
+     * the whole time, one SELECT away.
+     *
+     * The path is parsed exactly as Tina4\Cache\RedisBackend::parseUrl does it,
+     * so the observer and the code under test cannot disagree about which
+     * database they mean.
+     *
+     * @return array{0: string, 1: int, 2: int}
+     */
     private function endpoint(): array
     {
         $url = $this->redisUrl();
         $parts = parse_url(str_contains($url, '://') ? $url : '//' . $url);
-        return [$parts['host'] ?? '127.0.0.1', (int)($parts['port'] ?? 6379)];
+        $path = ltrim($parts['path'] ?? '', '/');
+
+        return [
+            $parts['host'] ?? '127.0.0.1',
+            (int)($parts['port'] ?? 6379),
+            ctype_digit($path) ? (int)$path : 0,
+        ];
     }
 
     /** Point the persistent DB query cache at ONE real shared Redis. */
@@ -131,10 +156,28 @@ class CacheClearPersistentLayerTest extends TestCase
      */
     private function entriesInRedis(): int
     {
-        [$host, $port] = $this->endpoint();
+        [$host, $port, $database] = $this->endpoint();
         $sock = fsockopen($host, $port, $errno, $errstr, 5);
         $this->assertNotFalse($sock, "could not open a RESP socket to {$host}:{$port}");
         stream_set_timeout($sock, 5);
+
+        // SELECT the database the cache is configured for, before counting
+        // anything. Without it this counts database 0 while the cache fills
+        // another one - see endpoint().
+        if ($database !== 0) {
+            $select = ['SELECT', (string)$database];
+            $wire = '*' . count($select) . "\r\n";
+            foreach ($select as $arg) {
+                $wire .= '$' . strlen($arg) . "\r\n" . $arg . "\r\n";
+            }
+            fwrite($sock, $wire);
+            $this->assertSame(
+                'OK',
+                $this->respRead($sock),
+                "the observer could not SELECT redis database {$database}, so every count below "
+                . 'would be read off database 0 instead'
+            );
+        }
 
         $count = 0;
         $cursor = '0';

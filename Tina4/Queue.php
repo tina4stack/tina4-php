@@ -17,7 +17,10 @@
  *
  * Environment variables:
  *   TINA4_QUEUE_BACKEND — 'file', 'rabbitmq', 'kafka', or 'mongodb'
- *   TINA4_QUEUE_URL     — connection URL for rabbitmq/kafka
+ *   TINA4_QUEUE_URL     — connection URL for the selected backend. It is read
+ *                         only by the backend whose scheme it names, so an
+ *                         amqp:// URL is never handed to MongoDB; an explicit
+ *                         config value always wins over it.
  *
  * Usage:
  *   // Auto-detect from env (default: file)
@@ -715,8 +718,29 @@ class Queue
      */
     private function resolveMongoConfig(array $config): array
     {
-        $url = getenv('TINA4_QUEUE_URL');
-        if ($url) {
+        // AN EXPLICIT uri WINS OVER THE ENV, as it already does for RabbitMQ two
+        // functions up (array_merge($parsed, $config) puts $config last). This
+        // one had the precedence inverted, so `new Queue('mongodb', ['uri' =>
+        // $mongoUri])` was silently overwritten by whatever TINA4_QUEUE_URL held.
+        //
+        // AND TINA4_QUEUE_URL IS NOT A MONGO URI JUST BECAUSE IT IS SET. It is
+        // ONE variable serving three backends that speak three unrelated URL
+        // schemes - the docblock at the top of this file has always described it
+        // as the rabbitmq/kafka connection URL. MEASURED 2026-08-05 on the lab
+        // host with TINA4_QUEUE_URL=amqp://guest:guest@127.0.0.1:5672/tina4_php
+        // exported for the RabbitMQ suite: constructing a mongodb Queue in the
+        // same environment died inside the driver with
+        //   Failed to parse MongoDB URI ... Invalid URI scheme "amqp://"
+        // An app with a RabbitMQ queue AND a MongoDB queue is an ordinary shape,
+        // so the URL is left to the backend whose scheme it names and Mongo
+        // falls back to TINA4_MONGO_URI / TINA4_MONGO_HOST+PORT, which
+        // MongoBackend already resolves.
+        if (isset($config['uri'])) {
+            return $config;
+        }
+
+        $url = (string)(getenv('TINA4_QUEUE_URL') ?: '');
+        if (str_starts_with($url, 'mongodb://') || str_starts_with($url, 'mongodb+srv://')) {
             $config['uri'] = $url;
         }
         return $config;

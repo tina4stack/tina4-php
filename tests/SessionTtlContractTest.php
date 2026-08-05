@@ -77,8 +77,10 @@ class SessionTtlContractTest extends TestCase
 
     private string $redisHost = '127.0.0.1';
     private int $redisPort = 6379;
+    private int $redisDatabase = 0;
     private string $valkeyHost = '127.0.0.1';
     private int $valkeyPort = 6380;
+    private int $valkeyDatabase = 0;
     private string $memcachedHost = '127.0.0.1';
     private int $memcachedPort = 11211;
     private string $mongoUri = 'mongodb://127.0.0.1:27017';
@@ -105,6 +107,19 @@ class SessionTtlContractTest extends TestCase
         $this->valkeyHost = getenv('TINA4_SESSION_VALKEY_HOST') ?: '127.0.0.1';
         $this->valkeyPort = (int)(getenv('TINA4_SESSION_VALKEY_PORT') ?: 6380);
 
+        // THE DATABASE NUMBER IS A COORDINATE LIKE THE HOST AND THE PORT, and it
+        // was the one this file left implicit. Redis serves 16 numbered
+        // databases on one port; the handlers read TINA4_SESSION_REDIS_DB /
+        // TINA4_SESSION_VALKEY_DB and issue SELECT, and case 3's out-of-band
+        // probe did not - so it asked database 0 for a key the handler had
+        // written to another one. MEASURED 2026-08-05 under the parallel-run
+        // isolation env (PHP gets database 2): TTL answered -2, which is Redis
+        // for "no such key", and the failure read "redis stored now+-2s" as
+        // though the handler had written the wrong deadline. It had not; the
+        // probe was looking in the wrong database.
+        $this->redisDatabase = (int)(getenv('TINA4_SESSION_REDIS_DB') ?: 0);
+        $this->valkeyDatabase = (int)(getenv('TINA4_SESSION_VALKEY_DB') ?: 0);
+
         $this->memcachedHost = getenv('TINA4_SESSION_MEMCACHED_HOST')
             ?: (getenv('TINA4_TEST_MEMCACHED_HOST') ?: '127.0.0.1');
         $this->memcachedPort = (int)(getenv('TINA4_SESSION_MEMCACHED_PORT')
@@ -124,8 +139,10 @@ class SessionTtlContractTest extends TestCase
         $this->setEnv('TINA4_SESSION_PATH', $this->tempDir);
         $this->setEnv('TINA4_SESSION_REDIS_HOST', $this->redisHost);
         $this->setEnv('TINA4_SESSION_REDIS_PORT', (string)$this->redisPort);
+        $this->setEnv('TINA4_SESSION_REDIS_DB', (string)$this->redisDatabase);
         $this->setEnv('TINA4_SESSION_VALKEY_HOST', $this->valkeyHost);
         $this->setEnv('TINA4_SESSION_VALKEY_PORT', (string)$this->valkeyPort);
+        $this->setEnv('TINA4_SESSION_VALKEY_DB', (string)$this->valkeyDatabase);
         $this->setEnv('TINA4_SESSION_MEMCACHED_HOST', $this->memcachedHost);
         $this->setEnv('TINA4_SESSION_MEMCACHED_PORT', (string)$this->memcachedPort);
         $this->setEnv('TINA4_SESSION_MONGO_URI', $this->mongoUri);
@@ -282,16 +299,17 @@ class SessionTtlContractTest extends TestCase
         // redis / valkey - ask the SERVER for the key's remaining TTL over our
         // own socket. The handler issued SETEX; this issues TTL.
         $respTargets = [
-            'redis' => [$this->redisHost, $this->redisPort],
-            'valkey' => [$this->valkeyHost, $this->valkeyPort],
+            'redis' => [$this->redisHost, $this->redisPort, $this->redisDatabase],
+            'valkey' => [$this->valkeyHost, $this->valkeyPort, $this->valkeyDatabase],
         ];
-        foreach ($respTargets as $backend => [$host, $port]) {
+        foreach ($respTargets as $backend => [$host, $port, $database]) {
             $respId = $this->sessionId('ttloob', $backend);
             $this->handlerFor($backend)->write($respId, ['seeded' => true]);
             $observed[$backend] = (float)$this->remainingTtlFromServer(
                 $backend,
                 $host,
                 $port,
+                $database,
                 self::RESP_KEY_PREFIX . $respId
             );
         }
@@ -435,8 +453,13 @@ class SessionTtlContractTest extends TestCase
      * client case 3 needs. TTL replies -2 when the key is gone and -1 when it
      * carries no expiry; both fail the assertion loudly rather than silently
      * reading as "fine".
+     *
+     * It SELECTs $database first, for the reason spelled out in setUp: an
+     * independent client that skips SELECT is not independent, it is pointed at
+     * a different database, and -2 then reads as a wrong deadline rather than as
+     * a missing key.
      */
-    private function remainingTtlFromServer(string $service, string $host, int $port, string $key): int
+    private function remainingTtlFromServer(string $service, string $host, int $port, int $database, string $key): int
     {
         $errNo = 0;
         $errStr = '';
@@ -452,6 +475,23 @@ class SessionTtlContractTest extends TestCase
         }
 
         stream_set_timeout($socket, 5);
+
+        if ($database !== 0) {
+            fwrite($socket, "*2\r\n\$6\r\nSELECT\r\n\$" . strlen((string)$database) . "\r\n" . $database . "\r\n");
+            $selected = fgets($socket);
+            if (!is_string($selected) || !str_starts_with($selected, '+OK')) {
+                fclose($socket);
+                $this->fail(sprintf(
+                    '%s refused SELECT %d for the out-of-band TTL read (%s), so the probe would '
+                    . 'have read database 0 while the handler wrote to %d',
+                    $service,
+                    $database,
+                    var_export($selected, true),
+                    $database
+                ));
+            }
+        }
+
         fwrite($socket, "*2\r\n\$3\r\nTTL\r\n\$" . strlen($key) . "\r\n" . $key . "\r\n");
         $reply = fgets($socket);
         fclose($socket);
