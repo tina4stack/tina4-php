@@ -245,7 +245,8 @@ class FirebirdAdapter implements DatabaseAdapter
                 // Trim string values (Firebird pads CHAR fields)
                 // and auto-decode BLOB columns
                 $cleaned = [];
-                foreach ($row as $key => $value) {
+                foreach ($row as $rawKey => $value) {
+                    $key = self::columnName($rawKey);
                     if (is_resource($value)) {
                         // BLOB resource handle — read into bytes
                         $blobData = '';
@@ -281,6 +282,37 @@ class FirebirdAdapter implements DatabaseAdapter
             $this->lastError = $e->getMessage();
             return [];
         }
+    }
+
+    /**
+     * Firebird's stored column name, folded back only when it was folded.
+     *
+     * Firebird's identifier folding is ASYMMETRIC. An unquoted `AS x` is stored
+     * UPPERCASE, so the driver hands back "X" where every other engine Tina4
+     * supports gives "x" - PostgreSQL folds to lower, and MySQL, SQLite and
+     * MSSQL preserve what you wrote. Portable code reading $row['x'] therefore
+     * broke on Firebird alone, and the tests in this repo papered over it by
+     * reading `$row['X'] ?? $row['x']`.
+     *
+     * A QUOTED `AS "MyCol"` is stored exactly as written, and that case is
+     * deliberate - the caller asked for it - so it is left alone. Lowercasing
+     * unconditionally (which is what Python used to do) makes a mixed-case key
+     * unreachable and is the same asymmetric-folding trap that made
+     * tableExists() miss quoted tables.
+     *
+     * So: fold back only a name carrying no lowercase letter, the only thing
+     * unquoted folding can produce. A quoted ALL-CAPS name is genuinely
+     * indistinguishable from a folded one and is lowercased too; that ambiguity
+     * is Firebird's, and quoting an all-caps name is the one spelling this
+     * cannot round-trip.
+     *
+     * @param string $raw the column name exactly as the driver reported it
+     * @return string the name callers see on the row
+     */
+    public static function columnName(string $raw): string
+    {
+        $name = trim($raw);
+        return $name === strtoupper($name) ? strtolower($name) : $name;
     }
 
     public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0): array
