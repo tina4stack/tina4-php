@@ -13,6 +13,7 @@
  *   TINA4_SESSION_VALKEY_PORT     — port (default: 6379)
  *   TINA4_SESSION_VALKEY_PASSWORD — password (default: none)
  *   TINA4_SESSION_VALKEY_DB       — database number (default: 0)
+ *   TINA4_SESSION_VALKEY_PREFIX   — key prefix (default: tina4:session:)
  *   TINA4_SESSION_TTL             — session TTL in seconds (default: 3600)
  */
 
@@ -49,7 +50,7 @@ class ValkeySessionHandler
 
         $this->db = (int)($config['db'] ?? (getenv('TINA4_SESSION_VALKEY_DB') ?: 0));
         $this->ttl = (int)($config['ttl'] ?? (getenv('TINA4_SESSION_TTL') ?: 3600));
-        $this->keyPrefix = $config['keyPrefix'] ?? 'tina4:session:';
+        $this->keyPrefix = $config['keyPrefix'] ?? (getenv('TINA4_SESSION_VALKEY_PREFIX') ?: 'tina4:session:');
     }
 
     /**

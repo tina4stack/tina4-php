@@ -365,12 +365,26 @@ class SessionHandlerTest extends TestCase
 
     public function testValkeyDefaultsAndEnvOverrides(): void
     {
+        // The default half asserts against a CLEARED environment, for the same
+        // reason the redis and mongo cases do: a default is only a default when
+        // nothing in the precedence chain is set. TINA4_SESSION_VALKEY_PREFIX is
+        // in the list because the handler now reads it (parity - Node and Ruby
+        // already did), so an isolated run that namespaces its session keys
+        // would otherwise see this case report a broken default.
+        $restore = $this->withoutEnv([
+            'TINA4_SESSION_VALKEY_PREFIX',
+            'TINA4_SESSION_VALKEY_PASSWORD',
+            'TINA4_SESSION_VALKEY_TTL',
+            'TINA4_SESSION_TTL',
+        ]);
+
         // Defaults
         $default = new ValkeySessionHandler();
         $ref = new \ReflectionClass($default);
         $this->assertSame('tina4:session:', $ref->getProperty('keyPrefix')->getValue($default));
         $this->assertNull($ref->getProperty('password')->getValue($default), 'no password by default');
         $this->assertSame(3600, $ref->getProperty('ttl')->getValue($default));
+        $restore();
 
         // Env vars feed the constructor; explicit config must still win.
         putenv('TINA4_SESSION_VALKEY_HOST=envhost');
@@ -495,6 +509,7 @@ class SessionHandlerTest extends TestCase
             'TINA4_SESSION_REDIS_PORT',
             'TINA4_SESSION_REDIS_PASSWORD',
             'TINA4_SESSION_REDIS_DB',
+            'TINA4_SESSION_REDIS_PREFIX',
             'TINA4_SESSION_TTL',
         ];
         $restore = $this->withoutEnv($managed);

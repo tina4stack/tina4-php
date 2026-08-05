@@ -63,8 +63,32 @@ class SessionTtlContractTest extends TestCase
     /** Every backend the invariant names. */
     private const BACKENDS = ['file', 'database', 'redis', 'valkey', 'mongodb', 'memcached'];
 
-    /** The key prefix Redis and Valkey both write under. */
-    private const RESP_KEY_PREFIX = 'tina4:session:';
+    /** The key prefix Redis and Valkey write under WHEN NOTHING IS CONFIGURED. */
+    private const DEFAULT_RESP_KEY_PREFIX = 'tina4:session:';
+
+    /**
+     * The key prefix THIS backend really writes under.
+     *
+     * It used to be one const spelling 'tina4:session:' for both, which is only
+     * the DEFAULT: RedisSessionHandler reads TINA4_SESSION_REDIS_PREFIX and
+     * ValkeySessionHandler reads TINA4_SESSION_VALKEY_PREFIX, and they are
+     * SEPARATE variables that can hold different values. The prefix is a
+     * coordinate exactly like the host, the port and the database number
+     * resolved in setUp, and it was the one this file left implicit - so an
+     * isolated run that namespaces its session keys would have this probe ask
+     * for a key nobody wrote. Redis answers TTL -2 on a missing key, and the
+     * case would report it as a deadline that did not come from
+     * TINA4_SESSION_TTL: a config mismatch dressed up as a TTL defect. Measured
+     * in exactly that form in Ruby and Node on 2026-08-05.
+     */
+    private function respKeyPrefix(string $backend): string
+    {
+        $name = $backend === 'valkey'
+            ? 'TINA4_SESSION_VALKEY_PREFIX'
+            : 'TINA4_SESSION_REDIS_PREFIX';
+
+        return (string)(getenv($name) ?: self::DEFAULT_RESP_KEY_PREFIX);
+    }
 
     private string $tempDir = '';
     private string $dbFile = '';
@@ -310,7 +334,7 @@ class SessionTtlContractTest extends TestCase
                 $host,
                 $port,
                 $database,
-                self::RESP_KEY_PREFIX . $respId
+                $this->respKeyPrefix($backend) . $respId
             );
         }
 

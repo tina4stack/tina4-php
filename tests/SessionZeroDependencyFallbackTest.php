@@ -962,15 +962,25 @@ class SessionZeroDependencyFallbackTest extends TestCase
         return [
             'redis' => [
                 'drive' => static function () use ($port, $sessionId, $data): void {
-                    (new RedisSessionHandler(['host' => '127.0.0.1', 'port' => $port, 'db' => 0, 'ttl' => 60]))
-                        ->write($sessionId, $data, 60);
+                    (new RedisSessionHandler([
+                        'host' => '127.0.0.1',
+                        'port' => $port,
+                        'db' => 0,
+                        'keyPrefix' => 'tina4:session:',
+                        'ttl' => 60,
+                    ]))->write($sessionId, $data, 60);
                 },
                 'contains' => ["*4\r\n", 'SETEX', 'tina4:session:' . $sessionId, 'zero-dependency'],
             ],
             'valkey' => [
                 'drive' => static function () use ($port, $sessionId, $data): void {
-                    (new ValkeySessionHandler(['host' => '127.0.0.1', 'port' => $port, 'db' => 0, 'ttl' => 60]))
-                        ->write($sessionId, $data, 60);
+                    (new ValkeySessionHandler([
+                        'host' => '127.0.0.1',
+                        'port' => $port,
+                        'db' => 0,
+                        'keyPrefix' => 'tina4:session:',
+                        'ttl' => 60,
+                    ]))->write($sessionId, $data, 60);
                 },
                 'contains' => ["*4\r\n", 'SETEX', 'tina4:session:' . $sessionId, 'zero-dependency'],
             ],
