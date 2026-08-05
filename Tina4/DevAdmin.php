@@ -711,7 +711,12 @@ class DevAdmin
         // API: List available queue topics by scanning the queue data directory.
         Router::get('/__dev/api/queue/topics', function (Request $request, Response $response) {
             try {
-                $queueDir = getcwd() . '/data/queue';
+                // The REAL store — TINA4_QUEUE_PATH, else data/queue. This
+                // hardcoded getcwd() . '/data/queue', so an app whose store had
+                // been moved onto a volume could never list a real topic; it
+                // listed whatever stale directories happened to sit under the
+                // working directory instead. See GET /__dev/api/queue below.
+                $queueDir = (new \Tina4\Queue('file', [], 'default'))->getBasePath();
                 if (is_dir($queueDir)) {
                     $topics = [];
                     foreach (scandir($queueDir) ?: [] as $entry) {
@@ -733,7 +738,7 @@ class DevAdmin
         Router::get('/__dev/api/queue', function (Request $request, Response $response) {
             try {
                 $topic = $request->queryParam('topic') ?? 'default';
-                $statusFilter = $request->queryParam('status');
+                $statusFilter = (string)($request->queryParam('status') ?? '');
                 $queue = new \Tina4\Queue('file', [], $topic);
 
                 $stats = [
@@ -743,34 +748,57 @@ class DevAdmin
                     'reserved' => $queue->size('reserved'),
                 ];
 
-                $jobs = [];
-                if ($statusFilter === 'pending' || $statusFilter === null) {
-                    $queueDir = getcwd() . '/data/queue/' . $topic;
-                    if (is_dir($queueDir)) {
-                        $files = glob($queueDir . '/*.queue-data') ?: [];
-                        sort($files);
-                        foreach ($files as $filepath) {
-                            $raw = @file_get_contents($filepath);
-                            if ($raw === false) continue;
-                            $job = json_decode($raw, true);
-                            if (is_array($job)) {
-                                $job['status'] = 'pending';
-                                $jobs[] = $job;
-                            }
-                        }
-                    }
-                }
-                if ($statusFilter === 'failed' || $statusFilter === null) {
-                    foreach ($queue->failed() as $j) {
-                        $j['status'] = 'failed';
-                        $jobs[] = $j;
-                    }
-                }
-                if ($statusFilter === 'dead' || $statusFilter === null) {
-                    foreach ($queue->deadLetters() as $j) {
-                        $j['status'] = 'dead_letter';
-                        $jobs[] = $j;
-                    }
+                // The job list and the stats above MUST describe the same set of
+                // jobs. Three defects of one shape broke that, all measured
+                // 2026-08-05 and pinned by tests/DevAdminQueuePathTest.php:
+                //
+                //  1. THE DIRECTORY. This scanned a hardcoded
+                //     getcwd() . '/data/queue/<topic>' while size() counts
+                //     against the Queue's basePath, which honours
+                //     TINA4_QUEUE_PATH — so with that set (a container that
+                //     moved the store onto a volume) the panel listed one
+                //     directory and counted another. Both sides now go through
+                //     Queue::getBasePath(), the single answer to where the
+                //     queue files live.
+                //  2. THE SET. A RESERVED job was counted by stats.reserved and
+                //     never listed at all, and a failed-but-retryable job —
+                //     which the auto-retry lifecycle leaves in the PENDING dir
+                //     with status "pending" — was listed TWICE: once by the
+                //     directory scan and once by Queue::failed(), which re-reads
+                //     those very same files. One job, two rows, two
+                //     contradictory statuses.
+                //  3. MAXRETRIES. Dead letters were listed via
+                //     Queue::deadLetters(), which filters on THIS queue's
+                //     maxRetries (3) — a threshold the dev admin cannot know. A
+                //     job dead-lettered by an app configured maxRetries=1 was
+                //     counted by stats.failed and never appeared in the list.
+                //     failed/ is now read the way size('failed') counts it.
+                //
+                // Every job now appears exactly once, in the bucket its own stat
+                // counts it in, so pending + completed + failed + reserved
+                // equals the number of jobs listed, and each ?status= filter
+                // returns exactly what its stat counts. (File store only — with
+                // an external backend size() ignores the status argument
+                // entirely and the list still reads the file store, because
+                // QueueBackend has no listing method. Pre-existing, unchanged.)
+                $topicDir = $queue->getBasePath() . '/' . $topic;
+                $jobs = array_merge(
+                    self::readQueueDir($topicDir, null),
+                    self::readQueueDir($topicDir . '/reserved', 'reserved'),
+                    self::readQueueDir($topicDir . '/failed', 'dead_letter')
+                );
+
+                if ($statusFilter !== '') {
+                    // 'failed' and 'dead' both name the dead-letter store —
+                    // size() counts them identically (LiteBackend::DEAD_STATES),
+                    // so the filter must too.
+                    $wanted = in_array($statusFilter, ['failed', 'dead', 'dead_letter'], true)
+                        ? 'dead_letter'
+                        : $statusFilter;
+                    $jobs = array_values(array_filter(
+                        $jobs,
+                        static fn (array $job): bool => ($job['status'] ?? '') === $wanted
+                    ));
                 }
 
                 return $response->json(['jobs' => $jobs, 'stats' => $stats]);
@@ -788,11 +816,12 @@ class DevAdmin
             try {
                 $topic = $request->queryParam('topic') ?? 'default';
                 $queue = new \Tina4\Queue('file', [], $topic);
-                $jobs = [];
-                foreach ($queue->deadLetters() as $j) {
-                    $j['status'] = 'dead_letter';
-                    $jobs[] = $j;
-                }
+                // Same store, read the same way size('failed') counts it — this
+                // used Queue::deadLetters(), which filters on the DEV ADMIN's own
+                // maxRetries (3). The panel's Dead Letters tab therefore showed
+                // "0" next to a stats tab reporting "failed: 1" for any app
+                // configured with maxRetries below 3. See GET /__dev/api/queue.
+                $jobs = self::readQueueDir($queue->getBasePath() . '/' . $topic . '/failed', 'dead_letter');
                 return $response->json(['jobs' => $jobs, 'count' => count($jobs), 'topic' => $topic]);
             } catch (\Throwable $e) {
                 return $response->json(['jobs' => [], 'count' => 0, 'error' => $e->getMessage()]);
@@ -2532,6 +2561,58 @@ class DevAdmin
     }
 
     // ── Dev-admin helpers ──────────────────────────────────────────
+
+    /**
+     * Statuses LiteBackend::count() can attribute to a file in the topic's own
+     * queue directory — it matches a file to a stat by the file's OWN status.
+     * A file claiming anything else is counted by no stat, so listing it would
+     * break sum(stats) == count(jobs).
+     */
+    private const QUEUE_DIR_STATUSES = ['pending', 'completed'];
+
+    /**
+     * Read every *.queue-data record in ONE queue directory, oldest name first.
+     *
+     * Corrupt files are skipped exactly as LiteBackend::count() skips them, so
+     * the job list and the stats always see the same set of files.
+     *
+     * @param string      $dir    Directory to read; a missing one yields no jobs.
+     * @param string|null $bucket Status to stamp on every job found — for
+     *                            reserved/ and failed/, which count() counts in
+     *                            full whatever a file says its own status is.
+     *                            Pass null for the topic's own queue directory,
+     *                            where count() matches on the file's own status,
+     *                            so the file's own status is what gets listed.
+     * @return array<int, array> The job records, ready to serialise.
+     */
+    private static function readQueueDir(string $dir, ?string $bucket): array
+    {
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        $jobs = [];
+        $files = glob($dir . '/*.queue-data') ?: [];
+        sort($files);
+        foreach ($files as $filepath) {
+            $raw = @file_get_contents($filepath);
+            if ($raw === false) {
+                continue;
+            }
+            $job = json_decode($raw, true);
+            if (!is_array($job)) {
+                continue;
+            }
+            if ($bucket !== null) {
+                $job['status'] = $bucket;
+            } elseif (!in_array($job['status'] ?? '', self::QUEUE_DIR_STATUSES, true)) {
+                continue;
+            }
+            $jobs[] = $job;
+        }
+
+        return $jobs;
+    }
 
     /**
      * Build a FakeData field map from introspected table columns: name/type ->

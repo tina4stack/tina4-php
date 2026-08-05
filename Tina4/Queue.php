@@ -685,9 +685,21 @@ class Queue
     }
 
     /**
-     * Get the base path for this queue system.
+     * Where the file-backed store keeps this queue's jobs — the ONE answer to
+     * "where do the queue files live": the `path` config value, else
+     * TINA4_QUEUE_PATH, else `data/queue`.
+     *
+     * PUBLIC because anything that reads the store directly — the dev-admin
+     * queue panel — must ask HERE instead of re-deriving it. DevAdmin hardcoded
+     * `getcwd() . '/data/queue/<topic>'`, so the moment TINA4_QUEUE_PATH was set
+     * it LISTED one directory while size() COUNTED another (measured 2026-08-05:
+     * 1 stale job listed against 6 real jobs counted). It was `private` with no
+     * callers — unreachable dead code — which is exactly why the duplicate
+     * derivation grew in the first place.
+     *
+     * @see \Tina4\DevAdmin GET /__dev/api/queue and /__dev/api/queue/topics
      */
-    private function getBasePath(): string
+    public function getBasePath(): string
     {
         return $this->basePath;
     }
