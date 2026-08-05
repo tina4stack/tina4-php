@@ -335,15 +335,24 @@ class DocStoreTest extends TestCase
 
     public function testServerlessWhenNoMongo(): void
     {
+        // Clear the WHOLE selection chain. This cleared the canonical
+        // TINA4_MONGO_URI and the legacy TINA4_SESSION_MONGO_URL but not
+        // TINA4_SESSION_MONGO_URI in between, so on any machine exporting the
+        // middle name the test measured the environment instead of the default.
         $hadUri = getenv('TINA4_MONGO_URI');
+        $hadSessUri = getenv('TINA4_SESSION_MONGO_URI');
         $hadUrl = getenv('TINA4_SESSION_MONGO_URL');
         putenv('TINA4_MONGO_URI');
+        putenv('TINA4_SESSION_MONGO_URI');
         putenv('TINA4_SESSION_MONGO_URL');
         try {
             $this->assertTrue(isServerless());
         } finally {
             if ($hadUri !== false) {
                 putenv('TINA4_MONGO_URI=' . $hadUri);
+            }
+            if ($hadSessUri !== false) {
+                putenv('TINA4_SESSION_MONGO_URI=' . $hadSessUri);
             }
             if ($hadUrl !== false) {
                 putenv('TINA4_SESSION_MONGO_URL=' . $hadUrl);
@@ -353,11 +362,14 @@ class DocStoreTest extends TestCase
 
     public function testGetCollectionIsSqliteWhenServerless(): void
     {
+        // Same full-chain clear as testServerlessWhenNoMongo above.
         $hadUri = getenv('TINA4_MONGO_URI');
+        $hadSessUri = getenv('TINA4_SESSION_MONGO_URI');
         $hadUrl = getenv('TINA4_SESSION_MONGO_URL');
         $hadPath = getenv('TINA4_DOC_STORE_PATH');
         $tmp = sys_get_temp_dir() . '/tina4_ds_' . uniqid('', true) . '.db';
         putenv('TINA4_MONGO_URI');
+        putenv('TINA4_SESSION_MONGO_URI');
         putenv('TINA4_SESSION_MONGO_URL');
         putenv('TINA4_DOC_STORE_PATH=' . $tmp);
         resetDefaultStore();
@@ -370,6 +382,9 @@ class DocStoreTest extends TestCase
             resetDefaultStore();
             if ($hadUri !== false) {
                 putenv('TINA4_MONGO_URI=' . $hadUri);
+            }
+            if ($hadSessUri !== false) {
+                putenv('TINA4_SESSION_MONGO_URI=' . $hadSessUri);
             }
             if ($hadUrl !== false) {
                 putenv('TINA4_SESSION_MONGO_URL=' . $hadUrl);
