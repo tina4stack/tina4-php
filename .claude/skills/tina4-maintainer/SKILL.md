@@ -225,6 +225,46 @@ commit, merge, or release:
   path separators, SSL/cert stores, native extensions, line endings, and case-sensitivity are the
   classic per-platform divergences. If you didn't test it on a platform, say so; don't imply you did.
 
+
+**Ghost tests are not acceptable, in any circumstances.** A ghost test is one
+that LOOKS like coverage and never actually runs, or runs and proves nothing.
+It is worse than no test: an absent test is visible in the count, a ghost is a
+green tick over an untested code path. Every one of these has been found and
+fixed in this project, so none of it is hypothetical:
+
+- **A test that cannot run.** An unconditional stub - `skip("PostgreSQL live
+  connection", "Requires running PostgreSQL server")` with NO code behind it -
+  is not a skipped test, it is a test nobody wrote, wearing a skip's clothes.
+  Four of these sat in tina4-nodejs reading as "environment not set up" while
+  the lab had PostgreSQL, MySQL, MSSQL and Firebird running the whole time.
+- **A test excluded before it is counted.** RSpec `describe ..., if: cond` DROPS
+  its examples when `cond` is false - not pending, not skipped, simply absent
+  from the total. Same for a file filtered out of a runner's list: tina4-nodejs
+  reported "253 files, 0 failed" while 44 i18n tests were filtered out before
+  counting, and no lab run had ever executed them. If something is not going to
+  run, it must be REPORTED as not running.
+- **A gate that can never open.** A guard that probes the wrong address is a
+  permanently-dead test: `localhost:53050` when Firebird is on 3050, or
+  `host === "localhost"` when the URL says `127.0.0.1`. The skip reason then
+  reads like a missing service and hides an unwired test for months.
+- **A guard that tests a PROXY instead of the property.** `geteuid() == 0` is
+  not "the permission bits bind" - root loses that power the moment
+  CAP_DAC_OVERRIDE is dropped, so the test skipped on hosts that could have run
+  it perfectly well. Measure the property: write a 0400 probe and ask the kernel.
+- **A test that asserts nothing, or cannot fail.** No assertion, a tautology, or
+  an assertion so permissive it holds either way (`$row['X'] ?? $row['x']` hid a
+  real cross-framework divergence for months). If you cannot say what change
+  would turn it red, it is not a test.
+
+**The discipline.** Prove every new test is a GATE by mutation: break the thing
+it guards and watch it go red, then restore it. A test never seen to fail is not
+known to work. When a test genuinely needs an environment the current one cannot
+provide, say so in a machine-readable way - `[needs:absent-ext=pgsql]`,
+`[needs:no-dac-override]` - and give it a second pass that supplies it, rather
+than a skip that becomes permanent. And audit periodically: compare tests
+DECLARED in source against tests REPORTED by the runner, and check every file on
+disk is in the runner's list.
+
 This is non-negotiable for anything that commits, merges, or releases — and the same honesty governs
 every status you report: a claim is either proven-and-qualified, or it is not made. A re-run is
 trivial against the cost of shipping a masked regression to four public registries.
