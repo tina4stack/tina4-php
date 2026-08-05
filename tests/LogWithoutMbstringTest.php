@@ -40,6 +40,32 @@ class LogWithoutMbstringTest extends TestCase
      *
      * The scan covers the whole tree rather than one file, so a NEW unguarded
      * call in any future file is caught the day it lands.
+     *
+     * THE GUARD MUST NAME THE FUNCTION IT GUARDS. This started as "is there a
+     * function_exists somewhere in the 220 characters above the call", which is
+     * a proximity heuristic, and proximity is not a guard. MEASURED 2026-08-06
+     * on the lab (Ubuntu 24.04.4 LTS x86_64, PHP 8.3.6) by injecting this exact
+     * shape into Tina4/ContextChunker.php:
+     *
+     *     if (function_exists('mb_strtolower')) {
+     *         $text = mb_strtolower($text, 'UTF-8');
+     *     }
+     *     $text = mb_substr($text, 0, 64);   // <- fatal without ext-mbstring
+     *
+     * the whole file scanned GREEN: the second call borrowed the first call's
+     * guard simply by sitting near it. That is not a hypothetical shape - it is
+     * what "add one more mb_ call to this block" produces. Matching the QUOTED
+     * NAME inside the function_exists closes it, and costs one regex.
+     *
+     * The window is taken from the RAW source, not the blanked copy, because
+     * that is where the quoted name survives; codeOnly() replaces each noise
+     * BYTE with one space, so byte offsets are identical in both and the same
+     * offset indexes both strings.
+     *
+     * KNOWN LIMIT, stated rather than implied: a call made through a callable
+     * STRING (array_map('mb_strtolower', ...)) is invisible to this scan, since
+     * codeOnly() blanks string literals - the very thing that stops the gate
+     * flagging its own documentation. Core has none today.
      */
     public function testNoUnguardedMbstringCallAnywhereInCore(): void
     {
@@ -54,8 +80,8 @@ class LogWithoutMbstringTest extends TestCase
             if (!$file->isFile() || $file->getExtension() !== 'php') {
                 continue;
             }
-            $source = file_get_contents($file->getPathname());
-            if ($source === false) {
+            $rawSource = file_get_contents($file->getPathname());
+            if ($rawSource === false) {
                 continue;
             }
             // Scan CODE only. A first cut regexed the raw source and flagged
@@ -64,19 +90,21 @@ class LogWithoutMbstringTest extends TestCase
             // is the precise instrument: blank out comments and string literals
             // (newlines preserved so line numbers stay true) and match on what
             // actually executes.
-            $source = self::codeOnly($source);
-            if (!preg_match_all('/\bmb_[a-z_]+\s*\(/', $source, $m, PREG_OFFSET_CAPTURE)) {
+            $code = self::codeOnly($rawSource);
+            if (!preg_match_all('/\bmb_[a-z_]+\s*\(/', $code, $m, PREG_OFFSET_CAPTURE)) {
                 continue;
             }
             foreach ($m[0] as [$call, $offset]) {
-                // A guard is a function_exists() close above the call, or on the
-                // same line for the inline ternary form.
-                $window = substr($source, max(0, $offset - 220), min(220, $offset));
-                if (str_contains($window, 'function_exists')) {
+                $function = rtrim(substr($call, 0, -1));
+                // A guard is a function_exists() naming THIS function, close
+                // above the call or on the same line for the inline ternary.
+                $window = substr($rawSource, max(0, $offset - 220), min(220, $offset));
+                $guard = '/function_exists\s*\(\s*[\'"]' . preg_quote($function, '/') . '[\'"]/i';
+                if (preg_match($guard, $window) === 1) {
                     $guarded++;
                     continue;
                 }
-                $line = substr_count(substr($source, 0, $offset), "\n") + 1;
+                $line = substr_count(substr($code, 0, $offset), "\n") + 1;
                 $offenders[] = str_replace($root, 'Tina4', $file->getPathname()) . ":{$line} {$call}";
             }
         }
@@ -86,7 +114,8 @@ class LogWithoutMbstringTest extends TestCase
             $offenders,
             "Unguarded mb_* call(s) in core. On a PHP without ext-mbstring each is a fatal, "
             . "and inside an error path it hides the very failure it was called to report. "
-            . "Use Tina4\\Str (isUtf8/length/substr/titleCase/lower) instead:\n  "
+            . "A function_exists() nearby that names a DIFFERENT function does not guard this "
+            . "call. Use Tina4\\Str (isUtf8/length/substr/titleCase/lower) instead:\n  "
             . implode("\n  ", $offenders)
         );
 

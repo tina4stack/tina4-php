@@ -43,7 +43,10 @@ class ContextChunker
         $text = (string) preg_replace('/(?<=\d),(?=\d)/', '', $text);
         // split camelCase ("ForeignKeyField" -> "foreign key field") BEFORE lower
         $text = (string) preg_replace('/(?<=[a-z0-9])(?=[A-Z])/', ' ', $text);
-        $text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
+        // Str::lower IS this line, guard and fallback included. Hand-rolling it a
+        // second time gives the same idea two homes that can drift, and it reads
+        // as the pattern to copy the next time someone needs a mb_* call.
+        $text = Str::lower($text);
         // NFKD decomposition then drop non-ascii — mirrors Python's
         // unicodedata.normalize("NFKD", t).encode("ascii", "ignore"): é -> e.
         // tina4: falls back to a plain non-ascii strip when ext-intl is absent
