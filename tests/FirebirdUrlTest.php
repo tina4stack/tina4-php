@@ -102,15 +102,66 @@ class FirebirdUrlTest extends TestCase
 
     // ── Live tests against a Firebird container ─────────────────────────
 
+    // Fallbacks only. TINA4_TEST_FIREBIRD_URL is the canonical way to say where
+    // Firebird lives (ADR-0038), and these constants describe ONE particular
+    // container layout — a different port and a different data directory from
+    // the one the lab actually runs. Hard-coded, they turned three live tests
+    // into permanent skips on a host with a perfectly good Firebird on 3050:
+    // the service was there, the address was wrong, and the skip reason said
+    // "not reachable", which reads like a missing service rather than a
+    // misconfigured test.
     private const FIREBIRD_HOST = 'localhost';
     private const FIREBIRD_PORT = 53050;
     private const LIVE_DB_PATH = '/firebird/data/tina4.fdb';
 
+    /**
+     * Where the live Firebird actually is: TINA4_TEST_FIREBIRD_URL when set,
+     * else the container constants above.
+     *
+     * @return array{host: string, port: int, path: string, user: string, pass: string}
+     */
+    private static function liveTarget(): array
+    {
+        $url = getenv('TINA4_TEST_FIREBIRD_URL');
+        $parts = ($url === false || $url === '') ? [] : (parse_url($url) ?: []);
+
+        // Normalise to ONE leading slash. The env URL uses the double-slash
+        // absolute form, so parse_url hands back "//var/lib/..."; the tests
+        // below add the second slash themselves where they want it.
+        $path = isset($parts['path']) && $parts['path'] !== ''
+            ? '/' . ltrim($parts['path'], '/')
+            : self::LIVE_DB_PATH;
+
+        return [
+            'host' => $parts['host'] ?? self::FIREBIRD_HOST,
+            'port' => (int) ($parts['port'] ?? self::FIREBIRD_PORT),
+            'path' => $path,
+            'user' => isset($parts['user']) ? urldecode($parts['user']) : 'SYSDBA',
+            'pass' => isset($parts['pass']) ? urldecode($parts['pass']) : 'masterkey',
+        ];
+    }
+
+    /** Build a live connection URL, with `$extraSlash` for the double-slash form. */
+    private static function liveUrl(string $extraSlash = '', ?string $overridePath = null): string
+    {
+        $t = self::liveTarget();
+        return sprintf(
+            'firebird://%s:%s@%s:%d%s%s',
+            $t['user'],
+            $t['pass'],
+            $t['host'],
+            $t['port'],
+            $extraSlash,
+            $overridePath ?? $t['path']
+        );
+    }
+
     private static function firebirdReachable(): bool
     {
+        $t = self::liveTarget();
         $errno = 0;
         $errstr = '';
-        $sock = @fsockopen(self::FIREBIRD_HOST, self::FIREBIRD_PORT, $errno, $errstr, 1.0);
+        $sock = @fsockopen($t['host'], $t['port'], $errno, $errstr, 1.0);
         if ($sock === false) {
             return false;
         }
@@ -121,11 +172,12 @@ class FirebirdUrlTest extends TestCase
     private function skipIfNoFirebird(): void
     {
         if (!self::firebirdReachable()) {
+            $t = self::liveTarget();
             $this->markTestSkipped(
                 sprintf(
-                    'Firebird not reachable at %s:%d',
-                    self::FIREBIRD_HOST,
-                    self::FIREBIRD_PORT
+                    'Firebird not reachable at %s:%d (set TINA4_TEST_FIREBIRD_URL to point at a live server)',
+                    $t['host'],
+                    $t['port']
                 )
             );
         }
@@ -175,13 +227,8 @@ class FirebirdUrlTest extends TestCase
     {
         $this->skipIfNoFirebird();
 
-        $url = sprintf(
-            'firebird://SYSDBA:masterkey@%s:%d%s',
-            self::FIREBIRD_HOST,
-            self::FIREBIRD_PORT,
-            self::LIVE_DB_PATH // begins with "/"
-        );
-        $adapter = $this->tryConnect($url);
+        // Single-slash form — the path already begins with "/".
+        $adapter = $this->tryConnect(self::liveUrl());
         $row = $adapter->fetchOne('SELECT 1 AS x FROM rdb$database');
         $this->assertNotNull($row);
         $value = $row['X'] ?? $row['x'] ?? null;
@@ -195,13 +242,8 @@ class FirebirdUrlTest extends TestCase
 
         // Classic double-slash form — parse_url leaves "//path" in the
         // path component. Normalisation strips one slash.
-        $url = sprintf(
-            'firebird://SYSDBA:masterkey@%s:%d/%s',
-            self::FIREBIRD_HOST,
-            self::FIREBIRD_PORT,
-            self::LIVE_DB_PATH // already starts with "/" — gives "//..." when joined
-        );
-        $adapter = $this->tryConnect($url);
+        // The extra slash joins with the path's own leading "/" to give "//...".
+        $adapter = $this->tryConnect(self::liveUrl('/'));
         $row = $adapter->fetchOne('SELECT 1 AS x FROM rdb$database');
         $this->assertNotNull($row);
         $value = $row['X'] ?? $row['x'] ?? null;
@@ -215,13 +257,10 @@ class FirebirdUrlTest extends TestCase
 
         // Provide a deliberately wrong URL path; the env override points
         // at the real DB. The framework must connect to the real one.
-        $wrongUrl = sprintf(
-            'firebird://SYSDBA:masterkey@%s:%d/this/path/does/not/exist.fdb',
-            self::FIREBIRD_HOST,
-            self::FIREBIRD_PORT
-        );
-        putenv('TINA4_DATABASE_FIREBIRD_PATH=' . self::LIVE_DB_PATH);
-        $_ENV['TINA4_DATABASE_FIREBIRD_PATH'] = self::LIVE_DB_PATH;
+        $wrongUrl = self::liveUrl('', '/this/path/does/not/exist.fdb');
+        $realPath = self::liveTarget()['path'];
+        putenv('TINA4_DATABASE_FIREBIRD_PATH=' . $realPath);
+        $_ENV['TINA4_DATABASE_FIREBIRD_PATH'] = $realPath;
 
         $adapter = $this->tryConnect($wrongUrl);
         $row = $adapter->fetchOne('SELECT 1 AS x FROM rdb$database');
