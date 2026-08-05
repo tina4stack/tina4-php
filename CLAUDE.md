@@ -33,7 +33,10 @@ Version 3.13.94 - Full Tina4 PHP framework and application scaffold. See https:/
 - PSR-4 autoloading — core classes live in `Tina4/` (not `src/Tina4/`)
 - Namespace `Tina4\` for core, `Tina4\Database\` for adapters, `Tina4\Middleware\` for middleware, `Tina4\Queue\` for queue backends, `Tina4\Session\` for session handlers
 - Namespace `\` for src/app/orm/routes
-- Linting: `composer lint` (phplint)
+- Linting: `composer lint` runs `vendor/bin/phplint`, but phplint is NOT in
+  `require-dev` (only `phpunit/phpunit` and `mongodb/mongodb` are), so on a fresh
+  `composer install` it fails with "No such file or directory". The
+  zero-dependency check that does work today is `php -l` over the changed files
 
 ### Firebird-Specific Rules
 
@@ -126,11 +129,16 @@ Tina4/                   # Core framework classes (namespace Tina4\)
     RateLimiter.php      # Rate limiting
   Queue/
     QueueBackend.php     # Queue backend interface
+    LiteBackend.php      # File/SQLite queue backend (the default)
     KafkaBackend.php     # Kafka queue backend
+    MongoBackend.php     # MongoDB queue backend
     RabbitMQBackend.php  # RabbitMQ queue backend
   Session/
-    MongoSessionHandler.php  # MongoDB session handler
-    ValkeySessionHandler.php # Valkey/Redis session handler
+    DatabaseSessionHandler.php  # SQL session handler
+    MemcachedSessionHandler.php # Memcached session handler
+    MongoSessionHandler.php     # MongoDB session handler
+    RedisSessionHandler.php     # Redis session handler
+    ValkeySessionHandler.php    # Valkey session handler
 migrations/              # Database migration SQL files
 tests/                   # PHPUnit tests
 bin/
@@ -1315,21 +1323,23 @@ is authorised on the raw socket peer.
 - Background tasks via `$app->background()` — cooperative periodic callbacks in the event loop (no threads)
 - AI assistant detection (`AI`) with context file scaffolding for 7 tools
 - Queue system with Kafka, RabbitMQ, and MongoDB backends
-- Session handlers for MongoDB and Valkey/Redis. `TINA4_SESSION_SAMESITE` env var (default: Lax)
+- Session handlers for MongoDB, Redis, Valkey, Memcached and SQL databases. `TINA4_SESSION_SAMESITE` env var (default: Lax)
 - GraphQL query execution. **Depth guard**: selection-set nesting is bounded by `TINA4_GRAPHQL_MAX_DEPTH` (default `50`; set `<= 0` to disable) — an over-deep query or a circular fragment fails with a structured `"Query exceeds maximum depth of N"` error (counted per selection level AND per fragment spread) instead of overflowing the stack. Resolver exceptions are captured as GraphQL errors — the message is the real cause only in debug mode (`ErrorOverlay::isDebugMode()` / `TINA4_DEBUG`); in production it is a generic `"Internal server error"` (the real cause is logged via `Log::error`, `path` preserved) so a resolver exception never leaks internal state
 - SOAP 1.1 / WSDL (`WSDL`, `#[WSDLOperation]`). **DOCTYPE rejected**: a SOAP request containing a `<!DOCTYPE>` (DTD) is rejected with a `Client` fault **before** parsing — SOAP 1.1 §3 forbids DTDs, and this closes the XML entity-expansion (billion-laughs) + external-entity (XXE) attack surface for every parser. **Error masking is debug-gated**: an operation that raises returns a `Server` fault whose `<faultstring>` is the real cause only in debug mode (`ErrorOverlay::isDebugMode()` / `TINA4_DEBUG`); in production it is a generic `"Internal server error"` and the real cause is logged via `Log::error`, so a resolver exception never leaks internal state (DB creds, file paths) to a SOAP client
 - WebSocket support. WebSocket backplane for scaling broadcast across instances via Redis/NATS pub/sub (`TINA4_WS_BACKPLANE`, `TINA4_WS_BACKPLANE_URL` env vars) — **wired into the live broadcast path**: every `broadcastWebSocket()`/`broadcastToRoom()` delivers to LOCAL connections first then publishes an envelope `{src,kind,exclude,room,path,+text|b64}` to the shared `tina4:ws` channel (identical shape across all 4 frameworks); sibling instances drain it on the event-loop idle tick and relay to their own LOCAL connections only (origin guard drops our own echo by stable per-process id — no double-delivery, no cluster loop). Backplane failure logs + degrades to local-only, never crashes a broadcast. Broadcasts are resilient: a dead/slow client is pruned and never aborts delivery to the rest. **Security**: optional origin allow-list via `TINA4_WS_ALLOWED_ORIGINS` (comma-separated; empty/unset = allow all — non-breaking; set = reject mismatched/missing Origin with 403 on every upgrade path). **Per-route auth**: a WS route is PUBLIC by default (mirrors GET); mark it secured via an `@secured` handler docblock OR imperatively `Router::websocket($path, $handler, secure: true)` (both set `auth_required`). On EVERY upgrade entry point (`Server::handleWebSocketUpgrade` integrated + `WebSocket::handleNewConnection` standalone), AFTER the origin allow-list and BEFORE accepting the handshake, a secured route extracts and validates a JWT via `Auth::validToken()` — missing/invalid rejects the upgrade (401, never accepted); public routes always pass. Three token transports (checked in order, see `WebSocket::wsToken()`): `Authorization: Bearer <jwt>` header (server/CLI/mobile), the `Sec-WebSocket-Protocol: bearer, <jwt>` subprotocol (browser `new WebSocket(url, ['bearer', token])` — echoed back as the accepted subprotocol), and `?token=<jwt>` query param. The verified payload is exposed as `$connection->auth` (null on public routes). Helpers: `WebSocket::wsToken()` / `WebSocket::wsAuthorized()` (mirror Python's `ws_token` / `ws_authorized`). **Idle reaper**: `TINA4_WS_IDLE_TIMEOUT` (seconds; 0/unset = disabled) closes connections idle past the timeout. RFC 6455 fragmented messages (`OP_CONTINUATION`) are reassembled before dispatch. Rooms API: `$ws->joinRoom($clientId, $room)`, `$ws->leaveRoom($clientId, $room)`, `$ws->broadcastToRoom($room, $msg, $excludeIds?)`, `$ws->getRoomConnections($room)`, `$ws->roomCount($room)`
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
 - Messenger (.env driven SMTP/IMAP). IMAP reads **fail loud**: `inbox()`/`read()`/`unread()`/`search()`/`folders()` LOG and RAISE `Tina4\MessengerConnectionError` (extends `\RuntimeException`) on a connection/auth/protocol failure instead of swallowing it into an empty result — a *successful* fetch from a genuinely empty mailbox still returns empty (`[]`/`null`/`0`) normally. `send()` is unchanged (returns `{success, message, id}`). **Cross-framework contract:** `inbox(folder, limit, offset)` takes the folder FIRST (same order in all four); the `uid` field is a **STRING** everywhere (the Python master emits `str(uid)`), so a strict `=== 1` comparison must become `=== '1'` — `read()`/`markRead()` still accept `string|int`; and `read()` of a non-existent UID returns a **falsy** value (`null` here, `{}` in Python, `nil` in Ruby, `null` in Node) rather than raising, so `if (!$message)` is the portable missing-message check. Real SMTP + IMAP round-trips are covered against a live GreenMail in `tests/MessengerImapGreenMailTest.php` (ports 3025/3143; `TINA4_TEST_SMTP_*` / `TINA4_TEST_IMAP_*` to relocate)
-- CLI scaffolding: `composer tina4 generate model/route/migration/middleware`
-- Production server: `composer start --production` (OPcache auto-config)
+- CLI scaffolding: `bin/tina4php generate model/route/migration/middleware`. There
+  is no `composer tina4` script - composer defines exactly four (`serve`, `start`,
+  `test`, `lint`) and `composer tina4 ...` errors out
+- Production server: `bin/tina4php serve --production` (OPcache auto-config)
 - Frond pre-compilation for 2.8x template render improvement
 - DB query caching: request-scoped auto cache **off by default — opt-in via `TINA4_AUTO_CACHING=true`** (TTL `TINA4_AUTO_CACHING_TTL=5`s) dedupes identical reads within a request and flushes on writes. It is OFF by default because an on-by-default request cache is a footgun: a `SELECT MAX(id)` (or generator read) right before an INSERT in the same request returns a cached pre-write value → duplicate primary keys, and any read-after-write in one request shows stale state — so turn it on only for read-heavy endpoints. Persistent cross-request cache is also opt-in via `TINA4_DB_CACHE=true` (TTL `TINA4_DB_CACHE_TTL=30`s) routed through the unified backend set via `TINA4_DB_CACHE_BACKEND` (memory/file/redis/valkey/memcached/mongodb/database) + `TINA4_DB_CACHE_URL` so instances share one cache with global write-invalidation; `cacheStats()` reports `mode` (request/persistent/off) and `backend`, `cacheClear()`
 - ORM relationships: `hasMany`, `hasOne`, `belongsTo` with eager loading (`include:`)
 - Queue backends: file (default), RabbitMQ, Kafka, MongoDB. **Reservation/visibility timeout** (file + MongoDB): a popped job is reserved for `TINA4_QUEUE_VISIBILITY_TIMEOUT` seconds (default 300; `visibilityTimeout` constructor option; `<= 0` disables) — if the consumer dies before `acknowledge()`/`failJob()`, the next `dequeue()` reclaims it (incrementing `attempts`, dead-lettering past `maxRetries`), so a crashed/evicted consumer never strands a job. RabbitMQ/Kafka delegate redelivery to the broker.
 - Cache backends (`Tina4\Cache`): unified set across response/KV and persistent DB cache — `memory` (default), `file`, `redis`, `valkey`, `memcached`, `mongodb`, `database` — selected via `TINA4_CACHE_BACKEND` (+ `TINA4_CACHE_URL`/credentials); falls back to the file backend if a backend is unreachable
-- Session handlers: file, Redis/Valkey, MongoDB, database. `TINA4_SESSION_SAMESITE` env var controls SameSite attribute (default: Lax)
+- Session handlers: file, Redis, Valkey, MongoDB, Memcached, database. `TINA4_SESSION_SAMESITE` env var controls SameSite attribute (default: Lax). The MongoDB handler reads `TINA4_SESSION_MONGO_URI` (legacy alias `_URL`), `TINA4_SESSION_MONGO_DB` (default `tina4`) and `TINA4_SESSION_MONGO_COLLECTION` (default `sessions`); an explicit constructor option beats the environment
 - QueryBuilder with NoSQL/MongoDB support (`toMongo()`)
 - WebSocket backplane (Redis/NATS pub/sub) for horizontal scaling — wired into the live broadcast path with an origin guard + local-first delivery (see the WebSocket bullet above)
 - SameSite=Lax default on session cookies (`TINA4_SESSION_SAMESITE`)
@@ -1338,21 +1348,35 @@ is authorised on the raw socket peer.
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive. Hardened: the stream stops cleanly on client disconnect (`connection_aborted()`) and a generator that raises mid-stream is logged via `Log::error` and ends cleanly — the request worker never crashes
-- Tests: **4,945 executed, 16,023 assertions, 0 failures, 0 skipped** - measured
-  2026-08-05 on Ubuntu 24.04.4 LTS x86_64, PHP 8.3.6, against live services with
-  `TINA4_REQUIRE_SERVICES=1`. **Firebird IS covered** (5.0.4, native ext-interbase
-  built from source, plus pdo_firebird) - the previous note here said "Firebird
+- Tests: **4,987 executed, 16,270 assertions, 0 failures, 9 skipped** - measured
+  2026-08-06 on Ubuntu 24.04.4 LTS x86_64, PHP 8.3.6, against live services with
+  `TINA4_REQUIRE_SERVICES=1`. That is the ORDINARY single-pass run, which is what
+  you get by typing the command; quote it that way rather than quoting a
+  zero-skip figure that took three passes to assemble.
+
+  **Firebird IS covered** - live Firebird 5.0.4 on port 3050, reached through
+  native ext-interbase and pdo_firebird. An earlier note here said "Firebird
   excluded by design", which was false: the server had been up the whole time.
-  Reaching zero skips takes THREE passes, because six tests can only run in an
-  environment that is the OPPOSITE of the normal one and a skip is not a pass:
-  pass 1 is the ordinary run (4,939 tests); pass 2 re-runs the four "throws when
-  ext-X is missing" tests with `PHP_INI_SCAN_DIR` pointed at a conf.d with those
-  extensions pruned; pass 3 re-runs the two "a write really fails" tests under
-  `setpriv --bounding-set=-dac_override,-dac_read_search`, which takes
-  CAP_DAC_OVERRIDE away from root so `chmod 0400` finally denies. Such a test
-  declares what it needs with a marker in its skip reason - `[needs:absent-ext=NAME]`
-  or `[needs:no-dac-override]` - so a runner can select it without pattern-matching
-  prose.
+
+  The 9 skips are two different things, and only one of them is benign:
+
+  * **6 need an environment that is the OPPOSITE of the normal one**, and a skip
+    is not a pass, so they are re-run in two extra passes. Pass 2 re-runs the
+    four "throws when ext-X is missing" tests with `PHP_INI_SCAN_DIR` pointed at
+    a conf.d with those extensions pruned; pass 3 re-runs the two "a write really
+    fails" tests under `setpriv --bounding-set=-dac_override,-dac_read_search`,
+    which takes CAP_DAC_OVERRIDE away from root so `chmod 0400` finally denies.
+    Each declares what it needs with a marker in its skip reason -
+    `[needs:absent-ext=NAME]` or `[needs:no-dac-override]` - so a runner can
+    select it without pattern-matching prose.
+  * **3 are a real coverage gap.** `MigrationFootgunsLiveEngineTest`'s three
+    Firebird cases skip with "Firebird database ... could not be created ... set
+    `TINA4_TEST_FIREBIRD_PATH`": the lab's Firebird runs in a container that does
+    not share the host directory that variable names, so the throwaway migration
+    database cannot be created and these have never executed there. They stay
+    GREEN under `TINA4_REQUIRE_SERVICES=1` because `RequireServicesGate` omits
+    `firebird` from `SERVICE_KEYWORDS` on purpose (it is not provisioned in
+    GitHub CI). Do not read that green as Firebird migration coverage.
 
 ## Links
 
