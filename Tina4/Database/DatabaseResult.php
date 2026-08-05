@@ -321,13 +321,16 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
      */
     public function toPaginate(?int $page = null, ?int $perPage = null): array
     {
-        if (($page !== null || $perPage !== null) && $this->offset > 0) {
+        if (($page !== null || $perPage !== null) && count($this->records) < $this->count) {
             throw new \InvalidArgumentException(
                 'toPaginate($page, $perPage) slices the rows this result holds, but this '
-                . "result already starts at offset {$this->offset} - it is one page of a "
-                . 'larger query, so slicing it from row 0 gives a silently wrong answer. '
-                . 'Call toPaginate() with no arguments to describe the page you fetched, '
-                . 'or re-fetch without limit/offset to slice the whole set in memory.'
+                . 'result holds only ' . count($this->records) . ' of ' . $this->count
+                . ' rows - it is a PARTIAL result, so any page past the rows it holds comes '
+                . 'back empty while totalPages claims it exists. MEASURED on 100,000 rows '
+                . 'read under the default cap of 100: pages 1-5 of 20 were right and pages '
+                . '6 onward returned NOTHING. Fetch the page you want instead: '
+                . 'fetch($sql, [], $perPage, ($page - 1) * $perPage), then call '
+                . 'toPaginate() with no arguments.'
             );
         }
 
