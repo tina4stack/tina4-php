@@ -165,22 +165,27 @@ class PdoFirebirdAdapter implements DatabaseAdapter
             }
         }
 
-        foreach ($rows as &$row) {
+        // Rebuild each row rather than editing in place: the KEYS change here
+        // too (see FirebirdAdapter::columnName), and $floatCols is keyed by the
+        // driver's raw name, so the lookup has to happen before the rename.
+        $out = [];
+        foreach ($rows as $row) {
+            $cleaned = [];
             foreach ($row as $key => $value) {
-                if ($value === null) {
-                    continue;
+                if ($value !== null) {
+                    if (isset($floatCols[$key])) {
+                        $value = (float) $value;
+                    } elseif (is_resource($value)) {
+                        $value = stream_get_contents($value);
+                    } elseif (is_string($value)) {
+                        $value = rtrim($value);
+                    }
                 }
-                if (isset($floatCols[$key])) {
-                    $row[$key] = (float) $value;
-                } elseif (is_resource($value)) {
-                    $row[$key] = stream_get_contents($value);
-                } elseif (is_string($value)) {
-                    $row[$key] = rtrim($value);
-                }
+                $cleaned[FirebirdAdapter::columnName($key)] = $value;
             }
+            $out[] = $cleaned;
         }
-        unset($row);
-        return $rows;
+        return $out;
     }
 
     public function getDatabase(): string
