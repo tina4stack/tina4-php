@@ -935,7 +935,14 @@ class Session
         // it made save() report success on a write that never landed - a read-only
         // file, a full disk or a revoked permission all silently lost the session.
         // safeWrite() catches this and degrades per the log-loud policy.
-        $written = file_put_contents(
+        //
+        // Suppressed because the failure is HANDLED right below: the raw PHP
+        // warning is a second report of something already logged, and an app
+        // whose error handler promotes warnings to ErrorException would have it
+        // thrown from INSIDE the call, before the === false check, escaping as
+        // the wrong type and skipping the documented log-and-degrade path
+        // entirely. The return value is the signal; the diagnostic is noise.
+        $written = @file_put_contents(
             $this->getFilePath(),
             json_encode($this->data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
             LOCK_EX

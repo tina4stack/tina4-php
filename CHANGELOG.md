@@ -1,3 +1,54 @@
+### Fixed (Firebird held a table for the life of the process, #170)
+
+A parameterised statement on the native ext-interbase driver kept its table
+locked FOREVER -- after a successful `commit()`, after `close()`, for as long
+as the PHP process lived. Any later DDL against that table from another
+connection then waited forever rather than erroring, because both the native
+default transaction (`IBASE_WAIT`) and pdo_firebird use a WAIT lock policy.
+
+The cause was the statement, not the transaction. `doExecute()` bound
+parameters through `ibase_prepare()` + `ibase_execute()`, and a prepared
+statement's compiled request stays registered on the ATTACHMENT -- which
+ext-interbase does not detach on `ibase_close()` while the process is alive.
+Only PARAMETERISED statements did it, reads as well as writes; an
+unparameterised one goes through `ibase_query()`, whose statement is
+driver-owned and dropped with its result.
+
+Parameters are now bound through `ibase_query()` too. They are still bound by
+the driver -- no interpolation, no injection risk -- and the transaction still
+leads the call, so statements join the active transaction exactly as before.
+Nothing changes for a caller.
+
+`close()` also now ROLLS BACK an explicit transaction that never reached a
+commit, instead of nulling the handle and leaving the transaction open
+server-side holding its locks. Rollback on close is what every mainstream
+database API does; an unfinished unit of work must never be silently kept.
+
+Measured on Ubuntu 24.04.4, PHP 8.3.6, Firebird 5.0.4, ext-interbase built
+from source: unparameterised statements always released the table,
+parameterised ones never did, and no ordering of `ibase_free_query()` /
+`ibase_free_result()` changed that.
+
+This is what made three test files unrunnable on any host where ext-interbase
+is actually installed -- `FirebirdWriteVisibilityTest` and `MigrationV3Test`
+hung indefinitely and `FirebirdOrmWriteTest` failed with `RECREATE TABLE ...
+deadlock ... concurrent transaction number is N`. One cause, all three.
+
+`tests/FirebirdStatementLeakTest.php` locks it in with three REAL php processes
+against a REAL Firebird: a creator that exits, a holder that writes and closes
+but stays alive, and a prober that must still be able to run DDL under a
+wall-clock deadline. Red at 20s before the fix, green in 1.2s after, with an
+unparameterised control that passes either way.
+
+### Fixed (FirebirdUrlTest pointed at a server that was not there)
+
+The three live tests hard-coded `localhost:53050` and `/firebird/data/tina4.fdb`
+-- one particular container layout -- so on a host running Firebird anywhere
+else they skipped every run, reporting "Firebird not reachable", which reads
+like a missing service rather than a misconfigured test. They now derive host,
+port, path and credentials from `TINA4_TEST_FIREBIRD_URL` when it is set,
+falling back to the old constants.
+
 ### Fixed (the documented cursor chain fatalled on real MongoDB, ADR-0036)
 
 **This was a PUBLISHED example that did not run.** From this file's own DocStore
