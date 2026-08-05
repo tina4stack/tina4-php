@@ -300,22 +300,60 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
      *
      * @return array{records: array, data: array, count: int, total: int, limit: int, per_page: int, offset: int, page: int, totalPages: int, total_pages: int}
      */
-    public function toPaginate(): array
+    /**
+     * Paginate this result. Two modes.
+     *
+     * NO ARGUMENTS: describe the page this result already IS, derived from the
+     * query that produced it. PHP was the only framework of the four that got
+     * this right - Python and Node reported page 1 for an offset fetch, and
+     * Ruby returned zero records for one.
+     *
+     * WITH $page/$perPage: slice this result in memory, matching the behaviour
+     * GitHub issue #106 asked for in Python. Valid only when the result holds
+     * the WHOLE set: slicing a result that is already ONE PAGE of a larger
+     * query is refused, because the slice starts at row 0 of what you hold
+     * while the rows themselves start at $offset.
+     *
+     * @param int|null $page    1-based page to slice, or null to derive.
+     * @param int|null $perPage Rows per page when slicing, or null to derive.
+     * @return array The pagination envelope.
+     * @throws \InvalidArgumentException When slicing a result that is already one page.
+     */
+    public function toPaginate(?int $page = null, ?int $perPage = null): array
     {
-        $limit      = $this->limit > 0 ? $this->limit : 1;
-        $page       = (int) floor($this->offset / $limit) + 1;
-        $totalPages = (int) ceil($this->count / $limit);
+        if (($page !== null || $perPage !== null) && $this->offset > 0) {
+            throw new \InvalidArgumentException(
+                'toPaginate($page, $perPage) slices the rows this result holds, but this '
+                . "result already starts at offset {$this->offset} - it is one page of a "
+                . 'larger query, so slicing it from row 0 gives a silently wrong answer. '
+                . 'Call toPaginate() with no arguments to describe the page you fetched, '
+                . 'or re-fetch without limit/offset to slice the whole set in memory.'
+            );
+        }
+
+        if ($page === null && $perPage === null) {
+            $perPage = $this->limit > 0 ? $this->limit : count($this->records);
+            $page    = $perPage > 0 ? (int) floor($this->offset / $perPage) + 1 : 1;
+            $offset  = $this->offset;
+            $rows    = $this->records;
+        } else {
+            $page    = $page ?? 1;
+            $perPage = $perPage ?? ($this->limit > 0 ? $this->limit : 10);
+            $offset  = ($page - 1) * $perPage;
+            $rows    = array_slice($this->records, $offset, $perPage);
+        }
+        $totalPages = $perPage > 0 ? max(1, (int) ceil($this->count / $perPage)) : 1;
 
         return [
-            'records'     => $this->records,
-            'data'        => $this->records,       // alias for records
+            'records'     => $rows,
+            'data'        => $rows,                 // alias for records
             'count'       => $this->count,
             'total'       => $this->count,          // alias for count
-            'limit'       => $this->limit,
-            'per_page'    => $this->limit,          // alias for limit
-            'offset'      => $this->offset,
-            'page'        => $page,                 // computed: floor(offset/limit) + 1
-            'totalPages'  => $totalPages,           // computed: ceil(count/limit)
+            'limit'       => $perPage,
+            'per_page'    => $perPage,              // alias for limit
+            'offset'      => $offset,
+            'page'        => $page,                 // derived: floor(offset/limit) + 1
+            'totalPages'  => $totalPages,           // derived: ceil(count/limit)
             'total_pages' => $totalPages,           // snake_case alias
         ];
     }
