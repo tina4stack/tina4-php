@@ -335,17 +335,17 @@ class PdoFallbackParityTest extends TestCase
         // tell it apart from CHAR/BLOB, so the PDO adapter returns it as a numeric
         // string while native returns a float. NUMERIC/DECIMAL carry a scale and
         // DO re-type to float, matching native.
-        $this->assertEqualsWithDelta(19.99, (float) $nativeRow['PRICE'], 0.0001);
-        $this->assertEqualsWithDelta(19.99, (float) $pdoRow['PRICE'], 0.0001);
-        $this->assertEqualsWithDelta(1234.56, (float) $nativeRow['AMOUNT'], 0.0001);
-        $this->assertEqualsWithDelta(1234.56, (float) $pdoRow['AMOUNT'], 0.0001);
-        unset($nativeRow['PRICE'], $pdoRow['PRICE'], $nativeRow['AMOUNT'], $pdoRow['AMOUNT']);
+        $this->assertEqualsWithDelta(19.99, (float) $nativeRow['price'], 0.0001);
+        $this->assertEqualsWithDelta(19.99, (float) $pdoRow['price'], 0.0001);
+        $this->assertEqualsWithDelta(1234.56, (float) $nativeRow['amount'], 0.0001);
+        $this->assertEqualsWithDelta(1234.56, (float) $pdoRow['amount'], 0.0001);
+        unset($nativeRow['price'], $pdoRow['price'], $nativeRow['amount'], $pdoRow['amount']);
 
         // Everything else must be byte- AND type-identical (int stays int, bytes
         // stay bytes) — this is the core native-vs-PDO parity guarantee.
         $this->assertSame($nativeRow, $pdoRow, 'Firebird native vs PDO row (non-DOUBLE) must be byte- and type-identical');
-        $this->assertSame(42, $pdoRow['QTY']);
-        $this->assertSame(self::BLOB, $pdoRow['DATA'] ?? $pdoRow['data'] ?? null);
+        $this->assertSame(42, $pdoRow['qty']);
+        $this->assertSame(self::BLOB, $pdoRow['data'] ?? null);
 
         // Close the PDO reader BEFORE the native DROP. pdo_firebird holds an idle
         // read transaction after a SELECT, and Firebird DDL (DROP TABLE) needs
