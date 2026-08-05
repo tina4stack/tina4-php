@@ -74,25 +74,25 @@ class PdoFirebirdAdapterTest extends TestCase
         $this->assertIsArray($row);
 
         // INTEGER — a real PHP int, never a stringified '42'.
-        $this->assertSame(42, $row['QTY']);
+        $this->assertSame(42, $row['qty']);
 
         // NUMERIC/DECIMAL — re-typed to float to match the native adapter.
-        $this->assertSame(1234.56, $row['PRICE_NUM']);
+        $this->assertSame(1234.56, $row['price_num']);
 
         // DOUBLE PRECISION — the ONE documented divergence: pdo_firebird cannot
         // distinguish it from CHAR/BLOB, so it stays a numeric STRING. The value
         // is exact; only the PHP type differs from native.
-        $this->assertIsString($row['PRICE_DBL']);
-        $this->assertSame(19.99, (float) $row['PRICE_DBL']);
+        $this->assertIsString($row['price_dbl']);
+        $this->assertSame(19.99, (float) $row['price_dbl']);
 
         // VARCHAR — verbatim.
-        $this->assertSame('widget', $row['NAME']);
+        $this->assertSame('widget', $row['name']);
 
         // CHAR(8) — trailing space padding trimmed, like native.
-        $this->assertSame('AB12', $row['CODE']);
+        $this->assertSame('AB12', $row['code']);
 
         // BLOB — full byte fidelity, NUL and high bytes intact.
-        $this->assertSame(self::BLOB, $row['DATA']);
+        $this->assertSame(self::BLOB, $row['data']);
 
         $this->drop($db, 'T4_PDO_ADAPTER');
         $db->close();
@@ -152,6 +152,6 @@ class PdoFirebirdAdapterTest extends TestCase
     private function countLabel(PdoFirebirdAdapter $db, string $label): int
     {
         $row = $db->fetchOne('SELECT COUNT(*) AS C FROM T4_PDO_TXN WHERE LABEL = ?', [$label]) ?? [];
-        return (int) ($row['C'] ?? $row['c'] ?? reset($row) ?? 0);
+        return (int) ($row['c'] ?? reset($row) ?? 0);
     }
 }

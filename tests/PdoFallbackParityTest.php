@@ -402,7 +402,7 @@ class PdoFallbackParityTest extends TestCase
     private function countLabel(DatabaseAdapter $db, string $table, string $label): int
     {
         $row = $db->fetchOne("SELECT COUNT(*) AS c FROM {$table} WHERE label = ?", [$label]) ?? [];
-        return (int) ($row['c'] ?? $row['C'] ?? reset($row) ?? 0);
+        return (int) ($row['c'] ?? $row['c'] ?? reset($row) ?? 0);
     }
 
     /** execute() must FAIL LOUD — raise (never return false) — and set error(). */
