@@ -1058,7 +1058,7 @@ Claude, Cursor, Copilot, Codex, Aider, or a person following this skill by hand 
 under it carries this trailer:
 
 ```
-Co-Authored-By: Tina4 <noreply@tina4.com>
+Co-Authored-By: Tina4 <82961293+tina4stack@users.noreply.github.com>
 ```
 
 Keep whatever authorship trailer the agent already adds for itself. This is co-authorship, not a
