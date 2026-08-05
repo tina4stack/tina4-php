@@ -33,53 +33,25 @@ class RabbitMQIntegrationTest extends TestCase
     private string $queue = '';
 
     /**
-     * Parse amqp://[user:pass@]host[:port][/vhost] into a RabbitMQBackend config.
+     * Parse an AMQP URL using THE FRAMEWORK'S parser, never a copy of it.
+     *
+     * This file used to carry its own reimplementation, and it reproduced the
+     * framework's bug exactly - both prepended '/' to the vhost - so this live
+     * integration test connected to the same wrong virtual host the framework
+     * did, agreed with it, and could never have caught the divergence from the
+     * RabbitMQ URI spec. A test that reimplements the code under test measures
+     * its own copy, not the property.
      */
     private static function parseAmqpUrl(string $url): array
     {
-        $rest = preg_replace('#^amqps?://#', '', $url);
-
-        $username = 'guest';
-        $password = 'guest';
-        $vhost = '/';
-
-        $atPos = strpos($rest, '@');
-        if ($atPos !== false) {
-            $creds = substr($rest, 0, $atPos);
-            $rest = substr($rest, $atPos + 1);
-            $colon = strpos($creds, ':');
-            if ($colon !== false) {
-                $username = substr($creds, 0, $colon);
-                $password = substr($creds, $colon + 1);
-            } else {
-                $username = $creds;
-            }
-        }
-
-        $hostport = $rest;
-        $slash = strpos($rest, '/');
-        if ($slash !== false) {
-            $hostport = substr($rest, 0, $slash);
-            $vh = substr($rest, $slash + 1);
-            if ($vh !== '') {
-                $vhost = ($vh[0] === '/') ? $vh : '/' . $vh;
-            }
-        }
-
-        $host = $hostport;
-        $port = 5672;
-        $portColon = strpos($hostport, ':');
-        if ($portColon !== false) {
-            $host = substr($hostport, 0, $portColon);
-            $port = (int)substr($hostport, $portColon + 1);
-        }
+        $parsed = \Tina4\Queue::parseAmqpUrl($url);
 
         return [
-            'host' => $host ?: 'localhost',
-            'port' => $port ?: 5672,
-            'username' => $username,
-            'password' => $password,
-            'vhost' => $vhost,
+            'host' => $parsed['host'] ?? 'localhost',
+            'port' => $parsed['port'] ?? 5672,
+            'username' => $parsed['username'] ?? 'guest',
+            'password' => $parsed['password'] ?? 'guest',
+            'vhost' => $parsed['vhost'] ?? '/',
         ];
     }
 
