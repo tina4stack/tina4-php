@@ -753,6 +753,33 @@ PHP;
     // ── ADR-0025 / client-lifecycle-is-bounded (ASSERTED) ───────────────────
 
     /**
+     * Append one connection-string option to a MongoDB URI of ANY shape.
+     *
+     * The separator depends on whether the URI already has a PATH, not merely
+     * whether it has a query string. A mongodb URI needs a "/" before its
+     * query, but appending "/?" to a URI that already carries a database
+     * produces ".../tina4_php/?x=1" -- the driver then reads the database name
+     * as "tina4_php/" and rejects the whole string as invalid.
+     *
+     * MEASURED: the hand-rolled `'&' if '?' else '/?'` join this replaces broke
+     * 3 of 6 real URI shapes -- host/db, a bare trailing slash, and
+     * mongodb+srv://.../db, the ordinary Atlas connection string. It only ever
+     * looked correct because the test Mongo URI happened to be the bare
+     * host:port form; the moment per-framework test isolation pointed it at a
+     * URI carrying a database, every caller failed at once. Fixed in all four
+     * frameworks together.
+     */
+    private static function mongoUriWithOption(string $uri, string $option): string
+    {
+        if (str_contains($uri, '?')) {
+            return $uri . '&' . $option;
+        }
+        $afterScheme = str_contains($uri, '://') ? explode('://', $uri, 2)[1] : $uri;
+
+        return $uri . (str_contains($afterScheme, '/') ? '?' : '/?') . $option;
+    }
+
+    /**
      * docstore_contract.json :: client-lifecycle-is-bounded
      *
      * MEASURED 2026-08-03 against a real MongoDB, across all four frameworks:
@@ -783,11 +810,12 @@ PHP;
      * the connection string tags every socket this test's client opens, and
      * nobody else's carry it.
      */
+
     public function testRepeatedGetCollectionDoesNotGrowConnections(): void
     {
         $baseUri = $this->resolve('__MONGO__');
         $appName = 'tina4_docstore_lifecycle_' . bin2hex(random_bytes(5));
-        $uri = $baseUri . (str_contains($baseUri, '?') ? '&' : '/?') . 'appName=' . $appName;
+        $uri = self::mongoUriWithOption($baseUri, 'appName=' . $appName);
 
         $ownConnections = static function () use ($baseUri, $appName): int {
             $probe = new \MongoDB\Client($baseUri);
