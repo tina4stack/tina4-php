@@ -9,9 +9,11 @@
  * Zero external dependencies.
  *
  * Environment variables:
- *   TINA4_SESSION_MONGO_URL — MongoDB connection URL (default: mongodb://localhost:27017)
- *   TINA4_SESSION_MONGO_DB  — database name (default: tina4)
- *   TINA4_SESSION_TTL       — session TTL in seconds (default: 3600)
+ *   TINA4_SESSION_MONGO_URI        — MongoDB connection URI (default: mongodb://localhost:27017).
+ *                                    TINA4_SESSION_MONGO_URL is accepted as a legacy alias.
+ *   TINA4_SESSION_MONGO_DB         — database name (default: tina4)
+ *   TINA4_SESSION_MONGO_COLLECTION — collection name (default: sessions)
+ *   TINA4_SESSION_TTL              — session TTL in seconds (default: 3600)
  */
 
 namespace Tina4\Session;
@@ -47,7 +49,16 @@ class MongoSessionHandler
         // Canonical TINA4_SESSION_MONGO_URI; TINA4_SESSION_MONGO_URL is a legacy alias.
         $this->mongoUrl = $config['url'] ?? (getenv('TINA4_SESSION_MONGO_URI') ?: getenv('TINA4_SESSION_MONGO_URL') ?: 'mongodb://localhost:27017');
         $this->database = $config['database'] ?? (getenv('TINA4_SESSION_MONGO_DB') ?: 'tina4');
-        $this->collection = $config['collection'] ?? 'sessions';
+        // TINA4_SESSION_MONGO_COLLECTION reaches this handler the way every other
+        // coordinate does — EXPLICIT CONFIGURATION FIRST, THEN THE ENVIRONMENT,
+        // THEN THE DEFAULT. Python, Ruby and Node have all read this variable;
+        // PHP read nothing, so Session::getMongoHandler() (which constructs with
+        // NO config at all) wrote every session to `sessions` no matter what the
+        // .env said. One .env, four frameworks, three of them agreeing — the
+        // ADR-0024 failure mode: identical configuration, different observable
+        // outcome, and silent, because writing to the wrong collection is not an
+        // error, so the backend-failure policy can never fire.
+        $this->collection = $config['collection'] ?? (getenv('TINA4_SESSION_MONGO_COLLECTION') ?: 'sessions');
         $this->ttl = (int)($config['ttl'] ?? (getenv('TINA4_SESSION_TTL') ?: 3600));
 
         $parsed = parse_url($this->mongoUrl);
