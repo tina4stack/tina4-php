@@ -106,7 +106,7 @@ class DatabaseDriversTest extends TestCase
     public function testPostgresThrowsWithoutExtension(): void
     {
         if (function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql is installed — cannot test missing extension error');
+            $this->markTestSkipped('[needs:absent-ext=pgsql] ext-pgsql is installed — cannot test missing extension error');
         }
 
         $this->expectException(\RuntimeException::class);
@@ -117,7 +117,7 @@ class DatabaseDriversTest extends TestCase
     public function testMySQLThrowsWithoutExtension(): void
     {
         if (extension_loaded('mysqli')) {
-            $this->markTestSkipped('ext-mysqli is installed — cannot test missing extension error');
+            $this->markTestSkipped('[needs:absent-ext=mysqli] ext-mysqli is installed — cannot test missing extension error');
         }
 
         $this->expectException(\RuntimeException::class);
@@ -190,7 +190,7 @@ class DatabaseDriversTest extends TestCase
     public function testFirebirdThrowsWithoutExtension(): void
     {
         if (function_exists('ibase_connect') || function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase is installed — cannot test missing extension error');
+            $this->markTestSkipped('[needs:absent-ext=interbase] ext-interbase is installed — cannot test missing extension error');
         }
 
         $this->expectException(\RuntimeException::class);

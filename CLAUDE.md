@@ -1338,7 +1338,21 @@ is authorised on the raw socket peer.
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive. Hardened: the stream stops cleanly on client disconnect (`connection_aborted()`) and a generator that raises mid-stream is logged via `Log::error` and ends cleanly — the request worker never crashes
-- Tests: 4,381 executed, 13,163 assertions, 0 failures (28 skipped) - measured 2026-07-29 on Ubuntu 24.04.4 LTS x86_64, PHP 8.3.6, live services, TINA4_REQUIRE_SERVICES=1; Firebird excluded by design
+- Tests: **4,945 executed, 16,023 assertions, 0 failures, 0 skipped** - measured
+  2026-08-05 on Ubuntu 24.04.4 LTS x86_64, PHP 8.3.6, against live services with
+  `TINA4_REQUIRE_SERVICES=1`. **Firebird IS covered** (5.0.4, native ext-interbase
+  built from source, plus pdo_firebird) - the previous note here said "Firebird
+  excluded by design", which was false: the server had been up the whole time.
+  Reaching zero skips takes THREE passes, because six tests can only run in an
+  environment that is the OPPOSITE of the normal one and a skip is not a pass:
+  pass 1 is the ordinary run (4,939 tests); pass 2 re-runs the four "throws when
+  ext-X is missing" tests with `PHP_INI_SCAN_DIR` pointed at a conf.d with those
+  extensions pruned; pass 3 re-runs the two "a write really fails" tests under
+  `setpriv --bounding-set=-dac_override,-dac_read_search`, which takes
+  CAP_DAC_OVERRIDE away from root so `chmod 0400` finally denies. Such a test
+  declares what it needs with a marker in its skip reason - `[needs:absent-ext=NAME]`
+  or `[needs:no-dac-override]` - so a runner can select it without pattern-matching
+  prose.
 
 ## Links
 

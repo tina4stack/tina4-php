@@ -162,6 +162,43 @@ class SessionBackendFailurePolicyTest extends TestCase
     }
 
     /**
+     * Can a write through a 0400 file actually be refused in this process?
+     *
+     * The guard these two tests used to carry asked `posix_geteuid() === 0`,
+     * which is a PROXY for the property they need rather than the property
+     * itself. Root normally walks through the permission bits via
+     * CAP_DAC_OVERRIDE -- but a process can DROP that capability and stay uid 0
+     * (`setpriv --bounding-set=-dac_override`), and then 0400 denies root
+     * exactly like anyone else. The proxy answered "skip" for a process that
+     * could have run the test perfectly well, so on any host whose suite runs
+     * as root -- which is the lab, every time -- these two never ran at all.
+     *
+     * Ask the kernel instead of inferring from the uid.
+     */
+    private function permissionBitsAreEnforced(): bool
+    {
+        $probe = tempnam(sys_get_temp_dir(), 'tina4_perm_');
+        if ($probe === false) {
+            return false;
+        }
+        file_put_contents($probe, 'x');
+        chmod($probe, 0400);
+        $handle = @fopen($probe, 'a');
+        if ($handle !== false) {
+            fclose($handle);
+        }
+        chmod($probe, 0600); // a 0400 fixture must still be removable
+        @unlink($probe);
+        return $handle === false;
+    }
+
+    /** The skip reason, naming the remedy rather than just the obstacle. */
+    private const NO_DENIAL_REASON =
+        '[needs:no-dac-override] this process writes straight through a 0400 file (root holding '
+        . 'CAP_DAC_OVERRIDE), so no real denial is reachable here — run under '
+        . '`setpriv --bounding-set=-dac_override,-dac_read_search` to exercise it';
+
+    /**
      * The ERROR messages the REAL logger actually wrote since the last mark.
      *
      * This is not a capture double: Log::error() runs its real body — level
@@ -410,8 +447,8 @@ class SessionBackendFailurePolicyTest extends TestCase
      */
     public function testGcFailureOnAReallyReadOnlyDatabaseLogsAndDoesNotCrash(): void
     {
-        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
-            $this->markTestSkipped('running as root: chmod 0400 does not deny root, so no real SQLITE_READONLY');
+        if (!$this->permissionBitsAreEnforced()) {
+            $this->markTestSkipped(self::NO_DENIAL_REASON);
         }
 
         $dbFile = $this->tempDir . '/sessions.db';
@@ -628,8 +665,8 @@ class SessionBackendFailurePolicyTest extends TestCase
      */
     public function testWriteFailsAfterASuccessfulStartWithARealEacces(): void
     {
-        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
-            $this->markTestSkipped('running as root: chmod 0400 does not deny root, so no real EACCES');
+        if (!$this->permissionBitsAreEnforced()) {
+            $this->markTestSkipped(self::NO_DENIAL_REASON);
         }
 
         $sessionDir = $this->tempDir . '/sessions';

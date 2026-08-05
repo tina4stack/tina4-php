@@ -422,7 +422,7 @@ class QueueBackendTest extends TestCase
     public function testMongoBackendRequiresMongodbExtension(): void
     {
         if (extension_loaded('mongodb')) {
-            $this->markTestSkipped('ext-mongodb is installed — cannot test missing extension error');
+            $this->markTestSkipped('[needs:absent-ext=mongodb] ext-mongodb is installed — cannot test missing extension error');
         }
 
         $this->expectException(\RuntimeException::class);
