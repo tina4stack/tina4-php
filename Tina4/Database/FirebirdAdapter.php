@@ -201,6 +201,17 @@ class FirebirdAdapter implements DatabaseAdapter
     public function close(): void
     {
         if ($this->db !== null) {
+            if ($this->transaction !== null) {
+                // An explicit transaction that reached close() without a commit
+                // is an UNFINISHED unit of work: roll it back rather than
+                // abandoning the handle. Abandoning it left the transaction open
+                // server-side for the life of the process, holding every lock it
+                // had taken. Rollback (not commit) is what every mainstream
+                // database API does on close.
+                $rollbackFn = $this->fn . 'rollback';
+                @$rollbackFn($this->transaction);
+                $this->transaction = null;
+            }
             if ($this->defaultTx !== null) {
                 $commitFn = $this->fn . 'commit';
                 @$commitFn($this->defaultTx);
@@ -208,7 +219,6 @@ class FirebirdAdapter implements DatabaseAdapter
             }
             $this->releaseSharedLink();
             $this->db = null;
-            $this->transaction = null;
         }
     }
 
@@ -769,30 +779,34 @@ class FirebirdAdapter implements DatabaseAdapter
             // semantics and never touches a ? inside a string literal/comment. #123
             [$sql, $params] = self::rewriteNullParamsToLiterals($sql, $params);
 
-            $prepareFn = $this->fn . 'prepare';
-            $executeFn = $this->fn . 'execute';
-
-            // ibase_prepare() takes the QUERY as its LAST arg, with the link (and
-            // optionally the transaction) as leading args. Prepare against the
-            // ACTIVE transaction ($context) via the 3-arg form ibase_prepare(
-            // $link, $trans, $sql); the 2-arg ibase_prepare($trans, $sql) mis-binds
-            // the transaction resource AS the link, so the prepared statement
-            // never joins our transaction. #132
-            $stmt = @$prepareFn($this->db, $context, $sql);
-            if ($stmt === false) {
-                $msg = $errFn();
-                if (self::isDeadConnection($msg)) {
-                    throw new \RuntimeException($msg);
-                }
-                $this->lastError = $msg;
-                return false;
-            }
-
             // Firebird has no native boolean — a BooleanField column is INTEGER,
             // so bind PHP booleans as 1/0 (ibase otherwise stringifies `false`
             // to '' — same class of bug as PG).
             $values = self::normalizeBoolParams(array_values($params), nativeBoolean: false);
-            $result = @$executeFn($stmt, ...$values);
+
+            // Bind through ibase_query(), NOT ibase_prepare() + ibase_execute().
+            //
+            // Parameters are still bound by the driver — this is not string
+            // interpolation and carries no injection risk — but the statement is
+            // driver-owned and dropped when its result is freed, instead of
+            // living as a persistent prepared statement.
+            //
+            // A persistent statement is what caused #170: its compiled request
+            // stays registered on the attachment, and ext-interbase does not
+            // detach on ibase_close() while the process is alive, so the table
+            // stayed locked for the life of the process. Any later DDL from
+            // another connection then waited forever (both the native default
+            // transaction and pdo_firebird use a WAIT lock policy). Measured on
+            // the lab against Firebird 5.0.4: unparameterised statements always
+            // released the table, parameterised ones never did, and no order of
+            // ibase_free_query()/ibase_free_result() changed that.
+            //
+            // The transaction still comes first, so the statement joins the
+            // ACTIVE transaction — that is the #132 fix, preserved: what must
+            // never happen is binding the transaction resource where the driver
+            // expects the link.
+            $queryFn = $this->fn . 'query';
+            $result = @$queryFn($context, $sql, ...$values);
         }
 
         if ($result === false) {
