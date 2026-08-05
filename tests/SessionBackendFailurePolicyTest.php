@@ -194,7 +194,7 @@ class SessionBackendFailurePolicyTest extends TestCase
 
     /** The skip reason, naming the remedy rather than just the obstacle. */
     private const NO_DENIAL_REASON =
-        'this process writes straight through a 0400 file (root holding '
+        '[needs:no-dac-override] this process writes straight through a 0400 file (root holding '
         . 'CAP_DAC_OVERRIDE), so no real denial is reachable here — run under '
         . '`setpriv --bounding-set=-dac_override,-dac_read_search` to exercise it';
 
