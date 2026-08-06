@@ -1270,7 +1270,40 @@ HTML;
         ];
     }
 
-    public function run(?string $host = null, int $port = 7145): void
+    /** True once the PORT deprecation has been said, so it is said once. */
+    private static bool $portDeprecationWarned = false;
+
+    /**
+     * Resolve the bind port from the environment.
+     *
+     * TINA4_PORT > PORT (deprecated) > 7145. Bare PORT is a name anything can
+     * set - a shared CI runner, a PaaS, another tool - and it must never
+     * outrank the framework's own variable.
+     */
+    private static function resolveBindPort(int $default = 7145): int
+    {
+        $tina4Port = DotEnv::getEnv('TINA4_PORT');
+        if ($tina4Port !== null && ctype_digit((string)$tina4Port)) {
+            return (int)$tina4Port;
+        }
+
+        $legacy = DotEnv::getEnv('PORT');
+        if ($legacy !== null && ctype_digit((string)$legacy)) {
+            if (!self::$portDeprecationWarned) {
+                self::$portDeprecationWarned = true;
+                Log::warning(sprintf(
+                    'PORT is deprecated and will be removed in 3.14 - use TINA4_PORT '
+                    . 'instead (binding port %d from PORT)',
+                    (int)$legacy
+                ));
+            }
+            return (int)$legacy;
+        }
+
+        return $default;
+    }
+
+    public function run(?string $host = null, ?int $port = null): void
     {
         // SAPI guard (issue #180). run() is the standalone-server entry: it binds
         // a socket and owns the event loop. Under a WEB SAPI (php-fpm,
@@ -1302,6 +1335,24 @@ HTML;
         if ($host === null || $host === '') {
             $envHost = DotEnv::getEnv('TINA4_HOST');
             $host = ($envHost !== null && $envHost !== '') ? $envHost : '0.0.0.0';
+        }
+
+        // Resolve port: explicit arg > TINA4_PORT > PORT (deprecated) > 7145.
+        //
+        // This read NO environment variable at all. $port was a plain
+        // parameter defaulting to 7145, so TINA4_PORT - the name the CLI
+        // documents and prefers, and the one every .env sets - was ignored on
+        // the one path that binds the socket. Setting it did nothing, silently.
+        //
+        // The signature moved from `int $port = 7145` to `?int $port = null`
+        // for the reason ADR-0041 gives: a default in the ARGUMENT slot makes
+        // "not passed" indistinguishable from "passed the default", so the
+        // environment can never get a look in. Passing an int still works.
+        //
+        // Bare PORT stays honoured so nothing breaks, and warns so the
+        // migration happens. Removal is 3.14.
+        if ($port === null) {
+            $port = self::resolveBindPort();
         }
 
         $actualPort = self::findAvailablePort($port);
