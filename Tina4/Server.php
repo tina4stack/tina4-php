@@ -5,9 +5,51 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Server — Custom non-blocking HTTP server with WebSocket support.
- * Replaces `php -S` for development. Uses stream_socket_server + stream_select
- * for concurrent connection handling. Zero external dependencies.
+ * Server — Custom HTTP server with WebSocket support, for development.
+ * Replaces `php -S`. Uses stream_socket_server + stream_select. Zero external
+ * dependencies.
+ *
+ * CONCURRENT CONNECTIONS, SERIAL EXECUTION. Read that as a limit, not a boast.
+ * The sockets are non-blocking and many connections are multiplexed through one
+ * stream_select, so hundreds can be OPEN at once. But there is one process and
+ * one loop, and processHttpBuffer() dispatches the route handler INLINE. While
+ * a handler runs, the loop is not in stream_select: nothing is accepted, no
+ * other request advances, no WebSocket frame is read, and no background tick
+ * fires.
+ *
+ * So a handler that BLOCKS freezes the whole server for its duration. Measured
+ * on 3.13.94 with `sleep(10)` at the top of a route: the slow route answered
+ * correctly at 10.008s, and a trivial route requested one second later took
+ * 8.999s instead of its usual 0.007s. In a browser that reads as "the server is
+ * dead", because the favicon, the dev-toolbar poll and every asset queue behind
+ * it. Nothing is hung and nothing times out - it is strictly serial.
+ *
+ * This docblock used to say "non-blocking HTTP server ... concurrent connection
+ * handling", which a reader reasonably took to mean concurrent request
+ * HANDLING. It never was. Non-blocking I/O and concurrent execution are
+ * different properties and only the first one is here.
+ *
+ * Python's server has the identical property (asyncio, one loop: 9.004s under
+ * the same test). Ruby's does NOT, because Puma runs handlers on threads
+ * (0.0005s under the same test). PHP has no threads, and Fibers do not help:
+ * sleep() never yields, so a Fiber blocks its thread exactly the same way.
+ * Concurrency here would need a fork or a worker pool per request - see the
+ * note on that below.
+ *
+ * Blocking work belongs off the request path: `$app->background()` for periodic
+ * work, `Tina4\Queue` for jobs. For a deployment that must serve slow requests
+ * concurrently, run behind php-fpm (`tina4 serve --production`), which uses a
+ * worker per request and does not share this constraint.
+ *
+ * WHY NOT JUST FORK PER REQUEST: pcntl is usually available and it would work,
+ * but it would cost the things this dev server exists for. DevAdmin keeps its
+ * message log and request inspector in PROCESS-STATIC arrays
+ * (DevAdmin::$messages, DevAdmin::$requests), and the WebSocket registry
+ * ($wsClients, used by the dev-reload broadcast) lives in this parent process.
+ * A forked child's captures die with it and it cannot reach the parent's
+ * sockets, so the dashboard would go blank and hot reload would stop. If this
+ * is ever added it should be opt-in, with the dev features documented as the
+ * price.
  *
  * Features:
  *   - HTTP/1.1 request parsing with keep-alive
