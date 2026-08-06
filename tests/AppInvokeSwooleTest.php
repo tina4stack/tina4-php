@@ -36,6 +36,9 @@ class AppInvokeSwooleTest extends TestCase
 {
     private string $appDir = '';
 
+    /** True once this test booted an App, which installs the handlers. */
+    private bool $bootedApp = false;
+
     protected function setUp(): void
     {
         if (!extension_loaded('swoole') && !extension_loaded('openswoole')) {
@@ -72,8 +75,23 @@ PHP);
      */
     protected function tearDown(): void
     {
-        restore_error_handler();
-        restore_exception_handler();
+        // ONLY unwind when this test actually booted an App. A blanket restore
+        // pops whatever was on the stack, which in the instrument test below is
+        // somebody else's handler - PHPUnit reports that as "removed error
+        // handlers other than its own", correctly, and it was doing exactly
+        // that on the lab.
+        if ($this->bootedApp) {
+            restore_error_handler();
+            restore_exception_handler();
+            $this->bootedApp = false;
+        }
+    }
+
+    /** Boot an App and remember that we did, so tearDown unwinds exactly once. */
+    private function makeApp(): App
+    {
+        $this->bootedApp = true;
+        return new App($this->appDir);
     }
 
     /** Build a real Swoole request from real bytes. */
@@ -117,7 +135,7 @@ PHP);
 
     public function testASwooleGetRequestIsRoutedAndAnswered(): void
     {
-        $app = new App($this->appDir);
+        $app = $this->makeApp();
         $request = $this->swooleRequest("GET /hello?who=swoole HTTP/1.1\r\nHost: x\r\n\r\n");
 
         $response = $app($request);
@@ -132,7 +150,7 @@ PHP);
 
     public function testASwoolePostBodyReachesTheHandler(): void
     {
-        $app = new App($this->appDir);
+        $app = $this->makeApp();
         $body = 'the-posted-body';
         $raw = "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Type: text/plain\r\n"
              . 'Content-Length: ' . strlen($body) . "\r\n\r\n" . $body;
@@ -157,7 +175,7 @@ PHP);
      */
     public function testASwooleRequestNeverTakesThePsr7Branch(): void
     {
-        $app = new App($this->appDir);
+        $app = $this->makeApp();
         $request = $this->swooleRequest("GET /hello?who=swoole HTTP/1.1\r\nHost: x\r\n\r\n");
 
         try {

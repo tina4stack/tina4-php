@@ -144,6 +144,21 @@ class Server
     /** True inside a forked request child, so it exits instead of looping. */
     private bool $inRequestChild = false;
 
+    /** True in the pool supervisor, which serves nothing. */
+    private bool $isPoolParent = false;
+
+    /** True in a pool worker, which serves everything. */
+    private bool $isPoolWorker = false;
+
+    /** @var array<int, true> Live worker pids, in the supervisor only. */
+    private array $workerPids = [];
+
+    /** Requests this worker has served, for TINA4_SERVE_MAX_REQUESTS. */
+    private int $requestsServed = 0;
+
+    /** Requests a worker serves before it is recycled; 0 disables. */
+    private int $maxRequestsPerWorker = 0;
+
     /** @var array<int, resource> All connected client sockets */
     private array $clients = [];
 
@@ -503,131 +518,168 @@ class Server
         $this->requestTimeout = self::resolveLimit('TINA4_REQUEST_TIMEOUT', self::DEFAULT_REQUEST_TIMEOUT, true);
         $this->maxRequestHeader = self::resolveLimit('TINA4_MAX_REQUEST_HEADER', self::DEFAULT_MAX_REQUEST_HEADER);
         $this->maxRequestBody = self::resolveLimit('TINA4_MAX_REQUEST_BODY', self::DEFAULT_MAX_REQUEST_BODY);
+        $this->maxRequestsPerWorker = self::resolveLimit('TINA4_SERVE_MAX_REQUESTS', 0, true);
 
-        while ($this->running) {
-            // Dispatch pending signals
-            if (function_exists('pcntl_signal_dispatch')) {
-                pcntl_signal_dispatch();
+
+        // ONE process or MANY. TINA4_SERVE_WORKERS=1 (the default) keeps the
+        // single-process server every existing deployment already runs; more
+        // than one pre-forks a pool of long-lived workers that each accept on
+        // this same listening socket.
+        $workers = $this->resolveWorkerCount();
+        if ($workers > 1) {
+            $this->runWorkerPool($workers);
+            $this->cleanup();
+            return;
+        }
+
+        $this->acceptLoop();
+        $this->cleanup();
+    }
+
+    /**
+     * Accept and serve until stopped.
+     *
+     * Extracted from start() so a pool worker can run the same loop the
+     * single-process server runs. There is deliberately ONE accept loop: a
+     * second implementation for workers would drift from this one, and the
+     * whole point of the pool is that a worker serves requests identically.
+     */
+    private function acceptLoop(): void
+    {
+            while ($this->running) {
+                // Dispatch pending signals
+                if (function_exists('pcntl_signal_dispatch')) {
+                    pcntl_signal_dispatch();
+                }
+
+                // Recycle this worker once it has served its quota. Checked here,
+            // between connections, so an in-flight response is never cut off.
+            // The supervisor replaces it immediately, which is what makes this
+            // safe: the pool never drops below strength.
+            if ($this->isPoolWorker
+                && $this->maxRequestsPerWorker > 0
+                && $this->requestsServed >= $this->maxRequestsPerWorker
+            ) {
+                break;
             }
 
             // A forked request child must NEVER reach this loop. It has
-            // already dropped its listening socket, so $read would start with
-            // null and stream_select() would die with "supplied argument is
-            // not a valid stream resource" - taking the process with it.
-            //
-            // This is DEFENSIVE, and honestly labelled as such: an intermittent
-            // crash with exactly that signature was seen in the concurrency
-            // suite, but its cause is NOT established. The obvious suspect was
-            // an exception unwinding past handleHttp()'s two endRequestChild()
-            // calls; that was tested and is wrong - the framework catches a
-            // throwing handler, answers 500, and the child exits normally
-            // (measured: /boom -> 500, then /fast -> 200, server healthy).
-            //
-            // The guard stays because the invariant is true regardless of how
-            // a child might get here, and it costs one boolean per iteration.
-            // Do not treat it as a fix for the flake until the flake is
-            // reproduced.
-            if ($this->inRequestChild) {
-                $this->endRequestChild();
-            }
-
-            $read = array_merge([$this->socket], $this->clients);
-            if ($this->aiSocket !== null) {
-                $read[] = $this->aiSocket;
-            }
-            $write = null;
-            $except = null;
-
-            // 1ms timeout when idle — low latency without CPU spin
-            $changed = @stream_select($read, $write, $except, 0, 1000);
-            if ($changed === false) {
-                // false here is almost always EINTR — a signal (SIGCHLD,
-                // SIGTERM, alarm, etc.) interrupted the syscall. Bailing
-                // out of the accept loop on EINTR kills the server while
-                // it's mid-request, which surfaces to the user as
-                // "spinner appears, then dies, no answer". Retry instead.
-                // pcntl_signal_dispatch() picks up any queued signals.
-                if (\function_exists('pcntl_signal_dispatch')) {
-                    \pcntl_signal_dispatch();
+                // already dropped its listening socket, so $read would start with
+                // null and stream_select() would die with "supplied argument is
+                // not a valid stream resource" - taking the process with it.
+                //
+                // This is DEFENSIVE, and honestly labelled as such: an intermittent
+                // crash with exactly that signature was seen in the concurrency
+                // suite, but its cause is NOT established. The obvious suspect was
+                // an exception unwinding past handleHttp()'s two endRequestChild()
+                // calls; that was tested and is wrong - the framework catches a
+                // throwing handler, answers 500, and the child exits normally
+                // (measured: /boom -> 500, then /fast -> 200, server healthy).
+                //
+                // The guard stays because the invariant is true regardless of how
+                // a child might get here, and it costs one boolean per iteration.
+                // Do not treat it as a fix for the flake until the flake is
+                // reproduced.
+                if ($this->inRequestChild) {
+                    $this->endRequestChild();
                 }
-                continue;
-            }
-            if ($changed === 0) {
-                // Run registered tick callbacks (background tasks)
-                $this->runTickCallbacks();
 
-                // Single-threaded: drain any cluster broadcasts from the
-                // backplane + reap idle WS connections on idle ticks. poll()
-                // returns immediately when nothing is pending, so neither
-                // blocks the accept loop.
-                $this->wsBackplane?->poll();
-                $this->reapIdleWebSocketClients();
-                $this->reapIdleHttpClients();
-
-                // Check for pending reload from Rust CLI (POST /__dev/api/reload)
-                if (DevAdmin::$pendingReload) {
-                    DevAdmin::$pendingReload = false;
-                    $this->broadcastReload();
+                $read = array_merge([$this->socket], $this->clients);
+                if ($this->aiSocket !== null) {
+                    $read[] = $this->aiSocket;
                 }
-                continue;
-            }
+                $write = null;
+                $except = null;
 
-            foreach ($read as $socket) {
-                // A shutdown signal closes the listeners mid-sweep (see stop()),
-                // and a handler can close its own client, so a handle chosen by
-                // stream_select may already be gone by the time we reach it.
-                if (!is_resource($socket)) {
+                // 1ms timeout when idle — low latency without CPU spin
+                $changed = @stream_select($read, $write, $except, 0, 1000);
+                if ($changed === false) {
+                    // false here is almost always EINTR — a signal (SIGCHLD,
+                    // SIGTERM, alarm, etc.) interrupted the syscall. Bailing
+                    // out of the accept loop on EINTR kills the server while
+                    // it's mid-request, which surfaces to the user as
+                    // "spinner appears, then dies, no answer". Retry instead.
+                    // pcntl_signal_dispatch() picks up any queued signals.
+                    if (\function_exists('pcntl_signal_dispatch')) {
+                        \pcntl_signal_dispatch();
+                    }
                     continue;
                 }
-                if ($socket === $this->socket) {
-                    // Accept new connection
-                    $client = @stream_socket_accept($this->socket, 0, $peerName);
-                    if ($client) {
-                        stream_set_blocking($client, false);
-                        $resourceId = (int)$client;
-                        $this->clients[$resourceId] = $client;
-                        $this->buffers[$resourceId] = '';
-                        // Capture the raw TCP peer once at accept — the socket
-                        // SAPI never sets $_SERVER['REMOTE_ADDR'], so this is
-                        // the only place the real client address is available.
-                        $this->peerNames[$resourceId] = self::peerIp($peerName);
-                        $this->httpActivity[$resourceId] = microtime(true);
+                if ($changed === 0) {
+                    // Run registered tick callbacks (background tasks)
+                    $this->runTickCallbacks();
+
+                    // Single-threaded: drain any cluster broadcasts from the
+                    // backplane + reap idle WS connections on idle ticks. poll()
+                    // returns immediately when nothing is pending, so neither
+                    // blocks the accept loop.
+                    $this->wsBackplane?->poll();
+                    $this->reapIdleWebSocketClients();
+                    $this->reapIdleHttpClients();
+
+                    // Check for pending reload from Rust CLI (POST /__dev/api/reload)
+                    if (DevAdmin::$pendingReload) {
+                        DevAdmin::$pendingReload = false;
+                        $this->broadcastReload();
                     }
-                } elseif ($socket === $this->aiSocket) {
-                    // Accept new AI port connection
-                    $client = @stream_socket_accept($this->aiSocket, 0, $peerName);
-                    if ($client) {
-                        stream_set_blocking($client, false);
-                        $resourceId = (int)$client;
-                        $this->clients[$resourceId] = $client;
-                        $this->buffers[$resourceId] = '';
-                        $this->aiPortConnections[$resourceId] = true;
-                        $this->peerNames[$resourceId] = self::peerIp($peerName);
-                        $this->httpActivity[$resourceId] = microtime(true);
+                    continue;
+                }
+
+                foreach ($read as $socket) {
+                    // A shutdown signal closes the listeners mid-sweep (see stop()),
+                    // and a handler can close its own client, so a handle chosen by
+                    // stream_select may already be gone by the time we reach it.
+                    if (!is_resource($socket)) {
+                        continue;
                     }
-                } elseif ($this->isWebSocketClient($socket)) {
-                    // WebSocket data
-                    $this->handleWebSocketFrame($socket);
-                } else {
-                    // HTTP request data
-                    $data = @fread($socket, 65536);
-                    if ($data === '' || $data === false) {
-                        $this->removeClient($socket);
-                    } else {
-                        $resourceId = (int)$socket;
-                        $this->buffers[$resourceId] = ($this->buffers[$resourceId] ?? '') . $data;
-                        $this->httpActivity[$resourceId] = microtime(true);
-                        if (!$this->enforceRequestLimits($socket)) {
-                            continue;   // over the cap: answered and closed
+                    if ($socket === $this->socket) {
+                        // Accept new connection
+                        $client = @stream_socket_accept($this->socket, 0, $peerName);
+                        if ($client) {
+                            stream_set_blocking($client, false);
+                            $resourceId = (int)$client;
+                            $this->clients[$resourceId] = $client;
+                            $this->buffers[$resourceId] = '';
+                            // Capture the raw TCP peer once at accept — the socket
+                            // SAPI never sets $_SERVER['REMOTE_ADDR'], so this is
+                            // the only place the real client address is available.
+                            $this->peerNames[$resourceId] = self::peerIp($peerName);
+                            $this->httpActivity[$resourceId] = microtime(true);
                         }
-                        $this->processHttpBuffer($socket);
+                    } elseif ($socket === $this->aiSocket) {
+                        // Accept new AI port connection
+                        $client = @stream_socket_accept($this->aiSocket, 0, $peerName);
+                        if ($client) {
+                            stream_set_blocking($client, false);
+                            $resourceId = (int)$client;
+                            $this->clients[$resourceId] = $client;
+                            $this->buffers[$resourceId] = '';
+                            $this->aiPortConnections[$resourceId] = true;
+                            $this->peerNames[$resourceId] = self::peerIp($peerName);
+                            $this->httpActivity[$resourceId] = microtime(true);
+                        }
+                    } elseif ($this->isWebSocketClient($socket)) {
+                        // WebSocket data
+                        $this->handleWebSocketFrame($socket);
+                    } else {
+                        // HTTP request data
+                        $data = @fread($socket, 65536);
+                        if ($data === '' || $data === false) {
+                            $this->removeClient($socket);
+                        } else {
+                            $resourceId = (int)$socket;
+                            $this->buffers[$resourceId] = ($this->buffers[$resourceId] ?? '') . $data;
+                            $this->httpActivity[$resourceId] = microtime(true);
+                            if (!$this->enforceRequestLimits($socket)) {
+                                continue;   // over the cap: answered and closed
+                            }
+                            $this->processHttpBuffer($socket);
+                        }
                     }
                 }
             }
-        }
-
-        $this->cleanup();
     }
+
 
     /**
      * Begin a graceful shutdown.
@@ -923,6 +975,13 @@ class Server
             $peerIp
         );
 
+        // Recycle bookkeeping. Counted here, at the top, so EVERY request the
+        // worker accepted is counted - including ones that end early. A leak
+        // does not care how the request finished.
+        if ($this->isPoolWorker) {
+            $this->requestsServed++;
+        }
+
         // ── Serve this request in a child, so a blocking handler cannot freeze
         // the server ────────────────────────────────────────────────────────
         //
@@ -1073,6 +1132,205 @@ class Server
             && function_exists('pcntl_waitpid')
             && function_exists('posix_kill')
             && function_exists('posix_getpid');
+    }
+
+    /**
+     * How many worker processes to pre-fork. 1 means the single-process server.
+     *
+     * Default is 1, so nothing any existing deployment does changes. The pool
+     * is opt-in because it is not free: each worker is a separate process with
+     * its OWN copy of anything the framework keeps in a static, and three of
+     * those matter.
+     *
+     *   - DevAdmin's message log and request inspector. The dashboard would
+     *     show you one worker's traffic and nothing else.
+     *   - DevAdmin::$pendingReload, set by POST /__dev/api/reload and read by
+     *     the accept loop. One worker would reload; the rest would not.
+     *   - $wsClients. A WebSocket lives in whichever worker accepted it, so a
+     *     broadcast reaches that worker's clients only, unless
+     *     TINA4_WS_BACKPLANE is configured to carry it between them.
+     *
+     * None of that matters in production, where TINA4_DEBUG is false and the
+     * dashboard is off. All of it matters in development, so the pool REFUSES
+     * to start in debug mode rather than quietly breaking the dashboard and
+     * hot reload - a developer would blame the framework, correctly.
+     */
+    private function resolveWorkerCount(): int
+    {
+        $workers = self::resolveLimit('TINA4_SERVE_WORKERS', 1);
+        if ($workers <= 1) {
+            return 1;
+        }
+
+        if (!$this->canForkWorkers()) {
+            Log::warning(
+                'TINA4_SERVE_WORKERS is set but pcntl/posix are unavailable, so a worker '
+                . 'pool cannot be started - serving from one process instead'
+            );
+            return 1;
+        }
+
+        if ($this->isDebug) {
+            Log::warning(
+                'TINA4_SERVE_WORKERS is ignored while TINA4_DEBUG is true: the dev '
+                . 'dashboard, hot reload and the WebSocket registry are per-process, and '
+                . 'a pool would silently break all three. Serving from one process.'
+            );
+            return 1;
+        }
+
+        return $workers;
+    }
+
+    /** Everything the pool needs from the OS. */
+    private function canForkWorkers(): bool
+    {
+        return function_exists('pcntl_fork')
+            && function_exists('pcntl_waitpid')
+            && function_exists('pcntl_signal')
+            && function_exists('posix_kill')
+            && function_exists('posix_getpid');
+    }
+
+    /**
+     * Pre-fork $count workers and supervise them until shutdown.
+     *
+     * The classic Unix pre-fork model, and the same one php-fpm, nginx, Puma
+     * and Gunicorn use: the parent binds the listening socket ONCE, forks
+     * workers that inherit it, and every worker runs accept() on that same
+     * socket. The kernel decides which worker gets each connection, so there is
+     * no dispatcher to become a bottleneck and no socket passing.
+     *
+     * This replaces fork-per-request for pooled deployments, and that is the
+     * whole point: fork-per-request paid a fork() for every single request,
+     * which measured 893 req/s against php-fpm's 1526 on the same box. A worker
+     * is forked once and serves thousands.
+     *
+     * The parent serves NOTHING. It waits, restarts a worker that dies, and
+     * forwards shutdown. Keeping it out of the request path means a wedged
+     * request can never take the supervisor with it.
+     */
+    private function runWorkerPool(int $count): void
+    {
+        $this->isPoolParent = true;
+
+        // The parent must not run the per-request fork path, and neither must
+        // the workers: the pool IS the concurrency now.
+        $this->forkPerRequest = false;
+
+        // TAKE BACK SIGCHLD. start() installs a handler that blind-drains every
+        // exited child with waitpid(-1, WNOHANG) - correct for fork-per-request,
+        // where the children are throwaway request handlers nobody waits for,
+        // and fatal here: it consumed each worker's death before the supervisor
+        // loop below could see it, so nothing was ever respawned.
+        //
+        // Measured before this line existed: kill one worker of four and the
+        // pool stays at three forever; run 60 requests with
+        // TINA4_SERVE_MAX_REQUESTS=5 and the pool drains to ZERO while still
+        // looking alive.
+        //
+        // SIG_DFL leaves an exited worker as a zombie until the supervisor's own
+        // pcntl_waitpid() collects it, which is exactly the handoff we want.
+        // There are no request children to reap here - forkPerRequest is off.
+        if (function_exists('pcntl_signal') && defined('SIGCHLD')) {
+            pcntl_signal(SIGCHLD, SIG_DFL);
+        }
+
+        for ($i = 0; $i < $count; $i++) {
+            $this->spawnWorker();
+        }
+
+        Log::info(sprintf('Worker pool: %d workers on %s:%d', $count, $this->host, $this->port));
+
+        while ($this->running) {
+            if (function_exists('pcntl_signal_dispatch')) {
+                pcntl_signal_dispatch();
+            }
+
+            // Reap and replace. A worker that dies - crashed, OOM-killed, or
+            // recycled at TINA4_SERVE_MAX_REQUESTS - is replaced immediately,
+            // so the pool stays at strength without operator involvement.
+            while (($pid = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+                unset($this->workerPids[$pid]);
+                if ($this->running) {
+                    $this->spawnWorker();
+                }
+            }
+
+            usleep(100000);   // 100ms: the parent has nothing to be fast about
+        }
+
+        $this->stopWorkers();
+    }
+
+    /**
+     * Fork one worker, which runs the ordinary accept loop and never returns.
+     */
+    private function spawnWorker(): void
+    {
+        $pid = @pcntl_fork();
+
+        if ($pid > 0) {
+            $this->workerPids[$pid] = true;
+            return;
+        }
+
+        if ($pid < 0) {
+            Log::error('Could not fork a pool worker; the pool is running under strength');
+            return;
+        }
+
+        // ── child ──────────────────────────────────────────────────────────
+        $this->isPoolParent = false;
+        $this->isPoolWorker = true;
+        $this->workerPids = [];
+        $this->requestsServed = 0;
+
+        // Default signal disposition: the parent decides when the pool stops,
+        // and forwards the signal. A worker inheriting the parent's handler
+        // would try to supervise a pool it does not own.
+        if (defined('SIGTERM')) {
+            pcntl_signal(SIGTERM, function () { $this->running = false; });
+            pcntl_signal(SIGINT, SIG_DFL);
+            if (defined('SIGCHLD')) {
+                pcntl_signal(SIGCHLD, SIG_DFL);
+            }
+        }
+
+        $this->acceptLoop();
+        $this->cleanup();
+        exit(0);
+    }
+
+    /**
+     * Stop every worker, then wait for them.
+     *
+     * SIGTERM first so a worker finishes what it is holding - the accept loop
+     * checks $running between connections, and the drain in stop() bounds how
+     * long that may take. SIGKILL only for anything still alive after the
+     * grace period, because a stuck worker must not hold the port open for the
+     * next deploy.
+     */
+    private function stopWorkers(): void
+    {
+        foreach (array_keys($this->workerPids) as $pid) {
+            @posix_kill($pid, SIGTERM);
+        }
+
+        $deadline = microtime(true) + $this->shutdownTimeout;
+        while ($this->workerPids !== [] && microtime(true) < $deadline) {
+            while (($pid = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+                unset($this->workerPids[$pid]);
+            }
+            usleep(50000);
+        }
+
+        foreach (array_keys($this->workerPids) as $pid) {
+            Log::warning(sprintf('Worker %d did not stop within %ds - killing it', $pid, $this->shutdownTimeout));
+            @posix_kill($pid, SIGKILL);
+            pcntl_waitpid($pid, $status);
+            unset($this->workerPids[$pid]);
+        }
     }
 
     /**
