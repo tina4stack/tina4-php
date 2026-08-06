@@ -169,6 +169,74 @@ class DatabaseDriversTest extends TestCase
         $this->assertConstructionDoesNotReportMissingExtension($extension, $construction, $needle);
     }
 
+    // Restored: this case was dropped when the extension tests were rewritten,
+    // but it covers a DIFFERENT property from them -- MSSQLAdapter picks BETWEEN
+    // two backends (ext-sqlsrv, else pdo_dblib) and only refuses when neither is
+    // there, so it is not the same assertion as "raises when the one extension is
+    // missing". It passes on this lab, where pdo_dblib is present and sqlsrv is
+    // not, and losing it would have been a silent coverage regression.
+    /**
+     * The MSSQLAdapter constructor now picks a backend automatically: it prefers
+     * ext-sqlsrv (the Microsoft driver) and falls back to ext-pdo_dblib (FreeTDS,
+     * the 'dblib' PDO driver — the same stack tina4-python/tina4-ruby use). It
+     * only throws when NEITHER backend is available.
+     *
+     * So this is now two assertions in one (driven by what the host actually
+     * provides):
+     *   - neither sqlsrv NOR pdo_dblib  → constructor STILL throws (clear error
+     *     naming both ext-sqlsrv and ext-pdo_dblib).
+     *   - pdo_dblib IS available (no sqlsrv) → constructor SUCCEEDS and the
+     *     instance reports the 'pdo' driver (it must not throw just because the
+     *     Microsoft driver is missing).
+     *
+     * The constructor connects in open(), so on a host with dblib but no live
+     * server we tolerate the "failed to connect" RuntimeException — what we are
+     * asserting is that it did NOT throw the missing-extension error and that
+     * the backend selection landed on 'pdo'. The live round-trip lives in
+     * MySQLMSSQLLiveTest.
+     */
+    public function testMSSQLBackendSelection(): void
+    {
+        $hasSqlsrv = function_exists('sqlsrv_connect');
+        $hasDblib = in_array('dblib', \PDO::getAvailableDrivers(), true);
+
+        if (!$hasSqlsrv && !$hasDblib) {
+            // Neither backend present — must throw the missing-extension error
+            // naming both options.
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('ext-sqlsrv');
+            new MSSQLAdapter('mssql://localhost/test');
+            return;
+        }
+
+        if ($hasSqlsrv) {
+            $this->markTestSkipped(
+                'ext-sqlsrv is installed — this host exercises the primary '
+                . 'driver, not the pdo_dblib fallback selection path.'
+            );
+        }
+
+        // pdo_dblib present, sqlsrv absent: the constructor must NOT throw a
+        // missing-extension error — it must select the 'pdo' backend. It may
+        // still raise a "failed to connect" RuntimeException if nothing is
+        // listening; that is fine — only the missing-extension error is wrong.
+        try {
+            $adapter = new MSSQLAdapter('mssql://localhost/test');
+            $this->assertSame('pdo', $adapter->getDriver(),
+                'with only pdo_dblib available the adapter must use the pdo backend');
+            $adapter->close();
+        } catch (\RuntimeException $e) {
+            $this->assertStringNotContainsString('ext-sqlsrv', $e->getMessage(),
+                'a missing-extension error is wrong when pdo_dblib is available — '
+                . 'the adapter must fall back to pdo, not refuse to construct'
+            );
+            $this->assertStringContainsString('Failed to connect', $e->getMessage(),
+                'the only acceptable RuntimeException here is a connection failure, '
+                . 'not a backend-availability error'
+            );
+        }
+    }
+
     /**
      * Only ext-interbase is removed, deliberately: FirebirdAdapter's constructor
      * selects ibase_* / fbird_* and raises when NEITHER exists, so pdo_firebird
