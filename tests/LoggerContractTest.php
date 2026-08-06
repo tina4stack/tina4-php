@@ -343,4 +343,100 @@ class LoggerContractTest extends TestCase
         $this->assertFileExists($this->tempDir . '/tina4.log');
         $this->assertFileExists($this->tempDir . '/tina4.log.1');
     }
+
+    // ── L5: explicit argument > environment > default (ADR-0041) ─────────
+
+    /**
+     * `Log::configure(logDir: '/srv/app/logs')` is one line that means one
+     * thing, and it did three different things across the four frameworks.
+     *
+     * PHP resolved `$envDir !== null && $envDir !== '' ? $envDir : $logDir`,
+     * so TINA4_LOG_DIR beat an argument the programmer wrote at the call site
+     * and "put the logs exactly here" could not be expressed. The docblock
+     * above the function said "TINA4_LOG_DIR - log directory (overrides
+     * $logDir)" while three lines further down the SAME docblock said
+     * "configure() is the explicit override and always wins"; the two halves
+     * contradicting each other is how it went unnoticed.
+     *
+     * The coordinate under test IS "which value wins", so this must not ask
+     * Log::logDir() what it chose -- that delegates the asserted property to
+     * the code under test. It controls both candidates and reads the FILESYSTEM.
+     */
+    public function testAnExplicitLogDirBeatsAConflictingEnvLogDir(): void
+    {
+        $envDir = $this->tempDir . '/from_env';
+        $argDir = $this->tempDir . '/from_argument';
+        mkdir($envDir, 0755, true);
+        mkdir($argDir, 0755, true);
+        $this->setEnv(['TINA4_LOG_OUTPUT' => 'file', 'TINA4_LOG_DIR' => $envDir]);
+
+        Log::configure(logDir: $argDir);
+        Log::info('which directory won?');
+
+        $this->assertFileExists($argDir . '/tina4.log', 'the explicit configure() argument did not win - TINA4_LOG_DIR overrode it');
+        $this->assertFileDoesNotExist($envDir . '/tina4.log', 'the log landed in the env directory, so the environment beat the argument');
+    }
+
+    /**
+     * NEGATIVE half. Without it, an implementation that ignored TINA4_LOG_DIR
+     * ENTIRELY would satisfy the positive test above and pass review.
+     */
+    public function testTheEnvLogDirStillAppliesWhenNoArgumentIsGiven(): void
+    {
+        $envDir = $this->tempDir . '/from_env';
+        mkdir($envDir, 0755, true);
+        $this->setEnv(['TINA4_LOG_OUTPUT' => 'file', 'TINA4_LOG_DIR' => $envDir]);
+
+        Log::configure();   // nothing explicit to outrank the environment
+        Log::info('the env should win here');
+
+        $this->assertFileExists($envDir . '/tina4.log', 'TINA4_LOG_DIR was ignored even with no explicit argument to outrank it');
+    }
+
+    /**
+     * The level had the SAME inversion, justified in a comment as "parity with
+     * Python/Ruby/Node, which all read the env". That conflated READING the env
+     * with letting it beat an argument: Ruby and Node take no level argument at
+     * all, and Python's explicit level argument wins. PHP was the only
+     * framework where a level argument existed and lost.
+     */
+    public function testAnExplicitMinLevelBeatsAConflictingEnvLogLevel(): void
+    {
+        $this->setEnv(['TINA4_LOG_LEVEL' => 'error']);
+
+        Log::configure(minLevel: Log::LEVEL_DEBUG);
+
+        $this->assertTrue(Log::isEnabled('debug'), 'TINA4_LOG_LEVEL overrode the explicit minLevel argument');
+    }
+
+    /** NEGATIVE half for the level: the env must still apply with no argument. */
+    public function testTheEnvLogLevelStillAppliesWhenNoMinLevelIsGiven(): void
+    {
+        $this->setEnv(['TINA4_LOG_LEVEL' => 'error']);
+
+        Log::configure();   // no minLevel
+
+        $this->assertFalse(Log::isEnabled('debug'), 'TINA4_LOG_LEVEL was ignored with no explicit minLevel to outrank it');
+        $this->assertTrue(Log::isEnabled('error'));
+    }
+
+    /**
+     * The bootstrap must not send the framework's own default through the
+     * ARGUMENT channel (ADR-0041). App::start() used to pass
+     * logDir: "$basePath/logs", which only left TINA4_LOG_DIR working because
+     * the precedence was inverted -- the operator's env beat the bootstrap by
+     * accident. Correcting precedence without also removing that argument
+     * would have made TINA4_LOG_DIR dead in every booted app, which is
+     * measurably what had already happened to Ruby.
+     */
+    public function testTheAppBootstrapDoesNotPassAnExplicitLogDir(): void
+    {
+        $appSource = file_get_contents(__DIR__ . '/../Tina4/App.php');
+        $this->assertNotFalse($appSource);
+        $this->assertDoesNotMatchRegularExpression(
+            '/Log::configure\s*\(\s*[^)]*logDir\s*:/s',
+            $appSource,
+            'App.php passes an explicit logDir to Log::configure(), which outranks TINA4_LOG_DIR and makes the documented env var dead in every booted app'
+        );
+    }
 }
