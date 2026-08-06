@@ -963,9 +963,37 @@ class Swagger
      */
     private static function convertPath(string $pattern): string
     {
-        // Convert catch-all {name:.*} to {name}
-        return preg_replace('#\{([a-zA-Z_][a-zA-Z0-9_]*):\.\*\}#', '{$1}', $pattern);
+        // Strip ANY type token, not just the catch-all form.
+        //
+        // The router accepts {id:int}, {slug:slug}, {u:uuid} and the rest of
+        // Router::compilePath's table. This handled only {name:.*}, so an
+        // ordinary typed route kept its token in the path KEY - the template
+        // name became `id:int`, nothing declared a parameter for it, and the
+        // document failed OpenAPI validation. Measured: the route served
+        // GET /api/typed/42 -> 200 while its own spec was invalid.
+        return preg_replace('#\{([a-zA-Z_][a-zA-Z0-9_]*):[^}]*\}#', '{$1}', $pattern);
     }
+
+    /**
+     * Route param type token -> JSON Schema fragment.
+     *
+     * Mirrors the Python master's _PARAM_TYPE_SCHEMA, over exactly the token
+     * set Router::compilePath accepts. An unknown token degrades to string
+     * rather than being dropped: a parameter documented loosely still makes the
+     * document valid, whereas no parameter at all does not.
+     */
+    private const PARAM_TYPE_SCHEMA = [
+        'int'     => ['type' => 'integer'],
+        'integer' => ['type' => 'integer'],
+        'float'   => ['type' => 'number'],
+        'number'  => ['type' => 'number'],
+        'uuid'    => ['type' => 'string', 'format' => 'uuid'],
+        'slug'    => ['type' => 'string', 'pattern' => '^[a-z0-9]+(?:-[a-z0-9]+)*$'],
+        'alpha'   => ['type' => 'string', 'pattern' => '^[A-Za-z]+$'],
+        'alnum'   => ['type' => 'string', 'pattern' => '^[A-Za-z0-9]+$'],
+        'path'    => ['type' => 'string'],
+        'string'  => ['type' => 'string'],
+    ];
 
     /**
      * Extract path parameters from a route pattern.
@@ -976,16 +1004,16 @@ class Swagger
     {
         $params = [];
 
-        // Match both {name} and {name:.*}
-        if (preg_match_all('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::\.?\*)?\}#', $pattern, $matches)) {
-            foreach ($matches[1] as $name) {
+        // {name} and {name:anything} - the token is captured so it can be
+        // mapped, rather than being part of the name or excluding the match.
+        if (preg_match_all('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]*))?\}#', $pattern, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $type = $match[2] ?? '';
                 $params[] = [
-                    'name' => $name,
+                    'name' => $match[1],
                     'in' => 'path',
                     'required' => true,
-                    'schema' => [
-                        'type' => 'string',
-                    ],
+                    'schema' => self::PARAM_TYPE_SCHEMA[$type] ?? ['type' => 'string'],
                 ];
             }
         }
