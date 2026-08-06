@@ -32,8 +32,7 @@ class SessionCookieAttributesTest extends TestCase
 
     public static function setUpBeforeClass(): void
     {
-        self::$docRoot = sys_get_temp_dir() . '/tina4_issue174_' . getmypid();
-        @mkdir(self::$docRoot, 0777, true);
+        self::$docRoot = \TempPath::dir('tina4_issue174_', 0777);
 
         // A clean-room app: framework only, no .env, no database, no app code.
         $autoload = dirname(__DIR__) . '/vendor/autoload.php';

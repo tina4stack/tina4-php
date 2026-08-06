@@ -19,8 +19,7 @@ class ServiceRunnerV3Test extends TestCase
         ServiceRunner::reset();
         Log::configure(sys_get_temp_dir() . '/tina4-test-logs');
 
-        $this->tmpDir = sys_get_temp_dir() . '/tina4-service-test-' . uniqid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->tmpDir = \TempPath::dir('tina4-service-test-', 0755);
         ServiceRunner::setPidDir($this->tmpDir);
     }
 

@@ -203,7 +203,7 @@ class ErrorOverlayTest extends TestCase
      */
     public function testStaleBadgeAppearsWhenFileModifiedAfterCapture(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'tina4_overlay_') . '.php';
+        $tmp = \TempPath::file('tina4_overlay_', '.php');
         file_put_contents($tmp, "<?php\nfunction tina4_overlay_stale_trigger() {\n    throw new \\RuntimeException('boom from temp');\n}\n");
         try {
             require $tmp;
@@ -242,7 +242,7 @@ class ErrorOverlayTest extends TestCase
      */
     public function testStaleBadgeAbsentWhenFileUnchanged(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'tina4_overlay_') . '.php';
+        $tmp = \TempPath::file('tina4_overlay_', '.php');
         file_put_contents($tmp, "<?php\nfunction tina4_overlay_fresh_trigger() {\n    throw new \\RuntimeException('boom from temp fresh');\n}\n");
         try {
             require $tmp;

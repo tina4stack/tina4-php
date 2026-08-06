@@ -235,9 +235,9 @@ PHP;
     private function runDriverAbsenceProbe(string $bootstrap, array $phpFlags, string $uri): array
     {
         $repo = dirname(__DIR__);
-        $probePath = tempnam(sys_get_temp_dir(), 'tina4_probe_') . '.php';
+        $probePath = \TempPath::file('tina4_probe_', '.php');
         file_put_contents($probePath, self::DRIVER_ABSENCE_PROBE);
-        $storePath = tempnam(sys_get_temp_dir(), 'tina4_store_') . '.db';
+        $storePath = \TempPath::file('tina4_store_', '.db');
         @unlink($storePath);
 
         $command = array_merge([PHP_BINARY], $phpFlags, [$probePath, $bootstrap, $repo, $uri, $storePath]);

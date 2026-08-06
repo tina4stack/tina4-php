@@ -42,8 +42,7 @@ class OrmCompositeKeyTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->dir = sys_get_temp_dir() . '/tina4-ck-' . bin2hex(random_bytes(6));
-        mkdir($this->dir, 0777, true);
+        $this->dir = \TempPath::dir('tina4-ck-', 0777);
         $this->db = Database::create('sqlite:///' . $this->dir . '/composite.db');
         \Tina4\ORM::bindDatabase($this->db);
     }

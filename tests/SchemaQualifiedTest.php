@@ -24,8 +24,8 @@ class SchemaQualifiedTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->main = tempnam(sys_get_temp_dir(), 'tina4_sq_main_') . '.db';
-        $this->att = tempnam(sys_get_temp_dir(), 'tina4_sq_att_') . '.db';
+        $this->main = \TempPath::file('tina4_sq_main_', '.db');
+        $this->att = \TempPath::file('tina4_sq_att_', '.db');
     }
 
     protected function tearDown(): void

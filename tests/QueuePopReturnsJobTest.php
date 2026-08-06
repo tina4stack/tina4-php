@@ -53,7 +53,7 @@ final class QueuePopReturnsJobTest extends TestCase
         // TINA4_QUEUE_BACKEND OVERRIDES the constructor argument, so it must be
         // cleared or every case silently runs on whatever the environment says.
         putenv('TINA4_QUEUE_BACKEND');
-        $this->queuePath = sys_get_temp_dir() . '/tina4_popjob_' . bin2hex(random_bytes(6));
+        $this->queuePath = \TempPath::dir('tina4_popjob_');
     }
 
     private function makeQueue(int $maxRetries = 2): \Tina4\Queue

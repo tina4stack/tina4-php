@@ -51,8 +51,7 @@ class DevSecretTest extends TestCase
         foreach (['TINA4_SECRET', 'CI', 'TINA4_ENV', 'TINA4_DEBUG'] as $k) {
             $this->clearEnv($k);
         }
-        $this->tmpDir = sys_get_temp_dir() . '/tina4_devsecret_' . bin2hex(random_bytes(6));
-        mkdir($this->tmpDir, 0777, true);
+        $this->tmpDir = \TempPath::dir('tina4_devsecret_', 0777);
     }
 
     protected function tearDown(): void

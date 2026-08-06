@@ -144,7 +144,7 @@ final class QueueCloseReleasesBackendTest extends TestCase
         putenv('TINA4_RABBITMQ_PORT=' . self::rabbitPort());
         putenv('TINA4_KAFKA_BROKERS=' . self::kafkaHost() . ':' . self::kafkaPort());
 
-        $this->queuePath = sys_get_temp_dir() . '/tina4_qclose_' . bin2hex(random_bytes(6));
+        $this->queuePath = \TempPath::dir('tina4_qclose_');
         putenv('TINA4_QUEUE_PATH=' . $this->queuePath);
     }
 

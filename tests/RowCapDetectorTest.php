@@ -75,7 +75,7 @@ class RowCapDetectorTest extends TestCase
      */
     private function seededAdapter(string $adapterClass): DatabaseAdapter
     {
-        $file = tempnam(sys_get_temp_dir(), 'tina4_rowcap_') . '.db';
+        $file = \TempPath::file('tina4_rowcap_', '.db');
         $this->dbFiles[] = $file;
 
         /** @var DatabaseAdapter $adapter */

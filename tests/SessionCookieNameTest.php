@@ -58,10 +58,8 @@ class SessionCookieNameTest extends TestCase
         echo \$result->getBody();
         PHP;
 
-        self::$customRoot = sys_get_temp_dir() . '/tina4_sess_name_custom_' . getmypid();
-        self::$defaultRoot = sys_get_temp_dir() . '/tina4_sess_name_default_' . getmypid();
-        @mkdir(self::$customRoot, 0777, true);
-        @mkdir(self::$defaultRoot, 0777, true);
+        self::$customRoot = \TempPath::dir('tina4_sess_name_custom_', 0777);
+        self::$defaultRoot = \TempPath::dir('tina4_sess_name_default_', 0777);
         file_put_contents(self::$customRoot . '/index.php', $index);
         file_put_contents(self::$defaultRoot . '/index.php', $index);
 

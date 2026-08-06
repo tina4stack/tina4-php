@@ -145,7 +145,7 @@ class RouterAuthSourcesTest extends TestCase
         })->secure();
 
         $token = Auth::getToken(['sub' => 'admin'], $this->secret);
-        $session = new Session('file', ['path' => sys_get_temp_dir() . '/tina4-test-sessions-' . uniqid()]);
+        $session = new Session('file', ['path' => \TempPath::dir('tina4-test-sessions-')]);
         $session->start();
         $session->set('token', $token);
 
@@ -163,7 +163,7 @@ class RouterAuthSourcesTest extends TestCase
             return $response->json(['ok' => true]);
         })->secure();
 
-        $session = new Session('file', ['path' => sys_get_temp_dir() . '/tina4-test-sessions-' . uniqid()]);
+        $session = new Session('file', ['path' => \TempPath::dir('tina4-test-sessions-')]);
         $session->start();
         $session->set('token', 'invalid.session.token');
 
@@ -227,7 +227,7 @@ class RouterAuthSourcesTest extends TestCase
         $bodyToken = Auth::getToken(['sub' => 'from-body'], $this->secret);
         $sessionToken = Auth::getToken(['sub' => 'from-session'], $this->secret);
 
-        $session = new Session('file', ['path' => sys_get_temp_dir() . '/tina4-test-sessions-' . uniqid()]);
+        $session = new Session('file', ['path' => \TempPath::dir('tina4-test-sessions-')]);
         $session->start();
         $session->set('token', $sessionToken);
 

@@ -17,7 +17,7 @@ class DevMailboxTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->mailboxDir = sys_get_temp_dir() . '/tina4-devmailbox-test-' . getmypid() . '-' . uniqid();
+        $this->mailboxDir = \TempPath::dir('tina4-devmailbox-test-');
         putenv('TINA4_MAILBOX_DIR=' . $this->mailboxDir);
     }
 

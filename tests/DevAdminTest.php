@@ -1058,7 +1058,7 @@ class DevAdminTest extends TestCase
     public function testConnectionsTestReportsRealTableCount(): void
     {
         // Real on-disk SQLite with two real tables — no mocks.
-        $dbFile = tempnam(sys_get_temp_dir(), 'tina4_conn_test_') . '.db';
+        $dbFile = \TempPath::file('tina4_conn_test_', '.db');
         $seed = new \SQLite3($dbFile);
         $seed->exec('CREATE TABLE alpha (id INTEGER PRIMARY KEY, name TEXT)');
         $seed->exec('CREATE TABLE beta (id INTEGER PRIMARY KEY, label TEXT)');

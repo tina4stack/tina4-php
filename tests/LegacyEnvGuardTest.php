@@ -289,7 +289,7 @@ class LegacyEnvGuardTest extends TestCase
             $this->markTestSkipped('vendor/autoload.php not found');
         }
 
-        $router = tempnam(sys_get_temp_dir(), 'tina4_119_') . '.php';
+        $router = \TempPath::file('tina4_119_', '.php');
         file_put_contents($router, <<<PHP
         <?php
         require '{$autoload}';

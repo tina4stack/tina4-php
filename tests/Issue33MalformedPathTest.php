@@ -45,7 +45,7 @@ class Issue33MalformedPathTest extends TestCase
         // Minimal real Tina4 app: one public GET route + the per-request handler
         // (Request::fromGlobals -> Router::dispatch -> emit). Exactly what a
         // PHP-FPM / php -S deployment runs for every request.
-        $this->router = tempnam(sys_get_temp_dir(), 'tina4_33_') . '.php';
+        $this->router = \TempPath::file('tina4_33_', '.php');
         file_put_contents($this->router, <<<PHP
         <?php
         require '{$autoload}';

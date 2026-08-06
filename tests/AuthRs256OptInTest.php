@@ -123,7 +123,7 @@ class AuthRs256OptInTest extends TestCase
     private function runChild(string $code, array $ini = []): array
     {
         $autoload = dirname(__DIR__) . '/vendor/autoload.php';
-        $script = (string)tempnam(sys_get_temp_dir(), 'tina4-rs256-') . '.php';
+        $script = \TempPath::file('tina4-rs256-', '.php');
         $this->tempFiles[] = $script;
         file_put_contents($script, "<?php\nrequire " . var_export($autoload, true) . ";\n" . $code);
 
@@ -755,7 +755,7 @@ class AuthRs256OptInTest extends TestCase
             $this->assertStringContainsString($required, $healthy);
         }
 
-        $prepend = (string)tempnam(sys_get_temp_dir(), 'tina4-unwrap-') . '.php';
+        $prepend = \TempPath::file('tina4-unwrap-', '.php');
         $this->tempFiles[] = $prepend;
         file_put_contents($prepend, "<?php stream_wrapper_unregister('https');\n");
 

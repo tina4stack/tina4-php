@@ -124,7 +124,7 @@ class SqlNormalizerTest extends TestCase
      */
     public function testFetchDoesNotDoubleAppendLimit(): void
     {
-        $tmpFile = tempnam(sys_get_temp_dir(), 'tina4_dbl_limit_') . '.db';
+        $tmpFile = \TempPath::file('tina4_dbl_limit_', '.db');
         $adapter = new SQLite3Adapter($tmpFile);
         $adapter->open();
         try {
@@ -154,7 +154,7 @@ class SqlNormalizerTest extends TestCase
 
     public function testFetchSurvivesTrailingSemicolon(): void
     {
-        $tmpFile = tempnam(sys_get_temp_dir(), 'tina4_sql_norm_') . '.db';
+        $tmpFile = \TempPath::file('tina4_sql_norm_', '.db');
         $adapter = new SQLite3Adapter($tmpFile);
         $adapter->open();
         try {
@@ -176,7 +176,7 @@ class SqlNormalizerTest extends TestCase
 
     public function testFetchOneSurvivesTrailingSemicolon(): void
     {
-        $tmpFile = tempnam(sys_get_temp_dir(), 'tina4_sql_norm_') . '.db';
+        $tmpFile = \TempPath::file('tina4_sql_norm_', '.db');
         $adapter = new SQLite3Adapter($tmpFile);
         $adapter->open();
         try {
@@ -201,7 +201,7 @@ class SqlNormalizerTest extends TestCase
      */
     private function seedBigDb(): array
     {
-        $tmpFile = tempnam(sys_get_temp_dir(), 'tina4_fetch_all_') . '.db';
+        $tmpFile = \TempPath::file('tina4_fetch_all_', '.db');
         $db = \Tina4\Database\Database::create('sqlite:///' . $tmpFile);
         $db->execute('CREATE TABLE rows (id INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER)');
         for ($i = 0; $i < 150; $i++) {

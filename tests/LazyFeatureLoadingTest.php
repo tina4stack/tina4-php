@@ -55,7 +55,7 @@ class LazyFeatureLoadingTest extends \PHPUnit\Framework\TestCase
     private function inFreshPhp(string $code): string
     {
         $autoload = $this->projectRoot() . '/vendor/autoload.php';
-        $script = tempnam(sys_get_temp_dir(), 't4lazy') . '.php';
+        $script = \TempPath::file('t4lazy', '.php');
         file_put_contents(
             $script,
             "<?php\nrequire " . var_export($autoload, true) . ";\n" . $code . "\n"
