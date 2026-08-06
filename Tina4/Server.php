@@ -94,6 +94,35 @@ class Server
     private const WRITE_STALL_TIMEOUT = 5;
 
     /**
+     * Seconds a client may stay silent before its connection is closed, when
+     * TINA4_REQUEST_TIMEOUT says nothing usable. 0 disables the reaper.
+     *
+     * This bounds slowloris: a peer that opens a connection and dribbles, or
+     * stops entirely, no longer holds a slot forever. It also closes idle
+     * keep-alive connections, which is normal and what every other HTTP server
+     * does (nginx keepalive_timeout defaults to 75s).
+     */
+    private const DEFAULT_REQUEST_TIMEOUT = 30;
+
+    /**
+     * Bytes of request headers accepted before answering 431, when
+     * TINA4_MAX_REQUEST_HEADER says nothing usable.
+     *
+     * The read path appends to a string with no ceiling, so without this a
+     * client streaming an endless header block grows it until the process dies.
+     * 64KB is roughly what nginx (large_client_header_buffers) and Apache
+     * (LimitRequestFieldSize) allow.
+     */
+    private const DEFAULT_MAX_REQUEST_HEADER = 65536;
+
+    /**
+     * Bytes of request BODY accepted before answering 413, when
+     * TINA4_MAX_REQUEST_BODY says nothing usable. Matches the documented
+     * TINA4_MAX_UPLOAD_SIZE default; this is the raw-socket layer beneath it.
+     */
+    private const DEFAULT_MAX_REQUEST_BODY = 10485760;
+
+    /**
      * Seconds a graceful shutdown may take before whatever is still in flight
      * is force-closed, when TINA4_SHUTDOWN_TIMEOUT says nothing usable.
      *
@@ -120,6 +149,15 @@ class Server
 
     /** @var array<int, string> Read buffers keyed by socket resource ID */
     private array $buffers = [];
+
+    /**
+     * @var array<int, float> Last time each HTTP client sent us anything.
+     *
+     * Only WebSocket clients had this before, so an HTTP connection that opened
+     * and never finished its request kept its slot and its buffer for the life
+     * of the process. See reapIdleHttpClients().
+     */
+    private array $httpActivity = [];
 
     /**
      * @var array<int, string> Raw socket peer address keyed by resource ID.
@@ -183,6 +221,15 @@ class Server
      * (128 + SIGALRM), no summary, no failing test named.
      */
     private bool $shutdownAlarmArmable = false;
+
+    /** @var int Seconds of client silence tolerated; 0 disables the reaper. */
+    private int $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT;
+
+    /** @var int Header bytes accepted before 431. */
+    private int $maxRequestHeader = self::DEFAULT_MAX_REQUEST_HEADER;
+
+    /** @var int Body bytes accepted before 413. */
+    private int $maxRequestBody = self::DEFAULT_MAX_REQUEST_BODY;
 
     /** @var int Seconds the current drain may take, resolved from TINA4_SHUTDOWN_TIMEOUT */
     private int $shutdownTimeout = self::DEFAULT_SHUTDOWN_TIMEOUT;
@@ -453,11 +500,35 @@ class Server
         }
 
         $this->forkPerRequest = $this->resolveForkPerRequest();
+        $this->requestTimeout = self::resolveLimit('TINA4_REQUEST_TIMEOUT', self::DEFAULT_REQUEST_TIMEOUT, true);
+        $this->maxRequestHeader = self::resolveLimit('TINA4_MAX_REQUEST_HEADER', self::DEFAULT_MAX_REQUEST_HEADER);
+        $this->maxRequestBody = self::resolveLimit('TINA4_MAX_REQUEST_BODY', self::DEFAULT_MAX_REQUEST_BODY);
 
         while ($this->running) {
             // Dispatch pending signals
             if (function_exists('pcntl_signal_dispatch')) {
                 pcntl_signal_dispatch();
+            }
+
+            // A forked request child must NEVER reach this loop. It has
+            // already dropped its listening socket, so $read would start with
+            // null and stream_select() would die with "supplied argument is
+            // not a valid stream resource" - taking the process with it.
+            //
+            // This is DEFENSIVE, and honestly labelled as such: an intermittent
+            // crash with exactly that signature was seen in the concurrency
+            // suite, but its cause is NOT established. The obvious suspect was
+            // an exception unwinding past handleHttp()'s two endRequestChild()
+            // calls; that was tested and is wrong - the framework catches a
+            // throwing handler, answers 500, and the child exits normally
+            // (measured: /boom -> 500, then /fast -> 200, server healthy).
+            //
+            // The guard stays because the invariant is true regardless of how
+            // a child might get here, and it costs one boolean per iteration.
+            // Do not treat it as a fix for the flake until the flake is
+            // reproduced.
+            if ($this->inRequestChild) {
+                $this->endRequestChild();
             }
 
             $read = array_merge([$this->socket], $this->clients);
@@ -491,6 +562,7 @@ class Server
                 // blocks the accept loop.
                 $this->wsBackplane?->poll();
                 $this->reapIdleWebSocketClients();
+                $this->reapIdleHttpClients();
 
                 // Check for pending reload from Rust CLI (POST /__dev/api/reload)
                 if (DevAdmin::$pendingReload) {
@@ -519,6 +591,7 @@ class Server
                         // SAPI never sets $_SERVER['REMOTE_ADDR'], so this is
                         // the only place the real client address is available.
                         $this->peerNames[$resourceId] = self::peerIp($peerName);
+                        $this->httpActivity[$resourceId] = microtime(true);
                     }
                 } elseif ($socket === $this->aiSocket) {
                     // Accept new AI port connection
@@ -530,6 +603,7 @@ class Server
                         $this->buffers[$resourceId] = '';
                         $this->aiPortConnections[$resourceId] = true;
                         $this->peerNames[$resourceId] = self::peerIp($peerName);
+                        $this->httpActivity[$resourceId] = microtime(true);
                     }
                 } elseif ($this->isWebSocketClient($socket)) {
                     // WebSocket data
@@ -542,6 +616,10 @@ class Server
                     } else {
                         $resourceId = (int)$socket;
                         $this->buffers[$resourceId] = ($this->buffers[$resourceId] ?? '') . $data;
+                        $this->httpActivity[$resourceId] = microtime(true);
+                        if (!$this->enforceRequestLimits($socket)) {
+                            continue;   // over the cap: answered and closed
+                        }
                         $this->processHttpBuffer($socket);
                     }
                 }
@@ -995,6 +1073,112 @@ class Server
             && function_exists('pcntl_waitpid')
             && function_exists('posix_kill')
             && function_exists('posix_getpid');
+    }
+
+    /**
+     * Resolve a numeric limit from the environment, falling back to a default.
+     *
+     * A non-numeric or negative value is refused with a named warning rather
+     * than silently becoming 0, because 0 means "no limit" for two of these
+     * three and a typo must never be the thing that disables a DoS guard.
+     *
+     * @param bool $zeroAllowed True when 0 is a legitimate "disabled" value.
+     */
+    private static function resolveLimit(string $name, int $default, bool $zeroAllowed = false): int
+    {
+        $raw = DotEnv::getEnv($name);
+        if ($raw === null || trim($raw) === '') {
+            return $default;
+        }
+        if (!is_numeric($raw)) {
+            Log::warning(sprintf('%s=%s is not a number - using %d', $name, $raw, $default));
+            return $default;
+        }
+        $value = (int)$raw;
+        if ($value < 0 || ($value === 0 && !$zeroAllowed)) {
+            Log::warning(sprintf('%s=%s is not a usable limit - using %d', $name, $raw, $default));
+            return $default;
+        }
+        return $value;
+    }
+
+    /**
+     * Close HTTP connections that have gone silent past TINA4_REQUEST_TIMEOUT.
+     *
+     * WebSocket clients are skipped: they are long-lived by design and have
+     * their own reaper on TINA4_WS_IDLE_TIMEOUT. Everything else is a request
+     * in flight, and a request in flight that has stopped speaking is either a
+     * dead peer or a slowloris. Neither deserves a slot.
+     *
+     * A partial request gets a 408 first, so a merely slow client learns why;
+     * a connection with nothing buffered is closed silently, because there is
+     * no request to answer.
+     */
+    private function reapIdleHttpClients(): void
+    {
+        if ($this->requestTimeout <= 0) {
+            return;
+        }
+        $now = microtime(true);
+        foreach ($this->httpActivity as $resourceId => $last) {
+            if (isset($this->wsSocketMap[$resourceId])) {
+                continue;   // WebSockets have their own idle policy
+            }
+            if (($now - $last) < $this->requestTimeout) {
+                continue;
+            }
+            $socket = $this->clients[$resourceId] ?? null;
+            if (!is_resource($socket)) {
+                unset($this->httpActivity[$resourceId]);
+                continue;
+            }
+            if (($this->buffers[$resourceId] ?? '') !== '') {
+                $this->sendHttpError($socket, 408, 'Request timed out before it was complete');
+            }
+            $this->removeClient($socket);
+        }
+    }
+
+    /**
+     * Refuse a request that is growing past what we agreed to read.
+     *
+     * The read path appends to $buffers with no ceiling of its own, and
+     * processHttpBuffer() returns "not enough data yet" without looking at the
+     * size, so between them a client could grow one string until the process
+     * died. This is the ceiling.
+     *
+     * Headers are capped before they are complete (431) and the body is capped
+     * from the declared Content-Length as soon as the headers ARE complete
+     * (413), so an oversized upload is refused on its first packet rather than
+     * after we have buffered all of it.
+     *
+     * @return bool False when the connection was answered and closed.
+     */
+    private function enforceRequestLimits($client): bool
+    {
+        $resourceId = (int)$client;
+        $buffer = $this->buffers[$resourceId] ?? '';
+        $headerEnd = strpos($buffer, "\r\n\r\n");
+
+        if ($headerEnd === false) {
+            if (strlen($buffer) > $this->maxRequestHeader) {
+                $this->sendHttpError($client, 431, 'Request header fields too large');
+                $this->removeClient($client);
+                return false;
+            }
+            return true;
+        }
+
+        if ($this->maxRequestBody > 0
+            && preg_match('/content-length:\s*(\d+)/i', substr($buffer, 0, $headerEnd), $m)
+            && (int)$m[1] > $this->maxRequestBody
+        ) {
+            $this->sendHttpError($client, 413, 'Request body too large');
+            $this->removeClient($client);
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1704,6 +1888,7 @@ class Server
         unset($this->buffers[$resourceId]);
         unset($this->aiPortConnections[$resourceId]);
         unset($this->peerNames[$resourceId]);
+        unset($this->httpActivity[$resourceId]);
         // Guard the close: a pruned dead client's socket may already be closed,
         // and fclose() on a non-resource raises an uncatchable TypeError in
         // PHP 8 — which would crash the very broadcast that is pruning it.
@@ -1729,6 +1914,7 @@ class Server
         unset($this->buffers[$resourceId]);
         unset($this->aiPortConnections[$resourceId]);
         unset($this->peerNames[$resourceId]);
+        unset($this->httpActivity[$resourceId]);
         @fclose($socket);
     }
 
@@ -1959,9 +2145,10 @@ class Server
         304 => 'Not Modified', 307 => 'Temporary Redirect', 308 => 'Permanent Redirect',
         400 => 'Bad Request', 401 => 'Unauthorized', 403 => 'Forbidden',
         404 => 'Not Found', 405 => 'Method Not Allowed', 406 => 'Not Acceptable',
+        408 => 'Request Timeout',
         409 => 'Conflict', 410 => 'Gone', 413 => 'Content Too Large',
         415 => 'Unsupported Media Type', 422 => 'Unprocessable Content',
-        429 => 'Too Many Requests',
+        429 => 'Too Many Requests', 431 => 'Request Header Fields Too Large',
         500 => 'Internal Server Error', 501 => 'Not Implemented',
         502 => 'Bad Gateway', 503 => 'Service Unavailable', 504 => 'Gateway Timeout',
     ];

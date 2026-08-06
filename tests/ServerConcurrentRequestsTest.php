@@ -60,6 +60,9 @@ class ServerConcurrentRequestsTest extends TestCase
     sleep(3);
     return $response("blocked", 200);
 });
+\Tina4\Router::get("/boom", function ($request, $response) {
+    throw new \RuntimeException("handler exploded");
+});
 PHP);
 
         $autoload = dirname(__DIR__) . '/vendor/autoload.php';
@@ -198,6 +201,40 @@ PHP);
             "/fast answered in {$elapsed}s with TINA4_SERVE_FORK=false. It should have been "
             . 'blocked behind the sleeping handler - if it is not, this pair is no longer '
             . 'measuring the fork and the positive test above proves nothing.'
+        );
+    }
+
+    /**
+     * A handler that THROWS must not take the server down with it.
+     *
+     * This locks in a property that already HOLDS - the framework catches the
+     * throw, logs "Route error", answers 500, and the forked child exits
+     * normally. Measured: /boom -> 500, then /fast -> 200, server healthy.
+     *
+     * Stated plainly because the comment here used to claim otherwise: this is
+     * NOT a gate for the accept-loop child backstop in Server.php. That guard
+     * was added on a theory that a throwing handler orphans a child, the theory
+     * was tested by removing the guard, and this test passed anyway. It is kept
+     * as a regression test for the 500-and-survive behaviour, which is worth
+     * having on its own.
+     */
+    public function testAThrowingHandlerDoesNotKillTheServer(): void
+    {
+        $this->startServer(fork: true);
+        $this->assertGreaterThan(0, $this->timeGet('/fast'), 'the fast route must work at all');
+
+        $this->timeGet('/boom', 10.0);   // may 500, may drop - either is fine
+
+        $this->assertGreaterThan(
+            0,
+            $this->timeGet('/fast'),
+            'the server stopped answering after a handler threw. One bad request took '
+            . 'down every other connection.'
+        );
+        $this->assertGreaterThan(
+            0,
+            $this->timeGet('/fast'),
+            'the server answered once more and then died'
         );
     }
 
