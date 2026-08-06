@@ -409,7 +409,16 @@ class RedisBackplane implements WebSocketBackplaneInterface
  * it — an exception is thrown only when this class is actually constructed.
  *
  * NATS connection URL defaults to nats://localhost:4222.
- * Uses a background Fiber (PHP 8.1+) for the subscription listener.
+ *
+ * The subscription listener is POLLED, not backgrounded: poll() calls the
+ * client's process(0) and is driven from the server's idle tick, so incoming
+ * messages are drained between requests on the one process Tina4 runs.
+ *
+ * This docblock used to claim "a background Fiber (PHP 8.1+)". There is no
+ * Fiber here and never was - the framework constructs none anywhere. A PHP
+ * Fiber would not buy anything either: it only switches at an explicit
+ * Fiber::suspend(), so a blocking client call inside one blocks the thread
+ * exactly as it does now. See the note in Server.php.
  */
 class NATSBackplane implements WebSocketBackplaneInterface
 {
