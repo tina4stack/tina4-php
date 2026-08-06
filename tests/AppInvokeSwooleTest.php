@@ -54,11 +54,26 @@ class AppInvokeSwooleTest extends TestCase
 \Tina4\Router::get("/hello", function ($request, $response) {
     return $response("hello " . ($request->query["who"] ?? "nobody"), 200);
 });
+// noAuth() because write routes are SECURED by default: without it the auth
+// gate answers 401 and this test measures the gate rather than whether
+// rawContent() reached the handler, which is the thing under test.
 \Tina4\Router::post("/echo", function ($request, $response) {
     return $response($request->body, 200);
-});
+})->noAuth();
 PHP);
         file_put_contents($this->appDir . '/.env', "TINA4_DEBUG=false\nTINA4_OVERRIDE_CLIENT=true\n");
+    }
+
+    /**
+     * App::start() installs an error handler and an exception handler and never
+     * removes them, so a test that boots an App leaves the process dirtier than
+     * it found it - PHPUnit reports that as risky, correctly. Unwind them here
+     * rather than leaving three risky tests in the suite.
+     */
+    protected function tearDown(): void
+    {
+        restore_error_handler();
+        restore_exception_handler();
     }
 
     /** Build a real Swoole request from real bytes. */
