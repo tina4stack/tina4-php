@@ -72,13 +72,35 @@ require __DIR__ . '/TempPath.php';
 // still the first line of defence; this is the backstop that makes forgetting
 // one harmless, and it is what finally empties /tmp on the lab (measured at
 // ~2,700 orphaned files and ~840 orphaned directories before it existed).
-register_shutdown_function([\TempPath::class, 'reap']);
+// THE PID GUARD IS LOAD-BEARING, on both handlers.
+//
+// tests/DbContractAbcTest.php forks 60 children with pcntl_fork() and ends each
+// with exit(0) -- and exit() RUNS THE SHUTDOWN FUNCTIONS. A forked child
+// inherits its parent's registered handlers and its copy of $tina4TestTmpRoot,
+// so the first child to finish deleted the PARENT'S sandbox, taking with it the
+// shared SQLite file the other 59 children and the parent were still using.
+// Measured as "SQLite3: Failed to open database: unable to open database file"
+// in three DbContractAbc cases, plus a TempPath failure to make a temp file at
+// all, none of which reproduce outside a full run.
+//
+// Only the process that CREATED the sandbox may remove it.
+$tina4TestOwnerPid = getmypid();
+
+register_shutdown_function(static function () use ($tina4TestOwnerPid): void {
+    if (getmypid() !== $tina4TestOwnerPid) {
+        return;                     // a forked child: not ours to reap
+    }
+    \TempPath::reap();
+});
 
 // Then the sandbox itself, wholesale. Registered SECOND on purpose: PHP runs
 // shutdown functions in registration order, so TempPath reaps what it tracked
 // first and this sweeps everything else the run left behind -- the long tail of
 // prefixes no call site was ever converted for. Never throws.
-register_shutdown_function(static function () use ($tina4TestTmpRoot): void {
+register_shutdown_function(static function () use ($tina4TestTmpRoot, $tina4TestOwnerPid): void {
+    if (getmypid() !== $tina4TestOwnerPid) {
+        return;                     // a forked child: not ours to reap
+    }
     if (!is_dir($tina4TestTmpRoot)) {
         return;
     }
