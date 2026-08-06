@@ -775,14 +775,31 @@ class SessionZeroDependencyFallbackTest extends TestCase
     }
 
     /**
-     * The extension count the request-path child must have: this process's, less
-     * exactly the optional client extensions this process actually holds.
+     * The extension count the request-path child must have: a BASELINE CHILD's
+     * count, less exactly the optional client extensions that child holds.
+     *
+     * This used to be count(get_loaded_extensions()) in the PARENT, and that is
+     * a real trap. PHPUnit's parent fixes its extension set once, at startup;
+     * every child re-reads conf.d when it is spawned. Anything that changes
+     * conf.d mid-run therefore breaks the arithmetic while nothing is actually
+     * wrong. It happened for real on 2026-08-05: ext-interbase was installed
+     * WHILE this suite was in flight, the parent had 57 extensions and the child
+     * found 58, and this file failed with "57 extensions where exactly 56 were
+     * expected" - a false red on a genuinely healthy tree.
+     *
+     * Measuring the baseline with a child too keeps both numbers on the same
+     * side of that boundary. The assertion stays EXACT, which is the whole point
+     * of it - loosening it to a range is what would make this file vacuous.
      */
     private function expectedChildExtensionCount(): int
     {
-        $present = array_filter(self::OPTIONAL_CLIENT_EXTENSIONS, static fn(string $name): bool => extension_loaded($name));
+        // Leading backslash: this file lives in namespace Tina4\Tests, and the
+        // shared test helpers are deliberately in the GLOBAL namespace (the repo
+        // maps PSR-4 Tina4\ -> Tina4/, so a Tina4\Tests\... helper would never
+        // autoload).
+        $baseline = \PhpChild::childExtensionBaseline(self::OPTIONAL_CLIENT_EXTENSIONS);
 
-        return count(get_loaded_extensions()) - count($present);
+        return \PhpChild::expectedCountWithout($baseline, self::OPTIONAL_CLIENT_EXTENSIONS);
     }
 
     // ---- the child programs --------------------------------------------------
