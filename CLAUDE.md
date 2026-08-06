@@ -1309,7 +1309,7 @@ is authorised on the raw socket peer.
 - Routes auto-discovered from `src/routes/`
 - ORM with migration support built in
 - Twig-compatible templating via built-in `Frond` engine (zero deps)
-- SCSS/LESS compilation via built-in `ScssCompiler`
+- SCSS compilation is owned by the `tina4` Rust CLI (grass), not the framework
 - JWT auth built in
 - Event system (`Events`) for decoupled pub/sub communication
 - DI container (`Container`) with factory and singleton registration
