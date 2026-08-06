@@ -880,6 +880,7 @@ class Server
                         pcntl_signal(SIGCHLD, SIG_DFL);
                     }
                 }
+                $this->dropInheritedSockets($client);
             }
             // $pid === -1 (fork failed, e.g. process limit): fall through and
             // serve it in the parent. A slow response beats a dropped one.
@@ -994,6 +995,47 @@ class Server
             && function_exists('pcntl_waitpid')
             && function_exists('posix_kill')
             && function_exists('posix_getpid');
+    }
+
+    /**
+     * Close every socket a forked child inherited but does not own.
+     *
+     * A child gets a COPY of every open descriptor, and a socket stays open
+     * until the LAST copy closes. Two things break if it keeps them:
+     *
+     * 1. The LISTENING sockets. The parent closing its copy on SIGTERM does not
+     *    free the port while any child still holds one - the kernel keeps the
+     *    listen queue, so a connection arriving after shutdown is ACCEPTED and
+     *    then RESET instead of getting a clean CONNECTION REFUSED, and the port
+     *    stays bound until the last child exits. Both symptoms were measured on
+     *    the first version of the fork: GracefulShutdownTest saw
+     *    "accepted-then-reset" and reported port 39785 still held after the run.
+     *
+     * 2. Every OTHER in-flight client. The parent answers and closes those, but
+     *    the peer sees no FIN while this child holds a copy, so an unrelated
+     *    request hangs for as long as this one runs - which is precisely the
+     *    blocking the fork exists to remove.
+     *
+     * @param resource $keep The accepted socket this child is answering on.
+     */
+    private function dropInheritedSockets($keep): void
+    {
+        foreach ($this->clients as $id => $client) {
+            if ($client === $keep) {
+                continue;   // the one we are answering on stays registered
+            }
+            if (is_resource($client)) {
+                @fclose($client);
+            }
+            unset($this->clients[$id], $this->buffers[$id]);
+        }
+
+        foreach (['socket', 'aiSocket'] as $listener) {
+            if (is_resource($this->{$listener})) {
+                @fclose($this->{$listener});
+            }
+            $this->{$listener} = null;
+        }
     }
 
     /**
