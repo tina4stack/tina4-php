@@ -1,6 +1,37 @@
 <?php
 
 /**
+ * TEMP SANDBOX -- FIRST, before anything can resolve a temp path.
+ *
+ * MEASURED: converting the 17 tempnam-orphan call sites (see TempPath.php) left
+ * the FULL suite still adding 45 entries to /tmp per run, from a long tail of
+ * ~15 other prefixes in files nobody had touched -- tina4_rt_test_ (22),
+ * tina4_autoserialize_ (14), and on. Converting call sites does not converge;
+ * a new test just adds another prefix.
+ *
+ * So every temp path this run creates is redirected into ONE per-run directory
+ * that is removed wholesale at shutdown. Two measured details decide the shape:
+ *
+ *   - PHP CACHES the temp directory on the FIRST sys_get_temp_dir() call, so
+ *     TMPDIR must be set before any code asks. That is why this block is above
+ *     the constants and the autoloader, and why the base is read with getenv()
+ *     rather than sys_get_temp_dir() -- calling that here would cache the OLD
+ *     value and defeat the whole thing.
+ *   - CHILD PROCESSES INHERIT TMPDIR, so the php subprocesses these tests spawn
+ *     land in the sandbox too, without knowing it exists.
+ *
+ * Verified: putenv('TMPDIR=/tmp/probe-php') then tempnam(sys_get_temp_dir(),'x')
+ * writes into /tmp/probe-php.
+ */
+$tina4TestTmpRoot = rtrim(getenv('TMPDIR') ?: '/tmp', '/') . '/tina4-phpunit-' . getmypid();
+if (!is_dir($tina4TestTmpRoot)) {
+    @mkdir($tina4TestTmpRoot, 0700, true);
+}
+putenv('TMPDIR=' . $tina4TestTmpRoot);
+$_ENV['TMPDIR'] = $tina4TestTmpRoot;
+$_SERVER['TMPDIR'] = $tina4TestTmpRoot;
+
+/**
  * Tina4 v3 test bootstrap.
  * Defines legacy constants before autoloader triggers Initialize.php,
  * then loads the Composer autoloader.
@@ -42,3 +73,21 @@ require __DIR__ . '/TempPath.php';
 // one harmless, and it is what finally empties /tmp on the lab (measured at
 // ~2,700 orphaned files and ~840 orphaned directories before it existed).
 register_shutdown_function([\TempPath::class, 'reap']);
+
+// Then the sandbox itself, wholesale. Registered SECOND on purpose: PHP runs
+// shutdown functions in registration order, so TempPath reaps what it tracked
+// first and this sweeps everything else the run left behind -- the long tail of
+// prefixes no call site was ever converted for. Never throws.
+register_shutdown_function(static function () use ($tina4TestTmpRoot): void {
+    if (!is_dir($tina4TestTmpRoot)) {
+        return;
+    }
+    $items = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator($tina4TestTmpRoot, \FilesystemIterator::SKIP_DOTS),
+        \RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($items as $item) {
+        $item->isDir() && !$item->isLink() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+    }
+    @rmdir($tina4TestTmpRoot);
+});
