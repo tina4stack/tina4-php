@@ -41,8 +41,16 @@ class Migration
     /** @var string Resolved migrations directory — canonical migrations/ at the project root */
     private readonly string $migrationsDir;
 
+    /**
+     * @param DatabaseAdapter|null $db Null is allowed for the SCAFFOLDING path only:
+     *   create() / createMigration() write files and never touch the database, and
+     *   the static createMigration() had no adapter to pass. It called
+     *   `new static($migrationsDir)` - a string where an adapter was required - so
+     *   EVERY call TypeError'd. A documented public API that had never once run.
+     *   migrate()/rollback()/status() still require a real adapter and say so.
+     */
     public function __construct(
-        private readonly DatabaseAdapter $db,
+        private readonly ?DatabaseAdapter $db = null,
         string $migrationsDir = 'migrations',
         private readonly string $delimiter = ';',
     ) {
@@ -55,7 +63,12 @@ class Migration
             $migrationsDir = 'src/migrations';
         }
         $this->migrationsDir = $migrationsDir;
-        $this->ensureMigrationsTable();
+        // No adapter means the SCAFFOLDING path (create/createMigration), which
+        // only writes files. There is no tracking table to ensure and no
+        // connection to make one on.
+        if ($this->db !== null) {
+            $this->ensureMigrationsTable();
+        }
     }
 
     /**
@@ -529,7 +542,23 @@ class Migration
         $safeName  = trim($safeName, '_');
         $createdAt = date('Y-m-d H:i:s') . ' UTC';
 
-        if ($kind === 'php') {
+        // MEASURED 2026-08-06: the accepted kind differed in every framework -
+        // python "python", php "php", ruby "ruby" OR "python", node "class" - and
+        // NONE validated it, so create_migration(..., kind="python") produced a
+        // code migration in Python and Ruby and a SILENT .sql file in PHP and
+        // Node. "code" is now the canonical spelling in all four; each keeps its
+        // own language name as a legacy alias; anything else raises.
+        $kind = strtolower(trim($kind ?: 'sql'));
+        if (!in_array($kind, ['sql', 'code', 'php'], true)) {
+            throw new \InvalidArgumentException(
+                "Unknown migration kind '{$kind}'. Use 'sql' (default) or 'code' "
+                . "(alias: 'php'). An unrecognised kind used to produce a .sql file "
+                . 'silently, which is why this now throws.'
+            );
+        }
+
+        if (in_array($kind, ['code', 'php'], true)) {
+
             $fileName  = "{$timestamp}_{$safeName}.php";
             $filePath  = $this->migrationsDir . DIRECTORY_SEPARATOR . $fileName;
 
@@ -579,7 +608,9 @@ class Migration
      */
     public static function createMigration(string $description, string $migrationsDir = 'migrations', string $kind = 'sql'): string
     {
-        $m = new static($migrationsDir);
+        // Named argument: the first positional slot is the adapter, and passing
+        // the directory there is what made this throw on every call.
+        $m = new static(migrationsDir: $migrationsDir);
         return $m->create($description, $kind);
     }
 
