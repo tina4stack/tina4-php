@@ -51,12 +51,33 @@ class FirebirdAdapter implements DatabaseAdapter
      * @var array<string,int> Live-holder count per shared native link.
      *
      * ext-interbase returns the SAME physical link resource for connections
-     * opened with identical (fn, path, user, pass, charset) arguments, and
-     * ibase_close() destroys that link for EVERY holder — so two Tina4
-     * connections to one database share a link and closing one breaks the
-     * other. We reference-count opens per connection signature and only
-     * ibase_close() when the final holder releases it (php #132 follow-up,
-     * surfaced by the native ext-interbase CI leg).
+     * opened with identical (fn, path, user, pass, charset) arguments, so two
+     * Tina4 adapters that believe they hold separate connections are really
+     * holding one. That link tolerates exactly ONE ibase_close(): issuing one
+     * per Tina4 holder over-releases it and takes the process down with a
+     * segmentation fault. We therefore reference-count opens per connection
+     * signature and ibase_close() only when the final holder releases it
+     * (php #132 follow-up, surfaced by the native ext-interbase CI leg).
+     *
+     * The count only means anything if EVERY holder is subtracted again, which
+     * is why {@see __destruct()} exists. Without it the count was incremented
+     * by open() and decremented only by an EXPLICIT close(), so the first
+     * adapter that was garbage collected instead of closed — the normal end of
+     * a request, a job or a test — pinned it above zero for the life of the
+     * process. From that point the final ibase_close() could never fire for
+     * that signature, so the driver was never told the link had been released,
+     * every later adapter piled onto the one ageing native link, and once that
+     * link went stale every connection in the process failed with "invalid
+     * database handle (no active connection)". MEASURED on Ubuntu 24.04.4 LTS
+     * x86_64 / PHP 8.3.6 / ext-interbase against Firebird 5.0.4: one abandoned
+     * holder was enough to take twelve unrelated live-Firebird tests down, and
+     * a trace of the run showed the same native link handed out for the whole
+     * suite with the count climbing 1..7 and not one release reaching zero.
+     *
+     * Closing unconditionally instead is NOT the fix: one ibase_close() per
+     * holder over-releases a shared link and SEGFAULTS the process (measured,
+     * same platform, exit 139 part-way through the suite). Exactly one close
+     * per physical link is the contract — which is what this count is for.
      */
     private static array $linkRefs = [];
     /** @var string|null This instance's key into self::$linkRefs (null once released). */
@@ -241,6 +262,25 @@ class FirebirdAdapter implements DatabaseAdapter
             $this->releaseSharedLink();
             $this->db = null;
         }
+    }
+
+    /**
+     * Release this adapter's claim on the shared native link when it is
+     * garbage collected without an explicit close().
+     *
+     * A holder that simply goes out of scope is the ordinary end of a request,
+     * a queue job or a test, and it is still one holder fewer. Without this the
+     * per-signature count in {@see $linkRefs} could only ever go up, the final
+     * ibase_close() was suppressed for the rest of the process, and every
+     * Firebird connection in it eventually failed with "invalid database handle
+     * (no active connection)".
+     *
+     * close() is already idempotent and guards on a live handle, so an adapter
+     * that was closed properly destructs to a no-op.
+     */
+    public function __destruct()
+    {
+        $this->close();
     }
 
     public function query(string $sql, array $params = []): array
@@ -920,6 +960,18 @@ class FirebirdAdapter implements DatabaseAdapter
      * Detect dead-socket Firebird errors that warrant a reconnect.
      * Substring match (case-insensitive) so we match both ibase and fbird
      * wording, and across server-side versus driver-side error sources.
+     *
+     * The markers are verbatim fragments of Firebird's OWN message catalogue
+     * (firebird.msg, the file the client library formats its errors from),
+     * checked against the installed catalogue rather than written from memory —
+     * because two of them had been written from memory and could never match:
+     * Firebird has no message containing "network error" (it says "Unable to
+     * complete network request to host") and none containing "connection is not
+     * active" (it says "invalid database handle (no active connection)"). A
+     * connection the framework could have recovered transparently therefore
+     * surfaced to the caller instead. Both old spellings are kept — a
+     * driver-side or OS-level source may still produce them — and the two real
+     * wordings are added alongside.
      */
     public static function isDeadConnection(?string $msg): bool
     {
@@ -932,6 +984,8 @@ class FirebirdAdapter implements DatabaseAdapter
             'error reading data from the connection',
             'connection shutdown',
             'connection lost',
+            'invalid database handle',
+            'unable to complete network request',
             'network error',
             'connection is not active',
             'broken pipe',

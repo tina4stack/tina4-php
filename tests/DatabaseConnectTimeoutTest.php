@@ -495,16 +495,16 @@ final class DatabaseConnectTimeoutTest extends TestCase
         }
 
         // Run in a CHILD process. ext-interbase shares ONE physical link across
-        // connections opened with identical arguments, and FirebirdAdapter
-        // reference-counts holders per connection SIGNATURE to decide when it
-        // may ibase_close (see its $linkRefs note). Opening a live Firebird
-        // connection from inside this suite added a holder that desynchronised
-        // that count and left TWELVE unrelated live-Firebird tests erroring
-        // with "invalid database handle (no active connection)" — MEASURED by
-        // bisection: disabling this one test alone returned the suite to
-        // 4997/16341/0. That fragility is a real pre-existing defect and is
-        // reported separately; a separate process cannot trip it, and the
-        // connect it proves is just as real.
+        // connections opened with identical arguments, so an in-process holder
+        // here is a holder of whatever link the rest of the suite is using — a
+        // connect test has no business reaching into that. Opening one from
+        // inside this suite used to leave TWELVE unrelated live-Firebird tests
+        // erroring with "invalid database handle (no active connection)"; that
+        // was FirebirdAdapter suppressing its own native close, fixed with its
+        // regression tests in tests/FirebirdSharedLinkTest.php. The isolation
+        // stays regardless: a child cannot perturb the suite's connections, it
+        // bounds a connect that could otherwise hang the run, and the connect
+        // it proves is just as real.
         $probes = ['firebird' => $this->startProbe('firebirdlive', '', 0, '2')];
         $result = $this->settle($probes)['firebird'];
 
