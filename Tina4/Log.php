@@ -114,35 +114,48 @@ class Log
     /**
      * Configure the logger.
      *
-     * Reads (in addition to the explicit args):
-     *   TINA4_LOG_DIR        — log directory (overrides $logDir)
+     * Reads (for the settings no explicit argument supplied):
+     *   TINA4_LOG_DIR        — log directory; used when $logDir is null
      *   TINA4_LOG_FILE       — primary log file path; if absolute, sets dir + filename
      *   TINA4_LOG_FORMAT     — 'json' selects JSON; anything else is TEXT
      *   TINA4_LOG_OUTPUT     — 'stdout', 'file', or 'both'
-     *   TINA4_LOG_LEVEL      — minimum console level (overrides $minLevel)
+     *   TINA4_LOG_LEVEL      — minimum console level; used when $minLevel is null
      *   TINA4_LOG_APPEND     — append (default) or truncate at startup
      *   TINA4_LOG_ROTATE_SIZE — rotate threshold in bytes (0 disables rotation)
      *   TINA4_LOG_ROTATE_KEEP — number of rotated files to retain
      *   TINA4_LOG_STRICT     — raise on a log-write failure instead of swallowing it
      *
+     * PRECEDENCE (ADR-0041): explicit argument > environment > built-in
+     * default, for every setting. The two null-defaulted parameters exist so
+     * "the caller said nothing" is distinguishable from "the caller asked for
+     * the default value" -- with a real default those are the same input and
+     * the three-way rule cannot be expressed.
+     *
      * Calling this is OPTIONAL: the same resolution runs on the first log call
      * ({@see ensureConfigured()}). configure() is the explicit override and
      * always wins.
      *
-     * @param string|null $logDir Directory (or file path) for log files, overridden by TINA4_LOG_DIR
+     * @param string|null $logDir Directory (or file path) for log files. WINS over TINA4_LOG_DIR; null means "not specified" (env, then 'logs')
      * @param bool $development Development mode — CONSOLE COLOUR only; it does NOT choose the format
-     * @param string $minLevel Minimum console log level (overridden by TINA4_LOG_LEVEL)
+     * @param string|null $minLevel Minimum console log level. WINS over TINA4_LOG_LEVEL; null means "not specified" (env, then INFO)
      */
     public static function configure(
-        ?string $logDir = 'logs',
+        ?string $logDir = null,
         bool $development = false,
-        string $minLevel = self::LEVEL_INFO,
+        ?string $minLevel = null,
     ): void {
-        // Directory: env override > caller arg. A null argument means "use the
-        // default", not "use an empty path" -- configure(null, true) used to
-        // resolve to an empty directory and silently write NO log files at all.
+        // Directory: caller arg > env > 'logs' (ADR-0041). This used to be the
+        // other way round, and the docblock above it said so ("overrides
+        // $logDir") while three lines further down it also claimed
+        // "configure() is the explicit override and always wins" -- the two
+        // halves of one docblock contradicting each other is how long it went
+        // unnoticed. An env var beating an argument the programmer wrote at the
+        // call site means "put the logs exactly here" cannot be expressed at
+        // all. A null argument still means "not specified", not "empty path" --
+        // configure(null, true) once resolved to an empty directory and
+        // silently wrote NO log files.
         $envDir = DotEnv::getEnv('TINA4_LOG_DIR');
-        $chosen = $envDir !== null && $envDir !== '' ? $envDir : ($logDir ?? 'logs');
+        $chosen = $logDir !== null && $logDir !== '' ? $logDir : ($envDir ?? '');
         if ($chosen === '') {
             $chosen = 'logs';
         }
@@ -195,14 +208,23 @@ class Log
             }
         }
 
-        self::$minLevel = strtoupper($minLevel);
-        // v3.13.14: TINA4_LOG_LEVEL env overrides the caller arg (parity with
-        // Python/Ruby/Node, which all read the env). Default is now INFO (was
-        // effectively DEBUG) so deployed apps surface request/startup/warn/error
-        // without debug noise.
+        // Level: caller arg > TINA4_LOG_LEVEL > INFO (ADR-0041). The env used
+        // to override the argument here too, justified in a comment as "parity
+        // with Python/Ruby/Node, which all read the env" -- which conflated
+        // READING the env with letting it beat an argument. Checked: Ruby and
+        // Node take no level argument at all, so they have nothing to conflict
+        // with, and Python's explicit `level` argument WINS (its boot path
+        // passes the env in, rather than the env overriding the caller). PHP
+        // was the only framework where a level argument existed and lost.
+        // Default is INFO (was effectively DEBUG) so deployed apps surface
+        // request/startup/warn/error without debug noise.
         $envLevel = strtoupper((string) (DotEnv::getEnv('TINA4_LOG_LEVEL') ?? ''));
-        if ($envLevel !== '' && isset(self::LEVEL_PRIORITY[$envLevel])) {
+        if ($minLevel !== null && $minLevel !== '') {
+            self::$minLevel = strtoupper($minLevel);
+        } elseif ($envLevel !== '' && isset(self::LEVEL_PRIORITY[$envLevel])) {
             self::$minLevel = $envLevel;
+        } else {
+            self::$minLevel = self::LEVEL_INFO;
         }
 
         // Format — TEXT BY DEFAULT, EVERYWHERE (owner decision 2026-08-01).

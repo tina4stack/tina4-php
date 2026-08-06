@@ -289,10 +289,16 @@ class App
 
         // Configure logger
         $isDev = $this->development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        Log::configure(
-            logDir: $this->basePath . DIRECTORY_SEPARATOR . 'logs',
-            development: $isDev,
-        );
+        // No logDir here, deliberately (ADR-0041). This used to pass
+        // "$basePath/logs", which is the FRAMEWORK'S DEFAULT and not something
+        // the user asked for -- and an argument outranks TINA4_LOG_DIR. It only
+        // worked because the precedence was inverted, so the operator's env var
+        // beat the bootstrap by accident; correcting the precedence without
+        // this line would have made TINA4_LOG_DIR dead in every booted app,
+        // which is measurably what happened to Ruby. Resolution now runs
+        // TINA4_LOG_DIR, then 'logs', matching Python and Node, whose
+        // bootstraps have never passed a directory.
+        Log::configure(development: $isDev);
 
         // Generate request ID
         Log::setRequestId($this->generateRequestId());
