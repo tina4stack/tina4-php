@@ -715,6 +715,21 @@ class SessionBackendFailurePolicyTest extends TestCase
             return true;
         }
 
+        // A child that is STILL unconstrained must never delegate again. Without
+        // this, a setpriv that silently failed to drop the capability would send
+        // each child to spawn another child in exactly the same state - an
+        // unbounded fork bomb on a shared box, presenting as a hang rather than
+        // as the configuration error it is. Delegation happens once, from the
+        // parent; the second time is always a bug worth naming.
+        if (getenv(self::PRIVILEGE_DROP_MARKER) !== false) {
+            self::fail(
+                'this process is the delegated child (' . self::PRIVILEGE_DROP_MARKER . ' is set) '
+                . 'and file permissions STILL do not constrain it, so setpriv did not actually drop '
+                . 'CAP_DAC_OVERRIDE. Refusing to delegate again - that would fork indefinitely. '
+                . 'CapEff=' . self::effectiveCapabilities()
+            );
+        }
+
         $this->delegateToCapabilityDroppedChild($testMethod);
 
         return false;

@@ -111,7 +111,12 @@ class RequireServicesGateTest extends TestCase
      * @param array<string, string> $fixtures className => source
      * @return array{0: string, 1: int} [combined output, exit code]
      */
-    private function runPhpunit(array $fixtures, bool $armed): array
+    /**
+     * @param array<string, string>       $fixtures    className => source.
+     * @param array<string, string|null>  $environment Extra child env; null unsets.
+     * @return array{0: string, 1: int}
+     */
+    private function runPhpunit(array $fixtures, bool $armed, array $environment = []): array
     {
         $paths = [];
         foreach ($fixtures as $className => $source) {
@@ -120,9 +125,28 @@ class RequireServicesGateTest extends TestCase
             $paths[] = escapeshellarg($path);
         }
 
-        $prefix = $armed
-            ? 'TINA4_REQUIRE_SERVICES=1'
-            : 'env -u TINA4_REQUIRE_SERVICES';
+        // Always go through env(1) so a case can both SET and UNSET a variable
+        // for the child. A conditionally-gated service (Firebird) is armed by
+        // its coordinates being present, so a test of that behaviour has to
+        // control them explicitly rather than inherit whatever this host
+        // happens to export -- otherwise it would assert the lab's environment
+        // instead of the gate's logic, and flip colour between here and CI.
+        $prefix = ['env'];
+        if ($armed) {
+            $prefix[] = 'TINA4_REQUIRE_SERVICES=1';
+        } else {
+            $prefix[] = '-u';
+            $prefix[] = 'TINA4_REQUIRE_SERVICES';
+        }
+        foreach ($environment as $name => $value) {
+            if ($value === null) {
+                $prefix[] = '-u';
+                $prefix[] = $name;
+                continue;
+            }
+            $prefix[] = escapeshellarg($name . '=' . $value);
+        }
+        $prefix = implode(' ', $prefix);
 
         $cmd = sprintf(
             'cd %s && %s ./vendor/bin/phpunit -c phpunit.xml --no-coverage --do-not-cache-result %s 2>&1',
@@ -241,15 +265,20 @@ class RequireServicesGateTest extends TestCase
     }
 
     /**
-     * REGRESSION GUARD: a Firebird skip must FAIL the armed run.
+     * REGRESSION GUARD (positive half): where a Firebird WAS promised, a
+     * Firebird skip must FAIL the armed run.
      *
-     * Firebird is provisioned. Until 2026-08-05 the gate excluded it by keyword
-     * and this file asserted the exclusion, so every "ext-interbase not
-     * installed" / "Firebird not reachable" skip passed green and stayed
-     * invisible. If anyone ever drops firebird/interbase from SERVICE_KEYWORDS
-     * again, this goes red.
+     * Until 2026-08-05 the gate excluded Firebird by keyword and this file
+     * asserted the exclusion, so every "ext-interbase not installed" /
+     * "Firebird not reachable" skip passed green and stayed invisible.
+     *
+     * Note this sets the coordinates for the CHILD rather than trusting the
+     * ambient ones. Firebird is gated per run, so a version of this test that
+     * inherited the environment would pass on the lab (which exports the URL)
+     * and fail in the CI `test:` job (which deliberately does not) -- asserting
+     * where it is running rather than what the gate does.
      */
-    public function testFirebirdSkipFailsTheArmedRun(): void
+    public function testFirebirdSkipFailsTheArmedRunWhenAFirebirdWasPromised(): void
     {
         [$output, $code] = $this->runPhpunit(
             ['GateFixtureFirebird' => $this->beforeClassFixture(
@@ -258,10 +287,81 @@ class RequireServicesGateTest extends TestCase
                 1,
             )],
             true,
+            ['TINA4_TEST_FIREBIRD_URL' => 'firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb'],
         );
 
-        $this->assertNotSame(0, $code, "a Firebird skip must fail the armed run.\n" . $output);
+        $this->assertNotSame(
+            0,
+            $code,
+            "a Firebird skip must fail the armed run when TINA4_TEST_FIREBIRD_URL promised one.\n" . $output,
+        );
         $this->assertStringContainsString('TINA4_REQUIRE_SERVICES is set', $output);
+    }
+
+    /**
+     * REGRESSION GUARD (negative half): where NO Firebird was promised, the
+     * same skip must stay green.
+     *
+     * This is the half that keeps the main CI `test:` job honest. It runs this
+     * whole suite with the gate armed and deliberately provisions no Firebird
+     * (stacking that container onto an already 8-service job destabilised the
+     * runner), so listing Firebird unconditionally would fail that job for a
+     * service it never claimed to provide.
+     */
+    public function testFirebirdSkipStaysGreenWhenNoFirebirdWasPromised(): void
+    {
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureNoFirebird' => $this->beforeClassFixture(
+                'GateFixtureNoFirebird',
+                'Firebird not reachable on localhost:3050',
+                1,
+            )],
+            true,
+            ['TINA4_TEST_FIREBIRD_URL' => null],
+        );
+
+        $this->assertSame(
+            0,
+            $code,
+            "with no Firebird promised, a Firebird skip must stay green.\n" . $output,
+        );
+        $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
+    }
+
+    /**
+     * The conditional matcher itself, with the environment controlled here so
+     * the assertion is about the code and not about the host.
+     */
+    public function testMatcherArmsFirebirdOnlyWhenItsCoordinatesArePublished(): void
+    {
+        $reason = 'Firebird not reachable on localhost:3050';
+        $original = getenv('TINA4_TEST_FIREBIRD_URL');
+
+        try {
+            putenv('TINA4_TEST_FIREBIRD_URL');
+            $this->assertFalse(
+                RequireServicesGate::isProvisionedServiceSkip($reason),
+                'with no coordinates published, this run was never promised a Firebird',
+            );
+            $this->assertNotContains('firebird', RequireServicesGate::activeServiceKeywords());
+
+            putenv('TINA4_TEST_FIREBIRD_URL=firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb');
+            $this->assertTrue(
+                RequireServicesGate::isProvisionedServiceSkip($reason),
+                'coordinates published means a Firebird WAS promised, so its skip is a violation',
+            );
+            $this->assertContains('firebird', RequireServicesGate::activeServiceKeywords());
+
+            // Blank is not a promise.
+            putenv('TINA4_TEST_FIREBIRD_URL=   ');
+            $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip($reason));
+        } finally {
+            if ($original === false) {
+                putenv('TINA4_TEST_FIREBIRD_URL');
+            } else {
+                putenv('TINA4_TEST_FIREBIRD_URL=' . $original);
+            }
+        }
     }
 
     // ── The keyword matcher itself (pure predicate, no dependency) ───────────
