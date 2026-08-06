@@ -113,8 +113,10 @@ class SwaggerTest extends TestCase
 
     public function testDefaultDescription(): void
     {
+        // 3.13.96: info.description defaults to "" (parity across all four
+        // frameworks). TINA4_SWAGGER_DESCRIPTION still overrides.
         $spec = Swagger::generate();
-        $this->assertSame('Auto-generated from Tina4 routes', $spec['info']['description']);
+        $this->assertSame('', $spec['info']['description']);
     }
 
     // ── Empty Paths ─────────────────────────────────────────────
@@ -309,12 +311,17 @@ class SwaggerTest extends TestCase
         $this->assertSame(['users'], $tags);
     }
 
-    public function testTagDefaultForRootPath(): void
+    public function testRootPathIsExcludedAsFrameworkInternal(): void
     {
+        // 3.13.96 (S7): the bare "/" is the framework landing page and is never
+        // part of the application's public API document. (Default-tag inference
+        // is still covered by testTagDefaultForParamOnlyPath via /{id}.)
         Router::get('/', fn($req, $res) => $res->json([]));
+        Router::get('/v1/things', fn($req, $res) => $res->json([]));
         $spec = Swagger::generate();
-        $tags = $spec['paths']['/']['get']['tags'];
-        $this->assertSame(['default'], $tags);
+        $paths = $spec['paths'] instanceof \stdClass ? [] : $spec['paths'];
+        $this->assertArrayNotHasKey('/', $paths, 'the bare "/" landing page is framework-internal');
+        $this->assertArrayHasKey('/v1/things', $paths);
     }
 
     public function testTagDefaultForParamOnlyPath(): void

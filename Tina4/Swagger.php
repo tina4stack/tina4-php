@@ -25,7 +25,7 @@ namespace Tina4;
  *   TINA4_SWAGGER_API_KEY_IN    — where the apiKey lives: header (default) | query | cookie
  *   TINA4_SWAGGER_DEFAULT_SCHEME — scheme secured routes use when no explicit security (default "bearerAuth")
  *   TINA4_SWAGGER_INCLUDE      — comma-separated raw-path prefixes to include (allow-list)
- *   TINA4_SWAGGER_EXCLUDE      — comma-separated raw-path prefixes to drop (/swagger + /__dev always excluded)
+ *   TINA4_SWAGGER_EXCLUDE      — comma-separated raw-path prefixes to drop (the shared framework internals — /swagger, /__dev, /__feedback and the AI/RAG service prefixes, plus bare "/" — are always excluded)
  *
  * v3.13.42 — configurability for external/public APIs:
  *   - per-route security + scopes via swagger(['security' => ..., 'scopes' => ...]);
@@ -233,9 +233,30 @@ class Swagger
     }
 
     /**
-     * Path-filter a raw route pattern. Framework internals (/swagger, /__dev)
-     * are ALWAYS excluded; then TINA4_SWAGGER_INCLUDE (allow-list) and
-     * TINA4_SWAGGER_EXCLUDE (deny-list) prefixes apply.
+     * Framework-internal route prefixes that are NEVER part of an application's
+     * public API document. Shared across all four frameworks so the rule is one
+     * list rather than a per-framework accident: the dev tools (/swagger,
+     * /__dev), the feedback widget (/__feedback), and the built-in AI/RAG
+     * service probes (/ai, /rag, /vision, /embed, /image) the dev dashboard
+     * registers. The bare landing page "/" is excluded separately (exact match).
+     *
+     * @var array<int, string>
+     */
+    private const INTERNAL_PREFIXES = [
+        '/swagger',
+        '/__dev',
+        '/__feedback',
+        '/ai',
+        '/rag',
+        '/vision',
+        '/embed',
+        '/image',
+    ];
+
+    /**
+     * Path-filter a raw route pattern. Framework internals (INTERNAL_PREFIXES
+     * plus the bare "/") are ALWAYS excluded; then TINA4_SWAGGER_INCLUDE
+     * (allow-list) and TINA4_SWAGGER_EXCLUDE (deny-list) prefixes apply.
      *
      * @param string        $rawPath
      * @param array<string> $include
@@ -243,7 +264,12 @@ class Swagger
      */
     private static function isIncluded(string $rawPath, array $include, array $exclude): bool
     {
-        foreach (['/swagger', '/__dev'] as $internal) {
+        // The framework's own landing page — exact match only, so a prefix test
+        // does not swallow every route.
+        if ($rawPath === '/') {
+            return false;
+        }
+        foreach (self::INTERNAL_PREFIXES as $internal) {
             if ($rawPath === $internal || str_starts_with($rawPath, $internal . '/')) {
                 return false;
             }
@@ -289,7 +315,7 @@ class Swagger
     {
         $title = DotEnv::getEnv('TINA4_SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
         $version = DotEnv::getEnv('TINA4_SWAGGER_VERSION', '1.0.0') ?? '1.0.0';
-        $description = DotEnv::getEnv('TINA4_SWAGGER_DESCRIPTION', 'Auto-generated from Tina4 routes') ?? 'Auto-generated from Tina4 routes';
+        $description = DotEnv::getEnv('TINA4_SWAGGER_DESCRIPTION', '') ?? '';
 
         $info = [
             'title' => $title,
@@ -298,9 +324,31 @@ class Swagger
         ];
 
         // Optional contact + license blocks — only present when env is set.
-        $contactEmail = DotEnv::getEnv('TINA4_SWAGGER_CONTACT_EMAIL');
-        if ($contactEmail !== null && $contactEmail !== '') {
-            $info['contact'] = ['email' => $contactEmail];
+        // info.contact carries name / url / email, each emitted only when
+        // configured. TINA4_SWAGGER_CONTACT_TEAM/_URL are read with the legacy
+        // SWAGGER_CONTACT_TEAM/_URL as a fallback — parity with the Python and
+        // Ruby masters (PHP alone used to emit only the email).
+        $contact = [];
+        $contactName = self::firstNonEmpty(
+            DotEnv::getEnv('TINA4_SWAGGER_CONTACT_TEAM'),
+            DotEnv::getEnv('SWAGGER_CONTACT_TEAM')
+        );
+        if ($contactName !== '') {
+            $contact['name'] = $contactName;
+        }
+        $contactUrl = self::firstNonEmpty(
+            DotEnv::getEnv('TINA4_SWAGGER_CONTACT_URL'),
+            DotEnv::getEnv('SWAGGER_CONTACT_URL')
+        );
+        if ($contactUrl !== '') {
+            $contact['url'] = $contactUrl;
+        }
+        $contactEmail = self::firstNonEmpty(DotEnv::getEnv('TINA4_SWAGGER_CONTACT_EMAIL'));
+        if ($contactEmail !== '') {
+            $contact['email'] = $contactEmail;
+        }
+        if (!empty($contact)) {
+            $info['contact'] = $contact;
         }
         $license = DotEnv::getEnv('TINA4_SWAGGER_LICENSE');
         if ($license !== null && $license !== '') {
@@ -727,14 +775,35 @@ class Swagger
         if (!empty($urls)) {
             return array_map(fn($u) => ['url' => $u], $urls);
         }
-        $dev = DotEnv::getEnv('SWAGGER_DEV_URL', 'http://localhost:7145') ?? 'http://localhost:7145';
+        // Default to "/" — correct under any port, host or reverse proxy.
+        // A hard-coded host:port is measurably wrong off that port (a server
+        // bound to 7146 would advertise 7145, so "Try it out" posts to the
+        // wrong place). SWAGGER_DEV_URL still overrides for a fixed dev URL.
+        $dev = DotEnv::getEnv('SWAGGER_DEV_URL', '/') ?? '/';
         return [['url' => $dev]];
     }
 
     /**
+     * The first argument that is neither null nor an empty string, or "" when
+     * none qualifies. Mirrors the Python master's `A or B` env fallback so an
+     * empty TINA4_SWAGGER_CONTACT_* value falls through to its legacy alias.
+     */
+    private static function firstNonEmpty(?string ...$values): string
+    {
+        foreach ($values as $value) {
+            if ($value !== null && $value !== '') {
+                return $value;
+            }
+        }
+        return '';
+    }
+
+    /**
      * Build a components.schemas object from an ORM model's field definitions.
-     * PHP's ORM field model carries type/PK/auto-increment/FK (no choices or
-     * length constraints), so the schema emits type + format + readOnly + FK.
+     * PHP's ORM field model carries type/PK/auto-increment/FK/nullability, so
+     * the schema emits type + format + readOnly + FK, and a `required` array
+     * derived from column nullability (a NOT NULL, non-auto-increment column is
+     * required — parity with the Python master).
      *
      * @param class-string<ORM> $modelClass
      * @return array<string, mixed>
@@ -749,6 +818,7 @@ class Swagger
             return ['type' => 'object', 'properties' => new \stdClass()];
         }
 
+        $required = [];
         foreach ($defs as $name => $def) {
             $schema = self::mapFieldType($def['type'] ?? 'string');
             // A foreign-key column is an integer reference.
@@ -760,12 +830,25 @@ class Swagger
                 $schema['readOnly'] = true;
             }
             $props[$name] = $schema;
+
+            // required is derived from nullability: a NOT NULL column the client
+            // must supply. A database-generated (auto-increment) column is
+            // readOnly and never required in a request body. Parity with the
+            // Python master, whose model schema lists required from field
+            // nullability — `required` is what makes the schema worth having.
+            if (empty($def['nullable']) && empty($def['auto_increment'])) {
+                $required[] = $name;
+            }
         }
 
-        return [
+        $schema = [
             'type' => 'object',
             'properties' => empty($props) ? new \stdClass() : $props,
         ];
+        if (!empty($required)) {
+            $schema['required'] = $required;
+        }
+        return $schema;
     }
 
     /**

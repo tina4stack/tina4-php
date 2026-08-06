@@ -1822,7 +1822,7 @@ abstract class ORM
      * like an auto-increment id is flagged `auto_increment => true` so the
      * seeder skips it (parity with Python's auto-increment PK skip).
      *
-     * @return array<string, array{type: string, column: string, primary_key: bool, auto_increment: bool, foreign_key: array{model: string, related_name: ?string}|null}>
+     * @return array<string, array{type: string, column: string, primary_key: bool, auto_increment: bool, foreign_key: array{model: string, related_name: ?string}|null, nullable: bool}>
      */
     public function getFieldDefinitions(): array
     {
@@ -1856,6 +1856,10 @@ abstract class ORM
                 'primary_key'    => $isPk,
                 'auto_increment' => $autoIncrement,
                 'foreign_key'    => $foreignKey,
+                // NOT NULL vs nullable, read from the declared property type
+                // (`string` -> false, `?string`/untyped -> true). Swagger derives
+                // `required` from this; an untyped property stays permissive.
+                'nullable'       => $def['nullable'] ?? true,
             ];
         }
 
@@ -1883,11 +1887,12 @@ abstract class ORM
     /**
      * Map this model's declared typed public properties to column definitions.
      * Each entry is ['type' => logical type, 'hasDefault' => bool,
-     * 'default' => mixed], where logical type is one of
-     * 'int' | 'float' | 'bool' | 'datetime' | 'string'. The primary key is
-     * always included even when its property is not declared on the subclass.
+     * 'default' => mixed, 'nullable' => bool], where logical type is one of
+     * 'int' | 'float' | 'bool' | 'datetime' | 'string' and nullable reflects the
+     * declared property type. The primary key is always included even when its
+     * property is not declared on the subclass.
      *
-     * @return array<string, array{type: string, hasDefault: bool, default: mixed}>
+     * @return array<string, array{type: string, hasDefault: bool, default: mixed, nullable: bool}>
      */
     private function getColumnDefinitions(): array
     {
@@ -1920,12 +1925,16 @@ abstract class ORM
                 'type'       => $this->logicalTypeFor($prop, $name),
                 'hasDefault' => $prop->hasDefaultValue(),
                 'default'    => $prop->hasDefaultValue() ? $prop->getDefaultValue() : null,
+                // A declared non-nullable type (`string`, `int`) is NOT NULL; a
+                // nullable type (`?string`) or an untyped property is nullable.
+                'nullable'   => $prop->getType()?->allowsNull() ?? true,
             ];
         }
 
-        // The primary key must always be a column even if undeclared.
+        // The primary key must always be a column even if undeclared. A PK is
+        // NOT NULL by definition.
         if (!isset($columns[$this->getPrimaryKeys()[0]])) {
-            $columns = [$this->getPrimaryKeys()[0] => ['type' => 'int', 'hasDefault' => false, 'default' => null]] + $columns;
+            $columns = [$this->getPrimaryKeys()[0] => ['type' => 'int', 'hasDefault' => false, 'default' => null, 'nullable' => false]] + $columns;
         }
 
         return $columns;
