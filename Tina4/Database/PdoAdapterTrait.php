@@ -41,6 +41,8 @@ namespace Tina4\Database;
  */
 trait PdoAdapterTrait
 {
+    use ConnectTimeoutTrait;
+
     private ?\PDO $pdo = null;
     private ?string $lastError = null;
     private bool $autoCommit = true;
@@ -91,9 +93,18 @@ trait PdoAdapterTrait
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ];
 
+        // Bound the connect (TINA4_DATABASE_CONNECT_TIMEOUT) before handing the
+        // DSN to PDO. How the bound is applied is per-engine — see
+        // {@see armConnectTimeout()}.
+        $timeout = $this->beginConnectTimeout();
+        if ($timeout > 0) {
+            $options = $this->armConnectTimeout($timeout, $options);
+        }
+
         try {
             $this->pdo = new \PDO($dsn, $username, $password, $options);
         } catch (\PDOException $e) {
+            $this->throwIfConnectTimedOut($this->engineLabel(), $this->connectTarget(), $e);
             $this->lastError = $e->getMessage();
             throw new \RuntimeException(
                 $this->engineLabel() . ': Failed to connect: ' . $e->getMessage()
@@ -106,6 +117,31 @@ trait PdoAdapterTrait
     /** Post-connect hook (e.g. SQLite busy_timeout / foreign_keys). Default no-op. */
     protected function onConnect(): void
     {
+    }
+
+    /**
+     * Apply the connect bound for this engine. Called only when a bound is in
+     * force, so an implementation never has to test for the disabled case.
+     *
+     * The default is a no-op, which is right for SQLite: it opens a local file
+     * and has no network to block on.
+     *
+     * @param int $timeout Seconds resolved from TINA4_DATABASE_CONNECT_TIMEOUT.
+     * @param array<int, mixed> $options PDO driver options built so far.
+     * @return array<int, mixed> The driver options to construct PDO with.
+     */
+    protected function armConnectTimeout(int $timeout, array $options): array
+    {
+        return $options;
+    }
+
+    /**
+     * What this connection is reaching for, as "host:port", for the
+     * connect-timeout message. Empty when there is no network target.
+     */
+    protected function connectTarget(): string
+    {
+        return '';
     }
 
     public function close(): void

@@ -17,6 +17,7 @@ class MySQLAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+    use ConnectTimeoutTrait;
 
     /**
      * The SQL dialect this adapter speaks.
@@ -108,23 +109,50 @@ class MySQLAdapter implements DatabaseAdapter
         // rewrite to 127.0.0.1 so mysqli takes the TCP code path.
         $host = self::rewriteHostForTcp($params['host'], $params['port']);
 
+        // Bound the connect (TINA4_DATABASE_CONNECT_TIMEOUT). This needs BOTH
+        // options, and therefore the mysqli_init()/real_connect() form — the
+        // one-shot `new \mysqli(...)` constructor gives no window to set them.
+        // MYSQLI_OPT_CONNECT_TIMEOUT alone bounds only the TCP connect, NOT the
+        // read of the server's greeting packet: MEASURED against a socket that
+        // accepts and never replies (Ubuntu 24.04.4, PHP 8.3.6), CONNECT_TIMEOUT
+        // on its own still blocked past 25s, and adding MYSQLI_OPT_READ_TIMEOUT
+        // stopped it at 3.002987s.
+        $timeout = $this->beginConnectTimeout();
+
         try {
-            $this->db = new \mysqli(
+            $connection = mysqli_init();
+            if ($timeout > 0) {
+                $connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, $timeout);
+                $connection->options(MYSQLI_OPT_READ_TIMEOUT, $timeout);
+            }
+
+            // The greeting-packet read aborted by READ_TIMEOUT raises a PHP
+            // warning of its own; we report the failure ourselves below.
+            @$connection->real_connect(
                 $host,
                 $params['username'],
                 $params['password'],
                 $params['database'],
                 $params['port']
             );
+            $this->db = $connection;
 
             if ($this->db->connect_error) {
+                $this->throwIfConnectTimedOut(
+                    'MySQLAdapter',
+                    $host . ':' . $params['port'],
+                    (string) $this->db->connect_error
+                );
                 $this->lastError = $this->db->connect_error;
-                throw new \RuntimeException("MySQLAdapter: Failed to connect: {$this->db->connect_error}");
+                $this->db = null;
+                throw new \RuntimeException("MySQLAdapter: Failed to connect: {$this->lastError}");
             }
 
             $this->db->set_charset('utf8mb4');
             $this->db->autocommit($this->autoCommit);
         } catch (\mysqli_sql_exception $e) {
+            $this->db = null;
+            $this->throwIfConnectTimedOut('MySQLAdapter', $host . ':' . $params['port'], $e);
             $this->lastError = $e->getMessage();
             throw new \RuntimeException("MySQLAdapter: Failed to connect: {$e->getMessage()}");
         }

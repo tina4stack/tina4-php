@@ -60,6 +60,43 @@ class PdoPostgresAdapter implements DatabaseAdapter
         return 'PostgreSQL (PDO)';
     }
 
+    /**
+     * Bound the connect with PDO::ATTR_TIMEOUT — NOT with connect_timeout in
+     * the DSN.
+     *
+     * pdo_pgsql appends its own "connect_timeout=<ATTR_TIMEOUT, default 30>" to
+     * the conninfo it hands libpq, and libpq lets the LAST duplicate of a
+     * keyword win, so a connect_timeout written into the DSN is silently
+     * overridden by pdo_pgsql's default. MEASURED against a socket that accepts
+     * and never replies (Ubuntu 24.04.4, PHP 8.3.6): the DSN spelling still
+     * blocked past 25s, ATTR_TIMEOUT stopped at 3.003829s.
+     *
+     * @param int $timeout Seconds resolved from TINA4_DATABASE_CONNECT_TIMEOUT.
+     * @param array<int, mixed> $options PDO driver options built so far.
+     * @return array<int, mixed> Options with the connect bound applied.
+     */
+    protected function armConnectTimeout(int $timeout, array $options): array
+    {
+        $options[\PDO::ATTR_TIMEOUT] = $timeout;
+
+        return $options;
+    }
+
+    /** The server this connection reaches for, as "host:port". */
+    protected function connectTarget(): string
+    {
+        $parts = parse_url($this->connectionString) ?: [];
+        if (isset($parts['host'])) {
+            return $parts['host'] . ':' . ($parts['port'] ?? 5432);
+        }
+
+        // libpq key=value form.
+        $host = preg_match('/\bhost=(\S+)/', $this->connectionString, $m) ? $m[1] : 'localhost';
+        $port = preg_match('/\bport=(\S+)/', $this->connectionString, $m) ? $m[1] : '5432';
+
+        return $host . ':' . $port;
+    }
+
     protected function buildDsn(): array
     {
         $input = $this->connectionString;

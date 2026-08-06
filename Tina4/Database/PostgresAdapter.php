@@ -32,6 +32,7 @@ class PostgresAdapter implements DatabaseAdapter
     }
 
     use AutocommitTrait;
+    use ConnectTimeoutTrait;
 
     /**
      * The SQL dialect this adapter speaks.
@@ -97,6 +98,19 @@ class PostgresAdapter implements DatabaseAdapter
 
         $dsn = $this->buildDsn($this->connectionString);
 
+        // Bound the connect (TINA4_DATABASE_CONNECT_TIMEOUT). libpq's own
+        // connect_timeout covers the whole connection request, not just the TCP
+        // handshake — MEASURED at 3.00s against a socket that accepts and never
+        // replies, where an unbounded pg_connect() blocked past 25s.
+        $timeout = $this->beginConnectTimeout();
+        if (str_contains($dsn, 'connect_timeout=')) {
+            // The caller put connect_timeout in their own conninfo. It is
+            // theirs: do not override it, and do not claim its expiry as ours.
+            $this->connectTimeoutArmed = 0;
+        } elseif ($timeout > 0) {
+            $dsn .= ' connect_timeout=' . $timeout;
+        }
+
         // PGSQL_CONNECT_FORCE_NEW: without it, pg_connect() reuses one libpq
         // connection for every adapter sharing a DSN — so a pool of N adapters
         // would all share ONE connection (and closing one would break the
@@ -107,6 +121,11 @@ class PostgresAdapter implements DatabaseAdapter
         error_clear_last();
         $conn = @pg_connect($dsn, PGSQL_CONNECT_FORCE_NEW);
         if ($conn === false) {
+            $this->throwIfConnectTimedOut(
+                'PostgresAdapter',
+                self::dsnTarget($dsn),
+                error_get_last()['message'] ?? ''
+            );
             // Say WHY and say WHICH. "Failed to connect to PostgreSQL" on its own
             // sent 43 identical errors to a maintainer who then went looking for a
             // driver bug; the real cause was a database that did not exist, and
@@ -498,6 +517,26 @@ class PostgresAdapter implements DatabaseAdapter
     private function safeDsn(string $dsn): string
     {
         return trim(\Tina4\DatabaseUrl::redact($dsn));
+    }
+
+    /**
+     * "host:port" for the connect-timeout message, read back out of the libpq
+     * conninfo so both DSN forms (URL-built and caller-supplied key=value) name
+     * the same target. Values may be single-quoted by {@see quoteDsnValue()}.
+     *
+     * @param string $dsn The conninfo string handed to pg_connect().
+     * @return string The target as "host:port", using libpq's own defaults.
+     */
+    private static function dsnTarget(string $dsn): string
+    {
+        $value = static function (string $key) use ($dsn): string {
+            if (!preg_match("/\b{$key}=(?:'([^']*)'|([^\s']+))/", $dsn, $matches)) {
+                return '';
+            }
+            return ($matches[2] ?? '') !== '' ? $matches[2] : $matches[1];
+        };
+
+        return ($value('host') ?: 'localhost') . ':' . ($value('port') ?: '5432');
     }
 
     /**

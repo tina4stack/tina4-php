@@ -35,6 +35,7 @@ namespace Tina4\Database;
 class MongoDBAdapter implements DatabaseAdapter
 {
     use AutocommitTrait;
+    use ConnectTimeoutTrait;
 
     /**
      * The SQL dialect this adapter speaks.
@@ -101,10 +102,14 @@ class MongoDBAdapter implements DatabaseAdapter
             return;
         }
 
+        $timeout = $this->beginConnectTimeout();
+        $target = '';
+
         try {
             $params = $this->parseConnectionString($this->connectionString);
             $dsn = $params['dsn'];
             $dbName = $params['database'];
+            $target = (string) preg_replace('#^mongodb://#', '', $dsn);
 
             $options = [];
             if ($params['username'] !== '') {
@@ -113,10 +118,29 @@ class MongoDBAdapter implements DatabaseAdapter
             if ($params['password'] !== '') {
                 $options['password'] = $params['password'];
             }
+            // The driver's own bounds, in MILLIseconds. Mongo is the only one
+            // of the eight that stops on its own without being asked (MEASURED
+            // 10.01s, its connectTimeoutMS default) — this brings it under the
+            // same variable as the rest. serverSelectionTimeoutMS matters too:
+            // the socket connect can succeed while server selection then spins.
+            if ($timeout > 0) {
+                $options['connectTimeoutMS'] = $timeout * 1000;
+                $options['serverSelectionTimeoutMS'] = $timeout * 1000;
+            }
 
             $this->client = new \MongoDB\Client($dsn, $options);
             $this->db = $this->client->selectDatabase($dbName);
+
+            // Actually open the connection. MongoDB\Client is LAZY — it and
+            // selectDatabase() do no I/O, so before this ping open() returned
+            // in 0.00s against a server that was not there (MEASURED), and the
+            // bound could only fire much later, buried inside whichever query
+            // happened to be first. That is the same "no log, no error, no
+            // signal" defect this variable exists to kill, and it also made
+            // open() mean something different here than in every other adapter.
+            $this->db->command(['ping' => 1]);
         } catch (\Exception $e) {
+            $this->throwIfConnectTimedOut('MongoDBAdapter', $target, $e);
             $this->lastError = $e->getMessage();
             throw new \RuntimeException("MongoDBAdapter: Failed to connect: {$e->getMessage()}");
         }

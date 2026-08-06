@@ -83,6 +83,36 @@ class PdoFirebirdAdapter implements DatabaseAdapter
         return 'Firebird (PDO)';
     }
 
+    /**
+     * Bound the connect by reaching the port ourselves first.
+     *
+     * PDO_Firebird exposes no connect timeout — it does not surface
+     * isc_dpb_connect_timeout, PDO::ATTR_TIMEOUT is ignored, and libfbclient
+     * retries through EINTR so a signal cannot interrupt it either (all three
+     * MEASURED on Ubuntu 24.04.4 / PHP 8.3.6). A bounded TCP connect is the
+     * only real bound available. See {@see ConnectTimeoutTrait::preflightConnectTimeout()}
+     * for exactly what it does and does not cover.
+     *
+     * @param int $timeout Seconds resolved from TINA4_DATABASE_CONNECT_TIMEOUT.
+     * @param array<int, mixed> $options PDO driver options built so far.
+     * @return array<int, mixed> The options unchanged — the bound is not a driver option.
+     */
+    protected function armConnectTimeout(int $timeout, array $options): array
+    {
+        $params = $this->parseConnection($this->connectionString);
+        $this->preflightConnectTimeout($this->engineLabel(), (string) $params['host'], (int) $params['port']);
+
+        return $options;
+    }
+
+    /** The server this connection reaches for, as "host:port"; empty when embedded. */
+    protected function connectTarget(): string
+    {
+        $params = $this->parseConnection($this->connectionString);
+
+        return $params['host'] === '' ? '' : $params['host'] . ':' . $params['port'];
+    }
+
     protected function buildDsn(): array
     {
         $params = $this->parseConnection($this->connectionString);

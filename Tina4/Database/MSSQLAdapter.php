@@ -27,6 +27,7 @@ class MSSQLAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+    use ConnectTimeoutTrait;
 
     /**
      * The SQL dialect this adapter speaks.
@@ -105,6 +106,11 @@ class MSSQLAdapter implements DatabaseAdapter
 
         $params = $this->parseConnection($this->connectionString);
 
+        // Bound the connect (TINA4_DATABASE_CONNECT_TIMEOUT). Both driver
+        // branches below arm their own mechanism; see each for what it covers.
+        $timeout = $this->beginConnectTimeout();
+        $target = $params['host'] . ':' . $params['port'];
+
         if ($this->driver === 'pdo') {
             // dblib DSN uses host:port with a COLON (not a comma like sqlsrv).
             // The FreeTDS TDS protocol version is taken from the environment
@@ -112,10 +118,25 @@ class MSSQLAdapter implements DatabaseAdapter
             $port = ($params['port'] > 0) ? (int)$params['port'] : 1433;
             $dsn = "dblib:host={$params['host']}:{$port};dbname={$params['database']};charset=UTF-8";
 
+            // FreeTDS login timeout. pdo_dblib maps both of these onto
+            // dbsetlogintime(). MEASURED CAVEAT (Ubuntu 24.04.4, PHP 8.3.6,
+            // FreeTDS via pdo_dblib): this bounds the CONNECT, but against a
+            // peer that completes the TCP handshake and then never speaks TDS
+            // it did NOT fire — the connect still blocked past 25s. There is no
+            // other timeout knob pdo_dblib exposes, so that case stays
+            // unbounded on this branch; use ext-sqlsrv (LoginTimeout, below)
+            // where a hard bound matters.
+            $options = [];
+            if ($timeout > 0) {
+                $options[\PDO::ATTR_TIMEOUT] = $timeout;
+                $options[\PDO::DBLIB_ATTR_CONNECTION_TIMEOUT] = $timeout;
+            }
+
             try {
-                $pdo = new \PDO($dsn, $params['username'], $params['password']);
+                $pdo = new \PDO($dsn, $params['username'], $params['password'], $options);
                 $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             } catch (\PDOException $e) {
+                $this->throwIfConnectTimedOut('MSSQLAdapter', $target, $e);
                 $this->lastError = $e->getMessage();
                 throw new \RuntimeException("MSSQLAdapter: Failed to connect: {$e->getMessage()}");
             }
@@ -142,10 +163,17 @@ class MSSQLAdapter implements DatabaseAdapter
             $connectionInfo['PWD'] = $params['password'];
         }
 
+        // sqlsrv's own login timeout, in seconds — the driver's documented
+        // mechanism. NOT verified on the lab box, which has no ext-sqlsrv.
+        if ($timeout > 0) {
+            $connectionInfo['LoginTimeout'] = $timeout;
+        }
+
         $conn = @sqlsrv_connect($serverName, $connectionInfo);
         if ($conn === false) {
             $errors = sqlsrv_errors();
             $msg = $errors ? $errors[0]['message'] : 'Unknown connection error';
+            $this->throwIfConnectTimedOut('MSSQLAdapter', $target, $msg);
             $this->lastError = $msg;
             throw new \RuntimeException("MSSQLAdapter: Failed to connect: {$msg}");
         }

@@ -24,6 +24,7 @@ class ODBCAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+    use ConnectTimeoutTrait;
 
     // Shared SQL normalisation: the row-cap detectors (scrub + anchor) and the
     // newline-safe COUNT wrapper / clause append used by fetch().
@@ -80,16 +81,26 @@ class ODBCAdapter implements DatabaseAdapter
             );
         }
 
+        // Bound the connect (TINA4_DATABASE_CONNECT_TIMEOUT) with the ODBC login
+        // timeout. An ODBC connection string names a DSN or a driver, not
+        // necessarily a host and port, so the message names the DSN instead.
+        // NOT verified on the lab box, which has no pdo_odbc.
+        $timeout = $this->beginConnectTimeout();
+        $options = [
+            \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+        ];
+        if ($timeout > 0) {
+            $options[\PDO::ATTR_TIMEOUT] = $timeout;
+        }
+
         try {
             $dsn = 'odbc:' . $this->connectionString;
             $this->pdo = new \PDO(
                 $dsn,
                 $this->username !== '' ? $this->username : null,
                 $this->password !== '' ? $this->password : null,
-                [
-                    \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
-                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-                ]
+                $options
             );
 
             // Disable PDO-level autocommit so we control transactions explicitly
@@ -97,6 +108,7 @@ class ODBCAdapter implements DatabaseAdapter
                 $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, 0);
             }
         } catch (\PDOException $e) {
+            $this->throwIfConnectTimedOut('ODBC', $this->connectionString, $e);
             $this->lastError = $e->getMessage();
             throw new \RuntimeException("ODBC: Failed to connect: {$e->getMessage()}");
         }

@@ -24,6 +24,7 @@ class FirebirdAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+    use ConnectTimeoutTrait;
 
     /**
      * The SQL dialect this adapter speaks.
@@ -148,10 +149,30 @@ class FirebirdAdapter implements DatabaseAdapter
             $dbPath .= ':' . $params['database'];
         }
 
+        // Bound the connect (TINA4_DATABASE_CONNECT_TIMEOUT) by reaching the
+        // port ourselves first. ext-interbase exposes no connect timeout — it
+        // builds its own DPB and never sets isc_dpb_connect_timeout — and
+        // libfbclient retries through EINTR, so pcntl_alarm cannot interrupt
+        // ibase_connect() either (both MEASURED on Ubuntu 24.04.4 / PHP 8.3.6).
+        // See ConnectTimeoutTrait::preflightConnectTimeout() for the residual
+        // case this does not cover.
+        $this->beginConnectTimeout();
+        $this->preflightConnectTimeout('FirebirdAdapter', (string) $params['host'], (int) $params['port']);
+
         $conn = @$connectFn($dbPath, $params['username'], $params['password'], $this->charset);
         if ($conn === false) {
             $errFn = $this->fn . 'errmsg';
             $this->lastError = $errFn();
+            // libfbclient has a connect ceiling of its own (firebird.conf
+            // ConnectionTimeout, default 180s — MEASURED here at 180.10s). When
+            // the connect blew past the configured bound, say so in the
+            // framework's words rather than leaving the operator with
+            // "connection rejected by remote interface" and no variable to tune.
+            $this->throwIfConnectTimedOut(
+                'FirebirdAdapter',
+                $params['host'] . ':' . $params['port'],
+                (string) $this->lastError
+            );
             throw new \RuntimeException("FirebirdAdapter: Failed to connect: {$this->lastError}");
         }
 

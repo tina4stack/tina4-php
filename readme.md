@@ -458,6 +458,7 @@ TINA4_LOCALE=en                         # Localization language
 # Database
 TINA4_DB_CACHE=true                     # Enable query caching (4x speedup)
 TINA4_AUTOCOMMIT=false                  # Auto-commit control (default: off)
+TINA4_DATABASE_CONNECT_TIMEOUT=10       # Seconds to wait for a connect (0 or less = wait forever)
 
 # Sessions
 TINA4_SESSION_HANDLER=file              # file, redis, valkey, mongodb, database
