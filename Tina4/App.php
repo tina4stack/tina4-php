@@ -1420,18 +1420,18 @@ HTML;
                 query: $request['query'] ?? [],
                 ip: $request['ip'] ?? '127.0.0.1',
             );
-        } elseif (is_object($request) && method_exists($request, 'getMethod')) {
-            // PSR-7 ServerRequestInterface
-            $tina4Request = new Request(
-                method: $request->getMethod(),
-                path: $request->getUri()->getPath(),
-                headers: array_map(fn($v) => $v[0] ?? '', $request->getHeaders()),
-                body: (string) $request->getBody(),
-                query: $request->getQueryParams(),
-                ip: $request->getServerParams()['REMOTE_ADDR'] ?? '127.0.0.1',
-            );
-        } elseif (is_object($request) && property_exists($request, 'server')) {
-            // Swoole\HTTP\Request
+        } elseif (is_object($request) && property_exists($request, 'server') && method_exists($request, 'rawContent')) {
+            // Swoole / OpenSwoole \Swoole\Http\Request.
+            //
+            // Checked BEFORE PSR-7, and PSR-7 is probed on getUri() rather than
+            // getMethod(), because Swoole's request HAS getMethod() (added in
+            // Swoole 4.6) and has no getUri() at all. Probing getMethod() first
+            // therefore sent every real Swoole request into the PSR-7 branch,
+            // where getUri()->getPath() died with "Call to undefined method
+            // Swoole\Http\Request::getUri()" - so this branch was unreachable
+            // and the Swoole integration documented above could never run.
+            // Measured on openswoole 26.2.0 / PHP 8.3: getMethod PRESENT,
+            // getUri absent. See tests/AppInvokeSwooleTest.php.
             $tina4Request = new Request(
                 method: $request->server['request_method'] ?? 'GET',
                 path: $request->server['request_uri'] ?? '/',
@@ -1439,6 +1439,18 @@ HTML;
                 body: $request->rawContent() ?: '',
                 query: $request->get ?? [],
                 ip: $request->server['remote_addr'] ?? '127.0.0.1',
+            );
+        } elseif (is_object($request) && method_exists($request, 'getUri') && method_exists($request, 'getMethod')) {
+            // PSR-7 ServerRequestInterface. Probed structurally rather than with
+            // instanceof because Tina4 declares no PSR dependency, so the
+            // interface is often not loaded at all.
+            $tina4Request = new Request(
+                method: $request->getMethod(),
+                path: $request->getUri()->getPath(),
+                headers: array_map(fn($v) => $v[0] ?? '', $request->getHeaders()),
+                body: (string) $request->getBody(),
+                query: $request->getQueryParams(),
+                ip: $request->getServerParams()['REMOTE_ADDR'] ?? '127.0.0.1',
             );
         } else {
             // Read from PHP globals (php -S, PHP-FPM, Apache)

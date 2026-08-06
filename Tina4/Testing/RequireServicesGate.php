@@ -117,6 +117,14 @@ final class RequireServicesGate
         // the lab's lab-env.sh / lab-env-for.sh (all three) - so keying on the
         // coordinates keeps the gate exactly as strict where the service is
         // promised, and silent where it is not.
+        // Swoole/OpenSwoole is conditional for the same reason: only the
+        // `swoole:` CI job installs the extension, and the main `test:` job
+        // must not fail for a PECL extension it never claimed to provide. The
+        // job that DOES install it sets TINA4_TEST_SWOOLE=1, so a skip there -
+        // which would mean the extension silently failed to load - is a hard
+        // failure instead of a green.
+        'TINA4_TEST_SWOOLE' => ['swoole', 'openswoole'],
+
         'TINA4_TEST_PG_URL' => ['postgres', 'postgresql', 'psycopg2', 'pg_connect', 'ext-pgsql'],
         'TINA4_TEST_MYSQL_URL' => ['mysql'],   // also matches "ext-mysqli" / "pdo_mysql"
         // SQL Server, native (ext-sqlsrv) or via FreeTDS/pdo_dblib.

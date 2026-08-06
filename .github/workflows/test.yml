@@ -615,3 +615,53 @@ jobs:
             tests/CacheClearPersistentLayerTest.php \
             tests/CacheProviderSelectionTest.php \
             tests/CacheMemcachedExptimeTest.php
+
+  # The SWOOLE transport runs in its OWN job, because App::__invoke() is a
+  # documented integration point that nothing in this pipeline ever executed.
+  #
+  # The docblock on App::__invoke() has shown a Swoole example since v3, and the
+  # branch that example needs was UNREACHABLE: the PSR-7 probe above it tested
+  # method_exists($request, 'getMethod'), and a real Swoole\Http\Request HAS
+  # getMethod() (Swoole 4.6+) while having NO getUri(). Every real Swoole request
+  # therefore took the PSR-7 branch and died on getUri()->getPath(). Measured on
+  # openswoole 26.2.0 / PHP 8.3.
+  #
+  # No test could have caught that without the real extension, because the defect
+  # WAS a wrong belief about the real class's method list - a hand-written stand-in
+  # would have been built from the same wrong belief and passed against the bug.
+  # So the extension gets installed and the real type gets used.
+  swoole:
+    runs-on: ubuntu-latest
+    env:
+      # The gate has teeth here: this is the one job that promises a Swoole, so a
+      # swoole/openswoole SKIP here means the extension silently failed to load,
+      # which is exactly the green pass the gate exists to stop.
+      TINA4_TEST_SWOOLE: '1'
+      TINA4_REQUIRE_SERVICES: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: sqlite3, pdo_sqlite
+
+      # FAIL the job if the extension does not load, rather than letting the
+      # suite downgrade to a green skip - same discipline as the interbase and
+      # pdo_firebird steps above.
+      - name: Install openswoole
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libbrotli-dev
+          sudo pecl install -f openswoole
+          scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
+          echo "extension=openswoole.so" | sudo tee "${scan_dir}/99-openswoole.ini"
+          php -m | grep -qi '^openswoole$' || { echo "openswoole failed to load"; php -m; exit 1; }
+          php -r 'if (!class_exists("Swoole\Http\Request")) { echo "no Swoole\Http\Request\n"; exit(1); }'
+          php -r 'echo "openswoole " . phpversion("openswoole") . " ready\n";'
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run the Swoole transport tests
+        run: vendor/bin/phpunit --colors=never tests/AppInvokeSwooleTest.php
