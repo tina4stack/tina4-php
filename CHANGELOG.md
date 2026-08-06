@@ -1,3 +1,53 @@
+### Changed (3.13.96 Swagger + Messenger cross-framework parity)
+
+Swagger and the Messenger IMAP read path were measured side by side across all
+four frameworks and moved onto one settled shape (Python is the reference).
+
+Swagger (`Tina4\Swagger`):
+
+- `components.schemas.<Model>` now carries a `required` array derived from column
+  nullability: a NOT NULL, non-auto-increment column is required. The ORM field
+  map (`getFieldDefinitions()`) gained a `nullable` flag read from the declared
+  property type (`string` is NOT NULL, `?string` and untyped are nullable).
+- `info.contact` now emits `name` and `url`, not only `email`. It reads
+  `TINA4_SWAGGER_CONTACT_TEAM` and `TINA4_SWAGGER_CONTACT_URL` (with the legacy
+  `SWAGGER_CONTACT_TEAM` / `SWAGGER_CONTACT_URL` as a fallback).
+- Framework-internal routes are excluded from the published document by one
+  shared list: `/swagger`, `/__dev`, `/__feedback`, and the AI/RAG service
+  prefixes (`/ai`, `/rag`, `/vision`, `/embed`, `/image`), plus the bare `/`
+  landing page. PHP was publishing ten service routes it registers itself.
+
+Breaking: `info.description` now defaults to `""` (was "Auto-generated from Tina4
+routes") and `servers[0].url` defaults to `"/"` (was `http://localhost:7145`,
+which is wrong off port 7145). `TINA4_SWAGGER_DESCRIPTION`, `TINA4_SWAGGER_SERVERS`
+and `SWAGGER_DEV_URL` still override. Migration: set those env vars if you relied
+on the old defaults.
+
+Messenger (`Tina4\Messenger`), IMAP read path:
+
+- Every `inbox()` / `search()` item now carries `snippet` (decoded,
+  transfer-decoded, tag-stripped plain text, truncated to 200 chars; `mb_*`
+  guarded so it works without ext-mbstring).
+- `read()` now returns a `headers` map (name => value).
+- New methods: `markUnread()`, `sendTemplate()` (renders a Frond template), and
+  `delete()` (flags `\Deleted` and expunges).
+- IMAP credentials are now separate from SMTP: `TINA4_MAIL_IMAP_USERNAME` /
+  `TINA4_MAIL_IMAP_PASSWORD` (falling back to `TINA4_MAIL_USERNAME` /
+  `_PASSWORD`), and constructor params `imapUsername` / `imapPassword`. PHP used
+  to authenticate IMAP to the SMTP account and could return someone else's mail.
+- `imapEncryption` is now a constructor parameter (explicit beats env, ADR-0041).
+  The default is port-aware (993 = tls, else none), reproducing the previous
+  port-based connection selection, so nothing regresses for callers who never
+  set it.
+
+Breaking (inbox/read item keys): an `inbox()`/`search()` item is now exactly
+`{uid, subject, from, to, date, snippet, seen}`. `to` was ADDED; `msgno`,
+`flagged` and `size` were REMOVED; `date` is now ISO-8601 (was raw RFC 2822).
+`read()` likewise emits `date` as ISO-8601 and adds `headers`. Migration: a
+consumer that read `msgno`/`flagged`/`size` from an inbox item must stop; a
+consumer that parsed the raw RFC 2822 `date` must parse ISO-8601 instead; `to`
+is now available directly.
+
 ### Fixed (Firebird held a table for the life of the process, #170)
 
 A parameterised statement on the native ext-interbase driver kept its table

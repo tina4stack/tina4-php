@@ -66,6 +66,12 @@ class Messenger
     /** @var int IMAP port */
     private int $imapPort;
 
+    /** @var string IMAP username — may differ from the SMTP username */
+    private string $imapUsername;
+
+    /** @var string IMAP password — may differ from the SMTP password */
+    private string $imapPassword;
+
     /** @var string IMAP encryption mode: 'tls', 'starttls', or 'none' */
     private string $imapEncryption;
 
@@ -85,8 +91,11 @@ class Messenger
      * @param string|null $fromName    Default sender display name
      * @param string|null $encryption  Encryption mode: tls, ssl, starttls, none (default: tls)
      * @param bool|null   $useTls      Deprecated — use $encryption instead
-     * @param string|null $imapHost    IMAP server hostname
-     * @param int|null    $imapPort    IMAP server port (993 for SSL, 143 for plain)
+     * @param string|null $imapHost     IMAP server hostname
+     * @param int|null    $imapPort     IMAP server port (993 for SSL, 143 for plain)
+     * @param string|null $imapUsername IMAP username (defaults to TINA4_MAIL_IMAP_USERNAME, then the SMTP username)
+     * @param string|null $imapPassword IMAP password (defaults to TINA4_MAIL_IMAP_PASSWORD, then the SMTP password)
+     * @param string|null $imapEncryption IMAP encryption: tls, starttls, none (explicit beats env; default port-aware)
      */
     public function __construct(
         ?string $host = null,
@@ -99,6 +108,9 @@ class Messenger
         ?bool $useTls = null,
         ?string $imapHost = null,
         ?int $imapPort = null,
+        ?string $imapUsername = null,
+        ?string $imapPassword = null,
+        ?string $imapEncryption = null,
     ) {
         // Whether a host was actually CONFIGURED, which is not the same as $this->host
         // being set: it falls back to 'localhost', so it is never empty and cannot
@@ -148,13 +160,30 @@ class Messenger
         $envImapPort = $this->env('TINA4_MAIL_IMAP_PORT');
         $this->imapPort = $imapPort ?? ($envImapPort !== null ? (int)$envImapPort : 993);
 
-        // IMAP encryption — TINA4_MAIL_IMAP_ENCRYPTION: 'tls' (default),
-        // 'starttls', or 'none'. Independent of SMTP encryption — Gmail-style
-        // setups use SSL/IMAPS on 993 while SMTP runs STARTTLS on 587.
-        $envImapEnc = $this->env('TINA4_MAIL_IMAP_ENCRYPTION');
-        $this->imapEncryption = strtolower($envImapEnc ?? 'tls');
-        if (!in_array($this->imapEncryption, ['tls', 'starttls', 'none'], true)) {
-            $this->imapEncryption = 'tls';
+        // IMAP credentials — SEPARATE from SMTP. A mailbox that authenticates
+        // differently from the SMTP relay (common at most providers) must read
+        // the right account. Priority: constructor > TINA4_MAIL_IMAP_* >
+        // TINA4_MAIL_* (the SMTP username/password, already resolved above).
+        $this->imapUsername = $imapUsername
+            ?? $this->env('TINA4_MAIL_IMAP_USERNAME')
+            ?? $this->username;
+        $this->imapPassword = $imapPassword
+            ?? $this->env('TINA4_MAIL_IMAP_PASSWORD')
+            ?? $this->password;
+
+        // IMAP encryption — 'tls' (implicit TLS/IMAPS), 'starttls', or 'none'.
+        // Independent of SMTP encryption (Gmail-style setups use IMAPS on 993
+        // while SMTP runs STARTTLS on 587). Priority: constructor > env >
+        // port-aware default. The port-aware default (993 = tls, else none)
+        // reproduces the historical port-based flag selection, so a caller that
+        // never sets it keeps today's exact connection behaviour; an explicit
+        // value now wins (ADR-0041) and is honoured by imapMailbox().
+        $explicitImapEnc = $imapEncryption ?? $this->env('TINA4_MAIL_IMAP_ENCRYPTION');
+        if ($explicitImapEnc !== null && $explicitImapEnc !== '') {
+            $enc = strtolower($explicitImapEnc);
+            $this->imapEncryption = in_array($enc, ['tls', 'starttls', 'none'], true) ? $enc : 'tls';
+        } else {
+            $this->imapEncryption = $this->imapPort === 993 ? 'tls' : 'none';
         }
     }
 
@@ -289,6 +318,72 @@ class Messenger
     }
 
     /**
+     * Send an HTML email rendered from a Frond template string.
+     *
+     * The template is rendered with the built-in Frond engine; if rendering
+     * fails the raw template is sent (and the failure is logged) rather than
+     * dropping the mail. Extra send options (cc/bcc/reply-to/attachments/
+     * headers) forward to send(). Parity with the Python master's send_template.
+     *
+     * @param string|array $to          Recipient(s)
+     * @param string       $subject     Email subject
+     * @param string       $template    Frond/Twig template source
+     * @param array        $data        Template variables
+     * @param array|string $cc          CC recipients
+     * @param array|string $bcc         BCC recipients
+     * @param string|null  $replyTo     Reply-to address
+     * @param array        $attachments Attachments (paths or filename/content/mime arrays)
+     * @param array        $headers     Additional headers as key => value
+     * @return array ['success' => bool, 'message' => string, 'id' => string|null]
+     */
+    public function sendTemplate(
+        string|array $to,
+        string $subject,
+        string $template,
+        array $data = [],
+        array|string $cc = [],
+        array|string $bcc = [],
+        ?string $replyTo = null,
+        array $attachments = [],
+        array $headers = [],
+    ): array {
+        $body = $this->renderTemplate($template, $data);
+
+        return $this->send(
+            to: $to,
+            subject: $subject,
+            body: $body,
+            html: true,
+            text: null,
+            cc: $cc,
+            bcc: $bcc,
+            replyTo: $replyTo,
+            attachments: $attachments,
+            headers: $headers,
+        );
+    }
+
+    /**
+     * Render a Frond template string, falling back to the raw template when the
+     * engine is unavailable or the render fails (mail must not be dropped).
+     *
+     * @param string $template Template source
+     * @param array  $data     Template variables
+     * @return string Rendered body (or the raw template on failure)
+     */
+    private function renderTemplate(string $template, array $data): string
+    {
+        if (class_exists(Frond::class)) {
+            try {
+                return (new Frond())->renderString($template, $data);
+            } catch (\Throwable $e) {
+                Log::warning('Messenger sendTemplate: template render failed, sending raw template: ' . $e->getMessage());
+            }
+        }
+        return $template;
+    }
+
+    /**
      * Test the SMTP connection.
      *
      * @return array ['success' => bool, 'message' => string]
@@ -335,12 +430,16 @@ class Messenger
     // ── IMAP Operations ──────────────────────────────────────────
 
     /**
-     * List messages in a mailbox folder.
+     * List messages in a mailbox folder, newest first.
+     *
+     * Each item carries the cross-framework settled shape (all four frameworks):
+     *   uid (string), subject (string), from (string), to (string),
+     *   date (ISO-8601 string), snippet (string), seen (bool).
      *
      * @param string $folder Folder name (default: INBOX)
      * @param int    $limit  Maximum messages to return
      * @param int    $offset Offset for pagination
-     * @return array List of message summary arrays
+     * @return array<int, array{uid: string, subject: string, from: string, to: string, date: string, snippet: string, seen: bool}>
      */
     public function inbox(string $folder = 'INBOX', int $limit = 20, int $offset = 0): array
     {
@@ -380,20 +479,7 @@ class Messenger
             $overview = array_reverse($overview);
 
             foreach ($overview as $msg) {
-                $messages[] = [
-                    // A STRING, matching the Python master
-                    // ("uid": uid.decode() ... else str(uid)) and Node. An int here
-                    // changed the JSON shape ("uid": 1 vs "uid": "1") between
-                    // frameworks, which the same-API-responses rule forbids.
-                    'uid' => (string)($msg->uid ?? ''),
-                    'msgno' => $msg->msgno ?? 0,
-                    'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
-                    'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
-                    'date' => $msg->date ?? '',
-                    'seen' => (bool)($msg->seen ?? false),
-                    'flagged' => (bool)($msg->flagged ?? false),
-                    'size' => $msg->size ?? 0,
-                ];
+                $messages[] = $this->summaryItem($imap, $msg);
             }
 
             return $messages;
@@ -407,10 +493,15 @@ class Messenger
     /**
      * Read a single message by UID.
      *
+     * Returns the settled read() shape: uid, subject, from, to, cc, date
+     * (ISO-8601), body_text, body_html, attachments, headers (name => value
+     * map). A genuinely missing UID returns null (a successful fetch with no
+     * match, NOT an error).
+     *
      * @param string|int $uid  Message UID
      * @param string $folder   Folder name
      * @param bool   $markRead Whether to mark as read
-     * @return array|null Message data or null if not found
+     * @return array<string, mixed>|null Message data or null if not found
      */
     public function read(string|int $uid, string $folder = 'INBOX', bool $markRead = true): ?array
     {
@@ -436,6 +527,12 @@ class Messenger
             $body = $this->extractBody($imap, $uid, $structure);
             $attachments = $this->extractAttachments($imap, $uid, $structure);
 
+            // Full header map (name => value), parity with the Python master's
+            // headers: dict(msg.items()). Peeked so reading the header block
+            // never flips \Seen ahead of the explicit markRead below.
+            $rawHeaders = imap_fetchheader($imap, $uid, FT_UID);
+            $headers = $this->parseHeaders($rawHeaders === false ? '' : $rawHeaders);
+
             if ($markRead) {
                 imap_setflag_full($imap, (string)$uid, '\\Seen', ST_UID);
             }
@@ -447,12 +544,13 @@ class Messenger
                 'from' => $this->formatAddress($header->from ?? []),
                 'to' => $this->formatAddress($header->to ?? []),
                 'cc' => $this->formatAddress($header->cc ?? []),
-                'date' => $header->date ?? '',
+                'date' => $this->toIso8601((string)($header->date ?? '')),
                 'seen' => (bool)($header->Seen ?? false),
                 'flagged' => (bool)($header->Flagged ?? false),
                 'body_text' => $body['text'] ?? '',
                 'body_html' => $body['html'] ?? '',
                 'attachments' => $attachments,
+                'headers' => $headers,
                 'message_id' => $header->message_id ?? '',
             ];
         } catch (\Throwable $e) {
@@ -563,16 +661,7 @@ class Messenger
                 }
 
                 $msg = $overview[0];
-                $messages[] = [
-                    'uid' => (string)$uid,
-                    'msgno' => $msg->msgno ?? 0,
-                    'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
-                    'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
-                    'date' => $msg->date ?? '',
-                    'seen' => (bool)($msg->seen ?? false),
-                    'flagged' => (bool)($msg->flagged ?? false),
-                    'size' => $msg->size ?? 0,
-                ];
+                $messages[] = $this->summaryItem($imap, $msg);
             }
 
             return $messages;
@@ -630,14 +719,47 @@ class Messenger
     public function markRead(string|int $uid, string $folder = 'INBOX'): void
     {
         $imap = $this->imapConnect($folder);
-        if ($imap === null) {
-            return;
-        }
 
         try {
             imap_setflag_full($imap, (string)$uid, '\\Seen', ST_UID);
-            imap_close($imap);
-        } catch (\Throwable $e) {
+        } finally {
+            @imap_close($imap);
+        }
+    }
+
+    /**
+     * Mark a message as unread (clear the \Seen flag).
+     *
+     * @param string|int $uid    Message UID
+     * @param string     $folder IMAP folder name
+     * @throws MessengerConnectionError On a connection/auth/protocol failure
+     */
+    public function markUnread(string|int $uid, string $folder = 'INBOX'): void
+    {
+        $imap = $this->imapConnect($folder);
+
+        try {
+            imap_clearflag_full($imap, (string)$uid, '\\Seen', ST_UID);
+        } finally {
+            @imap_close($imap);
+        }
+    }
+
+    /**
+     * Delete a message: flag it \Deleted and expunge the folder.
+     *
+     * @param string|int $uid    Message UID
+     * @param string     $folder IMAP folder name
+     * @throws MessengerConnectionError On a connection/auth/protocol failure
+     */
+    public function delete(string|int $uid, string $folder = 'INBOX'): void
+    {
+        $imap = $this->imapConnect($folder);
+
+        try {
+            imap_setflag_full($imap, (string)$uid, '\\Deleted', ST_UID);
+            imap_expunge($imap);
+        } finally {
             @imap_close($imap);
         }
     }
@@ -1023,8 +1145,8 @@ class Messenger
 
         $imap = @imap_open(
             $mailbox,
-            $this->username ?? '',
-            $this->password ?? '',
+            $this->imapUsername,
+            $this->imapPassword,
             0,
             1
         );
@@ -1043,9 +1165,26 @@ class Messenger
     private function imapMailbox(string $folder): string
     {
         $port = $this->imapPort ?? 993;
-        $flags = $port === 993 ? '/imap/ssl' : '/imap';
 
-        return '{' . $this->imapHost . ':' . $port . $flags . '}' . $folder;
+        return '{' . $this->imapHost . ':' . $port . $this->imapFlags() . '}' . $folder;
+    }
+
+    /**
+     * The imap_open connection flags for the resolved encryption mode:
+     *   tls (default) -> /imap/ssl (implicit TLS / IMAPS)
+     *   starttls      -> /imap/tls (negotiate STARTTLS)
+     *   none          -> /imap     (plain, no TLS)
+     *
+     * The port-aware default set in the constructor makes the no-explicit-value
+     * case reproduce the historical port-based selection exactly.
+     */
+    private function imapFlags(): string
+    {
+        return match ($this->imapEncryption) {
+            'starttls' => '/imap/tls',
+            'none'     => '/imap',
+            default    => '/imap/ssl',
+        };
     }
 
     /**
@@ -1054,16 +1193,20 @@ class Messenger
      * @param resource $imap      IMAP stream
      * @param int      $uid       Message UID
      * @param object   $structure Message structure
+     * @param bool     $peek      When true, fetch with FT_PEEK so reading the
+     *                            body does NOT set \Seen (used for snippets on a
+     *                            listing, which must not mutate the mailbox).
      * @return array ['text' => string, 'html' => string]
      */
-    private function extractBody($imap, int $uid, object $structure): array
+    private function extractBody($imap, int $uid, object $structure, bool $peek = false): array
     {
         $result = ['text' => '', 'html' => ''];
+        $flags = FT_UID | ($peek ? FT_PEEK : 0);
 
         if (empty($structure->parts)) {
             // Simple message, no parts
-            $body = imap_fetchbody($imap, $uid, '1', FT_UID);
-            $decoded = $this->decodeBody($body, $structure->encoding ?? 0);
+            $body = imap_fetchbody($imap, $uid, '1', $flags);
+            $decoded = $this->decodeBody($body === false ? '' : $body, $structure->encoding ?? 0);
 
             if (($structure->subtype ?? '') === 'HTML') {
                 $result['html'] = $decoded;
@@ -1075,16 +1218,20 @@ class Messenger
         }
 
         // Multipart message
-        $this->walkParts($imap, $uid, $structure->parts, '1', $result);
+        $this->walkParts($imap, $uid, $structure->parts, '1', $result, $peek);
 
         return $result;
     }
 
     /**
      * Recursively walk MIME parts to extract text and HTML bodies.
+     *
+     * @param bool $peek When true, fetch with FT_PEEK (does not set \Seen).
      */
-    private function walkParts($imap, int $uid, array $parts, string $prefix, array &$result): void
+    private function walkParts($imap, int $uid, array $parts, string $prefix, array &$result, bool $peek = false): void
     {
+        $flags = FT_UID | ($peek ? FT_PEEK : 0);
+
         foreach ($parts as $index => $part) {
             $partNumber = $prefix === '' ? (string)($index + 1) : $prefix . '.' . ($index + 1);
 
@@ -1099,8 +1246,8 @@ class Messenger
             $subtype = strtoupper($part->subtype ?? '');
 
             if ($type === 0) { // TEXT
-                $body = imap_fetchbody($imap, $uid, (string)($index + 1), FT_UID);
-                $decoded = $this->decodeBody($body, $part->encoding ?? 0);
+                $body = imap_fetchbody($imap, $uid, (string)($index + 1), $flags);
+                $decoded = $this->decodeBody($body === false ? '' : $body, $part->encoding ?? 0);
 
                 if ($subtype === 'HTML' && $result['html'] === '') {
                     $result['html'] = $decoded;
@@ -1108,7 +1255,7 @@ class Messenger
                     $result['text'] = $decoded;
                 }
             } elseif ($type === 1 && !empty($part->parts)) { // MULTIPART
-                $this->walkParts($imap, $uid, $part->parts, (string)($index + 1), $result);
+                $this->walkParts($imap, $uid, $part->parts, (string)($index + 1), $result, $peek);
             }
         }
     }
@@ -1242,6 +1389,124 @@ class Messenger
         $subtype = $part->subtype ?? 'OCTET-STREAM';
 
         return strtolower($type . '/' . $subtype);
+    }
+
+    /**
+     * Build the cross-framework inbox()/search() summary item for one overview
+     * message: {uid, subject, from, to, date (ISO-8601), snippet, seen}. The
+     * exact field set, names and order are shared across all four frameworks.
+     *
+     * @param resource $imap IMAP stream (for the snippet body fetch)
+     * @param object   $msg  An imap_fetch_overview row
+     * @return array{uid: string, subject: string, from: string, to: string, date: string, snippet: string, seen: bool}
+     */
+    private function summaryItem($imap, object $msg): array
+    {
+        // uid is a STRING everywhere (Python emits str(uid)); an int here would
+        // change the JSON shape ("uid": 1 vs "1") between frameworks.
+        $uid = (string)($msg->uid ?? '');
+
+        return [
+            'uid' => $uid,
+            'subject' => isset($msg->subject) ? $this->decodeMimeHeader($msg->subject) : '',
+            'from' => isset($msg->from) ? $this->decodeMimeHeader($msg->from) : '',
+            'to' => isset($msg->to) ? $this->decodeMimeHeader($msg->to) : '',
+            'date' => $this->toIso8601((string)($msg->date ?? '')),
+            'snippet' => $uid !== '' ? $this->snippetFor($imap, (int)$uid) : '',
+            'seen' => (bool)($msg->seen ?? false),
+        ];
+    }
+
+    /**
+     * A decoded, transfer-decoded, tag-stripped plain-text preview of a message
+     * body, truncated to 200 characters — the shared `snippet` field. Fetched
+     * with FT_PEEK so building a listing never flips \Seen. A fetch failure
+     * degrades to '' rather than raising (a per-message snippet must not sink
+     * the whole listing).
+     *
+     * @param resource $imap IMAP stream
+     * @param int      $uid  Message UID
+     */
+    private function snippetFor($imap, int $uid): string
+    {
+        $structure = @imap_fetchstructure($imap, $uid, FT_UID);
+        if ($structure === false) {
+            return '';
+        }
+        $body = $this->extractBody($imap, $uid, $structure, true);
+        $text = $body['text'] !== '' ? $body['text'] : $body['html'];
+
+        return $this->snippetText($text);
+    }
+
+    /**
+     * Strip HTML tags, collapse whitespace, and truncate to 200 characters.
+     *
+     * mb_substr is guarded: ext-mbstring is optional, and an unguarded mb_* call
+     * would fatal on a build without it — a snippet is a display preview, so a
+     * byte-based substr fallback is acceptable when the extension is absent.
+     */
+    private function snippetText(string $text): string
+    {
+        $text = preg_replace('/<[^>]+>/', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        if (function_exists('mb_substr')) {
+            return mb_substr($text, 0, 200);
+        }
+        return substr($text, 0, 200);
+    }
+
+    /**
+     * Convert an RFC 2822 date header to an ISO-8601 string (parity with the
+     * Python master's parsedate_to_datetime(...).isoformat()). An empty or
+     * unparseable value is returned unchanged.
+     */
+    private function toIso8601(string $date): string
+    {
+        if (trim($date) === '') {
+            return '';
+        }
+        try {
+            return (new \DateTimeImmutable($date))->format('c');
+        } catch (\Throwable) {
+            return $date;
+        }
+    }
+
+    /**
+     * Parse a raw RFC 2822 header block into a name => value map (last-wins for
+     * a repeated header), unfolding continuation lines. Parity with the Python
+     * master's headers: dict(msg.items()).
+     *
+     * @return array<string, string>
+     */
+    private function parseHeaders(string $raw): array
+    {
+        $headers = [];
+        $current = null;
+        foreach (preg_split('/\r\n|\r|\n/', $raw) ?: [] as $line) {
+            if ($line === '') {
+                continue;
+            }
+            // A folded continuation line begins with whitespace.
+            if (($line[0] === ' ' || $line[0] === "\t") && $current !== null) {
+                $headers[$current] .= ' ' . trim($line);
+                continue;
+            }
+            $pos = strpos($line, ':');
+            if ($pos === false) {
+                continue;
+            }
+            $name = trim(substr($line, 0, $pos));
+            if ($name === '') {
+                continue;
+            }
+            $headers[$name] = trim(substr($line, $pos + 1));
+            $current = $name;
+        }
+        return $headers;
     }
 
     /**
