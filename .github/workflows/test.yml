@@ -315,32 +315,28 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TINA4_TEST_FIREBIRD_URL: firebird://SYSDBA:masterkey@localhost:3050//var/lib/firebird/data/test.fdb
-      # TINA4_REQUIRE_SERVICES IS DELIBERATELY NOT SET HERE YET, and the reason
-      # is one concrete blocker rather than reluctance.
+      # THE GATE HAS TEETH HERE because this is the one CI job that promises a
+      # Firebird. A Firebird skip in the job that HAS a Firebird is exactly the
+      # green pass the gate exists to stop, and for as long as this line was
+      # missing that is precisely what happened.
       #
-      # Arming it would be right in principle: this is the one CI job that HAS a
-      # Firebird, so a Firebird skip here is exactly the green-pass the gate
-      # exists to stop. The SQL engines no longer stand in the way - they are
-      # keyed on their own URLs now (CONDITIONAL_SERVICE_KEYWORDS), so the nine
-      # PostgreSQL/mysqli skips across the files below stay green in a job that
-      # provisions neither.
+      # Two things had to be true first, and both now are:
       #
-      # THE BLOCKER IS pdo_firebird. This job builds only the NATIVE
-      # ext-interbase from source; nothing here loads pdo_firebird. Three skips
-      # would therefore fire on a FIREBIRD keyword, which the URL above arms:
+      #   1. The SQL engines are keyed on their own URLs
+      #      (CONDITIONAL_SERVICE_KEYWORDS), so the NINE PostgreSQL/mysqli skip
+      #      sites across the files below stay green in a job that provisions
+      #      neither engine. Unconditional keywords would have failed this job
+      #      on all nine.
+      #   2. pdo_firebird is installed AND verified above, so the three
+      #      "pdo_firebird driver not present ... UNVERIFIED" skips cannot
+      #      occur. 'firebird' matches inside 'pdo_firebird' and both 'not
+      #      present' and 'unverified' are gate hints, so any one of them would
+      #      have failed the job.
       #
-      #   PdoFirebirdAdapterTest  "pdo_firebird driver not present - ... UNVERIFIED here."
-      #   PdoFallbackFactoryTest  "pdo_firebird driver not present - ... UNVERIFIED."
-      #   MigrationV3Test         "pdo_firebird driver not present - ... UNVERIFIED."
-      #
-      # 'firebird' matches inside 'pdo_firebird', and both 'not present' and
-      # 'unverified' are unavailable-hints, so each is a violation and the job
-      # would go red.
-      #
-      # The fix is to BUILD pdo_firebird here, not to weaken the gate or reword
-      # those reasons - they are accurate, and three real PDO-Firebird files
-      # currently prove nothing in the only environment that could run them.
-      # Once it is built and those three pass, add TINA4_REQUIRE_SERVICES: '1'.
+      # If this job ever reddens on a skip, read the skip rather than removing
+      # this line: it means something this job DOES provide was not exercised,
+      # which is the whole point.
+      TINA4_REQUIRE_SERVICES: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -384,6 +380,51 @@ jobs:
           scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
           echo "extension=interbase.so" | sudo tee "${scan_dir}/99-interbase.ini"
           php -m | grep -i interbase || { echo "ext-interbase failed to load"; exit 1; }
+
+      # pdo_firebird, WITHOUT disturbing the source-built native ext above.
+      #
+      # WHY THIS STEP EXISTS. Three files here - PdoFirebirdAdapterTest,
+      # PdoFallbackFactoryTest and MigrationV3Test's pdo leg - skip with
+      # "pdo_firebird driver not present ... UNVERIFIED" when it is missing. They
+      # were therefore proving NOTHING in the only environment that has a real
+      # Firebird to test against, and those skips were also the single blocker
+      # keeping TINA4_REQUIRE_SERVICES off this job ('firebird' matches inside
+      # 'pdo_firebird', and 'not present'/'unverified' are both gate hints).
+      #
+      # MEASURED on the lab host (Ubuntu 24.04, PHP 8.3.6): the distro package
+      # php8.3-interbase ships BOTH extensions as separate ini files -
+      # 20-interbase.ini and 20-pdo_firebird.ini. So the package is taken purely
+      # for its pdo_firebird.so, and its interbase ini is removed immediately:
+      # the native ext stays the maintained FirebirdSQL fork built above, and
+      # loading interbase twice would warn "module already loaded".
+      #
+      # ALSO MEASURED, because the removal only works if they are independent:
+      # `php -n -d extension=pdo.so -d extension=pdo_firebird.so -m` lists
+      # PDO_Firebird with interbase ABSENT. pdo_firebird needs the PDO core, not
+      # the native ext. (A first probe without pdo.so failed with "undefined
+      # symbol: php_pdo_unregister_driver" - that was the probe's missing
+      # dependency, not a coupling between the two drivers.)
+      #
+      # The verification is the point. If the package name is wrong for this PHP
+      # version, or pdo_firebird does not load, this step FAILS THE JOB with a
+      # named reason - it can never silently downgrade those three files back to
+      # a green skip, which is precisely the failure this whole change removes.
+      - name: Install pdo_firebird (package supplies it; native ext stays the source build)
+        run: |
+          php_ver="$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')"
+          sudo apt-get install -y --no-install-recommends "php${php_ver}-interbase" || {
+            echo "php${php_ver}-interbase is not installable - pdo_firebird cannot be provided this way"; exit 1; }
+          # Keep ONLY the PDO driver from the package; the native ext is ours.
+          # The scan dir is read from PHP itself rather than assumed, exactly as
+          # the interbase build step above does - a hardcoded /etc/php/... glob
+          # is a guess about the runner's layout.
+          scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
+          sudo rm -f "${scan_dir}/20-interbase.ini"
+          php -m | grep -qi '^PDO_Firebird$' || {
+            echo "pdo_firebird failed to load after installing php${php_ver}-interbase"; php -m; exit 1; }
+          php -m | grep -qi '^interbase$' || {
+            echo "native ext-interbase stopped loading after the package install"; php -m; exit 1; }
+          echo "both drivers present: native interbase (source build) + PDO_Firebird (package)"
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
