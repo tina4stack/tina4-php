@@ -161,42 +161,12 @@ class SessionBackendFailurePolicyTest extends TestCase
         $this->logMark = is_file($this->logFile()) ? (int) filesize($this->logFile()) : 0;
     }
 
-    /**
-     * Can a write through a 0400 file actually be refused in this process?
-     *
-     * The guard these two tests used to carry asked `posix_geteuid() === 0`,
-     * which is a PROXY for the property they need rather than the property
-     * itself. Root normally walks through the permission bits via
-     * CAP_DAC_OVERRIDE -- but a process can DROP that capability and stay uid 0
-     * (`setpriv --bounding-set=-dac_override`), and then 0400 denies root
-     * exactly like anyone else. The proxy answered "skip" for a process that
-     * could have run the test perfectly well, so on any host whose suite runs
-     * as root -- which is the lab, every time -- these two never ran at all.
-     *
-     * Ask the kernel instead of inferring from the uid.
-     */
-    private function permissionBitsAreEnforced(): bool
-    {
-        $probe = tempnam(sys_get_temp_dir(), 'tina4_perm_');
-        if ($probe === false) {
-            return false;
-        }
-        file_put_contents($probe, 'x');
-        chmod($probe, 0400);
-        $handle = @fopen($probe, 'a');
-        if ($handle !== false) {
-            fclose($handle);
-        }
-        chmod($probe, 0600); // a 0400 fixture must still be removable
-        @unlink($probe);
-        return $handle === false;
-    }
-
-    /** The skip reason, naming the remedy rather than just the obstacle. */
-    private const NO_DENIAL_REASON =
-        '[needs:no-dac-override] this process writes straight through a 0400 file (root holding '
-        . 'CAP_DAC_OVERRIDE), so no real denial is reachable here — run under '
-        . '`setpriv --bounding-set=-dac_override,-dac_read_search` to exercise it';
+    // The gate that decides whether these two cases can run lives with the
+    // delegation that supplies it when they cannot: filePermissionsAreEnforced()
+    // and runsWhereFilePermissionsBite(), further down. There used to be a
+    // second copy of the probe here plus a NO_DENIAL_REASON skip message; both
+    // are gone because neither case skips any more -- when permission bits do
+    // not bite, the case is re-run in a capability-dropped child instead.
 
     /**
      * The ERROR messages the REAL logger actually wrote since the last mark.
@@ -447,8 +417,8 @@ class SessionBackendFailurePolicyTest extends TestCase
      */
     public function testGcFailureOnAReallyReadOnlyDatabaseLogsAndDoesNotCrash(): void
     {
-        if (!$this->permissionBitsAreEnforced()) {
-            $this->markTestSkipped(self::NO_DENIAL_REASON);
+        if (!$this->runsWhereFilePermissionsBite(__FUNCTION__)) {
+            return;   // already asserted, in a child where permissions really bite
         }
 
         $dbFile = $this->tempDir . '/sessions.db';
@@ -637,6 +607,243 @@ class SessionBackendFailurePolicyTest extends TestCase
         }
     }
 
+    // ── running as root is not an excuse: make the permission bits bite ─────
+    //
+    // Two cases here need a REAL EACCES / SQLITE_READONLY from the kernel, which
+    // they produce with chmod 0400. Both used to open with
+    //
+    //     if (posix_geteuid() === 0) markTestSkipped('running as root: ...')
+    //
+    // and the lab runs its suites as root, so both skipped green on every run --
+    // permanently, invisibly, and precisely on the two cases that prove the
+    // framework does not silently lose session data. A skip that fires on the
+    // machine you actually test on is a deleted test.
+    //
+    // THE FIX: when permission bits do not currently constrain us, re-run the
+    // SAME test method in a child where they do, and assert on the child. The
+    // child re-enters this method, finds that permissions now bite, and runs the
+    // real assertions inline -- so there is exactly ONE copy of the assertions
+    // and the two paths can never drift.
+    //
+    // HOW THE CHILD IS BUILT, AND WHY NOT setuid(nobody).
+    // The obvious move is setpriv --reuid=nobody. Measured on this lab, it does
+    // not work: the repo lives under /root, which is 0700, so an unprivileged
+    // child cannot even read vendor/autoload.php, and the alternative is to
+    // chmod o+x /root -- a permanent, system-wide weakening of a shared box, to
+    // make a test pass. Rejected.
+    //
+    // What root actually has that defeats chmod is not uid 0, it is
+    // CAP_DAC_OVERRIDE. So the child keeps uid 0 (it can still read the repo)
+    // and drops the CAPABILITY: setpriv --securebits=+noroot,+noroot_locked
+    // --bounding-set=-all --inh-caps=-all. With SECBIT_NOROOT set, execve grants
+    // a uid-0 process no capabilities at all, so the kernel's ordinary DAC check
+    // applies and chmod 0400 denies for real. Verified on the lab: CapEff goes
+    // to 0000000000000000 and an append to a 0400 file returns EACCES. Nothing
+    // is simulated -- the errno comes from the same kernel path a normal user
+    // hits. setpriv is util-linux, present on every mainstream Linux.
+    //
+    // THE GATE IS MEASURED, NOT GUESSED. posix_geteuid() === 0 was always a
+    // proxy for the real question; this asks the real question directly by
+    // chmod-ing a probe file and trying to write it. That is also what makes the
+    // child correct: inside it euid is STILL 0, so a euid test would have sent
+    // it into an infinite delegation loop.
+
+    /**
+     * Env marker telling a child it is the delegated, capability-dropped run.
+     *
+     * Deliberately NOT in the TINA4_TEST_ namespace. That namespace is the
+     * cross-framework test-environment contract (ADR-0038,
+     * tests/fixtures/test_env_contract.json), whose fixture is byte-identical in
+     * all four frameworks and whose purpose is to stop a SERVICE's connection
+     * details acquiring divergent spellings. This name configures no service,
+     * never crosses a framework boundary, and is set and read inside a single
+     * process tree by this file alone - so it belongs outside the contract
+     * rather than as a PHP-only entry that would break the fixture's
+     * byte-identical invariant.
+     */
+    private const PRIVILEGE_DROP_MARKER = 'TINA4_DAC_ENFORCED_CHILD';
+
+    /** What the delegated child prints so the parent can prove the drop happened. */
+    private const PRIVILEGE_DROP_SIGNAL = 'TINA4_DAC_INSTRUMENT';
+
+    /**
+     * Does a chmod 0400 actually deny THIS process a write?
+     *
+     * The direct question, asked of the real kernel with a real file. True for
+     * any ordinary user; false for root holding CAP_DAC_OVERRIDE.
+     */
+    private static function filePermissionsAreEnforced(): bool
+    {
+        $probe = tempnam(sys_get_temp_dir(), 'tina4-dac-');
+        if ($probe === false) {
+            return true;   // cannot tell; assume the ordinary case
+        }
+
+        file_put_contents($probe, 'probe');
+        chmod($probe, 0400);
+        $handle = @fopen($probe, 'a');
+        $enforced = $handle === false;
+        if ($handle !== false) {
+            fclose($handle);
+        }
+        @chmod($probe, 0600);
+        @unlink($probe);
+
+        return $enforced;
+    }
+
+    /**
+     * TRUE when the caller should run its assertions inline (permissions bite
+     * here). FALSE once they have been run in a capability-dropped child, which
+     * this method has already asserted on -- the caller must simply return.
+     */
+    private function runsWhereFilePermissionsBite(string $testMethod): bool
+    {
+        if (self::filePermissionsAreEnforced()) {
+            if (getenv(self::PRIVILEGE_DROP_MARKER) !== false) {
+                // We ARE the delegated child. Report the instrument on stderr
+                // (stderr, so PHPUnit does not flag unexpected test output) and
+                // let the parent prove the drop really happened.
+                fwrite(STDERR, sprintf(
+                    "\n%s uid=%d enforced=1 capeff=%s\n",
+                    self::PRIVILEGE_DROP_SIGNAL,
+                    function_exists('posix_geteuid') ? posix_geteuid() : -1,
+                    self::effectiveCapabilities()
+                ));
+            }
+
+            return true;
+        }
+
+        // A child that is STILL unconstrained must never delegate again. Without
+        // this, a setpriv that silently failed to drop the capability would send
+        // each child to spawn another child in exactly the same state - an
+        // unbounded fork bomb on a shared box, presenting as a hang rather than
+        // as the configuration error it is. Delegation happens once, from the
+        // parent; the second time is always a bug worth naming.
+        if (getenv(self::PRIVILEGE_DROP_MARKER) !== false) {
+            self::fail(
+                'this process is the delegated child (' . self::PRIVILEGE_DROP_MARKER . ' is set) '
+                . 'and file permissions STILL do not constrain it, so setpriv did not actually drop '
+                . 'CAP_DAC_OVERRIDE. Refusing to delegate again - that would fork indefinitely. '
+                . 'CapEff=' . self::effectiveCapabilities()
+            );
+        }
+
+        $this->delegateToCapabilityDroppedChild($testMethod);
+
+        return false;
+    }
+
+    /** This process's CapEff bitmask from /proc, or '' where /proc is absent. */
+    private static function effectiveCapabilities(): string
+    {
+        foreach (explode("\n", (string)@file_get_contents('/proc/self/status')) as $line) {
+            if (str_starts_with($line, 'CapEff:')) {
+                return trim(substr($line, strlen('CapEff:')));
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Re-run $testMethod in a child that has lost CAP_DAC_OVERRIDE, and assert
+     * on its outcome.
+     */
+    private function delegateToCapabilityDroppedChild(string $testMethod): void
+    {
+        $setpriv = trim((string)@shell_exec('command -v setpriv 2>/dev/null'));
+        if ($setpriv === '') {
+            self::fail(
+                'file permissions do not constrain this process (it is root with CAP_DAC_OVERRIDE), '
+                . 'and setpriv is not installed, so the real EACCES this test exists to prove cannot '
+                . 'be produced. Install util-linux, or run the suite as an ordinary user. This is '
+                . 'deliberately a FAILURE and not a skip: a green skip here is how both of these '
+                . 'cases sat dead on the lab for months.'
+            );
+        }
+
+        $repoRoot = dirname(__DIR__);
+        $environment = getenv();
+        $environment[self::PRIVILEGE_DROP_MARKER] = '1';
+
+        $command = [
+            $setpriv,
+            '--securebits=+noroot,+noroot_locked',
+            '--bounding-set=-all',
+            '--inh-caps=-all',
+            PHP_BINARY,
+            $repoRoot . '/vendor/bin/phpunit',
+            '--no-configuration',
+            '--bootstrap', $repoRoot . '/tests/bootstrap.php',
+            '--colors=never',
+            '--filter', '/::' . preg_quote($testMethod, '/') . '$/',
+            __FILE__,
+        ];
+
+        $pipes = [];
+        $process = proc_open(
+            $command,
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $repoRoot,
+            $environment
+        );
+        if (!is_resource($process)) {
+            self::fail('could not start the capability-dropped child for ' . $testMethod);
+        }
+
+        fclose($pipes[0]);
+        $stdout = (string)stream_get_contents($pipes[1]);
+        $stderr = (string)stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        // THE INSTRUMENT, FIRST. Without this a child that silently kept
+        // CAP_DAC_OVERRIDE would "pass" while asserting nothing at all: its
+        // chmod 0400 would not deny, so the very failure under test could not
+        // occur and the run would still exit 0.
+        $this->assertStringContainsString(
+            self::PRIVILEGE_DROP_SIGNAL,
+            $stderr,
+            "the child never reported that file permissions constrain it, so it did not run the "
+            . "case at all.\nexit: {$exitCode}\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
+        );
+        $this->assertMatchesRegularExpression(
+            '/' . self::PRIVILEGE_DROP_SIGNAL . ' uid=\d+ enforced=1 capeff=0+\b/',
+            $stderr,
+            'the child still holds effective capabilities, so chmod 0400 cannot deny it and the '
+            . "EACCES under test could never happen.\nstderr:\n{$stderr}"
+        );
+        $this->assertSame(
+            0,
+            $exitCode,
+            "{$testMethod} FAILED in the capability-dropped child (this is the run that actually "
+            . "exercises it).\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
+        );
+        // Exit 0 is also what a SKIPPED child produces, and a skip here would
+        // mean the delegation reported success while asserting nothing. Demand
+        // evidence that one test really ran and really asserted.
+        //
+        // BOTH of PHPUnit's summary spellings are accepted, because these two
+        // cases legitimately produce different ones and each spelling on its own
+        // failed a child that had actually passed:
+        //   clean run    -> "OK (1 test, 5 assertions)"
+        //   with a notice-> "Tests: 1, Assertions: 8" under "OK, but there were
+        //                    issues!" (the EACCES case trips a PHP warning from
+        //                    file_put_contents on the read-only file)
+        // Either way the assertion count must be non-zero, which is the part
+        // that proves the child really exercised something.
+        $this->assertMatchesRegularExpression(
+            '/^(OK \(1 test, [1-9]\d* assertion|Tests: 1, Assertions: [1-9]\d*)/m',
+            $stdout,
+            "the child exited 0 without running {$testMethod} to a real, asserting pass (a skip "
+            . "exits 0 too), so the delegation proved nothing.\nstdout:\n{$stdout}\nstderr:\n{$stderr}"
+        );
+    }
+
     // ── the mid-request death case, produced rather than simulated ──────────
 
     /**
@@ -665,8 +872,8 @@ class SessionBackendFailurePolicyTest extends TestCase
      */
     public function testWriteFailsAfterASuccessfulStartWithARealEacces(): void
     {
-        if (!$this->permissionBitsAreEnforced()) {
-            $this->markTestSkipped(self::NO_DENIAL_REASON);
+        if (!$this->runsWhereFilePermissionsBite(__FUNCTION__)) {
+            return;   // already asserted, in a child where permissions really bite
         }
 
         $sessionDir = $this->tempDir . '/sessions';

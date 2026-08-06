@@ -19,8 +19,17 @@ namespace Tina4\Testing;
  * MySQL and MSSQL / SQL Server joined the provisioned set in 3.13.44 (#262), so
  * their reachability / boolean round-trip skips now turn into failures too.
  *
- * Firebird is deliberately NOT in the keyword set — it is not provisioned, so
- * its "set TINA4_TEST_FIREBIRD_URL" / "not reachable" skips stay green.
+ * Firebird is gated PER RUN, not per fleet — see CONDITIONAL_SERVICE_KEYWORDS.
+ * It used to be excluded outright on the stated belief that no Firebird server
+ * was available, and that belief is false where it matters: the lab and the CI
+ * `firebird:` job both run a live Firebird 5.0.4/5.0.2. But it is TRUE in the
+ * main CI `test:` job, which runs the whole suite with this gate armed and
+ * deliberately has no Firebird container (stacking one onto that already
+ * 8-service job destabilised the runner). So neither a flat include nor a flat
+ * exclude is honest: including it unconditionally turns every Firebird skip in
+ * `test:` into a failure and reddens CI for a service that job never claimed to
+ * provide, while excluding it lets a real Firebird skip pass green on the two
+ * environments that DO provide one. Arm it on the evidence instead.
  *
  * Mechanism: a PHPUnit 11 event Extension subscribes to BOTH Test\Skipped and
  * TestSuite\Skipped to collect offending skips, then fails the whole run from
@@ -44,7 +53,9 @@ final class RequireServicesGate
      * Provisioned real services (and their client-library names). A skip whose
      * reason mentions one of these AND an unavailable hint is a violation.
      * MySQL + MSSQL/SQL Server joined the provisioned set in 3.13.44 (#262).
-     * EXCLUDES firebird on purpose (not provisioned — its skips stay green).
+     * These are provisioned by EVERY gated environment, so they are listed
+     * unconditionally; a service that only some gated runs provide belongs in
+     * CONDITIONAL_SERVICE_KEYWORDS instead.
      */
     private const SERVICE_KEYWORDS = [
         'postgres', 'postgresql', 'psycopg2', 'pg_connect', 'ext-pgsql',
@@ -61,10 +72,54 @@ final class RequireServicesGate
         'greenmail', 'smtp', 'imap',
     ];
 
-    /** Phrases that mean "the provisioned thing is not there right now". */
+    /**
+     * Services whose provisioning varies BETWEEN GATED RUNS, keyed by the env
+     * var that proves this run has one.
+     *
+     * The flat list above encodes "our fleet provides this", which is the right
+     * model only while every gated environment agrees. Firebird is the case
+     * where they do not: the lab and the CI `firebird:` job run a live server
+     * and set TINA4_TEST_FIREBIRD_URL; the main CI `test:` job runs the very
+     * same suite with the gate armed and deliberately provides no Firebird at
+     * all. Keying on the coordinates makes the gate ask the question it always
+     * meant to ask — "was this service promised to THIS run?" — instead of
+     * inferring it from a constant that cannot be true everywhere at once.
+     *
+     * So: coordinates set => a Firebird skip is a violation like any other;
+     * coordinates absent => that run never claimed a Firebird and its skips
+     * stay green. No environment has to be lied to.
+     *
+     * TINA4_TEST_FIREBIRD_URL is the canonical spelling (ADR-0038) and the one
+     * every live Firebird test reads.
+     *
+     * @var array<string, string[]>
+     */
+    private const CONDITIONAL_SERVICE_KEYWORDS = [
+        // The engine, the native client (ext-interbase, functions ibase_*/
+        // fbird_*) and the PDO driver (pdo_firebird).
+        'TINA4_TEST_FIREBIRD_URL' => ['firebird', 'interbase', 'ibase'],
+    ];
+
+    /**
+     * Phrases that mean "the provisioned thing is not there right now".
+     *
+     * 'not configured' and 'not present' were missing, and each one was a live
+     * leak: tests/DatabaseUrlCredentialsTest.php skips with the literal reason
+     * "live PostgreSQL not configured (TINA4_TEST_PG_URL)", which names a
+     * provisioned service on the keyword axis but matched NO hint, so the gate
+     * never fired and the test skipped green against a running PostgreSQL.
+     */
     private const UNAVAILABLE_HINTS = [
         'not reachable', 'unreachable', 'not running', 'not set',
         'not installed', 'could not connect', 'not available', 'refused',
+        'not configured', 'not present', 'cannot connect', 'connect failed',
+        // The escape-hatch phrase. A whole family of Firebird skips reads
+        // "<driver> present but cannot connect (...) - native Firebird
+        // UNVERIFIED here", i.e. the test is telling you in plain words that it
+        // proved nothing. Against a PROVISIONED service that is a failure, not a
+        // pass: the escape exists for a genuinely broken client on a dev box,
+        // and it must never be how CI reports success.
+        'unverified',
     ];
 
     /** @var array<int, array{id:string, reason:string}> */
@@ -93,6 +148,27 @@ final class RequireServicesGate
     }
 
     /**
+     * The service keywords in force for THIS run: the unconditional set, plus
+     * each conditional service whose coordinates the environment actually
+     * publishes.
+     *
+     * @return string[]
+     */
+    public static function activeServiceKeywords(): array
+    {
+        $keywords = self::SERVICE_KEYWORDS;
+
+        foreach (self::CONDITIONAL_SERVICE_KEYWORDS as $environmentVariable => $conditionalKeywords) {
+            $value = getenv($environmentVariable);
+            if ($value !== false && trim($value) !== '') {
+                $keywords = array_merge($keywords, $conditionalKeywords);
+            }
+        }
+
+        return $keywords;
+    }
+
+    /**
      * A skip reason is a violation when it names a PROVISIONED service (or its
      * client library) AND signals that the thing is unavailable.
      */
@@ -101,7 +177,7 @@ final class RequireServicesGate
         $low = strtolower($reason);
 
         $namesService = false;
-        foreach (self::SERVICE_KEYWORDS as $keyword) {
+        foreach (self::activeServiceKeywords() as $keyword) {
             if (str_contains($low, $keyword)) {
                 $namesService = true;
                 break;

@@ -26,10 +26,24 @@
  *     'pdo_dblib'), so under TINA4_REQUIRE_SERVICES=1 an "MSSQL not reachable
  *     at host:port" skip becomes a hard CI FAILURE. The skip text below is
  *     worded to match that gate ('mssql' + 'not reachable' / 'not installed').
- *   - Firebird is EXCLUDED from that keyword set ON PURPOSE — CI does not
- *     provision it — so a Firebird skip legitimately stays green. Do not read
- *     a green CI run as proof the Firebird legs executed; they only run where
- *     a real Firebird is present (as on the maintainer's Mac).
+ *   - Firebird is gated PER RUN: RequireServicesGate arms its keywords exactly
+ *     when TINA4_TEST_FIREBIRD_URL is set, so a Firebird skip is a hard failure
+ *     on the lab and the CI `firebird:` job (which both run a real server) and
+ *     legitimately stays green in the main CI `test:` job, which provides none.
+ *
+ * HOW THE FIREBIRD LEGS USED TO BE UNRUNNABLE. This file resolved its own
+ * Firebird coordinates from TINA4_TEST_FIREBIRD_HOST/_PORT/_PATH — the only
+ * file in the suite that did; the other thirteen live Firebird tests all read
+ * TINA4_TEST_FIREBIRD_URL. It then decided whether the database existed with
+ * `file_exists($path)`. That path is a SERVER-side path handed to Firebird
+ * inside a CREATE DATABASE string, but file_exists() answers about the CLIENT's
+ * filesystem, and the lab's Firebird runs in a container — so the file the
+ * server had just created was never visible here, the guard fired every time,
+ * and all three Firebird cases had NEVER EXECUTED anywhere. A probe that asks a
+ * different machine than the one it is reasoning about cannot ever open.
+ *
+ * They now do what every other live Firebird test does: read the canonical URL
+ * (ADR-0038) and let the CONNECTION be the existence check.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -224,60 +238,63 @@ class MigrationFootgunsLiveEngineTest extends TestCase
 
     // ── Firebird ────────────────────────────────────────────────────────────
 
-    private static function firebirdHost(): string
+    /**
+     * The live Firebird URL for this run, or '' when none was promised.
+     *
+     * TINA4_TEST_FIREBIRD_URL is the canonical spelling (ADR-0038) that the
+     * other thirteen live Firebird tests read, and it is what CI and the lab
+     * actually set. This file used to invent its own _HOST/_PORT/_PATH trio,
+     * which is why it alone pointed somewhere nothing was listening.
+     */
+    private static function firebirdUrl(): string
     {
-        return getenv('TINA4_TEST_FIREBIRD_HOST') ?: 'localhost';
+        $url = getenv('TINA4_TEST_FIREBIRD_URL');
+
+        return $url === false ? '' : trim($url);
     }
 
-    private static function firebirdPort(): int
-    {
-        return (int) (getenv('TINA4_TEST_FIREBIRD_PORT') ?: 3050);
-    }
-
-    private static function firebirdPath(): string
-    {
-        return getenv('TINA4_TEST_FIREBIRD_PATH') ?: (sys_get_temp_dir() . '/tina4_php_nomock_mig.fdb');
-    }
-
+    /**
+     * A live Firebird connection, or a skip whose wording the require-services
+     * gate can actually see.
+     *
+     * The database is NOT created here. It is the server's, it already exists
+     * (CI's container makes it with FIREBIRD_DATABASE, the lab's likewise), and
+     * the migration cases only ever create and drop their own three tables in
+     * it — exactly what every other live Firebird test does. Creating one meant
+     * guessing a server-side path from the client, which is the bug that kept
+     * these three from ever running.
+     */
     private function firebirdOrSkip(): Database
     {
         if (!function_exists('ibase_connect') && !in_array('firebird', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped('Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
         }
 
-        $host = self::firebirdHost();
-        $port = self::firebirdPort();
-        if (!self::reachable($host, $port)) {
-            $this->markTestSkipped(sprintf('Firebird not reachable at %s:%d — skip live migration footgun test', $host, $port));
-        }
-
-        $path = self::firebirdPath();
-        if (!file_exists($path) && function_exists('ibase_query')) {
-            // Create a REAL database on the REAL server (not a fixture stand-in).
-            @ibase_query(
-                IBASE_CREATE,
-                sprintf(
-                    "CREATE DATABASE '%s:%s' USER 'SYSDBA' PASSWORD 'masterkey' PAGE_SIZE 8192 DEFAULT CHARACTER SET UTF8",
-                    $host,
-                    $path
-                )
+        $url = self::firebirdUrl();
+        if ($url === '') {
+            $this->markTestSkipped(
+                'TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run, '
+                . 'so the live migration footgun cases cannot run'
             );
         }
-        if (!file_exists($path)) {
+
+        // THE CONNECTION IS THE PROBE. A TCP check only proves something is
+        // listening on the port, and file_exists() asks the wrong machine
+        // entirely; opening the database is the only thing that establishes the
+        // database is really there and really usable. Its failure carries the
+        // server's own reason, which is far more useful than "could not be
+        // created", and it is worded so RequireServicesGate treats it as a
+        // violation wherever a Firebird WAS promised.
+        try {
+            $db = new Database($url);
+            $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
+        } catch (\Throwable $failure) {
             $this->markTestSkipped(sprintf(
-                'Firebird database %s could not be created on %s:%d — set TINA4_TEST_FIREBIRD_PATH',
-                $path,
-                $host,
-                $port
+                'Firebird cannot connect at %s — %s',
+                $url,
+                $failure->getMessage()
             ));
         }
-
-        $db = new Database(
-            sprintf('firebird://%s:%d/%s', $host, $port, ltrim($path, '/')),
-            null,
-            getenv('TINA4_TEST_FIREBIRD_USERNAME') ?: 'SYSDBA',
-            getenv('TINA4_TEST_FIREBIRD_PASSWORD') ?: 'masterkey'
-        );
 
         $this->dropFirebird($db);
 
