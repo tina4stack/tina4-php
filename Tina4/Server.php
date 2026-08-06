@@ -9,47 +9,70 @@
  * Replaces `php -S`. Uses stream_socket_server + stream_select. Zero external
  * dependencies.
  *
- * CONCURRENT CONNECTIONS, SERIAL EXECUTION. Read that as a limit, not a boast.
+ * CONCURRENT CONNECTIONS, AND - where the OS allows it - CONCURRENT EXECUTION.
  * The sockets are non-blocking and many connections are multiplexed through one
- * stream_select, so hundreds can be OPEN at once. But there is one process and
- * one loop, and processHttpBuffer() dispatches the route handler INLINE. While
- * a handler runs, the loop is not in stream_select: nothing is accepted, no
- * other request advances, no WebSocket frame is read, and no background tick
- * fires.
+ * stream_select, so hundreds can be OPEN at once. Multiplexed I/O is not the
+ * same property as concurrent HANDLING though, and the two used to be confused
+ * here: processHttpBuffer() dispatched the route handler INLINE, so while a
+ * handler ran the loop was not in stream_select and nothing else advanced.
  *
- * So a handler that BLOCKS freezes the whole server for its duration. Measured
- * on 3.13.94 with `sleep(10)` at the top of a route: the slow route answered
- * correctly at 10.008s, and a trivial route requested one second later took
- * 8.999s instead of its usual 0.007s. In a browser that reads as "the server is
- * dead", because the favicon, the dev-toolbar poll and every asset queue behind
- * it. Nothing is hung and nothing times out - it is strictly serial.
+ * A handler that BLOCKED therefore froze the whole server for its duration.
+ * Measured on 3.13.94 with `sleep(10)` at the top of a route: the slow route
+ * answered correctly at 10.008s, and a trivial route requested one second later
+ * took 8.999s instead of its usual 0.007s. In a browser that reads as "the
+ * server is dead", because the favicon, the dev-toolbar poll and every asset
+ * queue behind it. Nothing was hung and nothing timed out - it was strictly
+ * serial, which is why the reporter saw "no response" from a route that was in
+ * fact working perfectly.
  *
- * This docblock used to say "non-blocking HTTP server ... concurrent connection
- * handling", which a reader reasonably took to mean concurrent request
- * HANDLING. It never was. Non-blocking I/O and concurrent execution are
- * different properties and only the first one is here.
+ * FORK PER REQUEST fixes that, and it is ON by default wherever pcntl and posix
+ * exist - Linux and macOS, which is every platform this dev server is used on.
+ * handleHttp() forks before dispatch: the child owns the accepted socket, runs
+ * the handler, writes the response and dies; the parent drops its copy of the
+ * client and goes straight back to stream_select. Same measurement after the
+ * change: the trivial route answers in 0.004s while the 10s sleep is still
+ * running, and the slow route still returns correctly at 10.006s.
  *
- * Python's server has the identical property (asyncio, one loop: 9.004s under
- * the same test). Ruby's does NOT, because Puma runs handlers on threads
- * (0.0005s under the same test). PHP has no threads, and Fibers do not help:
- * sleep() never yields, so a Fiber blocks its thread exactly the same way.
- * Concurrency here would need a fork or a worker pool per request - see the
- * note on that below.
- *
- * Blocking work belongs off the request path: `$app->background()` for periodic
- * work, `Tina4\Queue` for jobs. For a deployment that must serve slow requests
- * concurrently, run behind php-fpm (`tina4 serve --production`), which uses a
- * worker per request and does not share this constraint.
- *
- * WHY NOT JUST FORK PER REQUEST: pcntl is usually available and it would work,
- * but it would cost the things this dev server exists for. DevAdmin keeps its
- * message log and request inspector in PROCESS-STATIC arrays
+ * WHAT STAYS IN THE PARENT, and why /__dev is deliberately NOT forked. DevAdmin
+ * keeps its message log and request inspector in PROCESS-STATIC arrays
  * (DevAdmin::$messages, DevAdmin::$requests), and the WebSocket registry
  * ($wsClients, used by the dev-reload broadcast) lives in this parent process.
- * A forked child's captures die with it and it cannot reach the parent's
- * sockets, so the dashboard would go blank and hot reload would stop. If this
- * is ever added it should be opt-in, with the dev features documented as the
- * price.
+ * A child's writes to those go to a copy that dies with it. shouldForkRequest()
+ * therefore keeps every /__dev path in the parent, so the dashboard still fills
+ * and hot reload still fires. A WebSocket upgrade never reaches the fork at all
+ * - handleHttp() hands it to handleWebSocketUpgrade() and returns long before
+ * that point - so $wsClients is only ever touched by this process. Application
+ * routes have no such shared state; a child that mutates a static array was
+ * already not sharing it with the next request.
+ *
+ * A forked child must not run the parent's shutdown work. endRequestChild()
+ * leaves via posix_kill(SIGKILL) rather than exit(), because exit() runs every
+ * registered shutdown function and destructor in a process that shares the
+ * PARENT's file descriptors - see that method for what breaks. This is not
+ * theoretical: the same trap was measured earlier in this codebase when 60
+ * pcntl_fork children each ran the test bootstrap's temp-sandbox reaper and
+ * deleted the directory the parent was still using. Ruby's at_exit + fork
+ * behaves identically.
+ *
+ * SIGCHLD is reaped with a WNOHANG waitpid loop so a long-running dev session
+ * cannot accumulate zombies (measured: 0 after the pair above).
+ *
+ * TINA4_SERVE_FORK=false restores the old serial behaviour. It is an escape
+ * hatch, not a mode: reach for it when a debugger, a profiler or an xdebug
+ * session needs every request in one pid. Where pcntl or posix is absent
+ * (Windows, or a build without them) the server stays serial with no config,
+ * exactly as before, and everything in the paragraph above about a blocking
+ * handler applies again.
+ *
+ * Python's server still has the old property (asyncio, one loop: 9.004s under
+ * the same test) and is the parity item owed here. Ruby's never did, because
+ * Puma runs handlers on threads (0.0005s). PHP has no threads, and Fibers do
+ * not help: sleep() never yields, so a Fiber blocks its thread exactly the same
+ * way. Fork is the only mechanism PHP actually offers.
+ *
+ * Blocking work still belongs off the request path: `$app->background()` for
+ * periodic work, `Tina4\Queue` for jobs. In production run behind php-fpm
+ * (`tina4 serve --production`), which uses a real worker pool.
  *
  * Features:
  *   - HTTP/1.1 request parsing with keep-alive
@@ -82,6 +105,15 @@ class Server
 
     /** @var resource|null Server socket */
     private $socket = null;
+
+    /**
+     * Serve each request in a forked child, so a blocking handler cannot freeze
+     * the server. Resolved once at start(); false where pcntl is unavailable.
+     */
+    private bool $forkPerRequest = false;
+
+    /** True inside a forked request child, so it exits instead of looping. */
+    private bool $inRequestChild = false;
 
     /** @var array<int, resource> All connected client sockets */
     private array $clients = [];
@@ -406,7 +438,21 @@ class Server
                 });
                 $this->shutdownAlarmArmable = true;
             }
+            // Reap finished request children. Without this every served request
+            // leaves a zombie and the process table fills. A handler is used
+            // rather than SIG_IGN because SIG_IGN also discards the exit status
+            // of proc_open()/exec() children an APPLICATION starts, which would
+            // silently break any code that reads their return code.
+            if (defined('SIGCHLD')) {
+                pcntl_signal(SIGCHLD, static function () {
+                    while (pcntl_waitpid(-1, $status, WNOHANG) > 0) {
+                        // drain
+                    }
+                });
+            }
         }
+
+        $this->forkPerRequest = $this->resolveForkPerRequest();
 
         while ($this->running) {
             // Dispatch pending signals
@@ -799,6 +845,46 @@ class Server
             $peerIp
         );
 
+        // ── Serve this request in a child, so a blocking handler cannot freeze
+        // the server ────────────────────────────────────────────────────────
+        //
+        // Everything below this point may block for as long as the handler
+        // wants: sleep(), a slow query, a remote call. In one process that
+        // stalls stream_select and therefore every other connection. Measured
+        // before this existed: sleep(10) in one route made a trivial route take
+        // 8.999s instead of 0.007s.
+        //
+        // The fork is here, not at accept(), because the two things that MUST
+        // stay in the parent are only knowable once the request is parsed: a
+        // WebSocket upgrade (handled and returned above) and /__dev (see
+        // shouldForkRequest).
+        if ($this->shouldForkRequest($path)) {
+            $pid = @pcntl_fork();
+            if ($pid > 0) {
+                // Parent: the child owns this connection now. Closing our
+                // descriptor does NOT close the connection - the child holds
+                // its own copy - it just stops us reading a socket somebody
+                // else is answering on.
+                $this->removeClient($client);
+                return;
+            }
+            if ($pid === 0) {
+                $this->inRequestChild = true;
+                // Children must not run the parent's signal handlers: a SIGINT
+                // to the process group would otherwise have every in-flight
+                // child try to run stop() on the parent's socket list.
+                if (function_exists('pcntl_signal') && defined('SIGTERM')) {
+                    pcntl_signal(SIGTERM, SIG_DFL);
+                    pcntl_signal(SIGINT, SIG_DFL);
+                    if (defined('SIGCHLD')) {
+                        pcntl_signal(SIGCHLD, SIG_DFL);
+                    }
+                }
+            }
+            // $pid === -1 (fork failed, e.g. process limit): fall through and
+            // serve it in the parent. A slow response beats a dropped one.
+        }
+
         // Suppress hot-reload script for AI port connections
         if ($this->isAiPortConnection($client)) {
             DevAdmin::$suppressReload = true;
@@ -816,6 +902,7 @@ class Server
         // emit the stream itself — see streamToClient().
         if ($response->isStreaming()) {
             $this->streamToClient($client, $response);
+            $this->endRequestChild();
             return;
         }
 
@@ -853,6 +940,79 @@ class Server
         if (!$keepAlive) {
             $this->removeClient($client);
         }
+
+        $this->endRequestChild();
+    }
+
+    /**
+     * Should this request be served in its own process?
+     *
+     * WebSocket upgrades never reach here - handleHttp() returns before the
+     * fork - so the parent keeps every live socket and hot reload still works.
+     *
+     * /__dev is excluded on purpose. Those routes READ AND WRITE parent state:
+     * DevAdmin::$pendingReload is set by POST /__dev/api/reload and consumed by
+     * the accept loop, and the dashboard reports on the parent's own sockets. A
+     * child would set the flag on a copy that is discarded a millisecond later,
+     * so live reload would stop working with nothing to show for it. These
+     * requests never block for long, so serving them inline costs nothing.
+     */
+    private function shouldForkRequest(string $path): bool
+    {
+        if (!$this->forkPerRequest) {
+            return false;
+        }
+        if (str_starts_with($path, '/__dev')) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Decide once whether per-request forking is available.
+     *
+     * ON by default wherever the platform can do it, which is Linux and macOS.
+     * Windows has no fork, so it keeps the previous serial behaviour and the
+     * blocking-handler caveat with it - there is no way to give it the same
+     * guarantee from PHP.
+     *
+     * TINA4_SERVE_FORK=false is an escape hatch for the one case forking is
+     * genuinely wrong: a handler that mutates process state a LATER request is
+     * meant to see (an in-memory cache or session store built inside the
+     * server). That state now dies with the child.
+     */
+    private function resolveForkPerRequest(): bool
+    {
+        $raw = DotEnv::getEnv('TINA4_SERVE_FORK');
+        if ($raw !== null && $raw !== '') {
+            if (!DotEnv::isTruthy($raw)) {
+                return false;
+            }
+        }
+
+        return function_exists('pcntl_fork')
+            && function_exists('pcntl_waitpid')
+            && function_exists('posix_kill')
+            && function_exists('posix_getpid');
+    }
+
+    /**
+     * End a forked request child, immediately and without cleanup.
+     *
+     * SIGKILL to self rather than exit(), and that is deliberate. exit() runs
+     * destructors and shutdown functions, and this process shares the parent's
+     * file descriptors: a database destructor here would send a real QUIT on
+     * the connection the PARENT is still using, killing a session it believes
+     * it owns. The response bytes are already in the kernel's send buffer by
+     * this point (writeFully returned), and killing a process does not discard
+     * what the kernel has accepted, so the client still gets its answer.
+     */
+    private function endRequestChild(): void
+    {
+        if (!$this->inRequestChild) {
+            return;
+        }
+        posix_kill(posix_getpid(), SIGKILL);
     }
 
     /**
