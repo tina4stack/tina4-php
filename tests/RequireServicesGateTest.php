@@ -131,22 +131,36 @@ class RequireServicesGateTest extends TestCase
         // control them explicitly rather than inherit whatever this host
         // happens to export -- otherwise it would assert the lab's environment
         // instead of the gate's logic, and flip colour between here and CI.
-        $prefix = ['env'];
+        // env(1) takes OPTIONS first and NAME=VALUE assignments after: its usage
+        // is `env [OPTION]... [NAME=VALUE]... [COMMAND]`, so the first token that
+        // is not an option ends option parsing. Emitting `env A=1 -u B cmd` makes
+        // env treat `-u` as the COMMAND and die with
+        // "env: '-u': No such file or directory" - which surfaces as the child
+        // exiting non-zero and reads exactly like the gate firing. Collect the
+        // two kinds separately and always write the unsets first.
+        $unset = [];
+        $assign = [];
+
         if ($armed) {
-            $prefix[] = 'TINA4_REQUIRE_SERVICES=1';
+            $assign[] = 'TINA4_REQUIRE_SERVICES=1';
         } else {
-            $prefix[] = '-u';
-            $prefix[] = 'TINA4_REQUIRE_SERVICES';
+            $unset[] = 'TINA4_REQUIRE_SERVICES';
         }
         foreach ($environment as $name => $value) {
             if ($value === null) {
-                $prefix[] = '-u';
-                $prefix[] = $name;
+                $unset[] = $name;
                 continue;
             }
-            $prefix[] = escapeshellarg($name . '=' . $value);
+            $assign[] = $name . '=' . $value;
         }
-        $prefix = implode(' ', $prefix);
+
+        $prefix = 'env';
+        foreach ($unset as $name) {
+            $prefix .= ' -u ' . escapeshellarg($name);
+        }
+        foreach ($assign as $assignment) {
+            $prefix .= ' ' . escapeshellarg($assignment);
+        }
 
         $cmd = sprintf(
             'cd %s && %s ./vendor/bin/phpunit -c phpunit.xml --no-coverage --do-not-cache-result %s 2>&1',
