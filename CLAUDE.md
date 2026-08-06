@@ -1348,35 +1348,59 @@ is authorised on the raw socket peer.
 - Race-safe `getNextId()` with atomic sequence table (`tina4_sequences`) for SQLite/MySQL/MSSQL; PostgreSQL auto-creates sequences
 - Frond template engine optimizations: pre-compiled regexes, lazy loop context (copy-on-write), filter chain caching, path split caching, inline common filters (11-15% speedup)
 - SSE/Streaming via `$response->stream()` — Server-Sent Events support for real-time data push. Pass a generator callable; framework handles chunked transfer encoding, `text/event-stream` content type, and connection keep-alive. Hardened: the stream stops cleanly on client disconnect (`connection_aborted()`) and a generator that raises mid-stream is logged via `Log::error` and ends cleanly — the request worker never crashes
-- Tests: **4,987 executed, 16,270 assertions, 0 failures, 9 skipped** - measured
+- Tests: **5,008 executed, 16,428 assertions, 0 failures, 0 skipped** - measured
   2026-08-06 on Ubuntu 24.04.4 LTS x86_64, PHP 8.3.6, against live services with
-  `TINA4_REQUIRE_SERVICES=1`. That is the ORDINARY single-pass run, which is what
-  you get by typing the command; quote it that way rather than quoting a
-  zero-skip figure that took three passes to assemble.
+  `TINA4_REQUIRE_SERVICES=1`, exit code 0. That is the ORDINARY single-pass run:
+  the nine skips that used to need two extra passes now run inside it. (The run
+  also reports 21 PHPUnit Deprecations, which are pre-existing and come from
+  tests untouched by that work.)
 
   **Firebird IS covered** - live Firebird 5.0.4 on port 3050, reached through
   native ext-interbase and pdo_firebird. An earlier note here said "Firebird
   excluded by design", which was false: the server had been up the whole time.
 
-  The 9 skips are two different things, and only one of them is benign:
+  The nine skips that stood here until 2026-08-06 are gone, and none was closed
+  by relaxing an assertion. Each newly-running case was proved able to FAIL by
+  mutating what it covers:
 
-  * **6 need an environment that is the OPPOSITE of the normal one**, and a skip
-    is not a pass, so they are re-run in two extra passes. Pass 2 re-runs the
-    four "throws when ext-X is missing" tests with `PHP_INI_SCAN_DIR` pointed at
-    a conf.d with those extensions pruned; pass 3 re-runs the two "a write really
-    fails" tests under `setpriv --bounding-set=-dac_override,-dac_read_search`,
-    which takes CAP_DAC_OVERRIDE away from root so `chmod 0400` finally denies.
-    Each declares what it needs with a marker in its skip reason -
-    `[needs:absent-ext=NAME]` or `[needs:no-dac-override]` - so a runner can
-    select it without pattern-matching prose.
-  * **3 are a real coverage gap.** `MigrationFootgunsLiveEngineTest`'s three
-    Firebird cases skip with "Firebird database ... could not be created ... set
-    `TINA4_TEST_FIREBIRD_PATH`": the lab's Firebird runs in a container that does
-    not share the host directory that variable names, so the throwaway migration
-    database cannot be created and these have never executed there. They stay
-    GREEN under `TINA4_REQUIRE_SERVICES=1` because `RequireServicesGate` omits
-    `firebird` from `SERVICE_KEYWORDS` on purpose (it is not provisioned in
-    GitHub CI). Do not read that green as Firebird migration coverage.
+  * **Four "throws when ext-X is missing" cases** (ext-pgsql, ext-mysqli,
+    ext-interbase, ext-mongodb) skipped whenever the extension WAS loaded, so
+    the better the machine the less they tested. PHP cannot unload an extension
+    in-process, so `tests/PhpChild.php` CREATES the absence: a real php
+    subprocess with `PHP_INI_SCAN_DIR` and `-c` pointed at filtered copies of
+    this host's conf.d AND php.ini, so the shared object is never dlopen'd.
+    Every case asserts the instrument first - including an EXACT extension count
+    taken from a baseline child - and a negative control proves a child that
+    KEPT the extension does not report it missing.
+  * **Two "a write really fails" cases** need a real EACCES / SQLITE_READONLY,
+    which root does not get from `chmod 0400` because of CAP_DAC_OVERRIDE. They
+    re-run themselves under `setpriv --securebits=+noroot,+noroot_locked
+    --bounding-set=-all --inh-caps=-all`, dropping the CAPABILITY while staying
+    uid 0 so the repo under `/root` stays readable - dropping to an unprivileged
+    uid instead would deny directory TRAVERSAL and pass for the wrong reason.
+    The parent proves CapEff really reached 0 and that the child ran one
+    genuinely asserting test, since a skipped child also exits 0.
+  * **Three Firebird migration cases had never executed anywhere.**
+    `MigrationFootgunsLiveEngineTest` was the only file resolving its own
+    `TINA4_TEST_FIREBIRD_HOST/_PORT/_PATH`, and it decided the database existed
+    with `file_exists()` on a SERVER-side path - so with Firebird in a container
+    the file was never visible to the client and the guard fired every time. It
+    now reads the canonical `TINA4_TEST_FIREBIRD_URL` like the other thirteen
+    live Firebird tests and lets the CONNECTION be the existence check.
+
+  `RequireServicesGate` gates Firebird **per run** rather than by a flat keyword
+  (`CONDITIONAL_SERVICE_KEYWORDS`, armed by `TINA4_TEST_FIREBIRD_URL`). The
+  gated environments genuinely disagree: the lab and the CI `firebird:` job run
+  a live server, while the main CI `test:` job runs this same suite with the
+  gate armed and deliberately provides none. A flat include would fail that job
+  for a service it never claimed to provide; a flat exclude lets real Firebird
+  skips pass green where a server does exist.
+
+  On a PHP build where an extension is compiled STATICALLY (measured: macOS
+  Homebrew PHP 8.5.7 has pgsql and mysqli built in, no `extension=` line), its
+  absence cannot be created and that one case skips with a reason saying so.
+  Every Debian/Ubuntu build - the lab and CI included - ships them as shared
+  objects, so all four run there.
 
 ## Links
 
