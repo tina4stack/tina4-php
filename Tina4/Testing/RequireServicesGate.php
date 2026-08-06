@@ -58,9 +58,6 @@ final class RequireServicesGate
      * CONDITIONAL_SERVICE_KEYWORDS instead.
      */
     private const SERVICE_KEYWORDS = [
-        'postgres', 'postgresql', 'psycopg2', 'pg_connect', 'ext-pgsql',
-        'mysql',          // also matches "ext-mysqli" / "pdo_mysql"
-        'mssql', 'sqlserver', 'sqlsrv', 'pdo_dblib',  // SQL Server (ext-sqlsrv or FreeTDS/pdo_dblib)
         'redis', 'valkey', 'memcached',
         'mongo',          // also matches "mongodb" / "pymongo"
         'rabbit', 'amqp',
@@ -98,7 +95,49 @@ final class RequireServicesGate
         // The engine, the native client (ext-interbase, functions ibase_*/
         // fbird_*) and the PDO driver (pdo_firebird).
         'TINA4_TEST_FIREBIRD_URL' => ['firebird', 'interbase', 'ibase'],
+
+        // THE SQL ENGINES ARE CONDITIONAL FOR THE SAME REASON FIREBIRD IS, and
+        // leaving them unconditional is what kept the `firebird:` CI job's gate
+        // switched off. MEASURED 2026-08-06 on the 14 files that job runs: nine
+        // skip sites emit a PostgreSQL or mysqli reason - "PostgreSQL not
+        // reachable at %s:%d", "ext-mysqli not installed", "no PostgreSQL driver
+        // (pdo_pgsql / ext-pgsql) installed" - and that job provisions neither
+        // engine. Arming the gate there would have turned all nine into hard
+        // failures and reddened CI for services the job never claimed to
+        // provide.
+        //
+        // The two obvious workarounds are both wrong. Dropping those files from
+        // the job removes the FIREBIRD cases they carry, which is the only
+        // reason they are in that list. Rewording the skip reasons to dodge a
+        // keyword is gaming the gate: those reasons are accurate, and the next
+        // honestly-worded one re-opens the hole.
+        //
+        // Every gated environment that PROVIDES these sets its URL - the CI
+        // `test:` job (all three), the CI `cache-driver:` job (postgres), and
+        // the lab's lab-env.sh / lab-env-for.sh (all three) - so keying on the
+        // coordinates keeps the gate exactly as strict where the service is
+        // promised, and silent where it is not.
+        'TINA4_TEST_PG_URL' => ['postgres', 'postgresql', 'psycopg2', 'pg_connect', 'ext-pgsql'],
+        'TINA4_TEST_MYSQL_URL' => ['mysql'],   // also matches "ext-mysqli" / "pdo_mysql"
+        // SQL Server, native (ext-sqlsrv) or via FreeTDS/pdo_dblib.
+        'TINA4_TEST_MSSQL_URL' => ['mssql', 'sqlserver', 'sqlsrv', 'pdo_dblib'],
     ];
+
+    /**
+     * STILL UNCONDITIONAL, and the reason is a limit rather than a decision:
+     * redis, valkey, memcached, mongo, rabbit, kafka, mqtt and the mail
+     * services stay in SERVICE_KEYWORDS because a run that provides them does
+     * not always announce them through a single canonical URL variable the way
+     * the SQL engines do. Moving one without a coordinate to key on would
+     * silently DISARM the gate for it everywhere, which is the opposite of the
+     * bug being fixed here.
+     *
+     * The consequence, stated rather than hidden: the `firebird:` job provides
+     * none of those either, so a future test added to its file list that skips
+     * on, say, Mongo would fail that job. That is loud rather than silent, and
+     * the fix at that point is to give the service a coordinate and move it
+     * here too.
+     */
 
     /**
      * Phrases that mean "the provisioned thing is not there right now".

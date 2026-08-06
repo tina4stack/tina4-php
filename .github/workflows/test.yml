@@ -315,6 +315,32 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TINA4_TEST_FIREBIRD_URL: firebird://SYSDBA:masterkey@localhost:3050//var/lib/firebird/data/test.fdb
+      # TINA4_REQUIRE_SERVICES IS DELIBERATELY NOT SET HERE YET, and the reason
+      # is one concrete blocker rather than reluctance.
+      #
+      # Arming it would be right in principle: this is the one CI job that HAS a
+      # Firebird, so a Firebird skip here is exactly the green-pass the gate
+      # exists to stop. The SQL engines no longer stand in the way - they are
+      # keyed on their own URLs now (CONDITIONAL_SERVICE_KEYWORDS), so the nine
+      # PostgreSQL/mysqli skips across the files below stay green in a job that
+      # provisions neither.
+      #
+      # THE BLOCKER IS pdo_firebird. This job builds only the NATIVE
+      # ext-interbase from source; nothing here loads pdo_firebird. Three skips
+      # would therefore fire on a FIREBIRD keyword, which the URL above arms:
+      #
+      #   PdoFirebirdAdapterTest  "pdo_firebird driver not present - ... UNVERIFIED here."
+      #   PdoFallbackFactoryTest  "pdo_firebird driver not present - ... UNVERIFIED."
+      #   MigrationV3Test         "pdo_firebird driver not present - ... UNVERIFIED."
+      #
+      # 'firebird' matches inside 'pdo_firebird', and both 'not present' and
+      # 'unverified' are unavailable-hints, so each is a violation and the job
+      # would go red.
+      #
+      # The fix is to BUILD pdo_firebird here, not to weaken the gate or reword
+      # those reasons - they are accurate, and three real PDO-Firebird files
+      # currently prove nothing in the only environment that could run them.
+      # Once it is built and those three pass, add TINA4_REQUIRE_SERVICES: '1'.
     steps:
       - uses: actions/checkout@v4
 
@@ -375,10 +401,22 @@ jobs:
       # job (naming the file) rather than hanging the runner for hours.
       - name: Run Firebird tests (native ext-interbase)
         run: |
-          # Native ext-interbase tests PLUS the pdo_firebird tests. pdo_firebird is
-          # present here (the setup-php PHP 8.2 image bundles it), so both drivers
-          # are available and the native-vs-pdo parity + PDO-adapter tests run for
-          # real. (If a future runner drops pdo_firebird those tests skip cleanly.)
+          # Native ext-interbase tests, plus the pdo_firebird files.
+          #
+          # THIS COMMENT USED TO CLAIM pdo_firebird IS PRESENT because the
+          # setup-php image bundles it, which directly contradicted the comment
+          # on the job itself ("pdo_firebird is NOT built (only the native
+          # ext)"). Read the steps: `extensions:` asks for sqlite3 and pdo_sqlite
+          # only, the source build produces interbase.so, and the single ini
+          # written is 99-interbase.ini. NOTHING in this job loads pdo_firebird,
+          # so the job-level comment is the accurate one and this one was stale.
+          # Whether the base image happens to carry it is NOT asserted either
+          # way, because it cannot be established by reading the file - and it
+          # decides whether three PDO-Firebird files prove anything here. See the
+          # TINA4_REQUIRE_SERVICES note in this job's env: it is the one blocker
+          # keeping the gate off, and the honest fix is to build pdo_firebird
+          # rather than to leave those three skipping in the only environment
+          # with a real Firebird to test against.
           files="tests/FirebirdCharsetTest.php tests/FirebirdNullParamBindingTest.php \
             tests/FirebirdOrmCountTest.php tests/FirebirdOrmWriteTest.php \
             tests/FirebirdReconnectTest.php tests/FirebirdUrlTest.php \

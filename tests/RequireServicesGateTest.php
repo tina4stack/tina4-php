@@ -343,6 +343,72 @@ class RequireServicesGateTest extends TestCase
     }
 
     /**
+     * The SQL engines are conditional for the same reason Firebird is, and this
+     * pair is the proof. POSITIVE half: where a PostgreSQL WAS promised, its
+     * skip is still a violation exactly as it was when 'postgres' sat in the
+     * unconditional list.
+     *
+     * This half is the one that matters for the environments that do the real
+     * work: the CI `test:` job, the CI `cache-driver:` job and the lab all set
+     * TINA4_TEST_PG_URL, so moving the keyword must not have quietly disarmed
+     * the gate for any of them.
+     */
+    public function testPostgresSkipFailsTheArmedRunWhenAPostgresWasPromised(): void
+    {
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixturePostgres' => $this->beforeClassFixture(
+                'GateFixturePostgres',
+                'PostgreSQL not reachable at localhost:5432',
+                1,
+            )],
+            true,
+            ['TINA4_TEST_PG_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php'],
+        );
+
+        $this->assertNotSame(
+            0,
+            $code,
+            "a PostgreSQL skip must fail the armed run when TINA4_TEST_PG_URL promised one.\n" . $output,
+        );
+        $this->assertStringContainsString('TINA4_REQUIRE_SERVICES is set', $output);
+    }
+
+    /**
+     * NEGATIVE half, and the reason the SQL engines moved at all.
+     *
+     * The CI `firebird:` job provisions a real Firebird and NOTHING else, yet
+     * the files it runs carry nine PostgreSQL/mysqli skip sites - "PostgreSQL
+     * not reachable at %s:%d", "ext-mysqli not installed", "no PostgreSQL driver
+     * (pdo_pgsql / ext-pgsql) installed". While 'postgres' was unconditional,
+     * arming the gate there would have failed that job on every one of them, so
+     * the gate was simply left off and Firebird skips passed green in the one
+     * job that HAS a Firebird.
+     *
+     * Neither workaround was acceptable: dropping those files loses the Firebird
+     * cases they carry, which is why they are in that job's list, and rewording
+     * accurate skip reasons to dodge a keyword is gaming the gate.
+     */
+    public function testPostgresSkipStaysGreenWhenNoPostgresWasPromised(): void
+    {
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureNoPostgres' => $this->beforeClassFixture(
+                'GateFixtureNoPostgres',
+                'PostgreSQL not reachable at localhost:5432',
+                1,
+            )],
+            true,
+            ['TINA4_TEST_PG_URL' => null],
+        );
+
+        $this->assertSame(
+            0,
+            $code,
+            "with no PostgreSQL promised, a PostgreSQL skip must stay green.\n" . $output,
+        );
+        $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
+    }
+
+    /**
      * The conditional matcher itself, with the environment controlled here so
      * the assertion is about the code and not about the host.
      */
