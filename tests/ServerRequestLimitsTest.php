@@ -38,6 +38,9 @@ class ServerRequestLimitsTest extends TestCase
     /** Header bytes the test server accepts before answering 431. */
     private const MAX_HEADER = 16384;
 
+    /** Body bytes the test server accepts before answering 413. */
+    private const MAX_BODY = 65536;
+
     private string $appDir = '';
     /** @var resource|null */
     private $proc = null;
@@ -85,6 +88,7 @@ PHP);
             "TINA4_OVERRIDE_CLIENT=true\nTINA4_NO_BROWSER=true\nTINA4_DEBUG=false\n"
             . 'TINA4_REQUEST_TIMEOUT=' . self::REQUEST_TIMEOUT . "\n"
             . 'TINA4_MAX_REQUEST_HEADER=' . self::MAX_HEADER . "\n"
+            . 'TINA4_MAX_REQUEST_BODY=' . self::MAX_BODY . "\n"
         );
 
         $this->proc = proc_open(
@@ -218,6 +222,78 @@ PHP);
                 'a refused header flood should be 431 (or 400/413), got: ' . substr($read, 0, 120)
             );
         }
+    }
+
+    /**
+     * An oversized body is refused with 413 on the DECLARED Content-Length,
+     * before the bytes are read.
+     *
+     * The framework already did this - Server.php answers 413 from the declared
+     * length on the first packet rather than buffering and then objecting - but
+     * nothing asserted it. The header flood above was covered and the body was
+     * not, so the half of the DoS surface that carries the payload had no gate.
+     *
+     * Node and Python both shipped the opposite bug (measure the body, THEN
+     * refuse), which is exactly what this pins PHP against acquiring.
+     */
+    public function testAnOversizedBodyIsRefusedWith413(): void
+    {
+        $sock = @stream_socket_client("tcp://127.0.0.1:{$this->port}", $errno, $errstr, 5);
+        $this->assertIsResource($sock, "could not connect: $errstr");
+
+        $declared = self::MAX_BODY * 4;
+        $request = "POST /nope HTTP/1.1\r\n"
+            . "Host: 127.0.0.1\r\n"
+            . "Content-Type: application/octet-stream\r\n"
+            . "Content-Length: {$declared}\r\n"
+            . "\r\n";
+        fwrite($sock, $request);
+        // Deliberately send only a sliver of the declared body. A server that
+        // waits for all of it before deciding would hang here; one that reads
+        // the declared length answers immediately.
+        fwrite($sock, str_repeat('a', 512));
+
+        stream_set_timeout($sock, 8);
+        $read = stream_get_contents($sock);
+        fclose($sock);
+
+        $this->assertNotSame('', (string)$read, 'the server never answered an oversized body');
+        $this->assertMatchesRegularExpression(
+            '/ 413 /',
+            $read,
+            'an oversized body should be 413, got: ' . substr((string)$read, 0, 160)
+        );
+    }
+
+    /**
+     * The pair for the test above: a body comfortably UNDER the cap is served
+     * normally. A server that refused every POST would pass the 413 test and be
+     * useless.
+     */
+    public function testABodyUnderTheCapIsStillAccepted(): void
+    {
+        $sock = @stream_socket_client("tcp://127.0.0.1:{$this->port}", $errno, $errstr, 5);
+        $this->assertIsResource($sock, "could not connect: $errstr");
+
+        $body = str_repeat('a', 1024);
+        $this->assertLessThan(self::MAX_BODY, strlen($body), 'this control must stay under the cap');
+        $request = "POST /nope HTTP/1.1\r\n"
+            . "Host: 127.0.0.1\r\n"
+            . "Content-Type: application/octet-stream\r\n"
+            . 'Content-Length: ' . strlen($body) . "\r\n"
+            . "\r\n" . $body;
+        fwrite($sock, $request);
+
+        stream_set_timeout($sock, 8);
+        $read = stream_get_contents($sock);
+        fclose($sock);
+
+        $this->assertNotSame('', (string)$read, 'the server never answered a legal body');
+        $this->assertDoesNotMatchRegularExpression(
+            '/ 413 /',
+            $read,
+            'a body under the cap must not be refused, got: ' . substr((string)$read, 0, 160)
+        );
     }
 
     // ── NEGATIVE CONTROL ────────────────────────────────────────────────────
