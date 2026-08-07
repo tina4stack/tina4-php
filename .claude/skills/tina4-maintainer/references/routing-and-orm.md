@@ -187,15 +187,20 @@ $user->load("id = 1");
 All languages return the same JSON structure:
 ```json
 {
-    "data": [...],
-    "total": 100,
-    "page": 1,
+    "records": [...],
+    "total": 250,
+    "page": 3,
     "per_page": 20,
-    "total_pages": 5,
-    "has_next": true,
-    "has_prev": false
+    "total_pages": 13,
+    "limit": 20,
+    "offset": 40
 }
 ```
+Exactly these seven snake_case keys (ADR-0043). `to_paginate()` / `toPaginate()`
+takes NO arguments and derives every field from the query that ran; passing one
+RAISES. `total` is a true COUNT over the filter (never rows returned), `records`
+are verbatim (never re-sliced), and `page` = floor(offset / limit) + 1. Dropped:
+`data`, `count`, `totalPages`, `perPage`, `has_next`, `has_prev`.
 
 ## Database Adapters
 

@@ -158,6 +158,43 @@ own evidence: in a boot-and-verify gate `tina4_code` FAILED where Claude grounde
 longer exist, the exact drift this skill prevents. Write every line yourself so you own its
 correctness, then prove it against the source and the live API.
 
+## Decisions are ADRs: consult them before you change a contract, extend them when you make one
+
+Cross-framework behaviour is not settled by taste or by whoever edits last. It is settled by an
+**ADR** (`tina4-documentation/plan/v3/decisions/ADR-NNNN.md`, indexed in `DECISIONS.md`) and then
+made machine-checkable by a **contract fixture**
+(`tina4-documentation/plan/v3/fixtures/*_contract.json`, gated by
+`scripts/audit-contract-fixtures.py`). The two are one system: the ADR says WHY, the fixture proves
+the four frameworks still obey it.
+
+**Start at the map.** `tina4-documentation/plan/v3/CONTRACT-MAP.md` ties every audited feature to its
+fixture, its ADRs, and its proven-or-owed status. Before you touch a cross-framework contract - a
+response shape, a key set, a method signature, an env var, a wire format, a status code - open
+CONTRACT-MAP, find the governing ADR, and read it. The ADR is the authority; the code implements it,
+the fixture guards it, this skill and its `references/` only describe it.
+
+Five rules that keep the decisions and the code from drifting apart:
+
+- **Read the governing ADR before changing a contract.** If a change contradicts an accepted ADR,
+  you are not fixing a bug, you are reopening a decision - stop and supersede it deliberately.
+- **A fork in the road is not settled until it is an ADR.** When you pick between real options that
+  affect more than one framework, write the next `ADR-NNNN`, cite it in the fixture's invariants and
+  in your commit, and only then implement.
+- **Supersede explicitly, never silently.** A new ADR carries `Supersedes: ADR-XXXX`; you never quietly
+  change what an accepted ADR decided. (See `reference_decision_log`: supersede, do not silently change.)
+- **When you prove or change a contract, move the fixture and the map together.** Update the
+  `*_contract.json`, re-run the auditor, and sync CONTRACT-MAP from the auditor's OWN counts, never a
+  hand count. A row that disagrees with the auditor is a bug in the map.
+- **A doc that states a contract cites the ADR that governs it.** The pagination envelope in
+  `references/routing-and-orm.md` cites ADR-0043; do the same for any behaviour you document here.
+
+Recent decisions worth knowing by number: ADR-0002 (native metrics engine), ADR-0004 (best
+implementation prevails, parity flows both ways), ADR-0008 / G5 (a property name keeps its idiomatic
+casing - no framework rewrites it), ADR-0022 (queue at-least-once), ADR-0024 (one shared fixture +
+one checker per pluggable subsystem), ADR-0041 (explicit argument beats the environment), ADR-0042
+(the messenger uid is the IMAP UID, never a sequence number), ADR-0043 (the paginate envelope is
+seven snake_case keys derived from the query, no arguments). The full list is `DECISIONS.md`.
+
 ## Independent Verification & Honest Claims — Prove It, Then Qualify It
 
 When work is produced by a subagent, a parallel agent, or a workflow — or even by a prior step in

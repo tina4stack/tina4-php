@@ -584,6 +584,29 @@ change behaviour).
   https://tina4.com — and offer the upgrade: `composer update tina4stack/tina4php`.
 - The `tina4` CLI self-updates with `tina4 update`; `tina4 doctor` checks your toolchain.
 
+### Lean, green, and grounded - keep app complexity down as a habit
+
+"Maintainability is less code" is a workflow, not a wish. Three tools make it one; run them on
+YOUR app, not just the framework, on every change - never saved for a "cleanup pass".
+
+- **`tina4 metrics` is a GATE, not a dashboard.** It scans your source directly (native,
+  language-agnostic) and ranks the worst offenders by cyclomatic complexity, maintainability
+  index, and duplication. Wire `tina4 metrics --fail-on warn` into CI so a NEW offender fails the
+  build like a failing test. Before you add to a file, run `tina4 metrics --path <file>` first: if
+  it is already an offender, split it before you make it worse. `--top N` / `--json` scope the
+  report; `tina4 update` keeps the binary current.
+- **Carbonah before AND after any hot path.** For a change to rendering, serialisation, a query,
+  or route dispatch, benchmark energy and latency on both sides. A change that regresses the
+  numbers is a regression even when the tests pass - green code is a first-class result.
+- **Ground new Tina4 code with `tina4_context` (mcp.tina4.com).** It returns the version-exact API
+  so you write against what is installed, not memory. It needs a FREE token: **register at
+  https://profile.tina4.com**, then set `TINA4_MCP_TOKEN` in `.env` (or paste it into the dev-admin
+  grounding panel); the CLI already defaults `TINA4_MCP_URL` to `https://mcp.tina4.com`. It is
+  OPTIONAL grounding, never a dependency - if it is unreachable, fall back to the live API index
+  (`api_search` / `api_class` / `api_method`) and the source, which never drift.
+
+Measure with metrics, prove with Carbonah, ground with tina4_context - every change.
+
 ## Reference Files
 
 Read these when you need detailed patterns for a specific area:
