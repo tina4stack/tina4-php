@@ -239,12 +239,23 @@ class Session
 
     /**
      * Destroy the entire session and remove stored data.
+     *
+     * destroy() ENDS the session. The stored record is removed while the id is
+     * still valid, then the id is CLEARED — so a subsequent set()+save() with no
+     * new start() has no id to persist under and cannot RESURRECT the just-
+     * destroyed record (set() auto-saves). This mirrors the Python master, which
+     * nulls _session_id, and Node, which nulls sessionId. A fresh session needs a
+     * new start(), which mints a new id.
      */
     public function destroy(): void
     {
+        if ($this->sessionId !== '') {
+            $this->removeStorage();
+        }
         $this->data = [];
-        $this->removeStorage();
+        $this->sessionId = '';
         $this->started = false;
+        $this->dirty = false;
     }
 
     /**
@@ -670,6 +681,12 @@ class Session
      */
     public function save(): bool
     {
+        // No active session id (e.g. after destroy(), or before start()) — there
+        // is nothing to persist, and a write would re-create a just-destroyed
+        // record. Mirrors the Python master's `if self._session_id and self._dirty`.
+        if ($this->sessionId === '') {
+            return true;
+        }
         if ($this->safeWrite()) {
             $this->dirty = false;
             return true;
