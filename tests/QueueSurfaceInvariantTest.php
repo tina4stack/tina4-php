@@ -28,9 +28,12 @@ use PHPUnit\Framework\TestCase;
  * every backend. They are now declared on the interface, which makes the type
  * system enforce this invariant for those three methods permanently.
  *
- * The brokers answer with a named refusal rather than an empty list, because
- * an empty list claims nothing has failed - a different answer to the question
- * asked (ADR-0022 decision 7).
+ * On the brokers, failed() and retryFailed() answer with a named refusal rather
+ * than an empty list, because an empty list claims nothing has failed - a
+ * different answer to the question asked (ADR-0022 decision 7). deadLetters() is
+ * SUPPORTED there (it reads back the '<topic>.dead_letter' queue Tina4 maintains
+ * itself) and so ANSWERS - it is exercised by QueueFailureLifecycleTest, not
+ * refused here (queue_contract.json :: the-failure-lifecycle-is-real-everywhere).
  *
  * NO MOCKS. Every assertion drives a live MongoDB over TCP. If it is
  * unreachable the test skips, unless TINA4_REQUIRE_SERVICES is set.
@@ -151,14 +154,27 @@ final class QueueSurfaceInvariantTest extends TestCase
     }
 
     /**
-     * The broker keeps no queryable registry of failed jobs. Returning an empty
-     * list would claim nothing has failed, which is a different answer to the
-     * question asked - so it must refuse, naming itself and the method.
+     * failed() and retryFailed() cannot enumerate retryable failures on a broker:
+     * a failed-but-retryable job is re-published to the MAIN topic, where it is
+     * indistinguishable from pending work. So they REFUSE by name rather than
+     * return an empty list that would claim nothing has failed (ADR-0022 decision
+     * 7). Both refuse BEFORE opening a socket, which makes this a clean LOCAL gate
+     * that needs no broker: a raw "connection refused" instead of the named
+     * refusal is itself the violation - ADR-0022 says an unsupported op must
+     * refuse by name, never touching the network, whether or not the broker is up.
+     *
+     * deadLetters() is DELIBERATELY NOT listed: it is SUPPORTED on the brokers,
+     * not a refusal. It reads back the '<topic>.dead_letter' queue Tina4 maintains
+     * itself (drain-and-republish on rabbitmq, offset rewind-and-restore on kafka)
+     * and so ANSWERS - see the Python master's dead_letters() and the
+     * queue_contract.json failure-lifecycle invariant. Requiring it to refuse here
+     * was the stale assertion this test used to fail on locally, because a genuine
+     * answer method must connect. QueueFailureLifecycleTest proves it answers.
      */
     public function testABackendThatCannotAnswerAQuestionRefusesByNameInsteadOfLying(): void
     {
         foreach (['rabbitmq', 'kafka'] as $backend) {
-            foreach (['failed', 'deadLetters', 'retryFailed'] as $method) {
+            foreach (['failed', 'retryFailed'] as $method) {
                 $queue = $this->queue($backend);
                 $message = null;
                 try {
