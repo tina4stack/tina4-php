@@ -201,8 +201,11 @@ class AutoCrudV3Test extends TestCase
 
         $this->assertSame(200, $result->getStatusCode());
         $body = $result->getJsonBody();
-        $this->assertCount(3, $body['data']);
+        $this->assertCount(3, $body['records']);
         $this->assertSame(5, $body['total']);
+        $this->assertSame(1, $body['page']);
+        $this->assertSame(3, $body['per_page']);
+        $this->assertSame(2, $body['total_pages']); // ceil(5 / 3)
     }
 
     public function testUpdateItem(): void
@@ -283,7 +286,8 @@ class AutoCrudV3Test extends TestCase
         $result = Router::dispatch($request, $response);
 
         $body = $result->getJsonBody();
-        $this->assertCount(2, $body['data']);
+        $this->assertCount(2, $body['records']);
+        $this->assertSame(2, $body['total']); // true COUNT over the filter
     }
 
     // --- Sorting ---
@@ -330,8 +334,10 @@ class AutoCrudV3Test extends TestCase
 
         $this->assertSame(200, $result->getStatusCode());
         $body = $result->getJsonBody();
-        $this->assertCount(5, $body['data']);
+        $this->assertCount(5, $body['records']);
         $this->assertSame(15, $body['total']);
+        $this->assertSame(1, $body['page']);
+        $this->assertSame(3, $body['total_pages']); // ceil(15 / 5)
     }
 
     public function testPaginationSecondPage(): void
@@ -350,7 +356,81 @@ class AutoCrudV3Test extends TestCase
 
         $this->assertSame(200, $result->getStatusCode());
         $body = $result->getJsonBody();
-        $this->assertCount(3, $body['data']); // 8 - 5 = 3
+        $this->assertCount(3, $body['records']); // 8 - 5 = 3
+    }
+
+    // --- ADR-0043: the list envelope is EXACTLY the seven canonical keys ---
+
+    /**
+     * ADR-0043: the AutoCrud REST list endpoint returns EXACTLY the seven
+     * canonical snake_case keys - records, total, page, per_page, total_pages,
+     * limit, offset - and `total` is the TRUE total for the query (a COUNT
+     * probe), NEVER the number of rows returned on the page.
+     *
+     * Regression guard for the handler's own envelope, which built its OWN dict
+     * instead of routing through DatabaseResult::toPaginate(): the filter branch
+     * shipped `'total' => count($data)` (rows returned), so a page-2 request
+     * reported total = pageSize (20) instead of the real 250, and BOTH branches
+     * emitted `data` with no page/per_page/total_pages. Real SQLite, 250 real
+     * rows, a real dispatched route, page 2 - so rows-returned (20) and the true
+     * total (250) cannot coincide and the wrong-total bug is observable.
+     */
+    public function testPaginateRestListEnvelopeIsTheSevenKeys(): void
+    {
+        for ($i = 1; $i <= 250; $i++) {
+            $this->db->exec("INSERT INTO items (name, category) VALUES (:name, :cat)", [
+                ':name' => "Item{$i}",
+                ':cat' => 'bulk',
+            ]);
+        }
+
+        $crud = new AutoCrud($this->db);
+        $crud->register(CrudItem::class);
+        $crud->generateRoutes();
+
+        $canonical = ['limit', 'offset', 'page', 'per_page', 'records', 'total', 'total_pages'];
+
+        // --- Filter branch (the one that shipped total = count($data)) ---
+        $request = Request::create(
+            method: 'GET',
+            path: '/api/items',
+            query: ['filter' => ['category' => 'bulk'], 'limit' => 20, 'offset' => 20],
+        );
+        $response = new Response(testing: true);
+        $body = Router::dispatch($request, $response)->getJsonBody();
+
+        // EXACTLY the seven keys - no `data`, no `count`, no `totalPages`/`perPage`.
+        $keys = array_keys($body);
+        sort($keys);
+        $this->assertSame($canonical, $keys, 'filter branch must be exactly the seven canonical keys');
+
+        // total is the TRUE COUNT over the filter (250), not rows-returned (20 = pageSize).
+        $this->assertSame(250, $body['total'], 'total must be the true COUNT over the filter, not rows returned');
+        $this->assertNotSame(20, $body['total'], 'total must not be the page size (rows returned)');
+
+        $this->assertCount(20, $body['records'], 'records carries the full page of rows, verbatim');
+        $this->assertSame(2, $body['page'], 'page = floor(offset/limit) + 1 = 2');
+        $this->assertSame(20, $body['per_page']);
+        $this->assertSame(20, $body['limit']);
+        $this->assertSame(20, $body['offset']);
+        $this->assertSame(13, $body['total_pages'], 'total_pages = ceil(250 / 20) = 13');
+
+        // --- No-filter branch: same envelope, same true total ---
+        $request2 = Request::create(
+            method: 'GET',
+            path: '/api/items',
+            query: ['limit' => 20, 'offset' => 20],
+        );
+        $response2 = new Response(testing: true);
+        $body2 = Router::dispatch($request2, $response2)->getJsonBody();
+
+        $keys2 = array_keys($body2);
+        sort($keys2);
+        $this->assertSame($canonical, $keys2, 'no-filter branch must also be exactly the seven canonical keys');
+        $this->assertSame(250, $body2['total'], 'no-filter total is the true COUNT (250)');
+        $this->assertCount(20, $body2['records']);
+        $this->assertSame(2, $body2['page']);
+        $this->assertSame(13, $body2['total_pages']);
     }
 
     // --- Multiple filter values ---
@@ -375,7 +455,8 @@ class AutoCrudV3Test extends TestCase
         $result = Router::dispatch($request, $response);
 
         $body = $result->getJsonBody();
-        $this->assertCount(2, $body['data']);
+        $this->assertCount(2, $body['records']);
+        $this->assertSame(2, $body['total']); // true COUNT over the filter
     }
 
     // --- Update non-existent item ---
@@ -413,7 +494,7 @@ class AutoCrudV3Test extends TestCase
 
         $this->assertSame(200, $result->getStatusCode());
         $body = $result->getJsonBody();
-        $this->assertCount(0, $body['data']);
+        $this->assertCount(0, $body['records']);
         $this->assertSame(0, $body['total']);
     }
 

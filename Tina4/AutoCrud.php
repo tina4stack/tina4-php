@@ -9,6 +9,7 @@
 namespace Tina4;
 
 use Tina4\Database\DatabaseAdapter;
+use Tina4\Database\DatabaseResult;
 
 /**
  * Auto-CRUD — discovers ORM models and auto-generates REST endpoints.
@@ -187,25 +188,36 @@ class AutoCrud
 
             if (!empty($filter)) {
                 $models = $model->find($filter, $limit, $offset, $orderBy);
-                $data = array_map(fn(ORM $m) => $m->toDict(), $models);
-                return $response->json([
-                    'data' => $data,
-                    'total' => count($data),
-                    'limit' => $limit,
-                    'offset' => $offset,
-                ]);
+                // TRUE total for the filter: a COUNT over the SAME predicate
+                // find() built ("<column> = ?" per key, ANDed), NEVER the
+                // rows-returned count - a page-2 request must report 250, not 20.
+                // Mirror find()'s column mapping so the count matches the page.
+                $conditions = [];
+                $params = [];
+                foreach ($filter as $key => $value) {
+                    $conditions[] = $model->getDbColumn($key) . ' = ?';
+                    $params[] = $value;
+                }
+                $total = $model->count(implode(' AND ', $conditions), $params);
+            } else {
+                $models = $model->all($limit, $offset);
+                $total = $model->count();
             }
 
-            $models = $model->all($limit, $offset);
-            $data = array_map(fn(ORM $m) => $m->toDict(), $models);
-            $total = $model->count();
+            $records = array_map(fn(ORM $m) => $m->toDict(), $models);
 
-            return $response->json([
-                'data' => $data,
-                'total' => $total,
-                'limit' => $limit,
-                'offset' => $offset,
-            ]);
+            // ONE canonical envelope (ADR-0043): describe THIS page's result and
+            // let DatabaseResult::toPaginate() derive the exact seven snake_case
+            // keys - records, total, page, per_page, total_pages, limit, offset.
+            // No second, divergent envelope is built here.
+            $result = new DatabaseResult(
+                records: $records,
+                count: $total,
+                limit: $limit,
+                offset: $offset,
+            );
+
+            return $response->json($result->toPaginate());
         };
     }
 
