@@ -1399,8 +1399,8 @@ abstract class ORM
             return false;
         }
 
-        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
-        $sql = "DELETE FROM {$this->tableName} WHERE {$pkColumn} = :id";
+        [$whereSql, $whereParams] = $this->pkWhere('id');
+        $sql = "DELETE FROM {$this->tableName} WHERE {$whereSql}";
 
         // v3.13.39: wrap exec()+commit() in a started transaction. Previously
         // commit() was called with NO startTransaction() — committing whatever

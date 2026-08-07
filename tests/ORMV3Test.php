@@ -209,6 +209,25 @@ class ORMV3Test extends TestCase
         $this->assertFalse($post2->exists($id));
     }
 
+    public function testForceDelete(): void
+    {
+        // Regression (3.13.97): forceDelete() referenced an undefined $whereParams,
+        // so its :id placeholder was never bound and the hard delete threw instead
+        // of removing the row. A soft-delete model, force-deleted, must leave NO
+        // row behind, not even a trashed (is_deleted = 1) one.
+        $post = new TestPost($this->db);
+        $post->title = 'Gone';
+        $post->body = 'Content';
+        $post->save();
+        $id = $post->getPrimaryKeyValue();
+
+        $result = $post->forceDelete();
+        $this->assertTrue($result);
+
+        $rows = $this->db->query("SELECT * FROM posts WHERE id = :id", [':id' => $id]);
+        $this->assertCount(0, $rows, 'forceDelete must remove the row entirely, not even a soft-deleted one');
+    }
+
     // --- Find ---
 
     public function testFind(): void
