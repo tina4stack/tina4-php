@@ -256,6 +256,49 @@ class DocStoreTest extends TestCase
         $this->assertSame(3, $this->orders->countDocuments(['created_at' => ['$gte' => $base]]));
     }
 
+    // -- distinct -----------------------------------------------------------
+
+    /**
+     * distinct() must dedup by VALUE, including ObjectId (by 24-hex) and
+     * DateTime (by instant) - never by object identity. Parity with the Python
+     * master, Ruby and Node. PHP was the outlier: it special-cased
+     * ObjectId->equals() but compared every other value (including DateTime)
+     * with ===, so a field repeating the same instant returned one entry per
+     * decoded DateTimeImmutable instance instead of one per distinct value.
+     */
+    public function testDistinctDedupsRepeatedObjectIdAndDateByValue(): void
+    {
+        $utc = new \DateTimeZone('UTC');
+        $catA = new ObjectId('64d2f8a1b2c3d4e5f6a7b8c9');
+        $catB = new ObjectId('64d2f8a1b2c3d4e5f6a7b8ca');
+        $d1 = new \DateTimeImmutable('2026-08-07T12:00:00', $utc);
+        $d2 = new \DateTimeImmutable('2026-08-08T09:30:00', $utc);
+        $this->orders->insertMany([
+            ['category_id' => $catA, 'when' => $d1],
+            ['category_id' => $catA, 'when' => $d1],
+            ['category_id' => $catA, 'when' => $d2],
+            ['category_id' => $catB, 'when' => $d2],
+            ['category_id' => $catB, 'when' => $d1],
+        ]);
+
+        // ObjectId: two distinct values (A x3, B x2) -> exactly 2, not 5.
+        $ids = $this->orders->distinct('category_id');
+        $this->assertCount(2, $ids);
+        $hexes = array_map(fn ($o) => (string)$o, $ids);
+        sort($hexes);
+        $this->assertSame(
+            ['64d2f8a1b2c3d4e5f6a7b8c9', '64d2f8a1b2c3d4e5f6a7b8ca'],
+            $hexes
+        );
+
+        // DateTime: two distinct instants (D1 x3, D2 x2) -> exactly 2, not 5.
+        $dates = $this->orders->distinct('when');
+        $this->assertCount(2, $dates);
+        $isos = array_map(fn ($d) => DocStoreCodec::iso($d), $dates);
+        sort($isos);
+        $this->assertSame([DocStoreCodec::iso($d1), DocStoreCodec::iso($d2)], $isos);
+    }
+
     // -- updates ------------------------------------------------------------
 
     public function testSetIncUnset(): void

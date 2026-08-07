@@ -1180,7 +1180,7 @@ class SqliteCollection
             $v = $doc[$key] ?? null;
             $found = false;
             foreach ($seen as $s) {
-                if ($s === $v || ($s instanceof ObjectId && $v instanceof ObjectId && $s->equals($v))) {
+                if ($this->valueEquals($s, $v)) {
                     $found = true;
                     break;
                 }
@@ -1190,6 +1190,28 @@ class SqliteCollection
             }
         }
         return $seen;
+    }
+
+    /**
+     * Value-equality for distinct(): ObjectId by 24-hex and DateTime by UTC
+     * instant, everything else by ===. Decoded documents rehydrate ObjectId and
+     * DateTime as fresh objects, so identity (===) would treat two equal values
+     * as distinct; this normalises them the same way the Node/Ruby/Python
+     * masters do so the dedup is by value on every provider.
+     *
+     * @param mixed $a First value.
+     * @param mixed $b Second value.
+     * @return bool True when the two values are equal by value.
+     */
+    private function valueEquals(mixed $a, mixed $b): bool
+    {
+        if ($a instanceof ObjectId && $b instanceof ObjectId) {
+            return $a->equals($b);
+        }
+        if ($a instanceof \DateTimeInterface && $b instanceof \DateTimeInterface) {
+            return DocStoreCodec::iso($a) === DocStoreCodec::iso($b);
+        }
+        return $a === $b;
     }
 
     // -- updates (filter pushed to SQL; mutation applied per matched doc) --
