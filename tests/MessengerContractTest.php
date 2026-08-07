@@ -53,8 +53,14 @@ use Tina4\MessengerConnectionError;
  * conformed Tina4/Messenger.php to the fixture (inbox() carries `to`, drops
  * msgno/flagged/size; read() carries attachments + headers under body_text/
  * body_html; read() of a missing UID returns null; inbox()/read() take the folder
- * positionally; uid is UID-addressed and stringified). So no Messenger.php change
- * was required -- the tests LOCK the behaviour in so it cannot regress.
+ * positionally; uid is UID-addressed and stringified). So the testMsg* invariants
+ * required no Messenger.php change -- they LOCK the behaviour in so it cannot regress.
+ *
+ * The read()-shape FOLLOW-UPS did change Messenger.php (issues #70 and #69):
+ * testReadItemShapeIsExactlyTenKeys pins read() to EXACTLY the 10 canonical keys
+ * (msgno/message_id/seen/flagged removed), and testReadAttachmentsCarryDecodedBytes
+ * pins each attachment's RAW DECODED `content` bytes ({filename, content_type, size,
+ * content}). Both are GreenMail-backed and written first, red before the fix.
  *
  * NO MOCKS here either. GreenMail-backed invariants build a real Messenger against
  * a live SMTP+IMAP server and skip-guard exactly like MessengerImapGreenMailTest,
@@ -536,10 +542,10 @@ class MessengerContractTest extends TestCase
         // bodyText/bodyHtml). attachments + headers must be present (Ruby/Node had no
         // attachments; PHP/Ruby had no headers -- all conformed in 3.13.96).
         //
-        // NOTE: PHP read() additionally carries msgno/seen/flagged/message_id -- a
-        // PHP-only SUPERSET, never a measured defect (the fixture flagged MISSING
-        // keys, not extras). This test pins the 10 REQUIRED keys and the single body
-        // naming; it deliberately does not forbid the extras. See the report note.
+        // This pins the 10 REQUIRED keys and the single body naming. The EXACT set
+        // (extras forbidden) and the attachment BYTES are the #70/#69 follow-ups,
+        // locked separately by testReadItemShapeIsExactlyTenKeys and
+        // testReadAttachmentsCarryDecodedBytes below.
         $this->requireGreenMail();
         $to = $this->greenMailRecipient();
         $messenger = $this->greenMailMessenger($to);
@@ -569,6 +575,91 @@ class MessengerContractTest extends TestCase
         $headerNames = array_map('strtolower', array_keys($message['headers']));
         $this->assertContains('subject', $headerNames, 'read() headers must carry Subject');
         $this->assertContains('from', $headerNames, 'read() headers must carry From');
+    }
+
+    // ── #70: read() returns EXACTLY the 10 canonical keys, no extras ──────────
+    // Supplements msg-read-item-shape. That test pins the 10 REQUIRED keys but
+    // tolerated PHP's historical extras; issue #70 REMOVED them, so this locks the
+    // EXACT set and forbids: msgno (an IMAP SEQUENCE NUMBER ADR-0042 bars as a
+    // public id), message_id (a duplicate of headers['Message-ID']), and
+    // seen/flagged (inbox()-listing concerns, not read() fields). REAL GreenMail.
+    public function testReadItemShapeIsExactlyTenKeys(): void
+    {
+        $this->requireGreenMail();
+        $to = $this->greenMailRecipient();
+        $messenger = $this->greenMailMessenger($to);
+        $subject = 'TenKeys ' . bin2hex(random_bytes(4));
+
+        $envelope = $this->deliverAndWait($messenger, $to, $subject, 'ten keys body');
+        $message = $messenger->read($envelope['uid']);
+
+        $this->assertNotNull($message, 'read() returned null for a UID inbox() just listed');
+
+        $expected = ['uid', 'subject', 'from', 'to', 'cc', 'date', 'body_text', 'body_html', 'attachments', 'headers'];
+        $actual = array_keys($message);
+        sort($expected);
+        sort($actual);
+        $this->assertSame(
+            $expected,
+            $actual,
+            'read() must return EXACTLY the 10 canonical keys, got: ' . implode(', ', array_keys($message))
+        );
+
+        // Each removed extra forbidden by name, so a regression names the offender
+        // rather than only failing the whole-set compare above.
+        foreach (['msgno', 'message_id', 'seen', 'flagged'] as $forbidden) {
+            $this->assertArrayNotHasKey(
+                $forbidden,
+                $message,
+                "read() must not expose '{$forbidden}' (issue #70 / ADR-0042)"
+            );
+        }
+    }
+
+    // ── #69: read() attachments carry the RAW DECODED bytes ──────────────────
+    // Attachments were metadata-only; issue #69 adds `content` (transfer-decoded
+    // bytes) so an attachment is downloadable straight from read(). Item shape is
+    // EXACTLY {filename, content_type, size, content}; content === the original
+    // bytes; size === that byte length. REAL GreenMail, a real BINARY attachment.
+    public function testReadAttachmentsCarryDecodedBytes(): void
+    {
+        $this->requireGreenMail();
+        $to = $this->greenMailRecipient();
+        $messenger = $this->greenMailMessenger($to);
+        $subject = 'AttachBytes ' . bin2hex(random_bytes(4));
+
+        // Real binary bytes (NUL + high bytes) prove a TRUE raw-byte round trip,
+        // not an ASCII one that a broken base64 path could still pass.
+        $originalBytes = "\x89PNG\r\n\x1a\n" . random_bytes(96);
+        $filename = 'payload-' . bin2hex(random_bytes(4)) . '.bin';
+
+        $envelope = $this->deliverAndWait(
+            $messenger,
+            $to,
+            $subject,
+            'body with an attachment',
+            false,
+            [['filename' => $filename, 'content' => $originalBytes, 'mime' => 'application/octet-stream']],
+        );
+        $message = $messenger->read($envelope['uid']);
+
+        $this->assertNotNull($message);
+        $this->assertCount(1, $message['attachments'], 'exactly one attachment expected');
+
+        $attachment = $message['attachments'][0];
+
+        // EXACTLY the canonical attachment item keys — no `mime`, no `part_number`.
+        $this->assertSame(
+            ['filename', 'content_type', 'size', 'content'],
+            array_keys($attachment),
+            'attachment item must be exactly {filename, content_type, size, content}',
+        );
+
+        $this->assertSame($filename, $attachment['filename'], 'attachment filename must survive the round trip');
+        $this->assertSame('application/octet-stream', $attachment['content_type']);
+        // content is the RAW DECODED bytes (issue #69), never base64.
+        $this->assertSame($originalBytes, $attachment['content'], 'attachment content must be the original raw bytes');
+        $this->assertSame(strlen($originalBytes), $attachment['size'], 'size must be the decoded byte length');
     }
 
     // ── 9. msg-snippet-is-decoded-text (GreenMail) ───────────────────────────
@@ -888,11 +979,12 @@ class MessengerContractTest extends TestCase
      * this subject lands. Delivery is asynchronous, so a single immediate read would
      * be a race; a bounded poll keeps the test honest without a blanket sleep.
      *
+     * @param array<int, array{filename: string, content: string, mime?: string}> $attachments
      * @return array<string, mixed> The envelope from inbox()
      */
-    private function deliverAndWait(Messenger $messenger, string $to, string $subject, string $body, bool $html = false): array
+    private function deliverAndWait(Messenger $messenger, string $to, string $subject, string $body, bool $html = false, array $attachments = []): array
     {
-        $result = $messenger->send(to: $to, subject: $subject, body: $body, html: $html);
+        $result = $messenger->send(to: $to, subject: $subject, body: $body, html: $html, attachments: $attachments);
         $this->assertTrue($result['success'], 'SMTP send failed: ' . ($result['message'] ?? 'no message'));
 
         for ($attempt = 0; $attempt < 40; $attempt++) {

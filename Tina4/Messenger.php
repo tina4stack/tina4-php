@@ -537,21 +537,22 @@ class Messenger
                 imap_setflag_full($imap, (string)$uid, '\\Seen', ST_UID);
             }
 
+            // EXACTLY the 10 canonical read() keys, no more (ADR-0042, issue #70).
+            // The IMAP SEQUENCE NUMBER ($msgno) stays usable INTERNALLY to fetch the
+            // header above, but ADR-0042 forbids exposing it as a public id, so it is
+            // NOT a key here; message_id lives in `headers` (dropped as a duplicate);
+            // and seen/flagged are inbox()-listing concerns, not read() fields.
             return [
                 'uid' => (string)$uid,
-                'msgno' => $msgno,
                 'subject' => $this->decodeMimeHeader($header->subject ?? ''),
                 'from' => $this->formatAddress($header->from ?? []),
                 'to' => $this->formatAddress($header->to ?? []),
                 'cc' => $this->formatAddress($header->cc ?? []),
                 'date' => $this->toIso8601((string)($header->date ?? '')),
-                'seen' => (bool)($header->Seen ?? false),
-                'flagged' => (bool)($header->Flagged ?? false),
                 'body_text' => $body['text'] ?? '',
                 'body_html' => $body['html'] ?? '',
                 'attachments' => $attachments,
                 'headers' => $headers,
-                'message_id' => $header->message_id ?? '',
             ];
         } catch (\Throwable $e) {
             throw $this->imapFail('read', $e);
@@ -1261,9 +1262,19 @@ class Messenger
     }
 
     /**
-     * Extract attachment metadata from an IMAP message structure.
+     * Extract attachments — WITH their raw decoded bytes — from an IMAP message.
      *
-     * @return array List of attachment info arrays
+     * Each item is the canonical shape (issue #69, ADR-0042):
+     * {filename, content_type, size, content}, where `content` is the RAW DECODED
+     * bytes (base64 / quoted-printable transfer-decoded back to the original
+     * bytes — the same convention as an uploaded file's `content`) and `size` is
+     * that byte length. This makes an attachment downloadable straight from
+     * read(), matching the Python master's per-attachment `content`.
+     *
+     * @param resource $imap      IMAP stream (for the per-part body fetch)
+     * @param int      $uid       Message UID
+     * @param object   $structure imap_fetchstructure() result
+     * @return array<int, array{filename: string, content_type: string, size: int, content: string}>
      */
     private function extractAttachments($imap, int $uid, object $structure): array
     {
@@ -1300,11 +1311,17 @@ class Messenger
                     }
                 }
 
+                // Fetch this top-level part's body and transfer-decode it to the
+                // real attachment bytes. The top-level part number is $index + 1,
+                // the same addressing walkParts uses for the body parts.
+                $rawPart = imap_fetchbody($imap, $uid, (string)($index + 1), FT_UID);
+                $content = $this->decodeBody($rawPart === false ? '' : $rawPart, $part->encoding ?? 0);
+
                 $attachments[] = [
                     'filename' => $filename,
-                    'size' => $part->bytes ?? 0,
-                    'mime' => $this->mimeTypeFromPart($part),
-                    'part_number' => $index + 1,
+                    'content_type' => $this->mimeTypeFromPart($part),
+                    'size' => strlen($content),
+                    'content' => $content,
                 ];
             }
         }

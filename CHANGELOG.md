@@ -39,6 +39,12 @@ Messenger (`Tina4\Messenger`), IMAP read path:
   The default is port-aware (993 = tls, else none), reproducing the previous
   port-based connection selection, so nothing regresses for callers who never
   set it.
+- `read()` attachments now carry their raw decoded `content` bytes (issue #69).
+  Each attachment is `{filename, content_type, size, content}`, where `content`
+  is the transfer-decoded bytes (base64 / quoted-printable back to the original
+  bytes -- the same convention as an uploaded file's `content`) and `size` is
+  that byte length, so an attachment is downloadable straight from `read()`
+  (parity with the Python master's per-attachment `content`).
 
 Breaking (inbox/read item keys): an `inbox()`/`search()` item is now exactly
 `{uid, subject, from, to, date, snippet, seen}`. `to` was ADDED; `msgno`,
@@ -47,6 +53,18 @@ Breaking (inbox/read item keys): an `inbox()`/`search()` item is now exactly
 consumer that read `msgno`/`flagged`/`size` from an inbox item must stop; a
 consumer that parsed the raw RFC 2822 `date` must parse ISO-8601 instead; `to`
 is now available directly.
+
+Breaking (read() item keys, issue #70): `read()` now returns EXACTLY the 10
+canonical keys `{uid, subject, from, to, cc, date, body_text, body_html,
+attachments, headers}`. The PHP-only extras `msgno`, `message_id`, `seen` and
+`flagged` were REMOVED: `msgno` is the IMAP SEQUENCE NUMBER ADR-0042 forbids as a
+public id, `message_id` duplicated `headers['Message-ID']`, and `seen`/`flagged`
+are inbox()-listing concerns, not read() fields. Each attachment item likewise
+dropped `mime` and `part_number` in favour of `content_type` and the new
+`content`. Migration: read the Message-ID from `headers['Message-ID']`; use
+`inbox()`/`unread()` for seen/unread state; read an attachment's type from
+`content_type` (was `mime`). (`imap_msgno()` is still used INTERNALLY to fetch,
+just never exposed in the result.)
 
 ### Fixed (Firebird held a table for the life of the process, #170)
 
