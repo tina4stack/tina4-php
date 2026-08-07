@@ -142,13 +142,20 @@ final class QueueDelayInvariantTest extends TestCase
         foreach (['rabbitmq', 'kafka'] as $backend) {
             $queue = new \Tina4\Queue($backend, [], 'delay_' . bin2hex(random_bytes(6)));
 
+            $message = null;
             try {
                 $queue->push(['m' => 'delayed'], 0, self::DELAY);
-                $this->fail("the {$backend} backend must refuse a delayed push, not drop the delay");
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString($backend, $e->getMessage(), 'the error must name the backend');
-                $this->assertStringContainsString('delay', strtolower($e->getMessage()), 'the error must name the operation');
+                $message = $e->getMessage();
             }
+
+            // Asserted OUTSIDE the catch: PHPUnit's AssertionFailedError extends
+            // \RuntimeException, so a $this->fail() inside the try would be caught
+            // here and hide a push() that dropped the delay instead of refusing
+            // (the ghost). assertNotNull makes this a real gate.
+            $this->assertNotNull($message, "the {$backend} backend must refuse a delayed push, not drop the delay");
+            $this->assertStringContainsString($backend, (string)$message, 'the error must name the backend');
+            $this->assertStringContainsString('delay', strtolower((string)$message), 'the error must name the operation');
         }
     }
 }

@@ -160,15 +160,24 @@ final class QueueSurfaceInvariantTest extends TestCase
         foreach (['rabbitmq', 'kafka'] as $backend) {
             foreach (['failed', 'deadLetters', 'retryFailed'] as $method) {
                 $queue = $this->queue($backend);
+                $message = null;
                 try {
                     $queue->{$method}();
-                    $this->fail("{$backend}::{$method}() must refuse, not answer");
                 } catch (\Error $e) {
                     $this->fail("{$backend}::{$method}() is a FATAL, not a refusal: " . $e->getMessage());
                 } catch (\RuntimeException $e) {
-                    $this->assertStringContainsString($backend, $e->getMessage(), 'the refusal must name the backend');
-                    $this->assertStringContainsString($method, $e->getMessage(), 'the refusal must name the method');
+                    $message = $e->getMessage();
                 }
+
+                // Asserted OUTSIDE the catch: PHPUnit's AssertionFailedError extends
+                // \RuntimeException, so a $this->fail() inside the try would be
+                // swallowed by the \RuntimeException block and hide a method that
+                // answered instead of refusing (the ghost). The \Error catch stays -
+                // a FATAL is a genuine failure and its $this->fail() propagates (a
+                // sibling catch never swallows it). assertNotNull is the real gate.
+                $this->assertNotNull($message, "{$backend}::{$method}() must refuse, not answer");
+                $this->assertStringContainsString($backend, (string)$message, 'the refusal must name the backend');
+                $this->assertStringContainsString($method, (string)$message, 'the refusal must name the method');
             }
         }
     }

@@ -149,13 +149,23 @@ final class QueuePriorityInvariantTest extends TestCase
         foreach (['rabbitmq', 'kafka'] as $backend) {
             $queue = new \Tina4\Queue($backend, [], 'prio_' . bin2hex(random_bytes(6)));
 
+            $message = null;
             try {
                 $queue->push(['m' => 'high'], 9, 0);
-                $this->fail("the {$backend} backend must refuse a prioritised push, not drop the priority");
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString($backend, $e->getMessage(), 'the error must name the backend');
-                $this->assertStringContainsString('priority', strtolower($e->getMessage()), 'the error must name the operation');
+                $message = $e->getMessage();
             }
+
+            // Asserted OUTSIDE the catch on purpose. PHPUnit's AssertionFailedError
+            // extends \RuntimeException, so a $this->fail() inside the try would be
+            // swallowed by the catch above - the ghost that stays green even when
+            // push() did NOT refuse (proven: mutating KafkaBackend::enqueue() to
+            // return without throwing left this test green). Capturing the message
+            // and asserting out here makes it a real gate: a non-refusing push
+            // leaves $message null and assertNotNull fails.
+            $this->assertNotNull($message, "the {$backend} backend must refuse a prioritised push, not drop the priority");
+            $this->assertStringContainsString($backend, (string)$message, 'the error must name the backend');
+            $this->assertStringContainsString('priority', strtolower((string)$message), 'the error must name the operation');
         }
     }
 }

@@ -105,13 +105,20 @@ final class QueueReachesBackendTest extends TestCase
     {
         foreach (['rabbitmq', 'kafka'] as $backend) {
             $queue = new \Tina4\Queue($backend, [], 'reach_' . bin2hex(random_bytes(6)));
+            $message = null;
             try {
                 $queue->popById('whatever');
-                $this->fail("{$backend}::popById() must refuse, not answer from local disk");
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString($backend, $e->getMessage(), 'the refusal must name the backend');
-                $this->assertStringContainsString('popById', $e->getMessage(), 'the refusal must name the operation');
+                $message = $e->getMessage();
             }
+
+            // Asserted OUTSIDE the catch: PHPUnit's AssertionFailedError extends
+            // \RuntimeException, so a $this->fail() inside the try would be caught
+            // here and hide a popById() that quietly answered from local disk (the
+            // ghost). assertNotNull makes this a real gate.
+            $this->assertNotNull($message, "{$backend}::popById() must refuse, not answer from local disk");
+            $this->assertStringContainsString($backend, (string)$message, 'the refusal must name the backend');
+            $this->assertStringContainsString('popById', (string)$message, 'the refusal must name the operation');
         }
     }
 }
