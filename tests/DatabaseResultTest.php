@@ -147,11 +147,11 @@ class DatabaseResultTest extends TestCase
         $paginate = $result->toPaginate();
 
         $this->assertArrayHasKey('records', $paginate);
-        $this->assertArrayHasKey('count', $paginate);
+        $this->assertArrayHasKey('total', $paginate);
         $this->assertArrayHasKey('limit', $paginate);
         $this->assertArrayHasKey('offset', $paginate);
         $this->assertSame($records, $paginate['records']);
-        $this->assertSame(100, $paginate['count']);
+        $this->assertSame(100, $paginate['total']);
         $this->assertSame(25, $paginate['limit']);
         $this->assertSame(50, $paginate['offset']);
     }
@@ -333,7 +333,7 @@ class DatabaseResultTest extends TestCase
 
         $paginate = $result->toPaginate();
         $this->assertSame([], $paginate['records']);
-        $this->assertSame(0, $paginate['count']);
+        $this->assertSame(0, $paginate['total']);
     }
 
     // -- columnInfo() fallback --------------------------------------------------

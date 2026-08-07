@@ -155,7 +155,7 @@ class Issue106Test extends TestCase
         $paginated = $result->toPaginate();
 
         $this->assertCount(10, $paginated['records'], 'Page should have 10 items');
-        $this->assertSame(50, $paginated['count'], 'Total count should be 50');
+        $this->assertSame(50, $paginated['total'], 'Total count should be 50');
         $this->assertSame(10, $paginated['limit'], 'Limit should be 10 (per_page)');
         $this->assertSame(10, $paginated['offset'], 'Offset should be 10 for page 2');
 

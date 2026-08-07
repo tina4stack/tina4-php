@@ -293,71 +293,52 @@ class DatabaseResult implements \Iterator, \Countable, \ArrayAccess, \JsonSerial
     }
 
     /**
-     * Return a pagination-friendly associative array.
+     * Describe the page this result already IS as a pagination envelope.
      *
-     * Includes both canonical keys and aliases for backwards compatibility
-     * with clients that use either naming convention.
+     * Takes NO arguments and derives every field from the query that produced
+     * this result (ADR-0043): per_page is the query's limit, page is
+     * floor(offset / limit) + 1, total is the true COUNT for the filter (never
+     * the number of rows returned), total_pages is ceil(total / per_page), and
+     * records is the rows the query returned verbatim, never re-sliced. The
+     * envelope is EXACTLY seven snake_case keys, identical across all four Tina4
+     * frameworks: records, total, page, per_page, total_pages, limit, offset.
      *
-     * @return array{records: array, data: array, count: int, total: int, limit: int, per_page: int, offset: int, page: int, totalPages: int, total_pages: int}
+     * To read another page, fetch that page (limit + offset) and call this on
+     * the result. An argument is refused: a DatabaseResult holds no database
+     * connection, so one could only re-slice the rows already in memory and then
+     * report total_pages for pages it can never reach.
+     *
+     * @return array{records: array<int, array<string, mixed>>, total: int, page: int, per_page: int, total_pages: int, limit: int, offset: int}
+     * @throws \InvalidArgumentException When any argument is passed.
      */
-    /**
-     * Paginate this result. Two modes.
-     *
-     * NO ARGUMENTS: describe the page this result already IS, derived from the
-     * query that produced it. PHP was the only framework of the four that got
-     * this right - Python and Node reported page 1 for an offset fetch, and
-     * Ruby returned zero records for one.
-     *
-     * WITH $page/$perPage: slice this result in memory, matching the behaviour
-     * GitHub issue #106 asked for in Python. Valid only when the result holds
-     * the WHOLE set: slicing a result that is already ONE PAGE of a larger
-     * query is refused, because the slice starts at row 0 of what you hold
-     * while the rows themselves start at $offset.
-     *
-     * @param int|null $page    1-based page to slice, or null to derive.
-     * @param int|null $perPage Rows per page when slicing, or null to derive.
-     * @return array The pagination envelope.
-     * @throws \InvalidArgumentException When slicing a result that is already one page.
-     */
-    public function toPaginate(?int $page = null, ?int $perPage = null): array
+    public function toPaginate(...$args): array
     {
-        if (($page !== null || $perPage !== null) && count($this->records) < $this->count) {
+        if ($args !== []) {
             throw new \InvalidArgumentException(
-                'toPaginate($page, $perPage) slices the rows this result holds, but this '
-                . 'result holds only ' . count($this->records) . ' of ' . $this->count
-                . ' rows - it is a PARTIAL result, so any page past the rows it holds comes '
-                . 'back empty while totalPages claims it exists. MEASURED on 100,000 rows '
-                . 'read under the default cap of 100: pages 1-5 of 20 were right and pages '
-                . '6 onward returned NOTHING. Fetch the page you want instead: '
-                . 'fetch($sql, [], $perPage, ($page - 1) * $perPage), then call '
-                . 'toPaginate() with no arguments.'
+                'toPaginate() takes NO arguments - it describes the page this result '
+                . 'already IS, derived from the query that produced it. A DatabaseResult '
+                . 'holds no database connection, so an argument could only re-slice the rows '
+                . 'already in memory and then report total_pages for pages it can never reach. '
+                . 'MEASURED on 100,000 rows read under the default cap of 100: pages 1-5 of 20 '
+                . 'were right and pages 6 onward returned NOTHING while the envelope still '
+                . 'claimed those pages existed. Fetch the page you want instead: '
+                . 'fetch($sql, [], $perPage, ($page - 1) * $perPage), then call toPaginate() '
+                . 'with no arguments.'
             );
         }
 
-        if ($page === null && $perPage === null) {
-            $perPage = $this->limit > 0 ? $this->limit : count($this->records);
-            $page    = $perPage > 0 ? (int) floor($this->offset / $perPage) + 1 : 1;
-            $offset  = $this->offset;
-            $rows    = $this->records;
-        } else {
-            $page    = $page ?? 1;
-            $perPage = $perPage ?? ($this->limit > 0 ? $this->limit : 10);
-            $offset  = ($page - 1) * $perPage;
-            $rows    = array_slice($this->records, $offset, $perPage);
-        }
+        $perPage    = $this->limit > 0 ? $this->limit : count($this->records);
+        $page       = $perPage > 0 ? (int) floor($this->offset / $perPage) + 1 : 1;
         $totalPages = $perPage > 0 ? max(1, (int) ceil($this->count / $perPage)) : 1;
 
         return [
-            'records'     => $rows,
-            'data'        => $rows,                 // alias for records
-            'count'       => $this->count,
-            'total'       => $this->count,          // alias for count
+            'records'     => $this->records,
+            'total'       => $this->count,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total_pages' => $totalPages,
             'limit'       => $perPage,
-            'per_page'    => $perPage,              // alias for limit
-            'offset'      => $offset,
-            'page'        => $page,                 // derived: floor(offset/limit) + 1
-            'totalPages'  => $totalPages,           // derived: ceil(count/limit)
-            'total_pages' => $totalPages,           // snake_case alias
+            'offset'      => $this->offset,
         ];
     }
 
