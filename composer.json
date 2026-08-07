@@ -34,7 +34,8 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10 || ^11",
-        "mongodb/mongodb": "^2.3"
+        "mongodb/mongodb": "^2.3",
+        "cebe/php-openapi": "^1.8"
     },
     "bin": [
         "bin/tina4php"
