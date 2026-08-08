@@ -1416,6 +1416,42 @@ Always read and follow the instructions in .claude/skills/tina4-developer-php/SK
 ## Tina4-js Frontend Skill
 Always read and follow the instructions in .claude/skills/tina4-js/SKILL.md when working with tina4-js frontend code. Read its referenced files in .claude/skills/tina4-js/references/ as needed.
 
+## The Uniform Plan (cross-framework audit + consolidations)
+
+Tina4 is one framework in four languages, so the feature-by-feature audit and the
+contract-fixture consolidations live in ONE framework-agnostic place, not per
+repo: **`tina4-documentation/plan/v3/`** (the `tina4-documentation` repo, `main`
+branch). Cite plan docs by repo-prefixed path.
+
+- `plan/v3/98-feature-audit.md` - the master audit tracker: audit every feature,
+  pick the best implementation (ADR-0004 "best implementation prevails"), park a
+  plan. Planning first; implementation follows per feature.
+- `plan/v3/features/NNN-*.md` - one parked plan per feature: the chosen pattern,
+  the methodology, and the tests to write.
+- `plan/v3/fixtures/*_contract.json` + `plan/v3/CONTRACT-MAP.md` - the executable
+  consolidations. The SAME bytes drive the contract runners in all four
+  frameworks, mapped feature -> fixture -> ADR -> proven/owed.
+- `plan/v3/DECISIONS.md` + `plan/v3/decisions/` - the ADR log. Consult it before
+  changing any cross-framework contract, and supersede an ADR explicitly rather
+  than silently. `MASTER-SPEC.md` is the feature source-of-truth, but its NUMBERS
+  are stale; the fixtures, `CONTRACT-MAP.md`, and
+  `scripts/audit-contract-fixtures.py` carry current truth.
+
+This repo's own `plan/` holds LANGUAGE-SPECIFIC task plans (`PARITY.md`,
+`SCAFFOLDING.md`, `TESTS.md`, `AI-CONTEXT.md`, and per-task files). The
+CROSS-framework audit and consolidation work is the central plan above.
+
+**To advance a feature (the update loop):** pick the next feature from the parity
+backlog -> MEASURE all four side by side (assume no parity; no mocks, real
+services on the lab) -> DECIDE the best implementation, writing or superseding an
+ADR when the contract changes -> write the executable
+`fixtures/<feature>_contract.json` and fix the divergences in ALL FOUR with named
+positive and negative regressions -> flip owed->proven, run
+`scripts/audit-contract-fixtures.py`, and update the `CONTRACT-MAP.md` row from
+those counts -> verify yourself at HEAD on the lab -> ship `feature/release<ver>`
+-> `v3` -> tag. Pushing plan edits into tina4-documentation is a MERGE, never a
+rebase (the subtree graft + the PDF-sync bot).
+
 ## First Principle: Documentation Matches Code Reality
 
 **This rule overrides everything else in this file.**
