@@ -897,8 +897,30 @@ Tina4 optimizes for both, because the future of development is humans and AI wor
 
 ## Plan Documents
 
-The full v3 specifications live at `/Users/andrevanzuydam/IdeaProjects/plan/v3/`. When you
-need deep detail beyond what the bundled references provide, read the relevant plan doc:
+The full v3 plan - specs, the feature-by-feature audit, and the contract-fixture
+consolidations - lives in ONE framework-agnostic place: **`tina4-documentation/plan/v3/`**
+(the `tina4-documentation` repo, `main` branch). Cite plan docs by repo-prefixed path
+(e.g. `tina4-documentation/plan/v3/01-FEATURE-MATRIX.md`). A per-repo `<repo>/plan/`
+holds only that language's task plans; the cross-framework work is central.
+
+**The audit + consolidation backbone - where feature parity is actually driven:**
+
+| Path (under `tina4-documentation/plan/v3/`) | Content |
+|-----|---------|
+| `98-feature-audit.md` | Master audit tracker: audit every feature, pick the best implementation (ADR-0004), park a plan |
+| `features/NNN-*.md` | One parked plan per feature (pattern + methodology + tests to write) |
+| `fixtures/*_contract.json` + `CONTRACT-MAP.md` | Executable consolidations - the SAME bytes drive all four runners; mapped feature -> fixture -> ADR -> proven/owed |
+| `DECISIONS.md` + `decisions/ADR-*.md` | ADR log; supersede explicitly, never silently |
+| `scripts/audit-contract-fixtures.py` | The proven/owed source of truth - never hand-count (MASTER-SPEC numbers are stale) |
+
+**To advance a feature:** pick from the parity backlog -> MEASURE all four (no mocks,
+on the lab) -> DECIDE + write/supersede an ADR on a contract change -> write the
+fixture + fix divergences in ALL FOUR with named +/- regressions -> flip owed->proven
+via `audit-contract-fixtures.py` + update `CONTRACT-MAP.md` -> verify at HEAD on the
+lab -> ship `feature/release<ver>` -> `v3` -> tag. Plan edits into tina4-documentation
+MERGE, never rebase (the subtree graft + the PDF-sync bot).
+
+**The specs** - deep detail beyond the bundled references:
 
 | Doc | Content |
 |-----|---------|
@@ -1093,11 +1115,11 @@ repo (and add `:line` where it helps), or use an absolute path. Never emit a bar
 BAD  (resolves to ~/IdeaProjects/plan/foo.md → 404):   [plan](plan/pdo-silent-fallback.md)
 GOOD (repo-prefixed, resolves from the root):          [plan](tina4-php/plan/pdo-silent-fallback.md)
 GOOD (with a line anchor):                             [count()](tina4-php/Tina4/ORM.php:962)
-GOOD (absolute, always resolves):                      /Users/…/IdeaProjects/plan/v3/01-FEATURE-MATRIX.md
+GOOD (absolute, always resolves):                      tina4-documentation/plan/v3/01-FEATURE-MATRIX.md
 ```
 
-The framework `plan/` dirs live at `<repo>/plan/…`; the cross-cutting v3 specs live at
-the absolute `/Users/andrevanzuydam/IdeaProjects/plan/v3/…` (see the **Plan Documents**
+The framework `plan/` dirs live at `<repo>/plan/…`; the cross-cutting v3 plan lives at
+`tina4-documentation/plan/v3/…` (see the **Plan Documents**
 section). Link them that way and every reference the maintainer clicks resolves.
 
 ## Reporting a stale or incorrect skill

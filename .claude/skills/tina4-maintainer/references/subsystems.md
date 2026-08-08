@@ -342,7 +342,7 @@ from tina4_python import Api
 
 api = Api("https://api.example.com", auth_header="Bearer xyz")
 result = api.get("/users")                 # verb methods: get / post / put / delete
-result = api.send("GET", "/users")         # generic form — send_request() no longer exists
+result = api.send_request("GET", "/users") # generic form - one name in all four (Ruby cannot use bare send)
 ```
 
 ---
