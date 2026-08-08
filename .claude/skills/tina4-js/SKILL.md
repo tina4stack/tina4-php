@@ -240,6 +240,21 @@ bundle is the sub-3KB headline budget.
 | **pwa** | `tina4js/pwa` | `pwa` | 1.16 KB | Runtime web-manifest injection + service-worker registration for installable/offline apps. The manifest is generated and injected as a blob at runtime; the service worker is NOT — `register()` loads `swUrl` (or `/sw.js`), and `pwa.generateServiceWorker()` emits the SW source to write to disk. |
 | **debug** | `import 'tina4js/debug'` | side-effect (auto-enables) | dev-only | Mounts a dev overlay (Ctrl+Shift+D) that tracks signals, components, routes, and API calls. Never ship to production. |
 
+## Staying current: check for tina4-js updates
+
+tina4-js ships fixes and features often, and a rendering bug the user reports may already be
+fixed upstream. When you start substantial work — or whenever a user hits a reactivity/render
+bug a newer release might resolve — check whether the project's tina4-js is behind the latest,
+then surface it. **Never upgrade silently:** report the delta and let the user decide.
+
+- **Installed vs latest:** `npm outdated tina4js` (the npm package is `tina4js`, no hyphen).
+- **If behind:** tell the user what changed — release notes on https://tina4.com — and offer
+  the upgrade: `npm install tina4js@latest`.
+- **Using the vendored IIFE bundle** (`/js/tina4js.min.js`, shipped inside the Tina4 backend
+  via tina4-css) instead of npm? Then it tracks the backend framework — update the backend
+  (see its developer skill) and the bundle refreshes with it. The `tina4` CLI self-updates
+  with `tina4 update`.
+
 ## Backend API Lookups — Use the Live Index
 
 tina4-js talks to a Tina4 backend (Python / PHP / Ruby / Node). When you need a backend route's shape,
