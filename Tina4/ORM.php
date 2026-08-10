@@ -84,6 +84,36 @@ abstract class ORM
     public array $foreignKeys = [];
 
     /**
+     * Per-field validation constraints, keyed by property name, read by
+     * validate(). A constraint overlay on top of the typed properties — the
+     * properties still declare the columns and their PHP types; this adds the
+     * user-input rules a PHP type cannot express (bounds, length, pattern,
+     * presence).
+     *
+     *     public array $fields = [
+     *         'name'  => ['required' => true, 'minLength' => 2, 'maxLength' => 100],
+     *         'age'   => ['min' => 0, 'max' => 150],
+     *         'email' => ['required' => true, 'pattern' => '/^[^@\s]+@[^@\s]+$/'],
+     *     ];
+     *
+     * Recognised keys (matching the Node reference vocabulary):
+     *   - required         bool   — value must be present (not null / not "")
+     *   - minLength|min_length int — minimum string length
+     *   - maxLength|max_length int — maximum string length
+     *   - min              int|float — minimum numeric value
+     *   - max              int|float — maximum numeric value
+     *   - pattern          string — full PCRE pattern (with delimiters) the value must match
+     *
+     * `length` is a DDL sizing hint (see getColumnDefinitions/createTable) and is
+     * deliberately NOT a validation rule: a column can be VARCHAR(255) while the
+     * value is capped at 50 via maxLength. A field with no entry here is
+     * unconstrained — validate() only checks what is declared.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    public array $fields = [];
+
+    /**
      * Per-model database connection. May be:
      *   - a DatabaseAdapter instance (direct binding), or
      *   - a string naming a connection registered via ORM::bindDatabase($db, name: '...'), or
@@ -1493,15 +1523,96 @@ abstract class ORM
     }
 
     /**
-     * Validate the model data. Override in subclasses to add rules.
+     * Collect every validation-constraint violation for this model.
+     *
+     * Reads the per-field constraints declared in $fields (see that property's
+     * docblock) and checks them against the current instance values, returning
+     * one message per violated constraint. It COLLECTS, never raises: a bad
+     * user-supplied value is collectable input, not a programming error, so the
+     * documented pattern holds and a constraint violation is a 400, never a 500:
+     *
+     *     $errors = $model->validate();      // [] means valid
+     *     if ($errors) return $response->json(['errors' => $errors], 400);
+     *
+     * A TYPE error (assigning the wrong PHP type to a typed property) still
+     * raises at assignment through PHP's own type system; that is a programming
+     * error and is never returned here. Each message is formatted
+     * "<field>: <what was wrong>", using the Node reference vocabulary so a 400
+     * body reads identically across the frameworks. A field with no declared
+     * constraint is unconstrained — only what $fields declares is checked, and
+     * `length` (a DDL sizing hint) is deliberately never validated.
+     *
+     * Override to add cross-field rules: call parent::validate() and merge.
+     *
      * Maps to Python: validate()
      *
-     * @return array<string> List of validation error messages (empty = valid)
+     * @return array<int, string> Violation messages; empty when the model is valid.
      */
-    /** @return array<int, string> */
     public function validate(): array
     {
-        return [];
+        $errors = [];
+
+        foreach ($this->fields as $name => $rules) {
+            if (!is_array($rules)) {
+                continue;
+            }
+
+            $present = property_exists($this, $name) && isset($this->$name);
+            $value = $present ? $this->$name : null;
+
+            // required: the value must be present and non-blank. When it fails
+            // no other rule can add signal, so skip the rest for this field
+            // (parity with the Node reference's early `continue`).
+            $blank = !$present || (is_string($value) && trim($value) === '');
+            if (!empty($rules['required']) && $blank) {
+                $errors[] = "{$name}: is required";
+                continue;
+            }
+
+            // Absent/null but not required — nothing to constrain. An explicit
+            // empty string is NOT null, so its length/pattern rules still run.
+            if ($value === null) {
+                continue;
+            }
+
+            // String constraints (length + pattern) apply to string values;
+            // a non-string is a type concern, not a constraint concern.
+            if (is_string($value)) {
+                // Str::length wraps mb_strlen behind a function_exists guard so
+                // core stays callable on a PHP with no ext-mbstring (the same
+                // helper Validator uses); a raw mb_strlen here would be an
+                // unguarded core mb_* call — see LogWithoutMbstringTest.
+                $length = Str::length($value);
+
+                $minLength = $rules['minLength'] ?? $rules['min_length'] ?? null;
+                if ($minLength !== null && $length < (int)$minLength) {
+                    $errors[] = "{$name}: must be at least {$minLength} characters";
+                }
+
+                $maxLength = $rules['maxLength'] ?? $rules['max_length'] ?? null;
+                if ($maxLength !== null && $length > (int)$maxLength) {
+                    $errors[] = "{$name}: must be at most {$maxLength} characters";
+                }
+
+                if (isset($rules['pattern']) && !preg_match((string)$rules['pattern'], $value)) {
+                    $errors[] = "{$name}: does not match required pattern";
+                }
+            }
+
+            // Numeric bounds apply to numeric values (an int/float property or a
+            // numeric string from a request body).
+            if (is_numeric($value)) {
+                if (isset($rules['min']) && (float)$value < (float)$rules['min']) {
+                    $errors[] = "{$name}: must be at least {$rules['min']}";
+                }
+
+                if (isset($rules['max']) && (float)$value > (float)$rules['max']) {
+                    $errors[] = "{$name}: must be at most {$rules['max']}";
+                }
+            }
+        }
+
+        return $errors;
     }
 
     /**
@@ -1900,6 +2011,10 @@ abstract class ORM
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
             'foreignKeys', 'tableFilter',
+            // $fields is a validation-constraint overlay, never a column —
+            // exclude it even when a subclass redeclares it (which is how a
+            // model attaches its rules: public array $fields = [...];).
+            'fields',
             // $_db is a connection selector, never a column — exclude it even
             // when a subclass redeclares it (e.g. public $_db = 'analytics';).
             '_db',
@@ -2393,6 +2508,10 @@ abstract class ORM
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
             'foreignKeys', 'tableFilter',
+            // $fields is a validation-constraint overlay, never a column —
+            // exclude it even when a subclass redeclares it (which is how a
+            // model attaches its rules: public array $fields = [...];).
+            'fields',
             // $_db is a connection selector, never a column — exclude it even
             // when a subclass redeclares it (e.g. public $_db = 'analytics';).
             '_db',
