@@ -16,7 +16,13 @@
     "",
     "Three of these lines were silent bugs in Ruby before this row: an export",
     "prefix dropped the variable entirely, a trailing comment stayed in the value,",
-    "and ${VAR} never expanded anywhere but PHP."
+    "and ${VAR} never expanded anywhere but PHP.",
+    "",
+    "The legacy top-level env_file/expected fields remain temporarily because the",
+    "current 3.13 runners consume them. contract_3_14 is the decision-complete",
+    "answer key from the 2026-08-09 adversarial audit. Runners move to that section",
+    "only during the post-audit implementation phase; fixture data lands now so the",
+    "contract cannot drift back into prose."
   ],
   "env_file": "PLAIN=hello\nexport EXPORTED=shellstyle\nQUOTED=\"double quoted\"\nSINGLE='single quoted'\nHOST=example.com\nINTERP=${HOST}/api\nDQ_INTERP=\"${HOST}/v2\"\nLITERAL='${HOST}/api'\nWITH_HASH=value # trailing comment\nQUOTED_HASH=\"a # b\"\nUNKNOWN=${NOPE}/x\nEMPTY=\nESCAPES=\"line1\\nline2\\ttabbed\"\nSPACED_KEY = spaced\nno_equals_sign\n1BAD=invalid key\nDQ_THEN_COMMENT=\"s3cret\" # the database password\nSQ_THEN_COMMENT='lit' # note\nTRAILING_BS=hello\\\nCONT_NEXT=world\n",
   "expected": {
@@ -76,5 +82,355 @@
       "key": "PRECEDENCE_KEY",
       "value": "from_real_environment"
     }
+  },
+  "contract_3_14": {
+    "status": "decision-complete; implementation and runner wiring wait for the full audit",
+    "contract": "tina4-documentation/plan/v3/features/001-dotenv.md",
+    "schema": {
+      "given": "real filesystem sources plus pre-load environment, initialized framework constants, target and override mode",
+      "when": "one public DotEnv operation",
+      "then": "native return, raw process values, filesystem effects, error details and reset state",
+      "error": "category=configuration; every hard failure is transactional",
+      "native_types": ["string", "boolean", "null", "integer", "float", "sequence", "map"]
+    },
+    "canonical_template": "# Tina4 project settings\nPROJECT_NAME=\"My Project\"\nTINA4_DEBUG=true\nTINA4_LOCALE=en\nTINA4_LOG_LEVEL=ALL\nTINA4_SWAGGER_ENABLED=false\nTINA4_SWAGGER_VERSION=1.0.0\nTINA4_SWAGGER_DESCRIPTION=\"Edit your .env file to change this description\"\n",
+    "cases": [
+      {
+        "id": "ENV-T01",
+        "given": {"target": "$ROOT", "files": {}},
+        "when": {"operation": "load_env"},
+        "then": {"created": {".env": "$canonical_template"}, "not_created": [".env.local"], "native": {"PROJECT_NAME": "My Project", "TINA4_DEBUG": true, "TINA4_LOCALE": "en", "TINA4_LOG_LEVEL": "ALL", "TINA4_SWAGGER_ENABLED": false, "TINA4_SWAGGER_VERSION": "1.0.0", "TINA4_SWAGGER_DESCRIPTION": "Edit your .env file to change this description"}, "credentials_created": false},
+        "witness": "bootstrap_exact_bytes_and_no_credentials"
+      },
+      {
+        "id": "ENV-T02",
+        "given": {"target": "$ROOT", "files": {".env": "VALUE=1\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"files_unchanged": [".env"], "native": {"VALUE": 1}, "process": {"VALUE": "1"}},
+        "witness": "existing_main_never_rewritten"
+      },
+      {
+        "id": "ENV-T03",
+        "given": {"target": "$ROOT/missing.env", "files": {}, "environment": {"KEEP": "before"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "path": "$ROOT/missing.env", "reason": "missing explicit file"}, "environment": {"KEEP": "before"}, "created": []},
+        "witness": "missing_explicit_file_hard_fails"
+      },
+      {
+        "id": "ENV-T04",
+        "given": {"target": "$ROOT", "filesystem": "bootstrap-write-denied", "environment": {"KEEP": "before"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "path": "$ROOT/.env", "reason": "write failure"}, "environment": {"KEEP": "before"}},
+        "witness": "bootstrap_failure_is_not_empty_success"
+      },
+      {
+        "id": "ENV-T05",
+        "given": {"target": null, "project_root": "$ROOT", "environment": {"TINA4_ENV_FILE": "config/app.env"}, "files": {"config/app.env": "VALUE=main\n", "config/.env.local": "VALUE=local\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": "local"}, "resolved_main": "$ROOT/config/app.env"},
+        "witness": "selector_relative_resolution_and_local_sibling"
+      },
+      {
+        "id": "ENV-T06",
+        "given": {"target": "$ROOT/config/app.env", "files": {"config/app.env": "VALUE=main\n", "config/.env.local": "VALUE=local\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": "main"}, "sources_read": ["config/app.env"]},
+        "witness": "explicit_file_has_no_implicit_sibling"
+      },
+      {
+        "id": "ENV-T07",
+        "given": {"target": "$ROOT", "files": {}, "concurrency": 2},
+        "when": {"operation": "load_env_concurrently"},
+        "then": {"created_once": ".env", "content": "$canonical_template", "partial_reads": 0, "truncations": 0},
+        "witness": "exclusive_atomic_bootstrap"
+      },
+      {
+        "id": "ENV-P01",
+        "given": {"target": "$ROOT", "override": false, "environment": {"VALUE": "ambient"}, "files": {".env.local": "VALUE=local\nLOCAL_ONLY=local\n", ".env": "VALUE=main\nLOCAL_ONLY=main\nMAIN_ONLY=main\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": "ambient", "LOCAL_ONLY": "local", "MAIN_ONLY": "main"}, "process": {"VALUE": "ambient", "LOCAL_ONLY": "local", "MAIN_ONLY": "main"}},
+        "witness": "ambient_local_main_precedence"
+      },
+      {
+        "id": "ENV-P02",
+        "given": {"target": "$ROOT", "override": true, "environment": {"VALUE": "ambient"}, "files": {".env.local": "VALUE=local\n", ".env": "VALUE=main\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": "local"}, "process": {"VALUE": "local"}},
+        "witness": "override_never_reverses_file_precedence"
+      },
+      {
+        "id": "ENV-P03",
+        "given": {"target": "$ROOT", "files": {".env": "VALUE=first\nVALUE=second\n"}, "environment": {"KEEP": "before"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "lines": [1, 2], "reason": "duplicate assignment"}, "environment": {"KEEP": "before"}, "absent": ["VALUE"]},
+        "witness": "same_file_duplicate_hard_fails"
+      },
+      {
+        "id": "ENV-P04",
+        "given": {"target": "$ROOT", "files": {".env.local": "VALUE=local\n", ".env": "VALUE=main\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": "local"}, "error": null},
+        "witness": "cross_file_collision_is_precedence_not_duplicate"
+      },
+      {
+        "id": "ENV-P05",
+        "given": {"target": "$ROOT", "files": {".env.local": "URL=http://${HOST}/api\n", ".env": "HOST=localhost\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"URL": "http://localhost/api", "HOST": "localhost"}},
+        "witness": "cross_file_dependency_graph"
+      },
+      {
+        "id": "ENV-S01",
+        "given": {"target": "$ROOT", "files_base64": {".env": "77u/S0VZPXZhbHVlDQo="}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"KEY": "value"}},
+        "witness": "leading_bom_and_crlf"
+      },
+      {
+        "id": "ENV-S02",
+        "given": {"target": "$ROOT", "files_base64": {".env": "S0VZPv8K"}, "environment": {"KEEP": "before"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "byte_offset": 4, "reason": "invalid UTF-8"}, "environment": {"KEEP": "before"}},
+        "witness": "invalid_utf8_has_no_replacement"
+      },
+      {
+        "id": "ENV-S03",
+        "given": {"target": "$ROOT", "files": {".env": "# comment\n[Project Settings]\n[Open API] # label\nexport KEY=value\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"KEY": "value"}, "section_values": []},
+        "witness": "headers_are_organizational_only"
+      },
+      {
+        "id": "ENV-S04",
+        "variants": [
+          {"file": "MISSING_EQUALS\n", "reason": "missing equals"},
+          {"file": "1BAD=value\n", "reason": "invalid key"},
+          {"file": "[Broken\n", "reason": "malformed header"},
+          {"file": "export=value\n", "reason": "malformed export"}
+        ],
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "line": 1}, "mutated": false},
+        "witness": "every_noncomment_line_is_valid_syntax"
+      },
+      {
+        "id": "ENV-S05",
+        "given": {"target": "$ROOT", "files": {".env": "EMPTY=\nSINGLE='${MISSING}\\n'\nDOUBLE=\"line1\\n${HOST}\"\nHOST=example.com\nUNQUOTED=value # comment\nHASH=\"a # b\"\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"EMPTY": "", "SINGLE": "${MISSING}\\n", "DOUBLE": "line1\nexample.com", "HOST": "example.com", "UNQUOTED": "value", "HASH": "a # b"}},
+        "witness": "quote_and_comment_semantics"
+      },
+      {
+        "id": "ENV-S06",
+        "variants": [
+          {"file": "VALUE=\"unclosed\n", "reason": "unclosed quote"},
+          {"file": "VALUE=\"closed\" junk\n", "reason": "junk after quote"}
+        ],
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "line": 1}, "mutated": false},
+        "witness": "malformed_quotes_fail_transaction"
+      },
+      {
+        "id": "ENV-S07",
+        "given": {"target": "$ROOT", "files": {".env": "OPTIONS={\n  \"hosts\": [\"one\", \"two\"],\n  \"retry\": (1, 2, 3),\n} # complete\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"OPTIONS": {"hosts": ["one", "two"], "retry": [1, 2, 3]}}},
+        "witness": "balanced_multiline_and_trailing_commas"
+      },
+      {
+        "id": "ENV-S08",
+        "given": {"target": "$ROOT", "files": {".env": "VALUE=[one # not-a-comment\n]\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "reason": "invalid structured token"}, "mutated": false},
+        "witness": "comments_not_recognized_inside_structure"
+      },
+      {
+        "id": "ENV-R01",
+        "given": {"target": "$ROOT", "files": {".env.local": "LOCAL=http://${HOST}/${SUFFIX}\n", ".env": "FORWARD=${LATER}\nLATER=ready\nHOST=localhost\nSUFFIX=api\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"LOCAL": "http://localhost/api", "FORWARD": "ready"}},
+        "witness": "forward_backward_and_cross_file_resolution"
+      },
+      {
+        "id": "ENV-R02",
+        "given": {"target": "$ROOT", "files": {".env": "A=$${MISSING}\nB='${MISSING}'\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"A": "${MISSING}", "B": "${MISSING}"}},
+        "witness": "literal_interpolation_forms_do_not_lookup"
+      },
+      {
+        "id": "ENV-R03",
+        "given": {"target": "$ROOT", "files": {".env": "URL=http://${MISSING}/api\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "line": 1, "assignment": "URL", "missing": "MISSING"}, "mutated": false},
+        "witness": "missing_interpolation_hard_fails"
+      },
+      {
+        "id": "ENV-R04",
+        "given": {"target": "$ROOT", "environment": {"LEVEL": "9"}, "constants": {"LEVEL": 1}, "files": {".env": "VALUE=[LEVEL]\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": [9]}},
+        "witness": "environment_beats_framework_constant"
+      },
+      {
+        "id": "ENV-R05",
+        "given": {"target": "$ROOT", "constants": {"LEVEL": 1}, "files": {".env": "VALUE=[LEVEL]\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": [1]}},
+        "witness": "framework_constant_fallback"
+      },
+      {
+        "id": "ENV-R06",
+        "given": {"target": "$ROOT", "files": {".env": "VALUE=[MISSING]\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "assignment": "VALUE", "missing": "MISSING"}, "mutated": false},
+        "witness": "missing_bare_reference_never_becomes_text"
+      },
+      {
+        "id": "ENV-R07",
+        "given": {"target": "$ROOT", "environment": {"A": "[B]", "B": "[A]"}, "files": {".env": "VALUE=[A]\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration", "cycle": ["VALUE", "A", "B", "A"]}, "mutated": false},
+        "witness": "cycle_reports_complete_chain"
+      },
+      {
+        "id": "ENV-R08",
+        "variants": [
+          {"generate": {"kind": "nested_sequence", "depth": 64}, "then": {"error": null}},
+          {"generate": {"kind": "nested_sequence", "depth": 65}, "then": {"error": {"category": "configuration", "depth": 65}}}
+        ],
+        "when": {"operation": "load_env"},
+        "witness": "portable_depth_boundary"
+      },
+      {
+        "id": "ENV-N01",
+        "given": {"target": "$ROOT", "files": {".env": "A=true\nB=YES\nC=On\nD=false\nE=NO\nF=off\nG=1\nH=0\nI=NULL\nJ=none\nK=nil\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"A": true, "B": true, "C": true, "D": false, "E": false, "F": false, "G": 1, "H": 0, "I": null, "J": "none", "K": "nil"}},
+        "witness": "automatic_boolean_null_and_integer_types"
+      },
+      {
+        "id": "ENV-N02",
+        "given": {"target": "$ROOT", "files": {".env": "A=\"true\"\nB='null'\nC=\"7145\"\n"}},
+        "when": {"operation": "load_env_then_get"},
+        "then": {"native": {"A": "true", "B": "null", "C": "7145"}, "process": {"A": "true", "B": "null", "C": "7145"}},
+        "witness": "quoted_type_intent_survives_process_storage"
+      },
+      {
+        "id": "ENV-N03",
+        "given": {"target": "$ROOT", "files": {".env": "A=+42\nB=007\nC=.5\nD=1.\nE=-2.5E-4\nF=0x10\nG=1_000\nH=12px\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"A": 42, "B": 7, "C": 0.5, "D": 1.0, "E": -0.00025, "F": "0x10", "G": "1_000", "H": "12px"}},
+        "witness": "portable_full_token_decimal_grammar"
+      },
+      {
+        "id": "ENV-N04",
+        "given": {"target": "$ROOT", "files": {".env": "MIN=-9007199254740991\nMAX=9007199254740991\nLOW=-9007199254740992\nHIGH=9007199254740992\n"}},
+        "when": {"operation": "load_env_then_explicit_int"},
+        "then": {"native": {"MIN": -9007199254740991, "MAX": 9007199254740991, "LOW": "-9007199254740992", "HIGH": "9007199254740992"}, "explicit_int": {"LOW": {"default": 7, "returns": 7, "warns": true}, "HIGH": {"default": 7, "returns": 7, "warns": true}}},
+        "witness": "portable_integer_boundaries"
+      },
+      {
+        "id": "ENV-N05",
+        "given": {"target": "$ROOT", "files": {".env": "A=NaN\nB=Infinity\nC=1e9999\n"}},
+        "when": {"operation": "load_env_then_explicit_float"},
+        "then": {"native": {"A": "NaN", "B": "Infinity", "C": "1e9999"}, "explicit_float": {"A": {"default": 2.5, "returns": 2.5, "warns": true}, "B": {"default": 2.5, "returns": 2.5, "warns": true}, "C": {"default": 2.5, "returns": 2.5, "warns": true}}},
+        "witness": "nonfinite_top_level_tokens_are_strings"
+      },
+      {
+        "id": "ENV-N06",
+        "given": {"target": "$ROOT", "files": {".env": "A=[\"x\", 1, true, null]\nB=('x', 1, false, null)\nC={\"list\": [1, (2, 3)], 'map': {\"ok\": true}}\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"A": ["x", 1, true, null], "B": ["x", 1, false, null], "C": {"list": [1, [2, 3]], "map": {"ok": true}}}},
+        "witness": "native_sequences_maps_and_nested_parentheses"
+      },
+      {
+        "id": "ENV-N07",
+        "given": {"target": "$ROOT", "files": {".env": "PREFIX=db\nVALUE={\"${PREFIX}_host\": \"local\\thost\", '${PREFIX}_literal': '${PREFIX}'}\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": {"db_host": "local\thost", "${PREFIX}_literal": "${PREFIX}"}}},
+        "witness": "structured_quote_and_key_interpolation_rules"
+      },
+      {
+        "id": "ENV-N08",
+        "given": {"target": "$ROOT", "files": {".env": "VALUE=[1, (2, 3,), {\"x\": true,},]\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"VALUE": [1, [2, 3], {"x": true}]}},
+        "witness": "single_trailing_comma_at_every_level"
+      },
+      {
+        "id": "ENV-N09",
+        "variants": [
+          {"file": "VALUE=[9007199254740992]\n", "reason": "out-of-range integer"},
+          {"file": "VALUE=[NaN]\n", "reason": "non-finite number"},
+          {"file": "VALUE=[1e9999]\n", "reason": "overflowing float"}
+        ],
+        "when": {"operation": "load_env"},
+        "then": {"error": {"category": "configuration"}, "mutated": false},
+        "witness": "structured_numbers_never_change_type"
+      },
+      {
+        "id": "ENV-N10",
+        "given": {"target": "$ROOT", "files": {".env": "HOSTS=[\"one\", \"two\"]\nOPTIONS={\"enabled\": true, \"count\": 2}\nTEXT=Hosts:${HOSTS};Options:${OPTIONS}\n"}},
+        "when": {"operation": "load_env"},
+        "then": {"native": {"TEXT": "Hosts:[\"one\",\"two\"];Options:{\"enabled\":true,\"count\":2}"}},
+        "witness": "canonical_collection_interpolation"
+      },
+      {
+        "id": "ENV-N11",
+        "given": {"target": "$ROOT", "files": {".env": "VALUE={\"items\": [1, 2]}\n"}},
+        "when": {"operation": "get_env_mutate_get_env"},
+        "then": {"first_after_local_mutation": {"items": [1, 2, 3]}, "second": {"items": [1, 2]}, "process": {"VALUE": "{\"items\": [1, 2]}"}},
+        "witness": "public_structures_are_defensive_copies"
+      },
+      {
+        "id": "ENV-A01",
+        "given": {"target": "$ROOT", "files": {".env": "EMPTY=\n"}},
+        "when": {"operation": "get_env", "calls": [{"key": "EMPTY", "default": "fallback"}, {"key": "ABSENT", "default": "fallback"}]},
+        "then": {"results": {"EMPTY": "", "ABSENT": "fallback"}, "has": {"EMPTY": true, "ABSENT": false}},
+        "witness": "presence_is_not_truthiness"
+      },
+      {
+        "id": "ENV-A02",
+        "given": {"target": "$ROOT", "files": {".env": "EMPTY=\nPRESENT=value\n"}},
+        "when": {"operation": "require_env", "keys": ["EMPTY", "MISSING_A", "PRESENT", "MISSING_B"]},
+        "then": {"error": {"category": "configuration", "missing": ["MISSING_A", "MISSING_B"]}},
+        "witness": "require_aggregates_absence_and_accepts_empty"
+      },
+      {
+        "id": "ENV-A03",
+        "given": {"environment": {"AMBIENT": "1"}, "target": "$ROOT", "files": {".env": "VALUE=[1, 2]\n"}},
+        "when": {"operation": "all_env_mutate_result"},
+        "then": {"contains_native": {"AMBIENT": 1, "VALUE": [1, 2]}, "later_VALUE": [1, 2], "complete_process_environment": true},
+        "witness": "all_env_is_complete_native_copy"
+      },
+      {
+        "id": "ENV-A04",
+        "given": {"environment": {"AMBIENT_WIN": "old", "OVERRIDDEN": "old"}, "target": "$ROOT", "override": true, "files": {".env": "CREATED=new\nAMBIENT_WIN=file\nOVERRIDDEN=file\n"}},
+        "when": {"operation": "load_env_reset_env_reset_env"},
+        "then": {"environment": {"AMBIENT_WIN": "old", "OVERRIDDEN": "old"}, "absent": ["CREATED"], "second_reset_changed": false},
+        "witness": "reset_restores_exact_presence_and_raw_values"
+      },
+      {
+        "id": "ENV-A05",
+        "given": {"environment": {"AMBIENT": "old"}, "first": {"files": {".env": "GOOD=1\n"}}, "second": {"files": {"bad.env": "BROKEN=\"no\n"}}},
+        "when": {"operation": "successful_load_then_failed_load"},
+        "then": {"after_failure": {"AMBIENT": "old", "GOOD": "1"}, "absent": ["BROKEN"], "reset_restores": {"AMBIENT": "old"}},
+        "witness": "failed_load_preserves_prior_success_and_snapshot"
+      },
+      {
+        "id": "ENV-I01",
+        "given": {"consumers": ["server", "cli", "worker", "migration"]},
+        "when": {"operation": "boot_each"},
+        "then": {"root_loader_calls_per_consumer": 1, "private_ordering_paths": 0},
+        "witness": "one_configuration_operation_graph"
+      },
+      {
+        "id": "ENV-I02",
+        "given": {"tokens": ["true", "TRUE", "1", "yes", "on", "false", "0", "no", "off", "y", "maybe"]},
+        "when": {"operation": "compare_is_truthy_env_bool_and_consumers"},
+        "then": {"truthy": ["true", "TRUE", "1", "yes", "on"], "falsy": ["false", "0", "no", "off", "y", "maybe"], "private_truth_tables": 0},
+        "witness": "one_truthiness_table"
+      }
+    ]
   }
 }
