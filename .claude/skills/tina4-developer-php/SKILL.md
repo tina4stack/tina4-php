@@ -36,13 +36,30 @@ to **scope, delegate, and report** — never to build inline.
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
-| 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
+| 1. Scope | Restate the request AND its intended outcome (ask if unstated), agree the slice | a feature entry in `plan/<feature>.md` |
 | 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
 | 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
 | 4. Test-first | The worker writes REAL tests before any code | failing tests that pin the behaviour |
 | 5. Scaffold + Build | **Scaffold** with `tina4php generate` → fill the `AI-FILL` placeholder → ground the custom ~20% with `tina4_context` | tests now green |
 | 6. Verify | Run it for real; tick the item; log the commit | `[x]` + commit hash in the plan |
 | 7. Report | Relay worker completions to the developer as a ✅/❌ table | the status dashboard |
+
+### Establish the outcome before you scope - ask when it is not explicit
+
+Scoping starts with knowing what DONE looks like. If the developer's instruction does not state the intended
+**outcome** - the observable end state that counts as success - ask for it in one line before you plan,
+delegate, or write code. "Add a login page" names a task; the outcome might be "a user signs in with email and
+password, lands on the dashboard, and a wrong password shows an error" - and only the developer knows which.
+Guess wrong and a whole worker builds toward the wrong target.
+
+Ask one specific question and offer your best read as the default, so a quick "yes" moves the work:
+
+> You asked for X. I am taking the outcome to be: <one-line observable end state>. Is that the goal, or is it
+> <alternative>?
+
+Write the agreed outcome as an **Outcome:** line at the top of the plan, above the checklist. Every worker
+then builds toward the same end state, and you check the result against it. Never start building on an
+unstated outcome - a plan with no agreed outcome is a guess with a commit hash.
 
 ### 1. Keep the main session free — delegate to a worker
 When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
