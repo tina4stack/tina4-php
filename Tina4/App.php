@@ -34,7 +34,7 @@ class App
      *
      * @var string
      */
-    public static string $VERSION = '3.13.98';
+    public static string $VERSION = '3.13.99';
 
     /**
      * The health path that is registered no matter what TINA4_HEALTH_PATH says.
