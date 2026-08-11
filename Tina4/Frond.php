@@ -1021,10 +1021,10 @@ class Frond
         // Collect child blocks
         $childBlocks = $this->collectBlocks($ast);
 
-        // Load parent
-        $parentFile = $this->templateDir . '/' . $extendsNode['file'];
-        if (!is_file($parentFile)) {
-            throw new \RuntimeException("Parent template not found: $parentFile");
+        // Load parent (confined under the templates dir -- TAG-DEC-01).
+        $parentFile = $this->resolveTemplatePath($extendsNode['file']);
+        if ($parentFile === null) {
+            throw new \RuntimeException("Parent template not found: {$extendsNode['file']}");
         }
         $parentSource = file_get_contents($parentFile);
         $parentTokens = $this->tokenize($parentSource);
@@ -1465,13 +1465,54 @@ class Frond
         return '';
     }
 
+    /**
+     * Resolve a template file NAME to an absolute path CONFINED under the
+     * templates directory. Every path-taking tag ({% include %}, {% extends %},
+     * {% import %}, {% from ... import %}) funnels through this one resolver, so
+     * this single guard confines them all (TAG-DEC-01): a name that is absolute,
+     * climbs out with a `..` up-level segment, or resolves through a symlink to a
+     * location OUTSIDE the templates root is REFUSED -- the outside file is never
+     * read. Template-side analogue of the static-asset confinement (feature 41 /
+     * ADR-0050).
+     *
+     * @param string $name Template name relative to the templates directory.
+     * @return string|null The confined absolute path, or null when the file does
+     *                     not exist under the templates dir (an optional
+     *                     {% include ... ignore missing %} treats null as '').
+     * @throws \RuntimeException When the name escapes the templates directory.
+     */
+    private function resolveTemplatePath(string $name): ?string
+    {
+        // Lexical belt: refuse an absolute path or a `..` up-level segment before
+        // touching the filesystem (defense in depth in front of the realpath check).
+        $isAbsolute = $name !== '' && ($name[0] === '/' || $name[0] === '\\'
+            || preg_match('#^[A-Za-z]:#', $name) === 1);
+        if ($isAbsolute || in_array('..', preg_split('#[\\\\/]#', $name), true)) {
+            throw new \RuntimeException("Template path escapes the templates directory: $name");
+        }
+        $path = $this->templateDir . '/' . $name;
+        if (!is_file($path)) {
+            return null;
+        }
+        // Realpath containment: a symlink INSIDE the templates dir whose target
+        // resolves OUTSIDE it is refused (the lexical belt cannot see a symlink).
+        $root = realpath($this->templateDir);
+        $real = realpath($path);
+        if ($root === false || $real === false
+            || !($real === $root || str_starts_with($real, $root . DIRECTORY_SEPARATOR))) {
+            throw new \RuntimeException("Template path escapes the templates directory: $name");
+        }
+        return $real;
+    }
+
     private function executeInclude(array $node, array &$data): string
     {
-
-        $file = $this->templateDir . '/' . $node['file'];
-        if (!is_file($file)) {
+        // Confined under the templates dir (TAG-DEC-01). An escape THROWS (never
+        // swallowed by ignore missing); a genuinely missing file returns null.
+        $file = $this->resolveTemplatePath($node['file']);
+        if ($file === null) {
             if ($node['ignoreMissing']) return '';
-            throw new \RuntimeException("Include template not found: $file");
+            throw new \RuntimeException("Include template not found: {$node['file']}");
         }
 
         $includeData = $data;
@@ -3149,9 +3190,10 @@ class Frond
 
     private function executeFromImport(array $node, array &$data): void
     {
-        $file = $this->templateDir . '/' . $node['file'];
-        if (!is_file($file)) {
-            throw new \RuntimeException("Template not found: $file");
+        // Confined under the templates dir (TAG-DEC-01): an escape THROWS.
+        $file = $this->resolveTemplatePath($node['file']);
+        if ($file === null) {
+            throw new \RuntimeException("Template not found: {$node['file']}");
         }
         $source = file_get_contents($file);
         $tokens = $this->tokenize($source);
@@ -3185,9 +3227,10 @@ class Frond
      */
     private function executeImportAs(array $node, array &$data): void
     {
-        $file = $this->templateDir . '/' . $node['file'];
-        if (!is_file($file)) {
-            throw new \RuntimeException("Template not found: $file");
+        // Confined under the templates dir (TAG-DEC-01): an escape THROWS.
+        $file = $this->resolveTemplatePath($node['file']);
+        if ($file === null) {
+            throw new \RuntimeException("Template not found: {$node['file']}");
         }
         $source = file_get_contents($file);
         $tokens = $this->tokenize($source);
