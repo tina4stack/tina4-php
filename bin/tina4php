@@ -394,7 +394,16 @@ function tina4SelectablePids(string $lsofOutput, int $me, ?int $myGroup = null):
 // Extracted as a function so it can be unit-tested.
 function resolveHostPort(?string $cliArg = null): array
 {
-    $defaultHost = '0.0.0.0';
+    // DEVADMIN-DEC-02 (feature 127): in dev/serve mode the /__dev dashboard
+    // exposes an unauthenticated file/SQL/RCE surface, so the DEFAULT bind is
+    // loopback, not 0.0.0.0. Only the default changes: an explicit --host /
+    // positional host / TINA4_HOST / HOST still wins (the production Docker CMD
+    // passes --host 0.0.0.0, and production does not set TINA4_DEBUG), so a
+    // developer who WANTS network exposure sets TINA4_HOST=0.0.0.0 deliberately.
+    $debugOn = class_exists('\Tina4\DotEnv')
+        ? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false'))
+        : in_array(strtolower(trim((string) getenv('TINA4_DEBUG'))), ['true', '1', 'yes', 'on'], true);
+    $defaultHost = $debugOn ? '127.0.0.1' : '0.0.0.0';
     $defaultPort = '7145';
 
     $host = null;
@@ -409,9 +418,11 @@ function resolveHostPort(?string $cliArg = null): array
         }
     }
 
-    // 2. ENV vars (fill in anything not set by CLI)
+    // 2. ENV vars (fill in anything not set by CLI). TINA4_HOST wins over the
+    // legacy plain HOST (parity with Python/Ruby) so a stray OS-level HOST on a
+    // shared runner cannot silently override the framework's bind address.
     if ($host === null) {
-        $envHost = getenv('HOST');
+        $envHost = getenv('TINA4_HOST') ?: getenv('HOST');
         if ($envHost !== false && $envHost !== '') {
             $host = $envHost;
         }

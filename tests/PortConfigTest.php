@@ -33,15 +33,22 @@ class PortConfigTest extends \PHPUnit\Framework\TestCase
         if (!self::$functionLoaded) {
             $this->markTestSkipped('resolveHostPort function could not be loaded');
         }
-        // Clear env vars before each test
+        // Clear env vars before each test. TINA4_DEBUG is cleared so the
+        // "default host is 0.0.0.0" assertions stay deterministic even on a lab
+        // box that exports TINA4_DEBUG (DEVADMIN-DEC-02 made the default
+        // dev-aware — 127.0.0.1 in debug, 0.0.0.0 otherwise).
         putenv('PORT');
         putenv('HOST');
+        putenv('TINA4_HOST');
+        putenv('TINA4_DEBUG');
     }
 
     protected function tearDown(): void
     {
         putenv('PORT');
         putenv('HOST');
+        putenv('TINA4_HOST');
+        putenv('TINA4_DEBUG');
     }
 
     // ── Default values ──
@@ -132,5 +139,51 @@ class PortConfigTest extends \PHPUnit\Framework\TestCase
         putenv('PORT=3333');
         [$host, $port] = resolveHostPort('');
         $this->assertSame('3333', $port);
+    }
+
+    // ── DEVADMIN-DEC-02: dev/serve defaults to loopback (feature 127) ──
+
+    public function testDebugDefaultsToLoopback(): void
+    {
+        // The /__dev dashboard is an unauthenticated file/SQL/RCE surface, so
+        // with TINA4_DEBUG on and no explicit host the serve default is loopback.
+        putenv('TINA4_DEBUG=true');
+        [$host, $port] = resolveHostPort(null);
+        $this->assertSame('127.0.0.1', $host, 'dev serve must default to loopback');
+        $this->assertSame('7145', $port);
+    }
+
+    public function testDebugOffDefaultsToAllInterfaces(): void
+    {
+        putenv('TINA4_DEBUG=false');
+        [$host, $port] = resolveHostPort(null);
+        $this->assertSame('0.0.0.0', $host, 'production default bind is unchanged');
+    }
+
+    public function testTina4HostOverridesDebugLoopbackDefault(): void
+    {
+        // A developer who WANTS network exposure sets TINA4_HOST deliberately;
+        // it wins over the debug loopback default.
+        putenv('TINA4_DEBUG=true');
+        putenv('TINA4_HOST=0.0.0.0');
+        [$host, $port] = resolveHostPort(null);
+        $this->assertSame('0.0.0.0', $host, 'TINA4_HOST override must win over the debug default');
+    }
+
+    public function testCliHostOverridesDebugLoopbackDefault(): void
+    {
+        // The production Docker CMD passes --host 0.0.0.0 (mapped to the
+        // positional/flag host), which must win over the debug default.
+        putenv('TINA4_DEBUG=true');
+        [$host, $port] = resolveHostPort('0.0.0.0:7145');
+        $this->assertSame('0.0.0.0', $host, 'an explicit CLI host must win over the debug default');
+    }
+
+    public function testTina4HostWinsOverPlainHost(): void
+    {
+        putenv('TINA4_HOST=1.2.3.4');
+        putenv('HOST=5.6.7.8');
+        [$host, $port] = resolveHostPort(null);
+        $this->assertSame('1.2.3.4', $host, 'TINA4_HOST must win over the legacy plain HOST');
     }
 }

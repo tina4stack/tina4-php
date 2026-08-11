@@ -226,6 +226,12 @@ class DevAdmin
         // Register PHP error/exception handlers so they are captured in the Error Tracker
         ErrorTracker::register();
 
+        // DEVADMIN-DEC-01/02: fail-closed same-origin + loopback gate on every
+        // /__dev write, as a single global before-middleware choke point (deduped
+        // by Middleware::use). Closes drive-by CSRF/RCE and a network-exposed
+        // debug box. Registered here (dev-only path) so production never carries it.
+        \Tina4\Middleware::use(\Tina4\Middleware\DevAdminSecurityMiddleware::class);
+
         // Tier 4: customer feedback widget. Routes are env-gated at the
         // handler level (the master switch is TINA4_ENABLE_FEEDBACK +
         // TINA4_FEEDBACK_WHITELIST), so production deployments with the
@@ -2002,7 +2008,12 @@ class DevAdmin
 
             foreach ($names as $name) {
                 if ($name === '.' || $name === '..') continue;
-                if ($name !== '.env' && $name !== '.env.example' && str_starts_with($name, '.')) {
+                // DEVADMIN-DEC-03: never surface secrets (.env, keys); the
+                // .env.example template stays visible.
+                if (self::isSecretPath($name)) {
+                    continue;
+                }
+                if ($name !== '.env.example' && str_starts_with($name, '.')) {
                     continue;
                 }
                 if (in_array($name, $ignoredDirs, true)) {
@@ -2049,7 +2060,8 @@ class DevAdmin
                     foreach ($children as $c) {
                         if ($c === '.' || $c === '..') continue;
                         if (in_array($c, $ignoredDirs, true)) continue;
-                        if ($c !== '.env' && $c !== '.env.example' && str_starts_with($c, '.')) continue;
+                        if (self::isSecretPath($c)) continue;
+                        if ($c !== '.env.example' && str_starts_with($c, '.')) continue;
                         $hasChildren = true;
                         break;
                     }
@@ -2082,6 +2094,16 @@ class DevAdmin
             // after the SPA restores previously-open tabs from
             // localStorage that no longer exist on disk.
             $requested = (string) ($request->query['path'] ?? '');
+            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/).
+            if (self::isSecretPath($requested)) {
+                return $response->json([
+                    'error' => 'Refused: secret file',
+                    'path' => $requested,
+                    'content' => '',
+                    'language' => self::devAdminLang($requested),
+                    'size' => 0,
+                ], 403);
+            }
             $path = self::devAdminSafePath($requested);
             if ($path === null || !is_file($path)) {
                 return $response->json([
@@ -2111,6 +2133,10 @@ class DevAdmin
         });
 
         Router::get('/__dev/api/file/raw', function (Request $request, Response $response) {
+            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/).
+            if (self::isSecretPath((string) ($request->query['path'] ?? ''))) {
+                return $response->json(['error' => 'Refused: secret file'], 403);
+            }
             $path = self::devAdminSafePath($request->query['path'] ?? '');
             if ($path === null || !is_file($path)) {
                 return $response->text('not found', 404);
@@ -3230,6 +3256,93 @@ class DevAdmin
     {
         $remoteIp = (string) ($request->remoteIp ?? '');
         return McpServer::isRequestAllowed($remoteIp, self::mcpTokenOk($request));
+    }
+
+    // ── Dev-admin mutation security (feature 127, DEVADMIN-DEC-01/02/03) ──────
+    // The dashboard writes files, runs SQL and installs packages, so it must
+    // assume the developer ALSO browses the web. DevAdminSecurityMiddleware runs
+    // guardMutation() before every /__dev write; the file endpoints call
+    // isSecretPath() so .env / keys are never served.
+
+    /**
+     * Fail-closed same-origin check for a dev-admin mutation (DEVADMIN-DEC-01).
+     * A drive-by CSRF is a browser cross-origin request, and a modern browser
+     * always sends Sec-Fetch-Site (any browser sends Origin on a cross-origin
+     * POST), so a missing-both request is a non-browser client (curl/test) that
+     * cannot be a drive-by and the loopback gate still constrains it.
+     */
+    public static function devSameOriginOk(Request $request): bool
+    {
+        $sfs = strtolower(trim((string) ($request->headers['sec-fetch-site'] ?? '')));
+        if ($sfs !== '') {
+            return in_array($sfs, ['same-origin', 'same-site', 'none'], true);
+        }
+        $origin = trim((string) ($request->headers['origin'] ?? ''));
+        if ($origin !== '') {
+            $netloc = str_contains($origin, '://') ? explode('://', $origin, 2)[1] : $origin;
+            $host = trim((string) ($request->headers['host'] ?? ''));
+            return $host !== '' && strtolower($netloc) === strtolower($host);
+        }
+        return true;
+    }
+
+    /**
+     * Return [status, error] to REFUSE a dev-admin write, or null to allow.
+     * DEC-01 same-origin (all /__dev writes, incl. mcp/call) blocks drive-by
+     * CSRF; DEC-02 loopback (all /__dev writes EXCEPT the MCP surface, which
+     * carries its own richer 404 gate) blocks a network-exposed debug box.
+     * Reuses the MCP loopback primitive on the RAW socket peer (never XFF).
+     *
+     * @return array{0:int,1:string}|null
+     */
+    public static function guardMutation(Request $request): ?array
+    {
+        if (!self::devSameOriginOk($request)) {
+            return [403, 'dev-admin: refused (cross-origin request)'];
+        }
+        $path = (string) ($request->path ?? '');
+        if (!str_starts_with($path, '/__dev/api/mcp') && !str_starts_with($path, '/__dev/mcp')) {
+            $remoteIp = (string) ($request->remoteIp ?? '');
+            if (!(McpServer::isLoopback($remoteIp) || self::mcpTokenOk($request))) {
+                return [403, 'dev-admin: refused (non-loopback peer)'];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * True when $rel names secret material the file endpoints must never serve
+     * (DEVADMIN-DEC-03): .env / .env.* (the .env.example template is allowed),
+     * anything under .git/ or secrets/, and private-key material.
+     */
+    public static function isSecretPath(string $rel): bool
+    {
+        $norm = strtolower(trim(str_replace('\\', '/', $rel), '/'));
+        if ($norm === '') {
+            return false;
+        }
+        $parts = explode('/', $norm);
+        foreach ($parts as $p) {
+            if ($p === '.git' || $p === 'secrets') {
+                return true;
+            }
+        }
+        $base = $parts[count($parts) - 1];
+        if ($base === '.env.example') {
+            return false;
+        }
+        if ($base === '.env' || str_starts_with($base, '.env.')) {
+            return true;
+        }
+        if (in_array($base, ['.envrc', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519'], true)) {
+            return true;
+        }
+        foreach (['.pem', '.key', '.pfx', '.p12', '.keystore', '.jks'] as $suf) {
+            if (str_ends_with($base, $suf)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Legacy renderDashboard() removed — UI served from tina4-dev-admin.min.js

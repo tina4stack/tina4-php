@@ -1338,10 +1338,20 @@ HTML;
             return;
         }
 
-        // Resolve host: explicit arg > TINA4_HOST > '0.0.0.0'
+        // Resolve host: explicit arg > TINA4_HOST > default.
+        // DEVADMIN-DEC-02: in dev/serve mode (TINA4_DEBUG) the /__dev dashboard
+        // exposes an unauthenticated file/SQL/RCE surface, so the DEFAULT bind is
+        // loopback, not 0.0.0.0. Only the default changes: an explicit host arg or
+        // TINA4_HOST still wins (production passes one and does not set
+        // TINA4_DEBUG, and FPM/Swoole never call run()), so a developer who WANTS
+        // network exposure sets TINA4_HOST=0.0.0.0 to override deliberately.
         if ($host === null || $host === '') {
             $envHost = DotEnv::getEnv('TINA4_HOST');
-            $host = ($envHost !== null && $envHost !== '') ? $envHost : '0.0.0.0';
+            if ($envHost !== null && $envHost !== '') {
+                $host = $envHost;
+            } else {
+                $host = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false')) ? '127.0.0.1' : '0.0.0.0';
+            }
         }
 
         // Resolve port: explicit arg > TINA4_PORT > PORT (deprecated) > 7145.
