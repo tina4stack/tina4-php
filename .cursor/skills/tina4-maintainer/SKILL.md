@@ -1,6 +1,12 @@
----
+﻿---
 name: tina4-maintainer
-description: Tina4 cross-language maintenance instructions.
+description: >
+    Use whenever the user mentions "tina4" in any form â€” tina4-python, tina4-php, tina4-ruby, tina4-nodejs,
+    tina4-js, tina4delphi â€” or references Frond templates, Carbonah benchmarks, or cross-language feature
+    parity for the Tina4 framework. Covers all Tina4 maintenance: porting code between languages, PR reviews,
+    Docker image optimization, queue systems, ORM, routing, CI/CD, template debugging, and benchmarking.
+    If the working directory is a tina4 project, use this skill for every task including generic ones like
+    tests or deployment pipelines.
 ---
 
 # Tina4 Maintainer

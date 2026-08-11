@@ -29,29 +29,26 @@ JSON, POST a JSON body and it's automatically parsed into `$request->body`, drop
 
 ## The Tina4 Working Method
 
-This is how a Tina4 build is run. The **main session stays free for the developer**; the actual
-work happens in **workers driven by a plan**. Every instruction becomes (or joins) a plan; every
-plan is a living checklist the workers update and you report from. In the main session your job is
-to **scope, delegate, and report** — never to build inline.
+This is how a Tina4 build is run. Work is **driven by a plan file** under `plan/`. Prefer keeping
+the main session free (scope / delegate / report) and spawning workers to build — but if you build
+in the main session, **you still own the plan file**: same tick rules, same commit log, same
+write-back. Cursor todos / chat checklists are **not** the plan.
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
 | 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
-| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
-| 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
-| 4. Test-first | The worker writes REAL tests before any code | failing tests that pin the behaviour |
+| 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (approved to start) |
+| 3. Delegate | Prefer a worker per task; main session stays free when possible | worker(s) (or you) running off the plan |
+| 4. Test-first | Write REAL tests before any code | failing tests that pin the behaviour |
 | 5. Scaffold + Build | **Scaffold** with `tina4php generate` → fill the `AI-FILL` placeholder → ground the custom ~20% with `tina4_context` | tests now green |
-| 6. Verify | Run it for real; tick the item; log the commit | `[x]` + commit hash in the plan |
-| 7. Report | Relay worker completions to the developer as a ✅/❌ table | the status dashboard |
+| 6. Verify + tick | Run it for real; **edit the plan file now** — `[x]` Scope/Tests + Commits line | plan file updated in the same turn |
+| 7. Report | Relay completions as a ✅/❌ table that matches the plan file | the status dashboard |
 
-### 1. Keep the main session free — delegate to a worker
-When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
-spawn a separate worker to execute it**, so the main session is always free for the next input.
-Tina4 **hot-reloads on save** (DevReload), so as the worker edits routes, models, and templates the
-developer watches the interface change **live in the browser** — keeping the main session open is
-what lets them observe and steer while the work happens. The main agent scopes, dispatches, and
-reports; workers build and update the plan. When a worker finishes an item, surface it to the
-developer.
+### 1. Keep the main session free when you can — always keep the plan current
+Prefer: allocate the ask to a plan, spawn a worker, keep the main session free so the developer can
+steer while Tina4 hot-reloads. **Required either way:** whoever builds must update `plan/<feature>.md`
+in the **same turn** they claim progress. Saying "done" in chat while the plan file still shows
+`[ ]` is a process failure — fix the file before you report.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
@@ -118,10 +115,12 @@ extension point instead. That is the token-efficient split the skills evaluation
 boilerplate is *generated* (no stochastic model in that path), and the ~20% custom logic is where you
 write — grounded with `tina4_context`. Climb the reuse ladder for anything the scaffolder can't express.
 
-### 6. Verify for real, then log the commit
-An item is `[x]` only when its real tests pass against a real run. When it lands, record the
-**commit hash + one-line description** in the plan's Commits section, so the plan is an honest
-audit trail of what actually shipped.
+### 6. Verify for real, then tick and log — do not wait for per-item approval
+Tick a Scope or Tests checkbox **as soon as you have verified it**: code works and its real tests
+pass on a real run. **Do not** leave boxes open waiting for the developer to approve each item —
+that is why plans stall. Developer approval is only required to **start** the plan and to set
+`## Status: Complete`. When an item lands, also append **commit hash + one-line description** under
+Commits in the same edit.
 
 ### 7. Report as a ✅/❌ dashboard
 Report to the developer as a table, not prose:
@@ -759,76 +758,108 @@ The app includes a health check at `/health` that Kubernetes probes can use.
 
 ## Plan First — Always
 
-> Use the plan **format** from **The Tina4 Working Method** above — Scope / Tests / Bugs / Commits. The workflow below is how you drive it.
+**One format only:** Scope / Tests / Bugs / Commits / Status. Never use Criteria / Approach —
+those headings are obsolete and cause agents to ignore half the plan.
 
-Every feature starts with a plan. No exceptions. This isn't overhead — it's how you avoid
-building the wrong thing and how the developer tracks progress.
+Every feature starts with `plan/<feature-name>.md` (and a row in `plan/MASTER.md`). No exceptions.
+This is how you avoid building the wrong thing and how the developer tracks progress.
+
+### From sweeping asks to small shippable chunks
+
+Junior (and AI) failure mode #1: a broad stroke like "add auth", "build the shop", or "make it
+production ready" becomes one giant checkbox — or no plan at all. **Never accept a sweeping
+statement as a Scope item.** Translate it first:
+
+1. **Embellish with Tina4 principles** — restate the ask through the reuse ladder, convention
+   over configuration, secure-by-default (writes need Bearer — don't reach for `->noAuth()`),
+   scaffold-then-fill, real tests, Tina4CSS + frond.js (or API + tina4-js), zero Composer deps.
+   Example: "add auth" → "public `POST /api/login` mints JWT via `\Tina4\Auth`; write routes stay
+   Bearer-protected by default; login page uses Frond + `frond.form.submit`; real PHPUnit for
+   success/401."
+2. **Split into small shippable chunks** — each Scope checkbox is one deliverable a junior can
+   finish in ~1–2 hours (one model, one route, one template, one real test). If a checkbox needs
+   the word "and" thrice, split it.
+3. **One open feature plan at a time** — finish or deliberately park before opening another.
+4. **MASTER.md stays the dashboard** — complex programmes are *many small feature plans*, not one
+   novel-length plan.
+
+Bad: `- [ ] Build checkout`  
+Good:
+```markdown
+## Scope
+- [ ] Order model (id, user_id, total, status, created_at)
+- [ ] POST /api/orders (Bearer) creates an order from cart lines
+- [ ] GET /api/orders/:id returns the caller's order only
+- [ ] Order confirmation Frond page (Tina4CSS, no inline styles)
+```
 
 ### Creating the Plan
 
-Before writing any code, create a plan file in the project's `plan/` directory:
-
-```
-my-app/plan/<feature-name>.md
-```
-
-The plan contains:
 ```markdown
 # Feature: User Authentication
 
-## Criteria
+## Scope
 - [ ] Login page with email/password
 - [ ] JWT token issued on successful login
-- [ ] Protected routes return 401 without valid token
-- [ ] Logout clears session
-- [ ] Tests: login success, login failure, protected route access, token expiry
+- [ ] Protected write routes return 401 without a valid token
+- [ ] Logout clears the session
 
-## Approach
-- Server-rendered (Frond templates)
-- Session stored in file backend
-- Password hashed with Auth
+## Tests (written first, real — no mocks)
+- [ ] login success (real DB / real request)
+- [ ] login failure returns 401
+- [ ] protected route rejects missing token
+- [ ] token expiry rejects stale tokens
+
+## Bugs
+- (none yet)
+
+## Commits
+- (hash  description — one line per landed change)
 
 ## Status: In Progress
 ```
 
-### Working the Plan
+Show the plan before coding so the developer can adjust scope. If they say "just build it," still
+create the plan file, then build against it — never skip the file.
 
-- **Get approval first** — Show the plan to the developer before writing code. They may
-  adjust scope, change priorities, or catch misunderstandings.
-- **Check off items as they're DONE** — Done means: code is written, tests pass, the developer has
-  reviewed and approved it, and all criteria for that item are met.
-- **If something fails or needs rework, uncheck it** — A checked item that breaks goes back
-  to unchecked. No item stays checked if it doesn't work. This is an honest record.
-- **Update the plan file as you go** — The plan is a living document.
+### Working the Plan — non-negotiable
 
-### What "Done" Actually Means
+1. **The plan file is the only checklist.** Cursor todos, chat bullets, and memory are not a
+   substitute. Progress that is not written into `plan/<feature>.md` did not happen for Tina4.
+2. **Tick when verified, in the same turn.** `[x]` a Scope/Tests/Bugs item as soon as the code
+   works and its real tests pass. Do **not** wait for per-item human approval.
+3. **Log the commit in the same edit.** Append `hash  description` under Commits when work lands.
+4. **Never claim done without a plan write.** If you would say "✅ login done" in chat, the plan
+   file must already show that item `[x]` (or you edit it first in that turn).
+5. **Regressions uncheck.** If a checked item breaks, set it back to `[ ]` and note why.
+6. **New asks amend the plan.**    Extra scope → new `[ ]` rows (or a new feature plan). No off-plan
+   side-quests. Sweeping follow-ups get the same embellish + small-chunk treatment before coding.
+7. **Workers inherit the plan path.** Every worker prompt names `plan/<feature>.md` and requires
+   ticking + commit log before the worker reports complete.
 
-A checklist item is only checked when ALL of these are true:
-1. The code works correctly
-2. Tests exist and pass (positive and negative cases)
-3. The developer has confirmed it meets their requirements
-4. It doesn't break anything else
+### What "done" means (two levels)
 
-If any of these fail — even after it was previously checked — **uncheck it** and note why.
+| Level | When to mark | Who |
+|-------|----------------|-----|
+| Scope / Tests / Bugs `[x]` | Code works + real tests green on a real run | Agent / worker (immediately) |
+| `## Status: Complete` | All Scope + Tests checked, developer confirms the feature | After developer confirmation |
 
 ### Closing the Plan
 
-When all items are checked and the developer confirms the feature is complete, update the
-status to `## Status: Complete` with the date.
+When every Scope and Tests item is `[x]` and the developer confirms, set
+`## Status: Complete` with the date. Update `plan/MASTER.md` to match.
 
 ## Before Building Any Feature
 
-Every time a developer asks you to build something, run through this:
-
-1. **Create a plan** — Write it in `plan/<feature-name>.md` and get approval.
-2. **"Server-rendered or client-rendered?"** — Ask this for any UI work. Check the existing
-   project for clues (is there a `src/templates/pages/` with app pages? Or a `src/public/` with
-   a JS app?). If unclear, ask.
-3. **Stay in lane** — If it's server-rendered, write Frond templates. If it's client-rendered,
-   write API endpoints and frontend components. Never cross the streams.
-4. **Check what exists** — Look at the project structure before creating new files. Don't
-   introduce a new pattern that contradicts what's already there.
-5. **Work the checklist** — Check off items as they pass, uncheck if they regress.
+1. **Open or create the plan** — `plan/<feature-name>.md` in Scope / Tests / Bugs / Commits form.
+   If the ask is broad, embellish with Tina4 principles and split into small Scope items first.
+2. **"Server-rendered or client-rendered?"** — Ask for any UI work. Check the project for clues
+   (`src/templates/pages/` vs a JS app in `src/public/`). If unclear, ask.
+3. **Stay in lane** — Server-rendered → Frond. Client-rendered → API + frontend. Never mix in one
+   feature.
+4. **Check what exists** — Don't invent a pattern that contradicts the project.
+5. **Work the plan file** — Tick as items verify; uncheck if they regress; never leave the file
+   stale while chat claims progress.
 
 ## Code Quality Enforcement
 

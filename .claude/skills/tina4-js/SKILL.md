@@ -50,29 +50,28 @@ of truth, derived from the actual source code.
 
 ## The Tina4 Working Method
 
-This is how a tina4-js build is run. The **main session stays free for the developer**; the actual
-work happens in **workers driven by a plan**. Every instruction becomes (or joins) a plan; every
-plan is a living checklist the workers update and you report from. In the main session your job is
-to **scope, delegate, and report** — never to build inline.
+This is how a tina4-js build is run. Work is **driven by a plan file** under `plan/`. Prefer keeping
+the main session free (scope / delegate / report) and spawning workers — but if you build in the
+main session, **you still own the plan file**. Cursor todos / chat checklists are **not** the plan.
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
 | 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
-| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
-| 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
-| 4. Test-first | The worker pins the behaviour BEFORE building the component | a real check that fails first |
+| 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (approved to start) |
+| 3. Delegate | Prefer a worker per task; main session stays free when possible | worker(s) (or you) running off the plan |
+| 4. Test-first | Pin the behaviour BEFORE building the component | a real check that fails first |
 | 5. Build | Ground with `tina4_context` → climb the Lazy Frontend Ladder → minimum reactive code | it works in the browser |
-| 6. Verify | Run the dev server, drive the real UI; tick the item; log the commit | `[x]` + commit hash in the plan |
-| 7. Report | Relay worker completions to the developer as a ✅/❌ table | the status dashboard |
+| 6. Verify + tick | Drive the real UI; **edit the plan file now** — `[x]` + Commits line | plan updated in the same turn |
+| 7. Report | ✅/❌ table that matches the plan file | the status dashboard |
 
-### 1. Keep the main session free — delegate to a worker
-When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
-spawn a separate worker to execute it**, so the main session is always free for the next input.
-tina4-js **hot-reloads on save** (Vite HMR / the dev server), so as the worker edits components and
-signals the developer watches the UI update **live in the browser** — keeping the main session open
-is what lets them observe and steer while the work happens. The main agent scopes, dispatches, and
-reports; workers build and update the plan. When a worker finishes an item, surface it to the
-developer.
+### 1. Keep the main session free when you can — always keep the plan current
+Prefer: allocate the ask to a plan, spawn a worker, keep the main session free so the developer can
+steer while the UI hot-reloads. **Required either way:** whoever builds must update
+`plan/<feature>.md` in the **same turn** they claim progress. Saying "done" in chat while the plan
+file still shows `[ ]` is a process failure — fix the file before you report.
+
+Tick Scope/Tests when verified in the browser (real UI), not when waiting for per-item human
+approval. Developer approval is for **starting** the plan and for `## Status: Complete`.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that

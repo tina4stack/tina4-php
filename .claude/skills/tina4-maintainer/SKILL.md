@@ -50,21 +50,21 @@ is shown with a one-line example of it firing.
 
 ## The Tina4 Working Method
 
-How maintenance work is run. The **main session stays free**; the actual work happens in **workers
-driven by a plan**. You **scope, delegate, and report** — the workers build, update the plan, and
-you relay completions. This section is the map; the detailed sections below own each step
-(**Plan-Driven Workflow**, **Independent Verification & Honest Claims**, **The Parity Mandate**,
-**Communication Style — Dashboard-Driven**).
+How maintenance work is run. Prefer keeping the **main session free** (scope / delegate / report)
+with **workers** building — but if you build inline you still own the plan file. You **scope,
+delegate, and report**; whoever builds updates the plan. This section is the map; the detailed
+sections below own each step (**Plan-Driven Workflow**, **Independent Verification & Honest Claims**,
+**The Parity Mandate**, **Communication Style — Dashboard-Driven**).
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
 | 1. Scope | Restate the task; which framework(s) does it land in? | a feature entry in `<repo>/plan/<task>.md` |
-| 2. Plan | Checklist `[ ]` + parity dashboard + Bugs + Commit log | the plan, approved |
-| 3. Delegate | A worker per task/framework; the main session stays free | workers running off the plan |
+| 2. Plan | Scope + Parity + Tests + Bugs + Commits | the plan (approved to start) |
+| 3. Delegate | Prefer a worker per task/framework; main stays free when possible | workers (or you) off the plan |
 | 4. Test-first | REAL tests (positive AND negative) before the code, in every target backend | failing tests that pin the behaviour |
 | 5. Build | Ground in the source + live API index (`tina4_context` optional) → reuse ladder → port the proven design → minimum code | tests green, parity held |
-| 6. Verify | **Re-run the full suite yourself at HEAD** (no mocks); tick the item; log the commit | `[x]` + commit hash |
-| 7. Report | A ✅/❌ dashboard per framework | the status table |
+| 6. Verify + tick | **Re-run the full suite yourself at HEAD** (no mocks); **edit the plan now** — `[x]` + Commits line | plan file updated in the same turn |
+| 7. Report | A ✅/❌ dashboard per framework that matches the plan file | the status table |
 
 ### Every instruction is allocated to a plan
 No maintenance happens off-plan. `<repo>/plan/` holds a **master plan** — the overview of every task
@@ -452,56 +452,35 @@ When porting a feature from Python to another language:
 
 ## Plan-Driven Workflow
 
-Every non-trivial task starts with a plan. This isn't bureaucracy — it's how you avoid wasted work
-and keep the master maintainer in the loop. The pattern:
+> **One format only** — the Working Method template above: Scope / Parity / Tests / Bugs / Commits /
+> Status. Do **not** invent Goal / Context / Checklist / Risks headings; that split-brain stalled
+> plans. Optional open questions go under Bugs or a short note after Status.
 
-### 1. Make the Plan
+Every non-trivial task starts with `<repo>/plan/<task-name>.md` (and a row in the repo's
+`plan/MASTER.md` when one exists). Trivial typos/comments are the only exception.
 
-Before writing any code, create a plan document in the repo's `plan/` directory:
+### 1. Make the Plan (approved to start)
 
-```
-<repo>/plan/<task-name>.md
-```
+Write Scope / Parity / Tests / Bugs / Commits. Present it to the master maintainer and get
+approval **to start** — not approval on every checkbox later.
 
-The plan should contain:
-- **Goal** — What you're building or fixing, in one sentence
-- **Context** — Why this matters, what's currently broken or missing
-- **Checklist** — Every discrete step, as checkboxes:
-  ```markdown
-  - [ ] Read Python reference implementation
-  - [ ] Write PHP adapter class with all 16 methods
-  - [ ] Write unit tests (positive + negative)
-  - [ ] Run parity check against Python output
-  - [ ] Update feature matrix dashboard
-  ```
-- **Parity dashboard** — Current state across languages (if applicable)
-- **Risks / Open questions** — Anything you're unsure about
+### 2. Work the plan file
 
-### 2. Get Approval
+Prefer workers; if you build in the main session you still own the plan write-back. Tick Scope /
+Tests / Bugs **when verified** (real suite green at HEAD for that item — see Independent
+Verification). Log `hash  description` under Commits in the **same turn**. Chat "✅" while the
+file still shows `[ ]` is a process failure.
 
-Present the plan to the master maintainer before starting work. Don't just dump it — summarize
-the approach and ask: "Does this look right?" The maintainer may adjust scope, reorder priorities,
-or flag things you missed.
+### 3. Close the loop
 
-### 3. Work the Checklist
-
-As you complete each step, check it off. This creates a clear audit trail and lets the maintainer
-see progress at a glance. If you discover something unexpected mid-task, update the plan — don't
-just wing it.
-
-### 4. Close the Loop
-
-When done, update the plan with final status. If anything changed from the original plan, note why.
-
-This applies to everything: porting features, fixing bugs, adding new capabilities, refactoring.
-The only exception is truly trivial changes (fixing a typo, updating a comment). When in doubt,
-make a plan.
+When Scope + Tests are complete and the maintainer confirms, set `## Status: Complete` and update
+MASTER. If anything changed from the original scope, note why in Commits or Bugs.
 
 ## Before Writing Any Code
 
 Every time you're about to write or modify Tina4 code, run through this checklist:
 
-1. **Make a plan** — Create it in `<repo>/plan/` and get approval from the master maintainer
+1. **Open or create the plan** — `<repo>/plan/<task>.md` in Scope / Parity / Tests / Bugs / Commits form; get approval to start
 2. **Which framework(s)?** — Is this Python-only, or does it need to land in multiple languages?
 3. **Does the feature exist in Python?** — If yes, read the Python implementation first.
    If no, you're designing something new — check the plan docs.
