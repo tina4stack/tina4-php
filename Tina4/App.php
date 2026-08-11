@@ -632,6 +632,12 @@ class App
         // before serving. Mirrors the Python master's attach_csrf_from_env().
         \Tina4\Middleware\CsrfMiddleware::attachFromEnv();
 
+        // Security headers: register in the default chain UNCONDITIONALLY
+        // (secure-by-default, SECHDR-DEC-01). Unlike CSRF this needs no opt-in — a
+        // default app ships X-Frame-Options/X-Content-Type-Options/CSP/etc. with no
+        // code change. HSTS stays HTTPS-only. Idempotent.
+        \Tina4\Middleware\SecurityHeadersMiddleware::attach();
+
         // Auto-wire i18n → template global t() if locale files exist
         $this->autoWireI18n();
 
