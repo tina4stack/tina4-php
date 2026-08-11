@@ -349,6 +349,38 @@ class Log
     }
 
     /**
+     * Sanitize an inbound X-Request-ID.
+     *
+     * Honours a well-formed inbound id ([A-Za-z0-9._-], 1..128 chars) so a client
+     * or an upstream service can thread its own correlation id through. Anything
+     * else - empty, over 128 chars, or carrying CR/LF, control chars or any
+     * character outside the allow-list - is rejected wholesale (returns null), so
+     * nothing attacker-controlled is ever reflected into the response header or a
+     * log line; the caller then generates a fresh id instead of echoing a raw
+     * header.
+     *
+     * @param string|null $value the raw inbound header value
+     * @return string|null the value when it is a safe correlation id, else null
+     */
+    public static function sanitizeRequestId(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (strlen($value) > 128) {
+            return null;
+        }
+        // Match ANY character OUTSIDE the allow-list - CR, LF, space, every other
+        // control char, any non-ASCII byte. Testing for a bad char (not anchoring
+        // ^...$) is the identical rule in all four frameworks and dodges the
+        // per-language trap where `$` still matches just before a trailing newline.
+        if (preg_match('/[^A-Za-z0-9._-]/', $value) === 1) {
+            return null;
+        }
+        return $value;
+    }
+
+    /**
      * Log a debug message.
      */
     public static function debug(mixed $message, array $context = []): void

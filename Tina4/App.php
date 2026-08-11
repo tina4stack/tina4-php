@@ -300,8 +300,10 @@ class App
         // bootstraps have never passed a directory.
         Log::configure(development: $isDev);
 
-        // Generate request ID
-        Log::setRequestId($this->generateRequestId());
+        // NOTE: the request id is generated PER REQUEST in Router::dispatch()
+        // (feature 43), not here. A single id minted in the constructor is
+        // process-scoped - under the long-running built-in server every request
+        // in the process would share it, which is useless for correlation.
 
         // ext-openssl is SUGGESTED, not required — HMAC JWT, PBKDF2 passwords and
         // random_bytes all need none of it. But PHP's `https` stream wrapper is
@@ -1711,11 +1713,4 @@ HTML;
         }
     }
 
-    /**
-     * Generate a short unique request ID.
-     */
-    private function generateRequestId(): string
-    {
-        return substr(bin2hex(random_bytes(8)), 0, 16);
-    }
 }

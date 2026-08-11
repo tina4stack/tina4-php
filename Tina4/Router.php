@@ -617,6 +617,19 @@ class Router
         // v3.13.14: stamp the request start so we can log elapsed time below.
         $reqStart = microtime(true);
 
+        // Feature 43: PER-REQUEST correlation id (was process-scoped in the App
+        // constructor - useless for correlation under the long-running server,
+        // where every request shared one id). Honour a sanitized inbound
+        // X-Request-ID so a client/upstream can thread its own id through; an
+        // attacker-controlled CR/LF, over-long or illegal-charset value is
+        // rejected (never echoed), and an absent one is generated. Thread it into
+        // the logger NOW so every log line for this request - including the 500
+        // handler and logRequest() below - carries it; it is echoed on the
+        // response at the end of dispatch().
+        $requestId = Log::sanitizeRequestId($request->header('X-Request-ID'))
+            ?? bin2hex(random_bytes(4));
+        Log::setRequestId($requestId);
+
         // Request-scoped DB query cache (default-on). Tina4 PHP runs a
         // LONG-RUNNING built-in server, so in-memory cache state persists
         // across requests. Clear the request-scoped layer on every live
@@ -707,6 +720,11 @@ class Router
         $result = self::stripHeadBody($request, $result);
 
         self::logRequest($request, $result, $reqStart);
+
+        // Echo the correlation id on the response (the SAME id as the log lines
+        // and the error page), whatever outcome dispatchInner produced - 200,
+        // 404 or 500 - so a client or downstream service can reference it.
+        $result->header('X-Request-ID', $requestId);
 
         return $result;
     }
@@ -830,7 +848,10 @@ class Router
             // generic page + request_id.
             $errorResp = self::renderError($response, 500, 'Server Error', $request->path, [
                 'error_message' => '',
-                'request_id'    => substr(md5(uniqid('', true)), 0, 12),
+                // The canonical per-request id (set at the top of dispatch), so
+                // the id a user reports off the 500 page matches the log lines and
+                // the X-Request-ID response header - not a throwaway md5.
+                'request_id'    => Log::getRequestId() ?? '',
             ]);
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
