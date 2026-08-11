@@ -1360,21 +1360,39 @@ DOCKERFILE;
     // TEST — Run tests
     // ────────────────────────────────────────────
     case 'test':
-        // Propagate the runner's exit code so `tina4php test || exit 1` CI
-        // gates actually fail on a red suite (python#96 parity). passthru's
-        // second by-ref arg captures the child process exit code — the same
-        // pattern `build` and `migrate` above use. A missing runner is itself
-        // a failure: a CI gate must exit non-zero when it cannot run tests.
+        // Inline @tests stage — discover decorated inline tests from the EXPLICIT
+        // tests dir and run them with a real exit code (INLINE-DEC-01). Discovery
+        // never eval's the docblock args nor require_once's a file outside tests/
+        // (INLINE-DEC-02), so it cannot execute a scanned source file.
+        \Tina4\Testing::reset();
+        $inlineDiscovered = \Tina4\Testing::discover($cwd . '/tests');
+        $inlineFailed = false;
+        if ($inlineDiscovered > 0) {
+            $inlineResults = \Tina4\Testing::runAll();
+            $inlineFailed = ($inlineResults['failed'] + $inlineResults['errors']) > 0;
+        }
+
+        // External suite stage — propagate the PHPUnit / smoke runner's exit code
+        // so `tina4php test || exit 1` CI gates fail on a red suite (python#96
+        // parity). passthru's second by-ref arg captures the child exit code.
         $testExit = 0;
+        $ranSuite = false;
         if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
             passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'), $testExit);
+            $ranSuite = true;
         } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
             passthru($cwd . '/vendor/bin/phpunit tests --colors=always', $testExit);
-        } else {
-            echo "No test runner found. Install phpunit or create tests/test_v3_smoke.php\n";
-            $testExit = 1;
+            $ranSuite = true;
         }
-        exit($testExit);
+
+        // Nothing to run at all is itself a failure — a CI gate must exit non-zero
+        // when it cannot run any tests.
+        if ($inlineDiscovered === 0 && !$ranSuite) {
+            echo "No tests found. Add inline @tests to files under tests/, install phpunit, or create tests/test_v3_smoke.php\n";
+            exit(1);
+        }
+
+        exit(($inlineFailed || $testExit) ? 1 : 0);
 
     // ────────────────────────────────────────────
     // SEED — Run seeders

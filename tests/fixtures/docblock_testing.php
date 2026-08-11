@@ -5,9 +5,9 @@
  */
 
 /**
- * @tests assertEqual([5, 3], 8)
- * @tests assertEqual([0, 0], 0)
- * @tests assertEqual([-1, 1], 0)
+ * @tests expectEqual([5, 3], 8)
+ * @tests expectEqual([0, 0], 0)
+ * @tests expectEqual([-1, 1], 0)
  */
 function docblock_add(int $a, int $b): int
 {
@@ -15,8 +15,8 @@ function docblock_add(int $a, int $b): int
 }
 
 /**
- * @tests assertRaises(InvalidArgumentException::class, [null])
- * @tests assertEqual([5, 3], 8)
+ * @tests expectRaises(InvalidArgumentException::class, [null])
+ * @tests expectEqual([5, 3], 8)
  */
 function docblock_add_safe($a, $b = null)
 {
@@ -27,8 +27,8 @@ function docblock_add_safe($a, $b = null)
 }
 
 /**
- * @tests assertTrue([10])
- * @tests assertFalse([0])
+ * @tests expectTrue([10])
+ * @tests expectFalse([0])
  */
 function docblock_truthy($value)
 {

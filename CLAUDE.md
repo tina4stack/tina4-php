@@ -1164,27 +1164,38 @@ Attach test assertions directly to functions and run them all at once.
 // Register a function with test assertions
 Testing::tests(array $assertions, callable $fn, string $name = 'anonymous'): void
 
-// Assertion builders
-Testing::assertEqual(array $args, mixed $expected): array
-Testing::assertRaises(string $exceptionClass, array $args): array
-Testing::assertTrue(array $args): array
-Testing::assertFalse(array $args): array
+// Assertion builders (DESCRIPTORS — named expect* so they never collide with the
+// xUnit assert* the PHPUnit suites use)
+Testing::expectEqual(array $args, mixed $expected): array
+Testing::expectRaises(string $exceptionClass, array $args): array
+Testing::expectTrue(array $args): array
+Testing::expectFalse(array $args): array
 
 // Run all registered tests
 Testing::runAll(bool $quiet = false, bool $failfast = false): array
 // Returns: ['passed' => int, 'failed' => int, 'errors' => int, 'details' => array]
 
+// Discover @tests docblocks from an EXPLICIT tests dir (default 'tests'). Args are
+// parsed as LITERALS — never eval'd — and only files under the tests dir are loaded.
+Testing::discover(string $path = 'tests'): int
+
 // Reset the test registry
 Testing::reset(): void
+```
+
+Run inline @tests from the CLI (real exit code — non-zero on any failure):
+
+```bash
+bin/tina4php test     # discovers @tests in tests/, runs them, then the PHPUnit suite
 ```
 
 Example:
 ```php
 Testing::tests(
     [
-        Testing::assertEqual([5, 3], 8),
-        Testing::assertEqual([0, 0], 0),
-        Testing::assertRaises('InvalidArgumentException', [null]),
+        Testing::expectEqual([5, 3], 8),
+        Testing::expectEqual([0, 0], 0),
+        Testing::expectRaises('InvalidArgumentException', [null]),
     ],
     function ($a, $b = null) {
         if ($b === null) throw new \InvalidArgumentException("b required");
