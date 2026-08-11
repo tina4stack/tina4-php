@@ -267,8 +267,8 @@ function fieldsOrDefault(string $fieldsStr): array
 function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
-    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear', 'json',
-                     'public', 'no-migration', 'once'];
+    $booleanFlags = ['no-browser', 'no-reload', 'no-kill', 'production', 'managed', 'all', 'clear',
+                     'json', 'public', 'no-migration', 'once'];
 
     $flags = [];
     $positional = [];
@@ -300,37 +300,29 @@ function parseFlags(array $args): array
 }
 
 /**
- * Kill any process listening on the given port.
+ * Reclaim *port* from a stale Tina4 dev server, only when it is safe.
+ *
+ * Routes through the shared identity-checked takeover (TAKEOVER-DEC-01/02): a
+ * holder is signalled ONLY when a Tina4 dev server recorded its PID in the
+ * per-port PID file. A foreign holder is left running and a clear message is
+ * printed; takeover is also skipped in a container, outside dev mode, and when
+ * opted out (TINA4_NO_TAKEOVER / --no-kill).
+ *
+ * @return bool True only when a Tina4 holder was actually signalled.
  */
 function killProcessOnPort(int $port): bool
 {
-    if (PHP_OS_FAMILY === 'Windows') {
-        return false;
-    }
-    // Reclaiming a port makes sense on a dev machine, where a previous serve
-    // may still hold it. Inside a container the server IS the container, so
-    // there is no stale sibling -- and trying is dangerous: casting a
-    // non-numeric lsof field yields 1, and SIGTERM to PID 1 is the container's
-    // own init. That is what produced "Killed existing process on port 7145
-    // (PID: 1 /usr/local/bin/php ...)" in a real image.
-    if (tina4InContainer()) {
-        return false;
-    }
-    $output = @shell_exec("lsof -ti :{$port} 2>/dev/null");
-    if (!empty(trim($output ?? ''))) {
-        $me = function_exists('posix_getpid') ? posix_getpid() : getmypid();
-        $myGroup = function_exists('posix_getpgrp') ? posix_getpgrp() : null;
-        $killed = [];
-        foreach (tina4SelectablePids(trim($output), $me, $myGroup) as $pid) {
-            @posix_kill($pid, 15);      // SIGTERM
-            $killed[] = (string)$pid;
-        }
-        if (empty($killed)) {
-            return false;
-        }
-        usleep(500000); // 0.5s
-        echo "  Warning: Killed existing process on port {$port} (PID: " . implode(', ', $killed) . ")\n";
+    $result = \Tina4\PortTakeover::takeOverPort(
+        $port,
+        \Tina4\PortTakeover::isDev(),
+        \Tina4\PortTakeover::noTakeoverOptedOut()
+    );
+    if ($result['status'] === \Tina4\PortTakeover::KILLED) {
+        echo "  Warning: {$result['message']}\n";
         return true;
+    }
+    if ($result['message'] !== '' && in_array($result['status'], \Tina4\PortTakeover::REFUSALS, true)) {
+        echo "  {$result['message']}\n";
     }
     return false;
 }
@@ -342,50 +334,21 @@ function killProcessOnPort(int $port): bool
  */
 function tina4InContainer(): bool
 {
-    if (is_file('/.dockerenv') || is_file('/run/.containerenv')) {
-        return true;
-    }
-    $blob = @file_get_contents('/proc/1/cgroup');
-    if ($blob === false) {
-        return false;
-    }
-    return str_contains($blob, 'docker')
-        || str_contains($blob, 'containerd')
-        || str_contains($blob, 'kubepods');
+    return \Tina4\PortTakeover::inContainer();
 }
 
 /**
  * The PIDs from `lsof -ti` output that are safe to signal.
  *
- * Pure so the safety rule can be tested directly. An unvalidated parse is a
- * footgun with real teeth: where lsof prints a different shape than -ti
- * implies, a non-numeric field casts to 0, and signalling PID 0 hits EVERY
- * process in the caller's own process group -- the server kills itself.
- *
- * Accepts only all-digit tokens; never PID 0 (our group), PID 1 (init),
- * ourselves, or our own process group.
+ * Thin wrapper over the shared \Tina4\PortTakeover::selectablePids so the CLI
+ * and the runtime bind-failure path share ONE implementation. Never casts junk
+ * into a PID and never signals PID 0/1, ourselves, or our own process group.
  *
  * @return int[]
  */
 function tina4SelectablePids(string $lsofOutput, int $me, ?int $myGroup = null): array
 {
-    $pids = [];
-    foreach (preg_split('/\s+/', trim($lsofOutput)) as $token) {
-        if ($token === '' || !ctype_digit($token)) {
-            continue;               // never cast junk into a PID
-        }
-        $pid = (int)$token;
-        if ($pid <= 1 || $pid === $me) {
-            continue;               // 0 = our group, 1 = init, me = suicide
-        }
-        if ($myGroup !== null && $pid === $myGroup) {
-            continue;
-        }
-        if (!in_array($pid, $pids, true)) {
-            $pids[] = $pid;
-        }
-    }
-    return $pids;
+    return \Tina4\PortTakeover::selectablePids($lsofOutput, $me, $myGroup);
 }
 
 
@@ -979,6 +942,13 @@ DOCKERFILE;
         if ($noReload) {
             putenv('TINA4_NO_RELOAD=true');
             $_ENV['TINA4_NO_RELOAD'] = 'true';
+        }
+        // --no-kill opts out of port takeover for the whole process, so the CLI
+        // path here AND the runtime bind-failure fallback both honour it
+        // (TAKEOVER-DEC-03).
+        if (isset($serveFlags['no-kill'])) {
+            putenv('TINA4_NO_TAKEOVER=true');
+            $_ENV['TINA4_NO_TAKEOVER'] = 'true';
         }
         $positionalArg = $servePositional[0] ?? null;
 

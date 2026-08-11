@@ -304,55 +304,34 @@ class Server
     }
 
     /**
-     * Kill whatever process is listening on the given port.
+     * Reclaim *port* from a stale Tina4 dev server via the shared, guarded path.
      *
-     * Uses lsof on macOS/Linux and netstat + taskkill on Windows.
-     * Throws RuntimeException if the port cannot be freed.
+     * This is the runtime bind-failure fallback. It used to SIGTERM whatever held
+     * the port with NONE of the CLI's guards -- no identity check, no container
+     * guard, no PID-safety filter -- so a foreign holder (another dev server, a
+     * database) was killed on any bind failure. It now routes through the SAME
+     * identity-checked helper the CLI uses (TAKEOVER-DEC-02), so only a
+     * PID-file-confirmed Tina4 dev server is ever signalled.
+     *
+     * @throws \RuntimeException when the port is held by a non-Tina4 process (or
+     *   takeover is opted out / disabled outside dev), so the bind fails loudly
+     *   with a clear message instead of killing an innocent process.
      */
     private function freePort(int $port): void
     {
-        echo "  Port {$port} in use — killing existing process...\n";
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            $output = [];
-            exec('netstat -ano', $output);
-            $pid = null;
-            foreach ($output as $line) {
-                if (str_contains($line, ":{$port}") &&
-                    (str_contains($line, 'LISTENING') || str_contains($line, 'ESTABLISHED'))) {
-                    $parts = preg_split('/\s+/', trim($line));
-                    $last = end($parts);
-                    if (ctype_digit($last)) {
-                        $pid = (int)$last;
-                        break;
-                    }
-                }
-            }
-            if ($pid !== null) {
-                exec("taskkill /PID {$pid} /F");
-            } else {
-                throw new \RuntimeException("Could not free port {$port}: no PID found");
-            }
-        } else {
-            $pids = [];
-            exec("lsof -ti :{$port}", $pids);
-            if (empty($pids)) {
-                // Nothing found — port may have freed itself
-                return;
-            }
-            foreach ($pids as $pid) {
-                $pid = trim($pid);
-                if (ctype_digit($pid) && function_exists('posix_kill')) {
-                    posix_kill((int)$pid, defined('SIGTERM') ? SIGTERM : 15);
-                } elseif (ctype_digit($pid)) {
-                    exec("kill -15 {$pid}");
-                }
-            }
+        $result = PortTakeover::takeOverPort(
+            $port,
+            PortTakeover::isDev(),
+            PortTakeover::noTakeoverOptedOut()
+        );
+        if ($result['status'] === PortTakeover::KILLED) {
+            echo "  {$result['message']}\n";
+            return;
         }
-
-        // Give the OS a moment to reclaim the port
-        usleep(500000);
-        echo "  Port {$port} freed\n";
+        if (in_array($result['status'], PortTakeover::REFUSALS, true)) {
+            throw new \RuntimeException($result['message']);
+        }
+        // NOTHING / container: nothing to reclaim -- let the real bind decide.
     }
 
     /**
@@ -419,6 +398,9 @@ class Server
         stream_set_blocking($this->socket, false);
         $this->running = true;
         self::$instance = $this;
+        // Record THIS process as the Tina4 dev server on the main port, so a
+        // later `tina4 serve` can identify it as reclaimable (TAKEOVER-DEC-01).
+        PortTakeover::writePidfile($this->port);
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         // Disable the internal file watcher when launched by the Rust CLI (--managed).
         // The Rust CLI owns file watching, SCSS compilation, and browser reload.
@@ -708,6 +690,8 @@ class Server
         $this->shutdownTimeout = self::resolveShutdownTimeout();
 
         $this->closeListeners();
+        // Drop our identity marker so a later takeover does not match a dead PID.
+        PortTakeover::removePidfile($this->port);
 
         Log::info(sprintf(
             'Graceful shutdown started (%s) — not accepting new connections, draining for up to %ds',
