@@ -76,6 +76,14 @@ class StaticFiles
             return null;
         }
 
+        // Security: never serve a dotfile (.env, .git/config, .htpasswd, ...).
+        // Reject any leading-dot segment in the REQUEST path before touching the
+        // filesystem. The resolved-path check below also refuses a symlink that
+        // points AT a dotfile inside the public dir.
+        if (self::hasHiddenSegment(str_replace('\\', '/', $path), '/')) {
+            return null;
+        }
+
         // Security: don't serve PHP files
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         if ($extension === 'php') {
@@ -98,15 +106,18 @@ class StaticFiles
             return null;
         }
 
-        // Search directories in order: TINA4_PUBLIC_DIR override, app public,
-        // then framework built-in public (tina4.min.js etc.)
+        // Search directories in ONE order shared across all four frameworks
+        // (ST-SEARCHDIR-DIVERGE): TINA4_PUBLIC_DIR override first, then the app's
+        // public then src/public, then the framework's built-in public
+        // (tina4.min.js etc.) last so an app asset is never shadowed by a
+        // framework one.
         $searchDirs = [];
         $customPublic = getenv('TINA4_PUBLIC_DIR');
         if ($customPublic !== false && $customPublic !== '') {
             $searchDirs[] = rtrim($customPublic, DIRECTORY_SEPARATOR);
         }
-        $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
         $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'public';
+        $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
         $searchDirs[] = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
 
         // Normalise the request path to a relative file path
@@ -134,9 +145,22 @@ class StaticFiles
                     continue;
                 }
 
-                // Security: ensure resolved path is inside the search directory
+                // Security: ensure resolved path is inside the search directory.
+                // realpath() collapses `..` and follows symlinks, so a symlink
+                // (or a sibling-prefix dir like publicsecret) that escapes the
+                // root is refused here; the trailing separator is what defeats
+                // the sibling-prefix match. Reference guard, ADR-0050.
                 $realDir = realpath($dir);
                 if ($realDir === false || !str_starts_with($realPath, $realDir . DIRECTORY_SEPARATOR)) {
+                    continue;
+                }
+
+                // Security: never emit bytes from a dotfile, even when a symlink
+                // inside the public dir points AT one. Check the segments BELOW
+                // the public dir so a public dir that itself lives under a
+                // dot-directory is unaffected.
+                $relative = substr($realPath, strlen($realDir) + 1);
+                if (self::hasHiddenSegment($relative, DIRECTORY_SEPARATOR)) {
                     continue;
                 }
 
@@ -250,6 +274,27 @@ class StaticFiles
     private static function stripWeakPrefix(string $eTag): string
     {
         return str_starts_with($eTag, 'W/') ? substr($eTag, 2) : $eTag;
+    }
+
+    /**
+     * Whether any segment of a path is hidden (starts with a dot).
+     *
+     * Used to refuse serving a dotfile (`.env`, `.git/config`, `.htpasswd`). A
+     * `..` segment also starts with a dot, so this doubles as a belt on traversal.
+     *
+     * @param string $path The path to inspect (already separator-normalised)
+     * @param string $separator The path separator to split on
+     * @return bool True when a segment begins with `.`
+     */
+    private static function hasHiddenSegment(string $path, string $separator): bool
+    {
+        foreach (explode($separator, $path) as $segment) {
+            if ($segment !== '' && $segment[0] === '.') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

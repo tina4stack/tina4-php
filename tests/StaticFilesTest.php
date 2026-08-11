@@ -416,4 +416,80 @@ class StaticFilesTest extends TestCase
         $this->assertEquals(200, $response->getStatusCode());
         $this->assertSame('precedence-bytes', $response->getBody());
     }
+
+    // ── Feature 41 shared contract (static_contract.json) ──────────
+    // ADR-0050 realpath + separator confinement, dotfile block, and the
+    // TINA4_PUBLIC_DIR override — proven with REAL files and a REAL symlink.
+
+    public function testALegitAssetIsServedWithItsContentType(): void
+    {
+        file_put_contents($this->tempDir . '/src/public/css/app.css', 'body{color:green}');
+        $response = StaticFiles::tryServe('/css/app.css', $this->tempDir);
+        $this->assertNotNull($response);
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertSame('body{color:green}', $response->getBody());
+        $this->assertStringContainsString('text/css', $response->getHeader('Content-Type'));
+    }
+
+    public function testADotDotTraversalPathIsRefused(): void
+    {
+        // A real secret one level ABOVE the public root.
+        file_put_contents($this->tempDir . '/secret.env', 'TINA4_SECRET=leaked');
+        $response = StaticFiles::tryServe('/css/../../secret.env', $this->tempDir);
+        $this->assertNull($response);
+    }
+
+    public function testASymlinkEscapingThePublicDirIsRefused(): void
+    {
+        // A real secret OUTSIDE the public dir, reached by a real symlink placed
+        // INSIDE it. A lexical `..` check cannot see this; realpath containment must.
+        $secret = $this->tempDir . '/outside-secret.txt';
+        file_put_contents($secret, 'SUPER SECRET');
+        $link = $this->tempDir . '/src/public/leak.txt';
+        $this->assertTrue(@symlink($secret, $link), 'symlink() must succeed for this test');
+
+        $response = StaticFiles::tryServe('/leak.txt', $this->tempDir);
+        $this->assertNull($response, 'a symlink whose realpath escapes the public dir must be refused');
+    }
+
+    public function testADotenvFileIsRefused(): void
+    {
+        // A real .env sitting INSIDE the public dir must never be served.
+        file_put_contents($this->tempDir . '/src/public/.env', 'TINA4_SECRET=leaked');
+        $response = StaticFiles::tryServe('/.env', $this->tempDir);
+        $this->assertNull($response);
+    }
+
+    public function testADotgitFileIsRefused(): void
+    {
+        mkdir($this->tempDir . '/src/public/.git', 0755, true);
+        file_put_contents($this->tempDir . '/src/public/.git/config', '[core]');
+        $response = StaticFiles::tryServe('/.git/config', $this->tempDir);
+        $this->assertNull($response);
+    }
+
+    public function testTina4PublicDirEnvRelocatesTheRoot(): void
+    {
+        // A separate public root selected purely by TINA4_PUBLIC_DIR; the base
+        // path deliberately does NOT contain the asset, so a hit proves the env
+        // override is honoured (not the app dirs).
+        $customPublic = sys_get_temp_dir() . '/tina4-static-custom-' . getmypid() . '-' . uniqid();
+        mkdir($customPublic, 0755, true);
+        file_put_contents($customPublic . '/brand.css', '.brand{color:teal}');
+        $emptyBase = sys_get_temp_dir() . '/tina4-static-emptybase-' . getmypid() . '-' . uniqid();
+        mkdir($emptyBase, 0755, true);
+
+        putenv('TINA4_PUBLIC_DIR=' . $customPublic);
+        try {
+            $response = StaticFiles::tryServe('/brand.css', $emptyBase);
+            $this->assertNotNull($response, 'TINA4_PUBLIC_DIR must be honoured');
+            $this->assertEquals(200, $response->getStatusCode());
+            $this->assertSame('.brand{color:teal}', $response->getBody());
+        } finally {
+            putenv('TINA4_PUBLIC_DIR');
+            @unlink($customPublic . '/brand.css');
+            @rmdir($customPublic);
+            @rmdir($emptyBase);
+        }
+    }
 }
