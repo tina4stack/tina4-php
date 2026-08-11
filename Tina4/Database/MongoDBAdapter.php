@@ -319,10 +319,11 @@ class MongoDBAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        $this->requireWriteFilter($where, 'UPDATE', $table);
 
         try {
             $collection = $this->db->selectCollection($table);
-            $filter = $where !== '' ? $this->parseWhere($this->substitutePlaceholders($where, $whereParams)) : [];
+            $filter = $this->parseWhere($this->substitutePlaceholders($where, $whereParams));
             $result = $collection->updateMany(
                 $filter,
                 ['$set' => $data],
@@ -339,6 +340,10 @@ class MongoDBAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        // A list of assoc-array filters ([['id'=>1],['id'=>2]]) is a non-empty
+        // per-row delete and is allowed; only a blank string or an empty array
+        // (a whole-collection write) is refused.
+        $this->requireWriteFilter($filter, 'DELETE', $table);
 
         try {
             // List of assoc arrays — delete each
@@ -362,8 +367,8 @@ class MongoDBAdapter implements DatabaseAdapter
                 return $result->getDeletedCount() >= 0;
             }
 
-            // String WHERE clause
-            $mongoFilter = $filter !== '' ? $this->parseWhere($this->substitutePlaceholders($filter, $whereParams)) : [];
+            // String WHERE clause (guaranteed non-blank by requireWriteFilter above).
+            $mongoFilter = $this->parseWhere($this->substitutePlaceholders($filter, $whereParams));
             $collection = $this->db->selectCollection($table);
             $result = $collection->deleteMany($mongoFilter, $this->sessionOptions());
             return $result->getDeletedCount() >= 0;
@@ -659,9 +664,10 @@ class MongoDBAdapter implements DatabaseAdapter
         $table  = trim($m[1], '`"[]');
         $setStr = trim($m[2]);
         $whereStr = isset($m[3]) ? trim($m[3]) : '';
+        $this->requireWriteFilter($whereStr, 'UPDATE', $table);
 
         $setData = $this->parseSetClause($setStr);
-        $filter = $whereStr !== '' ? $this->parseWhere($whereStr) : [];
+        $filter = $this->parseWhere($whereStr);
 
         $collection = $this->db->selectCollection($table);
         $collection->updateMany($filter, ['$set' => $setData], $this->sessionOptions());
@@ -688,7 +694,8 @@ class MongoDBAdapter implements DatabaseAdapter
 
         $table = trim($m[1], '`"[]');
         $whereStr = isset($m[2]) ? trim($m[2]) : '';
-        $filter = $whereStr !== '' ? $this->parseWhere($whereStr) : [];
+        $this->requireWriteFilter($whereStr, 'DELETE', $table);
+        $filter = $this->parseWhere($whereStr);
 
         $collection = $this->db->selectCollection($table);
         $collection->deleteMany($filter, $this->sessionOptions());
@@ -845,8 +852,44 @@ class MongoDBAdapter implements DatabaseAdapter
                 : [$field => [$mongoOp => $value]];
         }
 
-        // Fall through — return an empty filter rather than crashing
-        return [];
+        // Fail closed. An unrecognised condition must NEVER degrade to an empty
+        // (match-all) filter: on a DELETE/UPDATE that empty filter reaches
+        // deleteMany([])/updateMany([]) and wipes or rewrites the WHOLE
+        // collection. Raise so the caller sees the unsupported SQL instead of
+        // silently losing data.
+        throw new \InvalidArgumentException(
+            "Unsupported MongoDB WHERE condition: '{$condition}'. The MongoDB SQL "
+            . "provider fails closed rather than matching every document. Supported: "
+            . "= != <> > >= < <= LIKE, NOT LIKE, IN, NOT IN, IS [NOT] NULL, AND, OR."
+        );
+    }
+
+    /**
+     * Fail closed: a DELETE/UPDATE must carry a real filter.
+     *
+     * A missing/blank WHERE (or an empty array filter) translates to an empty
+     * MongoDB filter, which matches EVERY document, so deleteMany([]) /
+     * updateMany([]) would wipe or rewrite the whole collection. Refuse it. The
+     * explicit whole-collection spelling is truncate() (it passes WHERE 1 = 1);
+     * the native driver via getConnection() is the escape hatch for anything the
+     * SQL subset cannot express. Shared by both write paths so the guard cannot
+     * drift.
+     *
+     * @param string|array<mixed> $filter Raw WHERE clause or column=>value filter
+     * @param string $operation "DELETE" or "UPDATE" (for the message)
+     * @param string $table Collection name (for the message)
+     * @throws \InvalidArgumentException When the filter is blank/empty
+     */
+    private function requireWriteFilter(string|array $filter, string $operation, string $table): void
+    {
+        $blank = is_array($filter) ? $filter === [] : trim($filter) === '';
+        if ($blank) {
+            throw new \InvalidArgumentException(
+                "Refusing to {$operation} every document in '{$table}': the statement "
+                . "has no WHERE clause, which would affect the whole collection. Add a "
+                . "WHERE, or use truncate() to clear it explicitly."
+            );
+        }
     }
 
     /**
