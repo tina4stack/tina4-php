@@ -37,6 +37,9 @@ class McpSecurityTest extends TestCase
     /** @var array<string,string|false> */
     private array $savedEnv = [];
 
+    /** Temp-file SQLite DB backing the /call write-witness; removed in tearDown(). */
+    private ?string $probeDbFile = null;
+
     private const KEYS = [
         'TINA4_MCP', 'TINA4_DEBUG', 'TINA4_MCP_REMOTE',
         'TINA4_MCP_TOKEN', 'TINA4_API_KEY', 'TINA4_HOST_NAME', 'TINA4_DATABASE_URL',
@@ -58,6 +61,10 @@ class McpSecurityTest extends TestCase
         ErrorTracker::reset();
         Router::clear();
         McpServer::resetDefaultServer();
+        if ($this->probeDbFile !== null) {
+            @unlink($this->probeDbFile);
+            $this->probeDbFile = null;
+        }
         foreach (self::KEYS as $k) {
             unset($_ENV[$k]);
             $saved = $this->savedEnv[$k] ?? false;
@@ -271,5 +278,119 @@ class McpSecurityTest extends TestCase
         $this->assertIsArray($out);
         $this->assertArrayHasKey('error', $out);
         $this->assertStringContainsStringIgnoringCase('invalid table', $out['error']);
+    }
+
+    // ── /call INVOCATION shim gate (MCP-02 regression) ───────────
+    //
+    // The handler tests above prove the tools-LIST route (GET
+    // /__dev/api/mcp/tools) is gated. These drive the surface that actually
+    // RUNS a tool: the POST /__dev/api/mcp/call INVOCATION shim mounted by
+    // DevAdmin::register(). That surface-specific gap — the LIST route being
+    // gated while the CALL shim was audited only via the gate helper — is
+    // exactly what let the Python hole ship (a remote unauth caller ran
+    // database_execute / file_write on a TINA4_DEBUG 0.0.0.0 box). PHP already
+    // gates /call via mcpRequestAllowed(); this locks that in so it can never
+    // regress, with a REAL write-witness rather than a status-only check:
+    // a temp-file SQLite DB whose probe table is re-counted on a FRESH
+    // Database::fromEnv() connection after the call. A denied call must leave
+    // the row count unchanged; an authorised call must increment it.
+
+    /**
+     * Bind a REAL temp-file SQLite DB with an empty `probe` table and point
+     * TINA4_DATABASE_URL at it (the URL database_execute resolves via
+     * Database::fromEnv()). A FILE, not sqlite::memory:, is required: the
+     * witness reopens the DB on a fresh connection after the call, and an
+     * in-memory DB is per-connection so the inserted row would be invisible.
+     */
+    private function bindProbeDatabase(): void
+    {
+        $this->probeDbFile = tempnam(sys_get_temp_dir(), 'tina4_mcp_call_') . '.db';
+        @unlink($this->probeDbFile);
+        // One-slash absolute form => absolute path. ('sqlite://' . $abs would be
+        // three slashes = RELATIVE to CWD — the documented SQLite URL footgun.)
+        $this->env('TINA4_DATABASE_URL', 'sqlite:' . $this->probeDbFile);
+        $db = \Tina4\Database\Database::fromEnv();
+        $db->execute('CREATE TABLE probe (id INTEGER PRIMARY KEY AUTOINCREMENT, note TEXT)');
+        $db->commit();
+    }
+
+    /** Count `probe` rows on a FRESH connection — the real write-witness. */
+    private function probeRowCount(): int
+    {
+        $result = \Tina4\Database\Database::fromEnv()->fetch('SELECT COUNT(*) AS n FROM probe', []);
+        $row = $result->records[0] ?? [];
+        return (int) ($row['n'] ?? $row['N'] ?? -1);
+    }
+
+    /**
+     * Dispatch POST /__dev/api/mcp/call — the ACTUAL invocation handler mounted
+     * by DevAdmin::register() — with an explicit raw peer + headers and a JSON
+     * body invoking database_execute with $sql (a real remote client's wire shape).
+     */
+    private function hitCall(string $remoteIp, string $sql, array $headers = []): Response
+    {
+        DevAdmin::register();
+        $cb = $this->callbackFor('POST', '/__dev/api/mcp/call');
+        $this->assertNotNull($cb, 'call route must be mounted (capability on)');
+        $body = json_encode(['name' => 'database_execute', 'arguments' => ['sql' => $sql]]);
+        $headers = array_merge(['content-type' => 'application/json'], $headers);
+        $request = Request::create('POST', '/__dev/api/mcp/call', body: $body, headers: $headers, remoteIp: $remoteIp);
+        return $cb($request, new Response(true));
+    }
+
+    public function testCallShimDeniesRemoteUnauthAndDoesNotExecute(): void
+    {
+        // remote 8.8.8.8, TINA4_DEBUG=true (MCP enabled), NO token -> 404 forbidden
+        // AND the tool never runs (probe row NOT inserted).
+        $this->env('TINA4_DEBUG', 'true');
+        $this->bindProbeDatabase();
+        $before = $this->probeRowCount();
+
+        $resp = $this->hitCall('8.8.8.8', "INSERT INTO probe (note) VALUES ('remote-unauth')");
+
+        $this->assertSame(404, $resp->getStatusCode(), 'remote unauth /call must be 404');
+        $this->assertSame('MCP forbidden', $resp->getJsonBody()['error'] ?? null);
+        $this->assertSame($before, $this->probeRowCount(), 'denied /call must NOT execute the tool');
+    }
+
+    public function testCallShimAllowsRemoteWithBearerTokenAndExecutes(): void
+    {
+        // remote 8.8.8.8 + TINA4_MCP_REMOTE=true + TINA4_MCP_TOKEN + matching
+        // Authorization: Bearer -> 200 AND the row WAS inserted (tool really ran).
+        $this->env('TINA4_DEBUG', 'true');
+        $this->env('TINA4_MCP_REMOTE', 'true');
+        $this->env('TINA4_MCP_TOKEN', 's3cr3t-token');
+        $this->bindProbeDatabase();
+        $before = $this->probeRowCount();
+
+        $resp = $this->hitCall(
+            '8.8.8.8',
+            "INSERT INTO probe (note) VALUES ('remote-authorised')",
+            ['authorization' => 'Bearer s3cr3t-token'],
+        );
+
+        $this->assertSame(200, $resp->getStatusCode(), 'authorised remote /call must be 200');
+        $this->assertTrue($resp->getJsonBody()['ok'] ?? false);
+        $this->assertSame($before + 1, $this->probeRowCount(), 'authorised /call must execute the tool');
+    }
+
+    public function testCallShimIgnoresSpoofedForwardedForAndDoesNotExecute(): void
+    {
+        // A remote caller cannot launder itself as loopback with X-Forwarded-For:
+        // the /call gate reads the RAW socket peer only. No token -> 404 AND the
+        // tool never runs (proves the socket peer governs, not the header).
+        $this->env('TINA4_DEBUG', 'true');
+        $this->bindProbeDatabase();
+        $before = $this->probeRowCount();
+
+        $resp = $this->hitCall(
+            '8.8.8.8',
+            "INSERT INTO probe (note) VALUES ('spoofed-xff')",
+            ['x-forwarded-for' => '127.0.0.1'],
+        );
+
+        $this->assertSame(404, $resp->getStatusCode(), 'spoofed XFF must NOT bypass the /call gate');
+        $this->assertSame('MCP forbidden', $resp->getJsonBody()['error'] ?? null);
+        $this->assertSame($before, $this->probeRowCount(), 'spoofed XFF /call must NOT execute the tool');
     }
 }
