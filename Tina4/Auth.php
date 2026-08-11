@@ -179,9 +179,16 @@ class Auth
 
     /**
      * Resolve TINA4_SECRET from env (putenv first, then $_ENV), '' if blank.
-     * Mirrors the lookup used by getToken()/validToken().
+     *
+     * The single fail-closed secret resolver: it never substitutes a built-in
+     * default, so an unset TINA4_SECRET resolves to '' (blank). Mirrors the
+     * lookup used by getToken()/validToken(). Public so CsrfMiddleware resolves
+     * the same secret and can reject every write when it is blank (a blank HMAC
+     * key is publicly reproducible — SEC-01, fail closed).
+     *
+     * @return string The signing secret, or '' when TINA4_SECRET is unset/blank.
      */
-    private static function resolveSecret(): string
+    public static function resolveSecret(): string
     {
         return (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
     }

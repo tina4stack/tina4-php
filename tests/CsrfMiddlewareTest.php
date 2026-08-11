@@ -33,6 +33,7 @@
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\Auth;
+use Tina4\Frond;
 use Tina4\Middleware;
 use Tina4\Middleware\CsrfMiddleware;
 use Tina4\Request;
@@ -559,5 +560,191 @@ class CsrfMiddlewareTest extends TestCase
         $this->assertIsArray($captured, '$request->handler must be populated before middleware runs');
         $this->assertTrue($captured['noAuth'] ?? false, 'route metadata must carry the noAuth flag');
         $this->assertSame('{"ok":true}', $response->getBody());
+    }
+
+    // ── Cross-framework conformance: the csrf_contract.json invariants ──────
+    //
+    // Each method name below normalises (strip "test", lowercase, drop
+    // non-alphanumerics) to a `case` in
+    // tina4-documentation/plan/v3/fixtures/csrf_contract.json, so the shared
+    // auditor (scripts/audit-contract-fixtures.py) credits this suite. The SAME
+    // case names appear in the Python (reference), Ruby and Node CSRF suites.
+    // Real HS256, real Request pipeline, real Frond generation, real Session;
+    // no mocks.
+
+    // csrf-no-default-secret (SEC-01)
+    public function testForgedDefaultSecretTokenIsRejected(): void
+    {
+        // TINA4_SECRET unset: a formToken forged with the retired public
+        // 'tina4-default-secret' must be rejected (fail closed — no default).
+        putenv('TINA4_SECRET');
+        unset($_ENV['TINA4_SECRET']);
+        $forged = Auth::getToken(['type' => 'form'], 'tina4-default-secret', 60);
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $forged]));
+        $this->assertRejected($res);
+    }
+
+    public function testForgedBlankSecretTokenIsRejected(): void
+    {
+        // TINA4_SECRET unset: the resolved key is BLANK, and a blank HMAC key is
+        // publicly reproducible — a token forged with '' must NOT validate. The
+        // middleware fails closed: no secret means no trusted token.
+        putenv('TINA4_SECRET');
+        unset($_ENV['TINA4_SECRET']);
+        $forged = Auth::getToken(['type' => 'form'], '', 60);
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $forged]));
+        $this->assertRejected($res);
+    }
+
+    // csrf-frond-token-validates
+    public function testAFrondEmittedFormTokenPassesCsrf(): void
+    {
+        // TINA4_SECRET is set by setUp(); generate a token via the REAL Frond
+        // generator and confirm the middleware passes it. The generator and the
+        // middleware both resolve the SAME fail-closed secret, so a legitimately
+        // rendered token is never self-rejected. No active session → no binding.
+        Frond::$formTokenSessionId = '';
+        $frond = new Frond();
+        $globals = $frond->getGlobals();
+        $this->assertArrayHasKey('form_token_value', $globals, 'Frond must expose the form_token_value generator');
+        $generate = $globals['form_token_value'];   // returns the raw JWT string
+        $token = $generate('');
+        $this->assertNotSame('', $token, 'Frond generator must emit a token');
+
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $token]));
+        $this->assertPassed($res);
+    }
+
+    // csrf-type-must-be-form
+    public function testANonFormJwtInTheFormTokenSlotIsRejected(): void
+    {
+        // A validly-signed but non-form JWT (e.g. an auth token) must not be
+        // accepted in the formToken slot even though its signature verifies.
+        $authJwt = Auth::getToken(['user_id' => 1], $this->secret, 60);
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $authJwt]));
+        $this->assertRejected($res);
+    }
+
+    // csrf-session-binding
+    public function testATokenBoundToAForeignSessionIsRejected(): void
+    {
+        // A token minted for session-A cannot be replayed against session-B.
+        $token = $this->formToken(['session_id' => 'session-A']);
+        [, $res] = $this->dispatchCsrf($this->makeRequest(
+            'POST',
+            body: ['formToken' => $token],
+            session: $this->startedSession('session-B'),
+        ));
+        $this->assertRejected($res);
+    }
+
+    // csrf-safe-methods-skipped
+    public function testASafeGetRequestSkipsCsrf(): void
+    {
+        [, $res, $passed] = $this->dispatchCsrf($this->makeRequest('GET'));
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    // csrf-write-methods-gated
+    public function testAPostWithoutATokenIsRejected(): void
+    {
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST'));
+        $this->assertRejected($res);
+    }
+
+    // csrf-noauth-exempt
+    public function testANoauthWriteRouteSkipsCsrf(): void
+    {
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', handler: ['noAuth' => true])
+        );
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    // csrf-bearer-exempt
+    public function testAValidBearerTokenSkipsCsrf(): void
+    {
+        $bearer = Auth::getToken(['user_id' => 1], $this->secret, 60);
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', headers: ['Authorization' => "Bearer {$bearer}"])
+        );
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    // csrf-query-token-rejected
+    public function testAFormTokenInTheQueryStringIsRejected(): void
+    {
+        $token = $this->formToken();
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST', query: ['formToken' => $token]));
+        $this->assertRejected($res);
+    }
+
+    // csrf-env-attach
+    public function testCsrfIsOffByDefault(): void
+    {
+        // TINA4_CSRF unset → the attach function returns false AND CsrfMiddleware
+        // is NOT in the global middleware list. Save/restore the global list so
+        // no state leaks to other tests.
+        putenv('TINA4_CSRF');
+        $saved = Middleware::getGlobal();
+        try {
+            Middleware::reset();
+            foreach ($saved as $mw) {
+                if ($mw !== CsrfMiddleware::class) {
+                    Middleware::use($mw);
+                }
+            }
+            $this->assertFalse(CsrfMiddleware::attachFromEnv(), 'unset TINA4_CSRF must not attach');
+            $this->assertNotContains(CsrfMiddleware::class, Middleware::getGlobal());
+        } finally {
+            Middleware::reset();
+            foreach ($saved as $mw) {
+                Middleware::use($mw);
+            }
+        }
+    }
+
+    public function testCsrfTrueAttachesTheMiddleware(): void
+    {
+        // TINA4_CSRF=true → the attach function returns true AND CsrfMiddleware
+        // IS in the global list. Save/restore the global list.
+        putenv('TINA4_CSRF=true');
+        $saved = Middleware::getGlobal();
+        try {
+            Middleware::reset();
+            foreach ($saved as $mw) {
+                if ($mw !== CsrfMiddleware::class) {
+                    Middleware::use($mw);
+                }
+            }
+            $this->assertTrue(CsrfMiddleware::attachFromEnv(), 'TINA4_CSRF=true must attach');
+            $this->assertContains(CsrfMiddleware::class, Middleware::getGlobal());
+            // Idempotent — a second attach does not duplicate the registration.
+            CsrfMiddleware::attachFromEnv();
+            $this->assertSame(
+                1,
+                count(array_filter(Middleware::getGlobal(), static fn($c) => $c === CsrfMiddleware::class)),
+                'attachFromEnv must be idempotent (Middleware::use de-dupes)'
+            );
+        } finally {
+            Middleware::reset();
+            foreach ($saved as $mw) {
+                Middleware::use($mw);
+            }
+        }
+    }
+
+    // csrf-403-envelope
+    public function testTheRejectionBodyIsTheCsrfInvalidEnvelope(): void
+    {
+        [, $res] = $this->dispatchCsrf($this->makeRequest('POST'));
+        $this->assertSame(403, $res->getStatusCode());
+        $body = json_decode($res->getBody(), true);
+        $this->assertTrue($body['error']);
+        $this->assertSame('CSRF_INVALID', $body['code']);
+        $this->assertSame(403, $body['status']);
     }
 }

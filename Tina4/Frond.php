@@ -3417,12 +3417,12 @@ class Frond
                 $payload['session_id'] = $sessionId;
             }
 
-            if (!isset($_ENV['TINA4_SECRET']) && !getenv('TINA4_SECRET')) {
-                $_ENV['TINA4_SECRET'] = DotEnv::getEnv('TINA4_SECRET') ?? 'tina4-default-secret';
-            }
+            // Sign via Auth's own fail-closed secret resolution: a null secret
+            // makes Auth resolve TINA4_SECRET (blank when unset — NO built-in
+            // default, and never a mutation of the process env). expiresIn is in
+            // MINUTES, so pass the TTL straight through as the third argument.
             $ttlMinutes = (int)(DotEnv::getEnv('TINA4_TOKEN_LIMIT', '60') ?? '60');
-            $expiresIn = $ttlMinutes * 60;
-            return Auth::getToken($payload, $expiresIn);
+            return Auth::getToken($payload, null, $ttlMinutes);
         };
 
         // formToken / form_token — returns full <input> element

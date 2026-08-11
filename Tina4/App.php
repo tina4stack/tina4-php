@@ -623,6 +623,13 @@ class App
             }
         }
 
+        // Auto-attach CSRF protection when TINA4_CSRF is truthy (true/1/yes/on).
+        // OFF by default (unset → not attached); the env flag is the switch, and
+        // once attached TINA4_CSRF=false is the kill switch. Idempotent. Done
+        // after route discovery (so the middleware sees a full route table) and
+        // before serving. Mirrors the Python master's attach_csrf_from_env().
+        \Tina4\Middleware\CsrfMiddleware::attachFromEnv();
+
         // Auto-wire i18n → template global t() if locale files exist
         $this->autoWireI18n();
 
