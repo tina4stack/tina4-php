@@ -829,18 +829,35 @@ class Router
             }
 
             if (ErrorOverlay::isDebugMode()) {
-                // Rich error overlay with stack trace, source context, and line numbers
-                $overlayHtml = ErrorOverlay::renderErrorOverlay($e, [
-                    'REQUEST_METHOD' => $request->method,
-                    'REQUEST_URI' => $request->path,
-                    'CONTENT_TYPE' => $request->contentType ?? '',
-                    'REMOTE_ADDR' => $request->ip ?? '',
-                    'QUERY_STRING' => $request->query ?? '',
-                    'headers' => $request->headers ?? [],
-                    'params' => $request->params ?? [],
-                    'body' => is_array($request->body) ? $request->body : [],
-                ]);
-                return $response->html($overlayHtml, 500);
+                // OVERLAY-DEC-03: guard the dev-overlay render. This call site sits
+                // INSIDE the catch, so if the overlay itself throws (a malformed
+                // frame, an unrenderable request value) it would double-fault out of
+                // dispatch. Wrap it and fall back to the same safe production page, so
+                // a broken overlay still yields a bounded 500 — never a crash.
+                try {
+                    $overlayHtml = ErrorOverlay::renderErrorOverlay($e, [
+                        'REQUEST_METHOD' => $request->method,
+                        'REQUEST_URI' => $request->path,
+                        'CONTENT_TYPE' => $request->contentType ?? '',
+                        'REMOTE_ADDR' => $request->ip ?? '',
+                        'QUERY_STRING' => $request->query ?? '',
+                        'headers' => $request->headers ?? [],
+                        'params' => $request->params ?? [],
+                        'body' => is_array($request->body) ? $request->body : [],
+                    ]);
+                    return $response->html($overlayHtml, 500);
+                } catch (\Throwable $overlayErr) {
+                    try {
+                        Log::warning(sprintf(
+                            'Error overlay render failed, serving the safe page: %s: %s',
+                            $overlayErr::class,
+                            $overlayErr->getMessage()
+                        ));
+                    } catch (\Throwable) {
+                        // Log failures must never block the 500 render.
+                    }
+                    // fall through to the safe production page below
+                }
             }
             // v3.13.7 SECURITY (CWE-209): production response body must
             // NOT contain the stack trace. The trace stays in Log::error

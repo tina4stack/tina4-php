@@ -119,48 +119,6 @@ class ErrorOverlayTest extends TestCase
         $this->assertStringContainsString('<details', $html);
     }
 
-    public function testRenderProductionReturnsHtml(): void
-    {
-        $html = ErrorOverlay::renderProductionError();
-        $this->assertStringStartsWith('<!DOCTYPE html>', $html);
-        // A real production page: generic safe copy + a "Go Home" link, and
-        // crucially NO internal detail leaked.
-        $this->assertStringContainsString('Something went wrong', $html);
-        $this->assertStringContainsString('Go Home', $html);
-        $this->assertStringNotContainsString('Stack Trace', $html);
-    }
-
-    public function testRenderProductionEscapesAndShowsPath(): void
-    {
-        // A caller-supplied path is rendered but HTML-escaped — a hostile
-        // path can never inject live markup into the safe production page.
-        $html = ErrorOverlay::renderProductionError(403, 'Forbidden', '/admin/<script>x</script>');
-        $this->assertStringContainsString('403', $html);
-        $this->assertStringContainsString('Forbidden', $html);
-        $this->assertStringNotContainsString('<script>x</script>', $html);
-        $this->assertStringContainsString('&lt;script&gt;', $html);
-    }
-
-    public function testRenderProductionContainsStatusCode(): void
-    {
-        $html = ErrorOverlay::renderProductionError(404, 'Not Found');
-        $this->assertStringContainsString('404', $html);
-        $this->assertStringContainsString('Not Found', $html);
-    }
-
-    public function testRenderProductionNoStackTrace(): void
-    {
-        $html = ErrorOverlay::renderProductionError();
-        $this->assertStringNotContainsString('Stack Trace', $html);
-    }
-
-    public function testRenderProductionDefault500(): void
-    {
-        $html = ErrorOverlay::renderProductionError();
-        $this->assertStringContainsString('500', $html);
-        $this->assertStringContainsString('Internal Server Error', $html);
-    }
-
     public function testIsDebugModeTrue(): void
     {
         putenv('TINA4_DEBUG=true');

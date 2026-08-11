@@ -1087,12 +1087,11 @@ Renders syntax-highlighted stack traces with source context, request details, an
 // Render a full HTML error overlay (dev mode)
 ErrorOverlay::renderErrorOverlay(\Throwable $e, ?array $request = null): string
 
-// Render a safe, generic error page (production)
-ErrorOverlay::renderProductionError(int $statusCode = 500, string $message = 'Internal Server Error'): string
-
 // Check if TINA4_DEBUG is enabled
 ErrorOverlay::isDebugMode(): bool
 ```
+
+The overlay is dev-only (gated on `isDebugMode()`/`TINA4_DEBUG`). The production 500 is NOT rendered here — `Router::renderError` renders `errors/500.twig` with an empty `error_message` (CWE-209), so the exception detail stays in the server log only. Sensitive request fields (Authorization / Cookie / Set-Cookie headers and password-like body/param keys) are redacted even in the overlay, the frame count is capped, and the router guards the render.
 
 Example:
 ```php
@@ -1100,9 +1099,7 @@ try {
     $handler($request, $response);
 } catch (\Throwable $e) {
     if (ErrorOverlay::isDebugMode()) {
-        echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);
-    } else {
-        echo ErrorOverlay::renderProductionError(500);
+        echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);   // dev only
     }
 }
 ```
