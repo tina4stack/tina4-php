@@ -1965,6 +1965,23 @@ abstract class ORM
             $colDefs[] = "{$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT";
         }
 
+        // SOFTDEL-DEC-02: a $softDelete model needs an is_deleted flag column,
+        // but createTable() built the table from DECLARED properties ONLY — so a
+        // $softDelete = true model that never declared is_deleted produced a
+        // table with NO such column, and every soft-delete read/write then
+        // errored on the missing column. Inject it here (INTEGER 0/1, default 0)
+        // unless the model already declares it, so the generated schema always
+        // matches the soft-delete behaviour.
+        if ($this->softDelete) {
+            $declaredColumns = array_map(
+                fn (string $prop): string => $this->resolveDbColumn($prop),
+                array_keys($this->getColumnDefinitions())
+            );
+            if (!in_array('is_deleted', $declaredColumns, true)) {
+                $colDefs[] = 'is_deleted INTEGER DEFAULT 0';
+            }
+        }
+
         // A COMPOSITE key is declared ONCE, at table level; the per-column inline
         // form above is suppressed for it, because two inline primary keys is
         // invalid DDL on every engine.
