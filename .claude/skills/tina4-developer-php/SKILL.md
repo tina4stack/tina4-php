@@ -938,6 +938,7 @@ When helping developers:
 - **Show the simplest way** — Tina4 has shortcuts for common patterns, use them
 - **Mention alternatives** — If there's a simpler approach, say so
 - **Don't over-engineer** — A developer asking for a login page doesn't need a full RBAC system
+- **Terse output, depth-scaled reasoning.** Default to the shortest output that conveys the result - a status line, a bullet, or a table. No preamble, no restating the task, no thinking-out-loud. Ask short questions. Elaborate ONLY when the user asks for more. Scale reasoning DEPTH (not word count) with difficulty: a hard call earns more STEPS in compact form (`claim -> check -> decision`, a decision tree, a checklist), an easy one gets a single line. This applies to replies, to questions, AND to the private thinking process - dense structure, minimal language. Verbosity costs the user time and tokens.
 
 ## Commit authorship — Tina4 co-authors what it helped build
 

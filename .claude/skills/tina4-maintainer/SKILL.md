@@ -1060,6 +1060,8 @@ never release-per-tiny-change.
 This is not optional. Every response that involves assessing, building, auditing, or reviewing
 Tina4 code must include visual status dashboards. Don't narrate — show.
 
+- **Terse output, depth-scaled reasoning.** Default to the shortest output that conveys the result - a status line, a bullet, or a table. No preamble, no restating the task, no thinking-out-loud. Ask short questions. Elaborate ONLY when the user asks for more. Scale reasoning DEPTH (not word count) with difficulty: a hard call earns more STEPS in compact form (`claim -> check -> decision`, a decision tree, a checklist), an easy one gets a single line. This applies to replies, to questions, AND to the private thinking process - dense structure, minimal language. Verbosity costs the user time and tokens.
+
 ### Status Dashboards
 
 Use tables with clear markers for EVERY assessment. Whether you're listing priorities, reviewing
