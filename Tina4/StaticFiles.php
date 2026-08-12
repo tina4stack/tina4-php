@@ -170,11 +170,15 @@ class StaticFiles
                 $fileSize = filesize($realPath);
                 $modifiedTime = filemtime($realPath);
 
-                // Validators: a weak ETag from mtime + size, and an HTTP-date
+                // Validators: a weak ETag from size + mtime, and an HTTP-date
                 // Last-Modified. The asset may be cached but must be revalidated
                 // before use, so a redeployed file reaches the browser on the
-                // next load without a manual hard refresh.
-                $eTag = sprintf('W/"%d-%d"', $modifiedTime, $fileSize);
+                // next load without a manual hard refresh. Format PINNED across
+                // all four frameworks (feature 40, CE-DEC-02): decimal
+                // `W/"<size>-<mtime>"`, integer-second mtime — a client behind a
+                // reverse proxy sees an identical validator for the same file
+                // regardless of backend language.
+                $eTag = sprintf('W/"%d-%d"', $fileSize, $modifiedTime);
                 $lastModified = gmdate('D, d M Y H:i:s', $modifiedTime) . ' GMT';
 
                 // Conditional request — a matching validator means the browser
@@ -224,7 +228,9 @@ class StaticFiles
     private static function isNotModified(?string $ifNoneMatch, ?string $ifModifiedSince, string $eTag, int $modifiedTime): bool
     {
         if ($ifNoneMatch !== null && $ifNoneMatch !== '') {
-            return self::eTagMatches($ifNoneMatch, $eTag);
+            // Shared with the dynamic conditional-GET path (Response::etagMatches,
+            // feature 40) so both use IDENTICAL RFC-7232 weak-comparison semantics.
+            return Response::etagMatches($ifNoneMatch, $eTag);
         }
 
         if ($ifModifiedSince !== null && $ifModifiedSince !== '') {
@@ -235,45 +241,6 @@ class StaticFiles
         }
 
         return false;
-    }
-
-    /**
-     * Match an `If-None-Match` header value against our ETag.
-     *
-     * Uses weak comparison (RFC 7232 §3.2): an optional `W/` prefix is ignored
-     * on both sides. Accepts a comma-separated list of candidate tags and the
-     * wildcard `*`.
-     *
-     * @param string $ifNoneMatch The raw `If-None-Match` header value
-     * @param string $eTag The validator this response would carry
-     * @return bool True when any candidate tag matches (or is `*`)
-     */
-    private static function eTagMatches(string $ifNoneMatch, string $eTag): bool
-    {
-        $ourTag = self::stripWeakPrefix($eTag);
-
-        foreach (explode(',', $ifNoneMatch) as $candidate) {
-            $candidate = trim($candidate);
-            if ($candidate === '*') {
-                return true;
-            }
-            if (self::stripWeakPrefix($candidate) === $ourTag) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Strip an optional leading `W/` weak-validator prefix from an ETag.
-     *
-     * @param string $eTag The ETag value (possibly weak, e.g. `W/"abc"`)
-     * @return string The ETag with any `W/` prefix removed
-     */
-    private static function stripWeakPrefix(string $eTag): string
-    {
-        return str_starts_with($eTag, 'W/') ? substr($eTag, 2) : $eTag;
     }
 
     /**

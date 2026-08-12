@@ -717,6 +717,16 @@ class Router
             self::saveSessionAndSetCookie($session, $sessionCookie, $sessionCookieName, $result);
         }
 
+        // Compression + ETag + conditional-GET (feature 40, CE-DEC-01/02) — the
+        // ONE header-builder step every response funnels through, matching
+        // Python's build_headers() + app() dispatch. Runs BEFORE stripHeadBody
+        // so a HEAD response's preserved Content-Length reflects the (possibly
+        // compressed) body the equivalent GET would have sent.
+        $result = self::applyConditionalGet(
+            $request,
+            self::compressAndTag($request, $result)
+        );
+
         $result = self::stripHeadBody($request, $result);
 
         self::logRequest($request, $result, $reqStart);
@@ -1310,6 +1320,79 @@ class Router
      * @param Response $result  The response to strip
      * @return Response The same response, body removed when this was a HEAD
      */
+    /**
+     * Gzip-compress + attach an ETag (feature 40, CE-DEC-01) — the one
+     * header-builder step every response funnels through. A streaming
+     * response (SSE) has no buffered body to compress or hash, so it is
+     * skipped, mirroring Python's "streaming responses bypass ETag/compression".
+     *
+     * @param Request  $request  The incoming request (read for Accept-Encoding)
+     * @param Response $response The response to compress/tag in place
+     * @return Response The same instance, mutated
+     */
+    private static function compressAndTag(Request $request, Response $response): Response
+    {
+        if ($response->isStreaming()) {
+            return $response;
+        }
+        $response->compressAndTag($request->headers['accept-encoding'] ?? '');
+        return $response;
+    }
+
+    /**
+     * Answer a matching conditional GET with a 304 that PRESERVES whichever
+     * validators (ETag / Last-Modified) the 200 would have carried (feature 40,
+     * CE-PY-304-DROPS-VALIDATORS was a Python-only bug — PHP's static path
+     * already preserved them; this extends the SAME preservation to a dynamic
+     * response, which never carried a validator to preserve before CE-DEC-01).
+     *
+     * A static-file 304 is already terminal by the time this runs
+     * (StaticFiles::tryServe's own short-circuit already answered it, so its
+     * status is 304, not 200) — the guard below leaves it untouched rather than
+     * re-deciding it, so nothing here can double-304 or diverge from that
+     * already-tested path.
+     *
+     * @param Request  $request  The incoming request (read for the conditional headers)
+     * @param Response $response The candidate 200 response
+     * @return Response Either $response unchanged, or a fresh 304
+     */
+    private static function applyConditionalGet(Request $request, Response $response): Response
+    {
+        if ($response->getStatusCode() !== 200 || $response->getBody() === '') {
+            return $response;
+        }
+
+        $etag = $response->getHeader('ETag');
+        $lastModified = $response->getHeader('Last-Modified');
+        $ifNoneMatch = $request->headers['if-none-match'] ?? '';
+        $ifModifiedSince = $request->headers['if-modified-since'] ?? '';
+
+        // If-None-Match takes precedence over If-Modified-Since (RFC 9110 S13.1.3).
+        $notModified = false;
+        if ($ifNoneMatch !== '' && $etag !== null) {
+            $notModified = Response::etagMatches($ifNoneMatch, $etag);
+        } elseif ($ifNoneMatch === '' && $ifModifiedSince !== '' && $lastModified !== null) {
+            $since = strtotime($ifModifiedSince);
+            $modified = strtotime($lastModified);
+            $notModified = $since !== false && $modified !== false && $modified <= $since;
+        }
+
+        if (!$notModified) {
+            return $response;
+        }
+
+        $notModifiedResponse = new Response();
+        $notModifiedResponse->status(304);
+        if ($etag !== null) {
+            $notModifiedResponse->header('ETag', $etag);
+        }
+        if ($lastModified !== null) {
+            $notModifiedResponse->header('Last-Modified', $lastModified);
+        }
+        $notModifiedResponse->setBody('');
+        return $notModifiedResponse;
+    }
+
     private static function stripHeadBody(Request $request, Response $result): Response
     {
         // RFC 9110 §9.3.2: the server MUST NOT send content in a HEAD

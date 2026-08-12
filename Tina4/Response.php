@@ -668,6 +668,101 @@ class Response
     }
 
     /**
+     * Gzip-compress the body when eligible and attach an ETag. Mirrors the
+     * Python master's ``build_headers()`` (feature 40, CE-DEC-01) — the SAME
+     * header builder every response (dynamic or static) funnels through, so
+     * a static-file response gets compression too and a dynamic response
+     * finally gets a validator.
+     *
+     * Compression: the body exceeds 1024 bytes AND `$acceptEncoding` offers
+     * gzip AND the content type is compressible. Uses core `gzencode` — zero
+     * new dependency.
+     *
+     * ETag: a strong md5 hash (first 16 hex chars) over the FINAL
+     * (post-compression) body, UNLESS a validator is already set — a
+     * static-file response (StaticFiles::tryServe) pins its own weak
+     * size+mtime ETag before this runs (CE-DEC-02), so this never
+     * overwrites it with a content hash.
+     *
+     * @param string $acceptEncoding The incoming `Accept-Encoding` request header
+     */
+    public function compressAndTag(string $acceptEncoding): void
+    {
+        if (
+            strlen($this->body) > 1024
+            && str_contains($acceptEncoding, 'gzip')
+            && self::isCompressibleContentType($this->headers['Content-Type'] ?? '')
+        ) {
+            $this->body = gzencode($this->body, 6);
+            $this->headers['Content-Encoding'] = 'gzip';
+            $this->headers['Vary'] = 'Accept-Encoding';
+            // Only correct an ALREADY-declared length (e.g. StaticFiles'
+            // filesize()-derived Content-Length) — most dynamic responses
+            // never set one, and the transport measures the final body itself.
+            if (isset($this->headers['Content-Length'])) {
+                $this->headers['Content-Length'] = (string) strlen($this->body);
+            }
+        }
+
+        if (!isset($this->headers['ETag']) && $this->body !== '' && $this->statusCode === 200) {
+            $this->headers['ETag'] = '"' . substr(md5($this->body), 0, 16) . '"';
+        }
+    }
+
+    /**
+     * Whether a content type benefits from gzip compression (text-ish, JSON,
+     * XML, JS, SVG). Mirrors the Python master's `_is_compressible`.
+     */
+    public static function isCompressibleContentType(string $contentType): bool
+    {
+        foreach (['text/', 'application/json', 'application/xml', 'application/javascript', 'image/svg'] as $needle) {
+            if (str_contains($contentType, $needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Match an `If-None-Match` header value against `$etag`.
+     *
+     * RFC 7232 S3.2 weak comparison: an optional `W/` prefix is ignored on
+     * both sides, the header may carry a comma-separated candidate list, and
+     * `*` matches any current representation. Shared by StaticFiles (its
+     * conditional-GET) and the dynamic conditional-GET path (feature 40,
+     * CE-INM-SEMANTICS) so both use IDENTICAL matching semantics.
+     *
+     * @param string $ifNoneMatch The raw `If-None-Match` header value
+     * @param string $etag The validator this response would carry
+     * @return bool True when any candidate tag matches (or is `*`)
+     */
+    public static function etagMatches(string $ifNoneMatch, string $etag): bool
+    {
+        if ($etag === '') {
+            return false;
+        }
+        $target = self::stripWeakEtagPrefix($etag);
+        foreach (explode(',', $ifNoneMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '*' || self::stripWeakEtagPrefix($candidate) === $target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Strip an optional leading `W/` weak-validator prefix from an ETag.
+     *
+     * @param string $etag The ETag value (possibly weak, e.g. `W/"abc"`)
+     * @return string The ETag with any `W/` prefix removed
+     */
+    public static function stripWeakEtagPrefix(string $etag): string
+    {
+        return str_starts_with($etag, 'W/') ? substr($etag, 2) : $etag;
+    }
+
+    /**
      * Get the current status code.
      */
     public function getStatusCode(): int
