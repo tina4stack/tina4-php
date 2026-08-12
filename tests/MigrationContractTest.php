@@ -86,6 +86,22 @@ class MigrationContractTest extends TestCase
         return (new \ReflectionMethod(Migration::class, $method))->invokeArgs($m, $args);
     }
 
+    /**
+     * Best-effort delete of a stale tina4_migration row. On a genuinely fresh
+     * database/engine the tracking table itself may not exist yet (nothing
+     * has called migrate() there before) -- that is not a real failure, just
+     * nothing to clean up.
+     */
+    private function cleanLedgerRow(Database $db, string $migrationName): void
+    {
+        try {
+            $db->execute('DELETE FROM tina4_migration WHERE migration_name = :n', [':n' => $migrationName]);
+            $db->commit();
+        } catch (\Throwable) {
+            // table doesn't exist yet -- nothing to clean up
+        }
+    }
+
     // ── real-engine reachability helpers ────────────────────────────────────
 
     private static function reachable(string $host, int $port, float $timeout = 1.0): bool
@@ -239,8 +255,8 @@ class MigrationContractTest extends TestCase
         $fullName = $name . '.sql';
         try {
             $db->execute("DROP TABLE IF EXISTS {$table}");
-            $db->execute('DELETE FROM tina4_migration WHERE migration_name = :n', [':n' => $fullName]);
             $db->commit();
+            $this->cleanLedgerRow($db, $fullName);
 
             file_put_contents(
                 $this->migrationsDir . "/{$fullName}",
@@ -257,8 +273,8 @@ class MigrationContractTest extends TestCase
             $this->assertNull($row, 'the ledger row must never be written for a failed migration, even on non-transactional DDL');
         } finally {
             $db->execute("DROP TABLE IF EXISTS {$table}");
-            $db->execute('DELETE FROM tina4_migration WHERE migration_name = :n', [':n' => $fullName]);
             $db->commit();
+            $this->cleanLedgerRow($db, $fullName);
             $db->close();
         }
     }
@@ -273,8 +289,8 @@ class MigrationContractTest extends TestCase
         $fullName = $name . '.sql';
         try {
             $db->execute("DROP TABLE IF EXISTS {$table}");
-            $db->execute('DELETE FROM tina4_migration WHERE migration_name = :n', [':n' => $fullName]);
             $db->commit();
+            $this->cleanLedgerRow($db, $fullName);
 
             file_put_contents(
                 $this->migrationsDir . "/{$fullName}",
@@ -293,8 +309,8 @@ class MigrationContractTest extends TestCase
             $this->assertNull($row, 'no ledger row for a fully-rolled-back file');
         } finally {
             $db->execute("DROP TABLE IF EXISTS {$table}");
-            $db->execute('DELETE FROM tina4_migration WHERE migration_name = :n', [':n' => $fullName]);
             $db->commit();
+            $this->cleanLedgerRow($db, $fullName);
             $db->close();
         }
     }
