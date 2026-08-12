@@ -1353,8 +1353,8 @@ abstract class ORM
      * autoMap models) and reads the value from the declared property or the
      * dynamic-property bag — whichever holds it.
      *
-     * Used by belongsTo(), belongsToMethod(), and the eager-load belongsTo /
-     * hasMany-grouping branches so the documented snake_case FK form resolves.
+     * Used by belongsTo() and the eager-load belongsTo / hasMany-grouping
+     * branches so the documented snake_case FK form resolves.
      *
      * @param string $fkColumn The FK column name (e.g. "author_id").
      * @return mixed The FK value, or null if unset.
@@ -1787,11 +1787,11 @@ abstract class ORM
      *
      * @param string $relatedClass Fully qualified class name of the related ORM model
      * @param string|null $foreignKey Foreign key column (defaults to thisTable_id)
-     * @param int $limit Max results
+     * @param int|null $limit Max results; null (the default) returns the WHOLE set
      * @param int $offset Starting offset
      * @return array<int, static>
      */
-    public function hasMany(string $relatedClass, ?string $foreignKey = null, int $limit = 100, int $offset = 0): array
+    public function hasMany(string $relatedClass, ?string $foreignKey = null, ?int $limit = null, int $offset = 0): array
     {
         $this->ensureDb();
         $pkValue = $this->getPrimaryKeyValue();
@@ -1805,7 +1805,36 @@ abstract class ORM
 
         /** @var ORM $related */
         $related = new $relatedClass($this->_db);
-        return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+
+        // Explicit limit -> single explicit page (never silent truncation).
+        if ($limit !== null) {
+            return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+        }
+
+        // IMPREL-PHP-PARALLEL + cap unify: with no explicit limit, page through
+        // ALL matching rows -- the same paged/uncapped behaviour as the lazy and
+        // eager paths (feature 21), so an imperatively-loaded has_many yields the
+        // SAME row count as the lazy accessor instead of a silent 100-row cap.
+        // where() already applies the soft-delete filter, so a soft-deleted child
+        // stays excluded from this traversal. This is the ONE implementation the
+        // declarative path (_loadRelationship) also uses -- no parallel copy.
+        $orderCol = $related->getDbColumn($related->getPrimaryKeys()[0]);
+        $all = [];
+        $pageOffset = $offset;
+        do {
+            $batch = $related->where(
+                "{$foreignKey} = :fk",
+                [':fk' => $pkValue],
+                self::EAGER_PAGE_SIZE,
+                $pageOffset,
+                null,
+                $orderCol
+            );
+            $all = array_merge($all, $batch);
+            $pageOffset += self::EAGER_PAGE_SIZE;
+        } while (count($batch) === self::EAGER_PAGE_SIZE);
+
+        return $all;
     }
 
     /**
@@ -2871,30 +2900,21 @@ abstract class ORM
      */
     private function _loadRelationship(string $name, string $definition, string $type): ORM|array|null
     {
-        $this->ensureDb();
-
+        // IMPREL-PHP-PARALLEL: the declarative path shares the ONE public
+        // imperative implementation (hasOne/hasMany/belongsTo) rather than a
+        // parallel private copy that can drift. Those methods call ensureDb() and
+        // resolve the default foreign key themselves, so a null $foreignKey (no
+        // key in the definition string) resolves the same default here as before.
         $parts = explode('.', $definition, 2);
         $relatedClass = $parts[0];
         $foreignKey = $parts[1] ?? null;
 
-        if ($type === 'hasOne') {
-            if ($foreignKey === null) {
-                $foreignKey = self::defaultForeignKey($this);
-            }
-            return $this->hasOneMethod($relatedClass, $foreignKey);
-        } elseif ($type === 'hasMany') {
-            if ($foreignKey === null) {
-                $foreignKey = self::defaultForeignKey($this);
-            }
-            return $this->hasManyMethod($relatedClass, $foreignKey);
-        } elseif ($type === 'belongsTo') {
-            if ($foreignKey === null) {
-                $foreignKey = self::defaultForeignKey($relatedClass);
-            }
-            return $this->belongsToMethod($relatedClass, $foreignKey);
-        }
-
-        return null;
+        return match ($type) {
+            'hasOne' => $this->hasOne($relatedClass, $foreignKey),
+            'hasMany' => $this->hasMany($relatedClass, $foreignKey),
+            'belongsTo' => $this->belongsTo($relatedClass, $foreignKey),
+            default => null,
+        };
     }
 
     /**
@@ -3090,70 +3110,6 @@ abstract class ORM
                 }
             }
         }
-    }
-
-    /**
-     * Internal: has-one query (used by lazy and explicit loading).
-     */
-    private function hasOneMethod(string $relatedClass, string $foreignKey): ?ORM
-    {
-        $pkValue = $this->getPrimaryKeyValue();
-        if ($pkValue === null) {
-            return null;
-        }
-
-        /** @var ORM $related */
-        $related = new $relatedClass($this->_db);
-        $results = $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], 1);
-        return $results[0] ?? null;
-    }
-
-    /**
-     * Internal: has-many query (used by lazy and explicit loading).
-     */
-    private function hasManyMethod(string $relatedClass, string $foreignKey): array
-    {
-        $pkValue = $this->getPrimaryKeyValue();
-        if ($pkValue === null) {
-            return [];
-        }
-
-        /** @var ORM $related */
-        $related = new $relatedClass($this->_db);
-        // REL-EAGER-UNBOUNDED: page through ALL children so a parent with more
-        // than one page never loses the tail (was a silent 100-row cap via
-        // where()'s default limit). where() already applies the soft-delete
-        // filter, so a soft-deleted child stays excluded from this traversal.
-        $orderCol = $related->getDbColumn($related->getPrimaryKeys()[0]);
-        $all = [];
-        $offset = 0;
-        do {
-            $batch = $related->where(
-                "{$foreignKey} = :fk",
-                [':fk' => $pkValue],
-                self::EAGER_PAGE_SIZE,
-                $offset,
-                null,
-                $orderCol
-            );
-            $all = array_merge($all, $batch);
-            $offset += self::EAGER_PAGE_SIZE;
-        } while (count($batch) === self::EAGER_PAGE_SIZE);
-
-        return $all;
-    }
-
-    /**
-     * Internal: belongs-to query (used by lazy and explicit loading).
-     */
-    private function belongsToMethod(string $relatedClass, string $foreignKey): ?ORM
-    {
-        $fkValue = $this->resolveFkValue($foreignKey);
-        if ($fkValue === null) {
-            return null;
-        }
-
-        return $relatedClass::findById($fkValue);
     }
 
     /**
