@@ -79,6 +79,11 @@ abstract class ORM
      *   'user_id' => 'User'                                          // simple: model name
      *   'user_id' => ['model' => 'User', 'related_name' => 'posts']  // extended: with custom has-many key
      *
+     * REL-DEC-01: relationships are READ-SIDE-ONLY. This wires up traversal
+     * accessors but emits NO DB-level FK / ON DELETE clause — referential
+     * integrity is the migration/DDL's job (consistent with the no-FK Firebird
+     * rule), so deleting a parent does NOT cascade to children at the engine level.
+     *
      * @var array<string, string|array>
      */
     public array $foreignKeys = [];
@@ -159,6 +164,16 @@ abstract class ORM
      * @var array<string, array<int, array{key: string, spec: string}>>
      */
     private static array $_fkRegistry = [];
+
+    /**
+     * REL-EAGER-UNBOUNDED: max parent PKs per eager `WHERE fk IN (...)` query, so
+     * a very large parent set never yields an unbounded IN list (a query-size /
+     * driver parameter-limit risk). Each chunk is one query.
+     */
+    private const EAGER_IN_CHUNK = 500;
+
+    /** Rows fetched per page so no relation is ever silently truncated. */
+    private const EAGER_PAGE_SIZE = 1000;
 
     /**
      * Bind a database to ORM models. Equivalent to Python's bind_database(db, name=None).
@@ -2896,10 +2911,27 @@ abstract class ORM
         }
 
         if ($db === null) {
-            $db = static::getDb();
+            // REL-PHP-EAGERLOAD-STATIC: the public ORM::eagerLoad($rows, $include)
+            // is a STATIC call, so it must resolve the DB via the static path.
+            // getDb() is an INSTANCE method (returns $this->_db) and fatals in a
+            // static context ("using $this when not in object context"); resolveDb()
+            // is the static default/global/env resolver used by every other static
+            // finder.
+            $db = static::resolveDb();
         }
 
         $sample = $instances[0];
+
+        // REL auto-wire parity: merge any FK-registry has-many entries onto the
+        // sample so an FK-auto-wired has-many resolves through the EAGER path too,
+        // exactly as __get() merges them for the lazy path. Without this, an
+        // include=['posts'] for a $foreignKeys-declared relation silently finds
+        // nothing unless the relation had been touched lazily first.
+        foreach (self::$_fkRegistry[get_class($sample)] ?? [] as $fkEntry) {
+            if (!isset($sample->hasMany[$fkEntry['key']])) {
+                $sample->hasMany[$fkEntry['key']] = $fkEntry['spec'];
+            }
+        }
 
         // Group includes: top-level and nested
         $topLevel = [];
@@ -2956,16 +2988,29 @@ abstract class ORM
 
                 /** @var ORM $relTemplate */
                 $relTemplate = new $relatedClass($db);
-                $placeholders = implode(',', array_fill(0, count($pkValues), '?'));
-                $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders})";
-                $result = $db->fetch($sql, $pkValues, count($pkValues) * 1000, 0);
+                // REL-SOFTDELETE-TRAVERSAL: a soft-deleted child must not surface
+                // through eager traversal (parity with the lazy where() path).
+                $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
+                $orderCol = $relTemplate->getDbColumn($relTemplate->getPrimaryKeys()[0]);
 
+                // REL-EAGER-UNBOUNDED: chunk the parent PKs so the IN list stays
+                // bounded, and page each chunk so no relation is truncated.
                 $related = [];
-                foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
-                    $model = new $relatedClass($db);
-                    $model->fill($row);
-                    $model->_exists = true;
-                    $related[] = $model;
+                foreach (array_chunk($pkValues, self::EAGER_IN_CHUNK) as $chunk) {
+                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                    $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders}){$soft} ORDER BY {$orderCol}";
+                    $offset = 0;
+                    do {
+                        $result = $db->fetch($sql, $chunk, self::EAGER_PAGE_SIZE, $offset);
+                        $rows = is_array($result) ? ($result['data'] ?? $result) : $result->records;
+                        foreach ($rows as $row) {
+                            $model = new $relatedClass($db);
+                            $model->fill($row);
+                            $model->_exists = true;
+                            $related[] = $model;
+                        }
+                        $offset += self::EAGER_PAGE_SIZE;
+                    } while (count($rows) === self::EAGER_PAGE_SIZE);
                 }
 
                 // Eager load nested
@@ -3017,17 +3062,21 @@ abstract class ORM
                     continue;
                 }
 
-                $placeholders = implode(',', array_fill(0, count($fkValues), '?'));
                 $relPk = $relTemplate->primaryKey;
-                $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders})";
-                $result = $db->fetch($sql, $fkValues, count($fkValues) * 10, 0);
-
+                // REL-SOFTDELETE-TRAVERSAL: exclude a soft-deleted parent (parity
+                // with findById). REL-EAGER-UNBOUNDED: chunk the FK values.
+                $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
                 $lookup = [];
-                foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
-                    $model = new $relatedClass($db);
-                    $model->fill($row);
-                    $model->_exists = true;
-                    $lookup[$model->getPrimaryKeyValue()] = $model;
+                foreach (array_chunk($fkValues, self::EAGER_IN_CHUNK) as $chunk) {
+                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                    $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders}){$soft}";
+                    $result = $db->fetch($sql, $chunk, count($chunk), 0);
+                    foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
+                        $model = new $relatedClass($db);
+                        $model->fill($row);
+                        $model->_exists = true;
+                        $lookup[$model->getPrimaryKeyValue()] = $model;
+                    }
                 }
 
                 if (!empty($nested) && !empty($lookup)) {
@@ -3062,7 +3111,7 @@ abstract class ORM
     /**
      * Internal: has-many query (used by lazy and explicit loading).
      */
-    private function hasManyMethod(string $relatedClass, string $foreignKey, int $limit = 100, int $offset = 0): array
+    private function hasManyMethod(string $relatedClass, string $foreignKey): array
     {
         $pkValue = $this->getPrimaryKeyValue();
         if ($pkValue === null) {
@@ -3071,7 +3120,27 @@ abstract class ORM
 
         /** @var ORM $related */
         $related = new $relatedClass($this->_db);
-        return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+        // REL-EAGER-UNBOUNDED: page through ALL children so a parent with more
+        // than one page never loses the tail (was a silent 100-row cap via
+        // where()'s default limit). where() already applies the soft-delete
+        // filter, so a soft-deleted child stays excluded from this traversal.
+        $orderCol = $related->getDbColumn($related->getPrimaryKeys()[0]);
+        $all = [];
+        $offset = 0;
+        do {
+            $batch = $related->where(
+                "{$foreignKey} = :fk",
+                [':fk' => $pkValue],
+                self::EAGER_PAGE_SIZE,
+                $offset,
+                null,
+                $orderCol
+            );
+            $all = array_merge($all, $batch);
+            $offset += self::EAGER_PAGE_SIZE;
+        } while (count($batch) === self::EAGER_PAGE_SIZE);
+
+        return $all;
     }
 
     /**
