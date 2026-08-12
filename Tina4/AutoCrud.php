@@ -23,6 +23,16 @@ use Tina4\Database\DatabaseResult;
  */
 class AutoCrud
 {
+    /**
+     * PAGE-DEC-01: the maximum per-page size the list handler will honour, no
+     * matter what a caller asks for via ?limit=/?per_page=. 100 is not an
+     * arbitrary pick - it is the SAME row cap ORM::all()/db->fetch() already
+     * default to, and the number Node's AutoCrud shares via its own
+     * DEFAULT_ROW_CAP constant. Without this a client could request the whole
+     * table in one query (?limit=1000000).
+     */
+    private const MAX_PER_PAGE = 100;
+
     /** @var array<string, class-string<ORM>> Registered model classes indexed by table name */
     private array $models = [];
     /** @var array<string, bool> tableName -> public-writes flag (default secure) */
@@ -171,7 +181,13 @@ class AutoCrud
 
             // Accept limit/offset (canonical) or per_page/page (aliases)
             $limit  = (int)($request->query['limit'] ?? $request->query['per_page'] ?? 10);
+            // PAGE-DEC-01: cap an oversized ?limit=/?per_page= BEFORE it is used to
+            // derive $offset below, so the offset lines up with the size actually
+            // used (a client can no longer request the whole table in one query).
+            $limit  = min($limit, self::MAX_PER_PAGE);
             $page   = (int)($request->query['page'] ?? 1);
+            // PAGE-DEC-01 (already correct here): a page <= 1 forces offset 0 - the
+            // reference behaviour Python/Ruby/Node were made to match.
             $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
 
             // Build filter from query params
