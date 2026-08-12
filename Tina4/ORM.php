@@ -84,6 +84,26 @@ abstract class ORM
     public array $foreignKeys = [];
 
     /**
+     * Per-column fixed-precision numeric overlay, keyed by property name:
+     * `['price' => [12, 4]]` asks createTable() to emit a real `DECIMAL(12, 4)`
+     * column for the `price` property instead of the floating `REAL` a typed
+     * `float` property maps to. It exists because a PHP typed property cannot
+     * carry a precision/scale the way Python's `DecimalField(precision, scale)`,
+     * Ruby's `decimal_field precision:, scale:` and Node's
+     * `{ type: 'decimal', precision, scale }` can — so the idiomatic PHP channel
+     * (a declared array property, exactly like $foreignKeys / $fieldMapping) is
+     * how a model asks for one. The in-memory value stays a PHP `float` (the
+     * documented money guidance: store minor units in an int for exact
+     * arithmetic); the fixed scale lives in the COLUMN.
+     *
+     *     public float $price = 0.0;
+     *     public array $decimals = ['price' => [12, 4]];   // DECIMAL(12,4)
+     *
+     * @var array<string, array{0:int,1:int}>
+     */
+    public array $decimals = [];
+
+    /**
      * Per-field validation constraints, keyed by property name, read by
      * validate(). A constraint overlay on top of the typed properties — the
      * properties still declare the columns and their PHP types; this adds the
@@ -378,6 +398,13 @@ abstract class ORM
             $this->fill($data);
         }
 
+        // Resolve per-instance field defaults (incl. callable/Closure defaults)
+        // for any column the caller did not supply — the PHP equivalent of
+        // Python's _resolve_default / Ruby's per-instance default / Node's
+        // structuredClone default. Runs on EVERY construct, so a `new Widget()`
+        // with no data still gets its defaults.
+        $this->applyFieldDefaults();
+
         // Auto-wire relationships from $foreignKeys declarations
         $this->_processForeignKeys();
 
@@ -498,6 +525,56 @@ abstract class ORM
      *
      * @return $this
      */
+    /**
+     * Per-instance field defaults, resolved on construct. Override in a
+     * subclass to give a column a default a PHP typed property cannot express —
+     * most importantly a CALLABLE (Closure) default, which PHP property syntax
+     * forbids (a property default must be a constant expression). A Closure is
+     * resolved PER INSTANCE (so each row gets its own uuid / timestamp) and is
+     * DROPPED from the DDL (the default is applied in PHP, never as a SQL
+     * literal); a non-Closure value is used verbatim. Only a column the caller
+     * did NOT supply is defaulted. This closes the one field-model parity gap:
+     * callable defaults now work in all four frameworks.
+     *
+     *     protected function fieldDefaults(): array
+     *     {
+     *         return [
+     *             'token'      => fn() => bin2hex(random_bytes(8)),   // per-instance
+     *             'created_at' => fn() => (new \DateTime())->format('c'),
+     *             'status'     => 'new',                              // plain value
+     *         ];
+     *     }
+     *
+     * @return array<string, mixed>  property name => value|Closure
+     */
+    protected function fieldDefaults(): array
+    {
+        return [];
+    }
+
+    /**
+     * Apply {@see fieldDefaults()} to this instance: for each declared default
+     * the caller did NOT supply, set the property — invoking a Closure PER
+     * INSTANCE so two rows created back to back get distinct values. A
+     * non-Closure default is used as-is. Only a Closure is treated as callable
+     * (never a bare string that happens to name a function), matching Python's
+     * "callable and not a type", Ruby's "responds to call and not a Class" and
+     * Node's "typeof === 'function'".
+     */
+    private function applyFieldDefaults(): void
+    {
+        foreach ($this->fieldDefaults() as $name => $default) {
+            if (isset($this->_assignedFields[$name])) {
+                continue;   // the caller supplied it — never override
+            }
+            $value = $default instanceof \Closure ? $default() : $default;
+            // Set natively (declared property) or via __set (dynamic). A default
+            // is NOT a caller assignment, so do not record it in _assignedFields.
+            $this->$name = $value;
+            unset($this->_assignedFields[$name]);
+        }
+    }
+
     public function fill(array $data): self
     {
         // When autoMap is enabled, auto-generate fieldMapping for incoming
@@ -1817,6 +1894,11 @@ abstract class ORM
         $pkProperty = $this->getPrimaryKeys()[0];
         $colDefs = [];
 
+        // A column with a per-instance field default (esp. a callable one) is
+        // defaulted in PHP on construct, so it must NOT carry a SQL DEFAULT in
+        // the DDL — parity with Python/Ruby/Node dropping a callable default.
+        $fieldDefaults = $this->fieldDefaults();
+
         foreach ($this->getColumnDefinitions() as $name => $def) {
             $type = $def['type'];
             $colName = $this->resolveDbColumn($name);
@@ -1825,6 +1907,10 @@ abstract class ORM
             $sqlType = match ($type) {
                 'int'      => 'INTEGER',
                 'float'    => 'REAL',
+                // A fixed-precision column ($decimals overlay): a real
+                // DECIMAL(p, s), identical syntax on PG/MySQL/MSSQL/Firebird/
+                // SQLite. FloatField-equivalent `float` stays REAL.
+                'decimal'  => 'DECIMAL(' . (int) ($def['precision'] ?? 10) . ',' . (int) ($def['scale'] ?? 2) . ')',
                 'bool'     => $boolSql,
                 'datetime' => $datetimeSql,
                 'json'     => $jsonSql,
@@ -1858,7 +1944,8 @@ abstract class ORM
             // needs TRUE/FALSE; an INTEGER- or BIT-backed bool (SQLite, Firebird,
             // MSSQL) needs 1/0. `DEFAULT 0` on a PG BOOLEAN raises
             // "default expression is of type integer".
-            if ($type === 'bool' && $def['hasDefault'] && is_bool($def['default'])) {
+            if ($type === 'bool' && $def['hasDefault'] && is_bool($def['default'])
+                && !isset($fieldDefaults[$name])) {
                 if ($boolSql === 'BOOLEAN') {
                     $parts[] = 'DEFAULT ' . ($def['default'] ? 'TRUE' : 'FALSE');
                 } else {
@@ -1885,7 +1972,12 @@ abstract class ORM
             $colDefs[] = 'PRIMARY KEY (' . implode(', ', $pkCols) . ')';
         }
 
-        $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
+        // MSSQL and Firebird reject `IF NOT EXISTS` on CREATE TABLE (a syntax
+        // error). The tableExists() guard at the top of createTable() already
+        // returns early when the table is present, so `IF NOT EXISTS` is pure
+        // redundancy on every engine and is simply omitted where it does not parse.
+        $ifNotExists = in_array($dialect, ['mssql', 'firebird'], true) ? '' : 'IF NOT EXISTS ';
+        $sql = "CREATE TABLE {$ifNotExists}{$this->tableName} (" . implode(', ', $colDefs) . ")";
 
         // Translate the generic AUTOINCREMENT to the engine's syntax
         // (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, …).
@@ -2014,6 +2106,11 @@ abstract class ORM
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
             'foreignKeys',
+            // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
+            // never a column itself — exclude it even when a subclass redeclares
+            // it (which is how a model asks for a real DECIMAL(p, s) column, since
+            // a PHP typed `float` property cannot carry a precision/scale).
+            'decimals',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
@@ -2039,13 +2136,19 @@ abstract class ORM
                 continue;
             }
 
+            // A property listed in $decimals is a fixed-precision numeric column:
+            // its logical type is 'decimal' and it carries the declared
+            // precision/scale, which createTable() renders as DECIMAL(p, s).
+            $isDecimal = isset($this->decimals[$name]);
             $columns[$name] = [
-                'type'       => $this->logicalTypeFor($prop, $name),
+                'type'       => $isDecimal ? 'decimal' : $this->logicalTypeFor($prop, $name),
                 'hasDefault' => $prop->hasDefaultValue(),
                 'default'    => $prop->hasDefaultValue() ? $prop->getDefaultValue() : null,
                 // A declared non-nullable type (`string`, `int`) is NOT NULL; a
                 // nullable type (`?string`) or an untyped property is nullable.
                 'nullable'   => $prop->getType()?->allowsNull() ?? true,
+                'precision'  => $isDecimal ? (int) ($this->decimals[$name][0] ?? 10) : null,
+                'scale'      => $isDecimal ? (int) ($this->decimals[$name][1] ?? 2) : null,
             ];
         }
 
@@ -2108,7 +2211,16 @@ abstract class ORM
             $typeName === \DateTime::class
                 || $typeName === \DateTimeImmutable::class
                 || $typeName === \DateTimeInterface::class => 'datetime',
-            (bool) preg_match('/(_at$|date|time)/i', $snaked) => 'datetime',
+            // A NAME heuristic, only reached when the property is NOT explicitly
+            // typed \DateTime (prefer the real type above). It is ANCHORED to a
+            // whole trailing segment so a substring never misfires: the old
+            // `/(_at$|date|time)/i` matched INSIDE a word, so `updated_by` (has
+            // "date" in "up-date-d"), `runtime` and `downtime` (both end in
+            // "time") were wrongly inferred as datetime. This matches only a
+            // `_at` suffix or a final `date`/`time`/`datetime`/`timestamp`
+            // segment, so `created_at`, `updated_at`, a `*_date` and a `*_time`
+            // column still resolve while the substrings above do not.
+            (bool) preg_match('/(_at$)|((?:^|_)(?:date|time|datetime|timestamp)$)/i', $snaked) => 'datetime',
             default => 'string',
         };
     }
@@ -2593,6 +2705,11 @@ abstract class ORM
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
             'foreignKeys',
+            // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
+            // never a column itself — exclude it even when a subclass redeclares
+            // it (which is how a model asks for a real DECIMAL(p, s) column, since
+            // a PHP typed `float` property cannot carry a precision/scale).
+            'decimals',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
