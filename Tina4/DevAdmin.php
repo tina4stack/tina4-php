@@ -677,15 +677,16 @@ class DevAdmin
                 // Build a field_map skipping auto-increment / id PKs, then delegate.
                 $fieldMap = self::buildSeedFieldMapFromColumns($columns, $fake);
 
+                // SEED-TABLE-SEED-INERT: seedTable no longer takes $seed —
+                // reproducibility already comes from the seeded $fake built
+                // above and closed over by buildSeedFieldMapFromColumns().
                 $summary = \Tina4\FakeData::seedTable(
                     $db,
                     $table,
                     $count,
                     $fieldMap,
-                    [],
-                    $clear,
-                    $seed,
-                    $strict
+                    clear: $clear,
+                    strict: $strict
                 );
 
                 return $response->json([
