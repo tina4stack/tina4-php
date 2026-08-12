@@ -1617,10 +1617,12 @@ abstract class ORM
      * A TYPE error (assigning the wrong PHP type to a typed property) still
      * raises at assignment through PHP's own type system; that is a programming
      * error and is never returned here. Each message is formatted
-     * "<field>: <what was wrong>", using the Node reference vocabulary so a 400
-     * body reads identically across the frameworks. A field with no declared
-     * constraint is unconstrained — only what $fields declares is checked, and
-     * `length` (a DDL sizing hint) is deliberately never validated.
+     * "<field> <what was wrong>", the canonical request-Validator vocabulary
+     * (feature 19, VALID-TWO-MESSAGES) so a 400 body reads identically across
+     * the frameworks AND matches the request-body Validator word for word
+     * ("name is required", "name does not match the required format"). A field
+     * with no declared constraint is unconstrained — only what $fields declares
+     * is checked, and `length` (a DDL sizing hint) is deliberately never validated.
      *
      * Override to add cross-field rules: call parent::validate() and merge.
      *
@@ -1645,7 +1647,7 @@ abstract class ORM
             // (parity with the Node reference's early `continue`).
             $blank = !$present || (is_string($value) && trim($value) === '');
             if (!empty($rules['required']) && $blank) {
-                $errors[] = "{$name}: is required";
+                $errors[] = "{$name} is required";
                 continue;
             }
 
@@ -1666,16 +1668,16 @@ abstract class ORM
 
                 $minLength = $rules['minLength'] ?? $rules['min_length'] ?? null;
                 if ($minLength !== null && $length < (int)$minLength) {
-                    $errors[] = "{$name}: must be at least {$minLength} characters";
+                    $errors[] = "{$name} must be at least {$minLength} characters";
                 }
 
                 $maxLength = $rules['maxLength'] ?? $rules['max_length'] ?? null;
                 if ($maxLength !== null && $length > (int)$maxLength) {
-                    $errors[] = "{$name}: must be at most {$maxLength} characters";
+                    $errors[] = "{$name} must be at most {$maxLength} characters";
                 }
 
                 if (isset($rules['pattern']) && !preg_match((string)$rules['pattern'], $value)) {
-                    $errors[] = "{$name}: does not match required pattern";
+                    $errors[] = "{$name} does not match the required format";
                 }
             }
 
@@ -1683,11 +1685,11 @@ abstract class ORM
             // numeric string from a request body).
             if (is_numeric($value)) {
                 if (isset($rules['min']) && (float)$value < (float)$rules['min']) {
-                    $errors[] = "{$name}: must be at least {$rules['min']}";
+                    $errors[] = "{$name} must be at least {$rules['min']}";
                 }
 
                 if (isset($rules['max']) && (float)$value > (float)$rules['max']) {
-                    $errors[] = "{$name}: must be at most {$rules['max']}";
+                    $errors[] = "{$name} must be at most {$rules['max']}";
                 }
             }
         }
