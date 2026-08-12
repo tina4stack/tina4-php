@@ -246,6 +246,14 @@ class Server
     /** @var int Body bytes accepted before 413. */
     private int $maxRequestBody = self::DEFAULT_MAX_REQUEST_BODY;
 
+    /**
+     * @var int Running per-chunk upload cap (TINA4_MAX_UPLOAD_SIZE). Enforced on
+     * the ACTUAL bytes received as they arrive, so a chunked or under-declared
+     * over-size body is refused before it is buffered whole - the declared
+     * Content-Length guard above cannot see that case.
+     */
+    private int $maxUploadSize = self::DEFAULT_MAX_REQUEST_BODY;
+
     /** @var int Seconds the current drain may take, resolved from TINA4_SHUTDOWN_TIMEOUT */
     private int $shutdownTimeout = self::DEFAULT_SHUTDOWN_TIMEOUT;
 
@@ -500,6 +508,7 @@ class Server
         $this->requestTimeout = self::resolveLimit('TINA4_REQUEST_TIMEOUT', self::DEFAULT_REQUEST_TIMEOUT, true);
         $this->maxRequestHeader = self::resolveLimit('TINA4_MAX_REQUEST_HEADER', self::DEFAULT_MAX_REQUEST_HEADER);
         $this->maxRequestBody = self::resolveLimit('TINA4_MAX_REQUEST_BODY', self::DEFAULT_MAX_REQUEST_BODY);
+        $this->maxUploadSize = self::resolveLimit('TINA4_MAX_UPLOAD_SIZE', self::DEFAULT_MAX_REQUEST_BODY);
         $this->maxRequestsPerWorker = self::resolveLimit('TINA4_SERVE_MAX_REQUESTS', 0, true);
 
 
@@ -1414,6 +1423,21 @@ class Server
         if ($this->maxRequestBody > 0
             && preg_match('/content-length:\s*(\d+)/i', substr($buffer, 0, $headerEnd), $m)
             && (int)$m[1] > $this->maxRequestBody
+        ) {
+            $this->sendHttpError($client, 413, 'Request body too large');
+            $this->removeClient($client);
+            return false;
+        }
+
+        // Running per-chunk counter: refuse the moment the ACTUAL body bytes
+        // received exceed TINA4_MAX_UPLOAD_SIZE, regardless of - or in the
+        // absence of - a declared Content-Length. This closes the chunked /
+        // under-declared over-size bypass the declared-length check above
+        // cannot see, and it fires as the bytes arrive rather than after the
+        // whole body is buffered. Parity with Python/Node, which run the same
+        // running counter in their body readers.
+        if ($this->maxUploadSize > 0
+            && (strlen($buffer) - ($headerEnd + 4)) > $this->maxUploadSize
         ) {
             $this->sendHttpError($client, 413, 'Request body too large');
             $this->removeClient($client);
@@ -2345,13 +2369,26 @@ class Server
 
             if ($filename !== null) {
                 // File upload — matches normaliseFiles() format in Request.php
-                $files[$name] = [
+                $descriptor = [
                     'fieldName' => $name,
                     'filename' => $filename,
                     'type' => $fileType,
                     'content' => $content,  // raw binary
                     'size' => strlen($content),
                 ];
+                // Repeated field name -> collect ALL descriptors into a list;
+                // never silently keep only the last (the multi-file data-loss
+                // bug). A single occurrence stays a plain descriptor. A single
+                // descriptor carries a 'filename' key; a list of them does not.
+                if (isset($files[$name])) {
+                    if (isset($files[$name]['filename'])) {
+                        $files[$name] = [$files[$name], $descriptor];
+                    } else {
+                        $files[$name][] = $descriptor;
+                    }
+                } else {
+                    $files[$name] = $descriptor;
+                }
             } else {
                 // Regular form field
                 $fields[$name] = $content;

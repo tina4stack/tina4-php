@@ -336,6 +336,60 @@ class Request
     }
 
     /**
+     * Persist an uploaded file's content inside $targetDir under a SAFE name.
+     *
+     * The client-supplied filename is untrusted. Directory components are
+     * stripped (so "../../evil" or "/etc/passwd" becomes "evil"/"passwd"), a
+     * NUL byte or an unusable name ('', '.', '..') is refused, and the resolved
+     * path is confined to $targetDir (realpath containment) so an upload can
+     * never write outside it.
+     *
+     * @param array       $file      An uploaded-file descriptor
+     *                               ($request->files[$name]) carrying 'content'
+     *                               (raw bytes); 'filename' is used when
+     *                               $filename is not given.
+     * @param string      $targetDir The directory to write into (created if missing).
+     * @param string|null $filename  An explicit name to use instead of the client filename.
+     * @return string The absolute path written.
+     * @throws \InvalidArgumentException When the derived name is unsafe or would escape.
+     */
+    public static function saveUpload(array $file, string $targetDir, ?string $filename = null): string
+    {
+        $raw = $filename ?? ($file['filename'] ?? '');
+        if (!is_string($raw)) {
+            $raw = (string)$raw;
+        }
+        if (str_contains($raw, "\0")) {
+            throw new \InvalidArgumentException('upload filename contains a null byte');
+        }
+        // Reduce to a single path segment, handling BOTH separators so a Windows
+        // "..\\..\\evil" cannot smuggle a directory part past a POSIX basename.
+        $base = str_replace('\\', '/', $raw);
+        $slash = strrpos($base, '/');
+        if ($slash !== false) {
+            $base = substr($base, $slash + 1);
+        }
+        if ($base === '' || $base === '.' || $base === '..') {
+            throw new \InvalidArgumentException("upload filename is not a usable name: {$raw}");
+        }
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+        }
+        $dest = rtrim($targetDir, '/') . '/' . $base;
+        // Defence in depth: the resolved parent of the destination must be
+        // exactly the resolved target dir (guards a pre-existing symlink at
+        // target/base).
+        $realDir = realpath($targetDir);
+        $realParent = realpath(dirname($dest));
+        if ($realDir === false || $realParent === false || $realParent !== $realDir) {
+            throw new \InvalidArgumentException("refusing to write outside {$targetDir}: {$raw}");
+        }
+        $content = $file['content'] ?? '';
+        file_put_contents($dest, is_string($content) ? $content : (string)$content);
+        return $dest;
+    }
+
+    /**
      * Check if the request method matches.
      */
     public function isMethod(string $method): bool
