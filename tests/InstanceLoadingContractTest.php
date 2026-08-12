@@ -85,14 +85,20 @@ class InstanceLoadingContractTest extends TestCase
 
         $got = (new LoadContractItemV1())->find($saved->id);
         $this->assertIsArray($got->payload, 'expected a native array, not a JSON string');
-        $this->assertSame(['tags' => ['a', 'b'], 'n' => 1], $got->payload);
+        // assertEqualsCanonicalizing, NOT assertSame: PostgreSQL's JSONB storage
+        // does not preserve OBJECT key insertion order (SQLite's TEXT column
+        // does) -- same data, key order differs by engine. That is a real,
+        // engine-level JSONB property, not a hydration bug: the parsed value
+        // carries the identical key/value pairs, so a key-order-insensitive
+        // comparison is the correct assertion here, not a weakened one.
+        $this->assertEqualsCanonicalizing(['tags' => ['a', 'b'], 'n' => 1], $got->payload);
 
         // ── json_column_round_trips_via_load ─────────────────────────────
         $reloaded = new LoadContractItemV1();
         $reloaded->id = $saved->id;
         $this->assertTrue($reloaded->load());
         $this->assertIsArray($reloaded->payload, 'expected a native array, not a JSON string');
-        $this->assertSame(['tags' => ['a', 'b'], 'n' => 1], $reloaded->payload);
+        $this->assertEqualsCanonicalizing(['tags' => ['a', 'b'], 'n' => 1], $reloaded->payload);
 
         // ── constraint_violating_stored_row_still_hydrates ───────────────
         // V1 (nullable `name`, no required) legitimately stores a NULL name —
