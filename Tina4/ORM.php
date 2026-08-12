@@ -677,6 +677,8 @@ abstract class ORM
 
         $this->lastError = null;
         $this->_exists = true;
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $this;
     }
 
@@ -905,6 +907,8 @@ abstract class ORM
             throw $e;
         }
 
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $result;
     }
 
@@ -1449,6 +1453,8 @@ abstract class ORM
             throw $e;
         }
 
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $result;
     }
 
@@ -1491,6 +1497,8 @@ abstract class ORM
             throw $e;
         }
 
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $result;
     }
 
@@ -2156,13 +2164,85 @@ abstract class ORM
     }
 
     /**
+     * The ONE process-wide, tag-aware query cache shared by EVERY model, so a
+     * write on one model busts a cross-table query cached on another
+     * (CACHE-DEC-01). Mirrors the Python master's module-level `_query_cache`. It
+     * is the existing {@see QueryCache} subsystem (TTL + tags) -- zero new deps --
+     * and is separate from the adapter-level auto-cache (SQLTranslator's static
+     * cache), which is env-gated and off by default.
+     */
+    private static ?QueryCache $modelQueryCache = null;
+
+    /**
+     * Lazily build and return the shared model query cache.
+     */
+    protected static function queryCache(): QueryCache
+    {
+        return self::$modelQueryCache ??= new QueryCache(0, 500);
+    }
+
+    /**
+     * Table names a query reads FROM / JOINs -- lowercased, schema-stripped.
+     *
+     * Best-effort: for each FROM/JOIN keyword it takes the following identifier,
+     * drops any quoting (backticks, double quotes, square brackets) and schema
+     * prefix (public.users -> users), and ignores the alias. A cached query is
+     * tagged with these tables so a write to any one of them busts it.
+     *
+     * @return array<int, string>
+     */
+    protected static function tablesInSql(string $sql): array
+    {
+        preg_match_all(
+            '/\b(?:FROM|JOIN)\s+([`"\[]?[A-Za-z_][\w$]*[`"\]]?(?:\.[`"\[]?[A-Za-z_][\w$]*[`"\]]?)?)/i',
+            $sql,
+            $matches
+        );
+        $tables = [];
+        foreach ($matches[1] as $raw) {
+            $name = trim($raw, '`"[]');
+            if (str_contains($name, '.')) {
+                $name = trim((string) substr(strrchr($name, '.'), 1), '`"[]');
+            }
+            if ($name !== '') {
+                $tables[strtolower($name)] = true;
+            }
+        }
+        return array_keys($tables);
+    }
+
+    /**
+     * Every table a cached query touches: this model's table plus every FROM/JOIN
+     * table in `$sql`. A write to any of these busts the entry (CACHE-DEC-01).
+     *
+     * @return array<int, string>
+     */
+    protected function cacheTags(string $sql): array
+    {
+        $tags = [strtolower($this->tableName)];
+        foreach (self::tablesInSql($sql) as $table) {
+            if (!in_array($table, $tags, true)) {
+                $tags[] = $table;
+            }
+        }
+        return $tags;
+    }
+
+    /**
      * Run a raw SQL query and cache the results for `$ttl` seconds.
-     * Results are tagged with the model class name so clearCache() invalidates them all.
+     *
+     * Invalidation (CACHE-DEC-01): the entry is tagged by every table the query
+     * touches (this model's table plus any FROM/JOIN tables), so a write through
+     * the ORM (save/delete/forceDelete/restore) to ANY of those tables busts it.
+     * `$ttl <= 0` means NO-CACHE -- the query runs and the rows are returned but
+     * nothing is stored, so every read hits the database (it is NOT an
+     * infinite-lived entry).
+     *
      * Maps to Python: cached(sql, params, ttl, limit, offset)
      *
      * @param string     $sql    Raw SELECT SQL
      * @param array      $params Bound parameters
-     * @param int        $ttl    Cache lifetime in seconds (default 60)
+     * @param int        $ttl    Cache lifetime in seconds (default 60; <= 0 = no-cache)
      * @param int        $limit  Max results
      * @param int        $offset Starting offset
      * @param array|null $include Relationship names to eager-load
@@ -2170,26 +2250,36 @@ abstract class ORM
      */
     public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 100, int $offset = 0, ?array $include = null): array
     {
-        $cacheKey = static::class . ':' . SQLTranslator::queryKey($sql, $params) . ":{$limit}:{$offset}";
-        $hit = SQLTranslator::cacheGet($cacheKey);
+        // ttl <= 0 is NO-CACHE: run it live, store nothing, read nothing.
+        if ($ttl <= 0) {
+            return $this->select($sql, $params, $limit, $offset, $include);
+        }
+
+        $cacheKey = static::class . ':' . QueryCache::queryKey($sql, $params) . ":{$limit}:{$offset}";
+        $hit = self::queryCache()->get($cacheKey);
         if ($hit !== null) {
             return $hit;
         }
 
         $result = $this->select($sql, $params, $limit, $offset, $include);
-        SQLTranslator::cacheSet($cacheKey, $result, $ttl);
+        self::queryCache()->set($cacheKey, $result, $ttl, $this->cacheTags($sql));
         return $result;
     }
 
     /**
-     * Clear all cached query results for this model class.
+     * Invalidate every cached query that touches this model's table.
+     *
+     * Tag-scoped, NOT a wholesale flush: a cached JOIN on another model that
+     * reads this table is busted too (it carries this table's tag), while a
+     * query that never touches this table is left intact. Called after every ORM
+     * write (save/delete/forceDelete/restore) so a read-after-write never serves
+     * a stale/deleted row (CACHE-DEC-01).
+     *
      * Maps to Python: clear_cache()
      */
     public function clearCache(): void
     {
-        // SQLTranslator cache doesn't support tag-based clearing, so we clear all.
-        // For per-model isolation, prefix keys are used but a full clear is the safe option.
-        SQLTranslator::cacheClear();
+        self::queryCache()->clearTag(strtolower($this->tableName));
     }
 
     /**
