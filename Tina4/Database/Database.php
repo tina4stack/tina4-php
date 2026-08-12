@@ -1955,6 +1955,23 @@ class Database implements DatabaseAdapter
             return self::makeSqlite($path === '' ? ':memory:' : $path, $autoCommit);
         }
 
+        // ODBC: the part after odbc:/// is a raw ODBC connection string
+        // (DSN=... or DRIVER={...};...), NOT a parseable URL - parse_url() chokes
+        // on the braces, spaces and semicolons, so it must be special-cased like
+        // sqlite BEFORE the generic parser (which is why `odbc:///...` used to
+        // fail "Cannot determine database type" despite being in the map). The
+        // credentials passed separately are honoured by ODBCAdapter.
+        if (str_starts_with($url, 'odbc:')) {
+            if (str_starts_with($url, 'odbc:///')) {
+                $connectionString = substr($url, 8);
+            } elseif (str_starts_with($url, 'odbc://')) {
+                $connectionString = substr($url, 7);
+            } else {
+                $connectionString = substr($url, 5);   // "odbc:"
+            }
+            return new ODBCAdapter($connectionString, $username, $password, $autoCommit);
+        }
+
         // For a bare file path ending in .db or .sqlite, assume SQLite
         if (!str_contains($url, '://') && preg_match('/\.(db|sqlite|sqlite3)$/i', $url)) {
             return self::makeSqlite($url, $autoCommit);
