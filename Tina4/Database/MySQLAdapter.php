@@ -170,6 +170,7 @@ class MySQLAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        $sql = self::translateDialect($sql);
 
         try {
             if (empty($params)) {
@@ -286,6 +287,7 @@ class MySQLAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        $sql = self::translateDialect($sql);
 
         try {
             if (empty($params)) {
@@ -479,6 +481,20 @@ class MySQLAdapter implements DatabaseAdapter
     }
 
     // ── Private helpers ──────────────────────────────────────────────
+
+    /**
+     * Apply the MySQL dialect rewrites the translator owns: `||` -> CONCAT and
+     * ILIKE -> LOWER() LIKE LOWER() (both literal-safe). MySQL reads a bare `||`
+     * as logical OR and has no ILIKE, so portable canonical SQL must be rewritten
+     * before it reaches the driver. A statement with neither token is returned
+     * unchanged (the transforms short-circuit), so ordinary queries are untouched.
+     */
+    private static function translateDialect(string $sql): string
+    {
+        $sql = \Tina4\SQLTranslator::concatPipesToFunc($sql);
+        $sql = \Tina4\SQLTranslator::ilikeToLike($sql);
+        return $sql;
+    }
 
     private function ensureOpen(): void
     {
