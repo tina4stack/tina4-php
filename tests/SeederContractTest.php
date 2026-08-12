@@ -42,6 +42,7 @@ namespace Tina4\Tests;
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
+use Tina4\Database\DatabaseAdapter;
 use Tina4\FakeData;
 use Tina4\ORM;
 
@@ -77,7 +78,7 @@ class SeederContractBook extends ORM
 
 class SeederContractTest extends TestCase
 {
-    private static ?ORM $savedGlobalDb = null;
+    private static ?DatabaseAdapter $savedGlobalDb = null;
 
     protected function setUp(): void
     {
