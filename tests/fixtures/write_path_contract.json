@@ -367,6 +367,18 @@
       "sql": "INSERT INTO tina4_no_such_table (x) VALUES (1)",
       "expect_raises": true,
       "expect_error_recorded": true
+    },
+    {
+      "name": "facade_insert_on_constraint_violation_throws",
+      "_note": "Feature 3/9 fail-loud gap, found Node-only during the seeder-28 pass: Database.insert() must raise on a real PRIMARY KEY / UNIQUE violation exactly like update()/delete()/execute() already do here, not swallow it into a `{success:false}` result. Node's SQLiteAdapter.insert() single-row path catches the driver error and returns `{success:false, affectedRows:0, error}` instead of throwing, and the facade passed that result through UNCHECKED (update()/delete()/truncate() already run it through the same assertWrote() check that adapterInsert() -- the seedTable()/seedOrm() helper -- already had; insert() was the one write method missing it). Proven on the SAME table every other case here uses, so the fixture needs no new column: inserting a second row whose id already exists collides on the PRIMARY KEY (the UNIQUE half of 'a real NOT NULL / UNIQUE violation').",
+      "op": "insert",
+      "seed": [{ "id": 1, "name": "alpha", "qty": 10 }],
+      "data": { "id": 1, "name": "duplicate", "qty": 99 },
+      "expect_raises": true,
+      "expect": {
+        "rows_after": 1,
+        "unchanged": [{ "id": 1, "name": "alpha", "qty": 10 }]
+      }
     }
   ]
 }

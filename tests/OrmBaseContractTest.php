@@ -131,4 +131,28 @@ class OrmBaseContractTest extends TestCase
         $this->assertNull(BaseWidgetModel::findById(1));
         $this->assertSame(0, (new BaseWidgetModel($this->db))->count());
     }
+
+    // ── Invariant: save() returns false, never throws, on a real constraint
+    // violation -- characterises the write-path fail-loud fix's ripple
+    // boundary. PHP's Database::insert() already throws DatabaseException on
+    // a driver error (an explicit `if ($result === false) throw` check), and
+    // ORM::save() already wraps its insert() call in try/catch and converts
+    // the throw to false; this pins that contract so it can never silently
+    // regress into save() throwing. ──────────────────────────────────────
+
+    public function testSaveOnConstraintViolationReturnsFalse(): void
+    {
+        $this->db->exec('CREATE UNIQUE INDEX idx_basewidget_name_unique ON basewidget (name)');
+        $this->newWidget('alpha', 1);
+        $this->assertSame(1, (new BaseWidgetModel($this->db))->count());
+
+        $duplicate = new BaseWidgetModel($this->db);
+        $duplicate->name = 'alpha'; // UNIQUE(name) collides
+        $duplicate->qty = 2;
+        $result = $duplicate->save(); // must NOT throw
+
+        $this->assertFalse($result);
+        $this->assertSame(1, (new BaseWidgetModel($this->db))->count()); // nothing written
+        $this->assertNotNull($duplicate->getError());                   // cause recorded
+    }
 }
