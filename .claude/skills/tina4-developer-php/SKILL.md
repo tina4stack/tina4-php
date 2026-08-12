@@ -697,6 +697,11 @@ hard to reproduce. Trigger the real failure (a real connection error, a real tim
 row), never a simulated one. The only tests that need no live dependency are pure functions that
 have no dependency at all. A green mock test proves nothing. Only a real run is verification.
 
+- **A green test for your change is not proof you broke nothing else.** When you change
+  something SHARED - a validation message, a model's columns, an error shape, an env var - other
+  tests across the same subsystem may still assert the old behaviour. Run the whole relevant suite
+  (the ORM / validation / model tests together), not just your new case, before you call it done.
+
 
 **Ghost tests are not acceptable, in any circumstances.** A ghost test is one
 that LOOKS like coverage and never actually runs, or runs and proves nothing.

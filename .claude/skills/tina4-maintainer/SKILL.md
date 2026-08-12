@@ -263,6 +263,25 @@ commit, merge, or release:
   language version, and DB engine** whenever behaviour could differ there — sessions, file paths,
   path separators, SSL/cert stores, native extensions, line endings, and case-sensitivity are the
   classic per-platform divergences. If you didn't test it on a platform, say so; don't imply you did.
+- **A cross-cutting change breaks tests your feature gate never runs.** A per-feature gate that
+  runs only the feature's OWN suite is blind to a SHARED contract you changed - a message/error
+  string, a response shape, a status code, a DDL column, an env var. Other suites across the
+  subsystem still assert the OLD contract and go red, but the gate never runs them, so the break
+  ships "green" and surfaces only at the far-off full-suite merge gate, or gets misread as a flake.
+  When a change touches anything more than one test file could assert, run the BROADER affected
+  suites (the whole subsystem neighbourhood - ORM + validation + model + footguns, in every
+  language) before calling it done. Example: feature 19 unified the validation message vocabulary;
+  its gate ran only the validation suite, so a Node `orm.test.ts` assertion on the old "pattern"
+  wording and a Ruby footguns assertion on the old "null" DB error both shipped red until a later
+  feature's broader run caught them.
+- **Prove a flake before you call it one.** "Flaky" or "seed-dependent" is a claim to PROVE, never
+  assume - run the suspect in ISOLATION and at several seeds. A test that fails DETERMINISTICALLY in
+  isolation is a real regression wearing a flake's coat; labelling it an "order-dependent state
+  leak" buries a genuine contract break. Example: a Ruby footguns spec was reported as a seed flake;
+  isolated at seed 1 it failed every time - feature 19's richer `validate()` answered "name is
+  required" where the test still expected the driver's "null". Real regression, wrong label. Real
+  order-dependent leaks DO exist in Tina4 - the point is to DISTINGUISH them by isolating and
+  varying the seed, not to guess.
 
 
 **Ghost tests are not acceptable, in any circumstances.** A ghost test is one
