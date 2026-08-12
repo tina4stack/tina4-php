@@ -307,14 +307,11 @@ class MySQLAdapter implements DatabaseAdapter
                 // — mysqli_stmt::$insert_id reflects the row this prepared INSERT
                 // just created. (See note in lastInsertId().)
                 if ($success !== false && $stmt->insert_id > 0) {
-                    // MySQL reports the FIRST generated id of a MULTI-ROW INSERT,
-                    // not the last (verified live: a 3-row insert into a fresh
-                    // table reports 1 while MAX(id) is 3). Every other engine
-                    // reports the last, and callers — getLastId(), ORM::save(),
-                    // the batch DatabaseResult — all expect the last. The ids in
-                    // one statement are consecutive, so normalise here, where
-                    // both the first id and the row count are known.
-                    $this->lastId = (int)$stmt->insert_id + max((int)$stmt->affected_rows, 1) - 1;
+                    // MySQL reports the FIRST id of a MULTI-ROW INSERT; normalise
+                    // to the LAST via the shared helper, in ONE place instead of
+                    // the two inline blocks this and the non-prepared path used
+                    // to duplicate (MYSQL-BATCH-ID-DUP).
+                    $this->captureInsertId((int)$stmt->insert_id, (int)$stmt->affected_rows);
                 }
                 // Affected rows for the prepared write, before close() drops it.
                 if ($success !== false) {
@@ -344,9 +341,9 @@ class MySQLAdapter implements DatabaseAdapter
             // applies to the non-prepared (no-params) path; insert_id is 0 for any
             // non-INSERT statement, so this never clobbers a real id with a stale 0.
             if (empty($params) && $this->db->insert_id > 0) {
-                // Same normalisation as the prepared path above: MySQL reports
-                // the FIRST id of a multi-row INSERT, callers expect the last.
-                $this->lastId = (int)$this->db->insert_id + max((int)$this->db->affected_rows, 1) - 1;
+                // Same normalisation as the prepared path above, via the ONE
+                // shared helper (MYSQL-BATCH-ID-DUP).
+                $this->captureInsertId((int)$this->db->insert_id, (int)$this->db->affected_rows);
             }
 
             return true;
@@ -386,7 +383,12 @@ class MySQLAdapter implements DatabaseAdapter
 
     public function getColumns(string $table): array
     {
-        $rows = $this->query("DESCRIBE {$table}");
+        // DESCRIBE takes an IDENTIFIER, not a bind parameter, so the table name
+        // is made injection-safe by STRICT backtick-quoting (escaping embedded
+        // backticks) rather than interpolated raw (MYSQL-DESCRIBE-UNPARAM): a
+        // crafted/odd name becomes ONE escaped identifier - a clean "unknown
+        // table", never runnable SQL - and an odd-but-valid name introspects.
+        $rows = $this->query('DESCRIBE ' . self::quoteMysqlIdentifier($table));
         $columns = [];
 
         foreach ($rows as $row) {
@@ -550,6 +552,39 @@ class MySQLAdapter implements DatabaseAdapter
             return '127.0.0.1';
         }
         return $host;
+    }
+
+    /**
+     * Capture the generated id at INSERT time, normalising the FIRST id MySQL
+     * reports for a multi-row INSERT to the LAST (the ids are consecutive) via
+     * the shared SQLTranslator helper. ONE place instead of the two inline
+     * blocks the prepared and non-prepared write paths used to duplicate
+     * (MYSQL-BATCH-ID-DUP). Guarded by a positive insert_id at the call site, so
+     * a non-INSERT never lands here.
+     *
+     * @param int $insertId     The id the driver reported (the FIRST for a batch)
+     * @param int $affectedRows Rows the statement wrote
+     */
+    private function captureInsertId(int $insertId, int $affectedRows): void
+    {
+        $this->lastId = \Tina4\SQLTranslator::batchLastId($insertId, max($affectedRows, 1), 'mysql');
+    }
+
+    /**
+     * Strict backtick-quote a (possibly schema-qualified) identifier, ESCAPING
+     * embedded backticks. DESCRIBE takes an identifier, not a bind parameter, so
+     * the table name is quoted rather than interpolated raw
+     * (MYSQL-DESCRIBE-UNPARAM): a crafted/odd name becomes ONE escaped identifier
+     * - a clean "unknown table", never runnable SQL.
+     *
+     * @param string $name A bare or ``schema.table`` identifier
+     * @return string The strict-quoted identifier
+     */
+    private static function quoteMysqlIdentifier(string $name): string
+    {
+        [$schema, $table] = self::splitSchema($name);
+        $q = static fn(string $part): string => '`' . str_replace('`', '``', $part) . '`';
+        return $schema === null ? $q($table) : $q($schema) . '.' . $q($table);
     }
 
     /**
