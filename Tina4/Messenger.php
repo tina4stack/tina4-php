@@ -246,6 +246,22 @@ class Messenger
             );
         }
 
+        // TINA4_MAIL_REDIRECT_TO (MAIL-DEC-01): the REAL-SEND path only --
+        // capture already returned above, so this never touches the capture
+        // branch. When the list is non-empty, replace every recipient with the
+        // redirect list (so ONLY the dev list receives the mail, never the real
+        // recipients) and preserve the originals in a header. Subject/body/
+        // attachments are untouched; send()'s return shape is unchanged. Read
+        // fresh per call, matching shouldCapture()'s own env-read style.
+        $redirectTo = $this->parseMailRedirectList($this->env('TINA4_MAIL_REDIRECT_TO'));
+        if (!empty($redirectTo)) {
+            $originalTo = implode(', ', array_merge($recipients, $ccList, $bccList));
+            $recipients = $redirectTo;
+            $ccList = [];
+            $bccList = [];
+            $headers['X-Tina4-Original-To'] = $originalTo;
+        }
+
         $allRecipients = array_merge($recipients, $ccList, $bccList);
 
         if (empty($allRecipients)) {
@@ -804,6 +820,29 @@ class Messenger
             return true;
         }
         return !$this->smtpConfigured;
+    }
+
+    /**
+     * Parse TINA4_MAIL_REDIRECT_TO (MAIL-DEC-01): comma-separated addresses,
+     * each trimmed, blanks dropped. Empty/unset -> [] (redirect off, no
+     * behaviour change).
+     *
+     * @param string|null $raw The raw env value
+     * @return string[] The redirect address list
+     */
+    private function parseMailRedirectList(?string $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        $addresses = [];
+        foreach (explode(',', $raw) as $address) {
+            $trimmed = trim($address);
+            if ($trimmed !== '') {
+                $addresses[] = $trimmed;
+            }
+        }
+        return $addresses;
     }
 
     /**
