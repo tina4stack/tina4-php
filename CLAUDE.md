@@ -950,19 +950,22 @@ $app->run();
 
 | Method | Description |
 |--------|-------------|
-| `$app->background(callable $callback, float $interval = 1.0): self` | Register a periodic task. Callback takes no arguments. Interval is in seconds. Returns `$app` for chaining. |
-| `$app->stopBackground(callable $callback): bool` | Stop a registered task and DEREGISTER it. Pass the SAME callable you registered — matching is by identity, and only the FIRST registration of it is removed. Works before and after `run()` (it also stops the live tick). Idempotent; returns `false` when nothing matched. |
+| `$app->background(callable $callback, float $interval = 1.0): \Tina4\BackgroundTask` | Register a periodic task. Callback takes no arguments. Interval is in seconds. Returns a `BackgroundTask` HANDLE — call `->stop()` to end and deregister it. Under a non-persistent SAPI (php-fpm/apache/`php -S`) it warns LOUDLY with the remedy (the tick loop lives only in the persistent `tina4 serve` socket server), never a silent drop. |
+| `$handle->stop(): bool` | Stop this task and DEREGISTER it. Idempotent — `true` the first time it removes a live task, `false` thereafter. |
+| `$app->stopBackground(callable $callback): bool` | Stop a registered task and DEREGISTER it by callable identity (without a handle). Only the FIRST registration of that callable is removed. Works before and after `run()` (it also stops the live tick). Idempotent; returns `false` when nothing matched. |
 | `$app->backgroundTaskCount(): int` | How many background tasks are currently REGISTERED (stopped ones are already gone). |
 
-`background()` deliberately stays fluent — the stop is a separate call, so
-existing chains keep working:
+`background()` returns a stop-handle — the ONE background surface shared with
+Python/Ruby/Node (a handle with a boolean `stop()` plus a count). **Breaking
+(3.13.99): it used to return `$this` (fluent); split a chained
+`->background(a)->background(b)` into two calls.**
 
 ```php
-$callback = static fn() => processOrders($queue);
-$app->background($callback, 2.0);   // still returns $app
+$handle = $app->background(static fn() => processOrders($queue), 2.0);
 // ...later, before or during run():
-$app->stopBackground($callback);    // true — task ended and deregistered
+$handle->stop();                    // true — task ended and deregistered
 $app->backgroundTaskCount();        // 0
+// stopBackground($callback) still stops by identity when you have no handle.
 ```
 
 Server-level access (advanced):

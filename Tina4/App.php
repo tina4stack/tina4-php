@@ -1182,16 +1182,61 @@ HTML;
 
     /**
      * Register a background task that runs periodically in the server event loop.
-     * Matches Python's App.background(fn, interval) pattern.
+     *
+     * Returns a {@see BackgroundTask} handle — call `->stop()` to end and
+     * deregister the task. This is the ONE background surface (a stop-handle plus
+     * a count) shared with Python/Ruby/Node.
+     *
+     * Breaking (3.13.99): this used to return `$this` (fluent). Split a chained
+     * `->background(a)->background(b)` into two separate calls, and use the
+     * returned handle's `->stop()` (or {@see stopBackground()}) to stop a task.
+     *
+     * BG-PHP-FPM-SWOOLE-NOOP guard: under a non-persistent SAPI (php-fpm,
+     * apache2handler, php -S / cli-server) there is no long-lived accept loop to
+     * run the tick, so the task would SILENTLY never fire. We warn LOUDLY with
+     * the remedy rather than drop it in silence. The `cli` SAPI (the Tina4 socket
+     * server, `tina4 serve`) does run ticks, so it passes without noise.
      *
      * @param callable $callback  Function to call (no arguments)
      * @param float    $interval  Seconds between invocations (default: 1.0)
-     * @return self Fluent
+     * @return BackgroundTask A handle whose stop() ends and deregisters the task.
      */
-    public function background(callable $callback, float $interval = 1.0): self
+    public function background(callable $callback, float $interval = 1.0): BackgroundTask
     {
+        $warning = self::backgroundSapiWarning(php_sapi_name());
+        if ($warning !== null) {
+            Log::warning($warning);
+        }
+
         $this->tickCallbacks[] = ['callback' => $callback, 'interval' => $interval];
-        return $this;
+
+        return new BackgroundTask($this, $callback);
+    }
+
+    /**
+     * The loud remedy to warn with when background() is called under a SAPI that
+     * cannot run cooperative ticks — or null when the current SAPI runs them.
+     *
+     * Pure + static so the FPM guard is testable without a live php-fpm: pass the
+     * SAPI name. `cli` is the persistent Tina4 socket server (its accept loop runs
+     * the ticks); every request-scoped web SAPI (`fpm-fcgi`, `apache2handler`,
+     * `cli-server`, `litespeed`) has no long-lived loop, so a task registered
+     * there would silently never run (BG-PHP-FPM-SWOOLE-NOOP). Mirrors the SAPI
+     * guard already on {@see run()}.
+     *
+     * @param  string      $sapi The php_sapi_name() to judge (e.g. 'cli', 'fpm-fcgi').
+     * @return string|null The remedy message, or null when ticks run under $sapi.
+     */
+    public static function backgroundSapiWarning(string $sapi): ?string
+    {
+        if ($sapi === 'cli') {
+            return null;
+        }
+
+        return "background() task registered under the '{$sapi}' SAPI, which has "
+            . "no long-lived worker to run it — the task will NOT tick here. Run "
+            . "under `tina4 serve` (the persistent socket server) or a Swoole "
+            . "worker, or use \\Tina4\\Queue for durable out-of-request work.";
     }
 
     /**
