@@ -878,8 +878,6 @@ abstract class ORM
             return false;
         }
 
-        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
-
         if ($this->softDelete) {
             [$whereSql, $whereParams] = $this->pkWhere('id');
             $sql = "UPDATE {$this->tableName} SET is_deleted = 1 WHERE {$whereSql}";
@@ -1030,7 +1028,7 @@ abstract class ORM
     }
 
     /**
-     * Count records matching conditions (respects soft delete and tableFilter).
+     * Count records matching conditions (respects soft delete).
      *
      * @param ?string $conditions Optional WHERE clause
      * @param array   $params     Bind parameters
@@ -1043,9 +1041,6 @@ abstract class ORM
         $whereParts = [];
         if ($this->softDelete) {
             $whereParts[] = "is_deleted = 0";
-        }
-        if ($this->tableFilter) {
-            $whereParts[] = $this->tableFilter;
         }
         if ($conditions !== null) {
             $whereParts[] = "({$conditions})";
@@ -2018,7 +2013,7 @@ abstract class ORM
         static $frameworkProps = [
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
-            'foreignKeys', 'tableFilter',
+            'foreignKeys',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
@@ -2597,7 +2592,7 @@ abstract class ORM
         static $frameworkProps = [
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
-            'foreignKeys', 'tableFilter',
+            'foreignKeys',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
