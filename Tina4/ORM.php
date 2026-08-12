@@ -649,16 +649,43 @@ abstract class ORM
                 }
             }
 
-            // #165: record the caller assignment BEFORE the native set — a
-            // declared public property is set natively (bypassing __set), so
-            // fill() is the only place its assignment can be tracked. This lets
-            // save() write an explicit null as NULL while omitting a column the
-            // caller never touched (so its DB DEFAULT applies).
-            $this->_assignedFields[$propName] = true;
-
             // Set directly on the object — declared properties get set natively,
-            // undeclared ones go through __set → _dynamicProps
-            $this->$propName = $value;
+            // undeclared ones go through __set → _dynamicProps.
+            //
+            // LOAD-DEC-01 (feature 26, 3.13.99): a stored row can legitimately
+            // hold SQL NULL in a column whose PHP property is declared
+            // NON-NULLABLE — the documented "required" idiom is exactly
+            // `public string $name = '';` + `$fields['name']['required']`
+            // (see OrmValidateConstraintsTest). PHP's own type system then
+            // THROWS TypeError on `$this->name = null`, which — unhandled —
+            // aborts the WHOLE select()/find()/all() for one non-conforming
+            // row. That is fill()'s PHP-shaped twin of Python's
+            // LOAD-PY-REVALIDATE (a stored/legacy row, or one written before a
+            // property was tightened to non-nullable, becomes unreadable).
+            // Business-constraint enforcement (including "required") belongs
+            // to validate()/save(), never to hydration, so a null-into-
+            // non-nullable assignment here is swallowed and the property is
+            // left at its already-initialized class default — reading
+            // continues. Any OTHER TypeError (a genuinely un-coercible
+            // non-null value — real data corruption) still propagates; only
+            // the null case is a business-constraint concern.
+            try {
+                $this->$propName = $value;
+            } catch (\TypeError $e) {
+                if ($value !== null) {
+                    throw $e;
+                }
+                continue;
+            }
+
+            // #165: record the caller assignment AFTER a successful native
+            // set — fill() is the only place a declared property's assignment
+            // can be tracked (it bypasses __set). This lets save() write an
+            // explicit null as NULL while omitting a column the caller never
+            // touched (so its DB DEFAULT applies). A value the assignment
+            // above SKIPPED (null-into-non-nullable) is correctly NOT
+            // recorded here — the property was never actually touched.
+            $this->_assignedFields[$propName] = true;
         }
 
         return $this;
