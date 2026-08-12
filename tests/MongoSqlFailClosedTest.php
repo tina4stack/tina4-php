@@ -270,4 +270,43 @@ final class MongoSqlFailClosedTest extends TestCase
         // Only id=2 changed.
         $this->assertSame(['changed', 'keep', 'keep'], $this->statuses());
     }
+
+    // ── Feature 14b: the explicit 1=1 tautology (truncate) empties the collection
+
+    public function testATruncateEmptiesTheCollection(): void
+    {
+        // truncate() issues delete($table, '1 = 1', []). The explicit 1=1
+        // tautology must translate to a MATCH-ALL [] filter so EVERY document is
+        // removed. PHP already special-cases "1 = 1" -> [] in parseWhere (this is
+        // the behaviour Python/Ruby/Node were brought to). Mutation-proved: drop
+        // parseWhere's 1=1 branch and this count stays 3.
+        $this->seed([
+            ['id' => 1, 'status' => 'keep'],
+            ['id' => 2, 'status' => 'keep'],
+            ['id' => 3, 'status' => 'gone'],
+        ]);
+        $this->assertSame(3, $this->documentCount());
+
+        // The mechanism truncate() uses (Database::truncate -> adapter->delete).
+        $this->adapter->delete($this->collection, '1 = 1', []);
+
+        $this->assertSame(0, $this->documentCount());
+    }
+
+    public function testAScopedEqualityIsNotWidenedToMatchAll(): void
+    {
+        // The tautology fix must be TIGHT: only a lone "1 = 1" is match-all. An
+        // ordinary numeric equality like "id = 1" -- superficially close to
+        // "1 = 1" -- must stay SCOPED to its one match, never widening.
+        $this->seed([
+            ['id' => 1, 'status' => 'keep'],
+            ['id' => 2, 'status' => 'keep'],
+        ]);
+
+        $this->adapter->execute("DELETE FROM {$this->collection} WHERE id = 1");
+
+        // Only id=1 was removed; id=2 remains.
+        $this->assertSame(1, $this->documentCount());
+        $this->assertSame(['keep'], $this->statuses());
+    }
 }
