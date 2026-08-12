@@ -66,6 +66,8 @@ you relay completions. This section is the map; the detailed sections below own 
 | 6. Verify | **Re-run the full suite yourself at HEAD** (no mocks); tick the item; log the commit | `[x]` + commit hash |
 | 7. Report | A ✅/❌ dashboard per framework | the status table |
 
+- **Delegate at the right capability tier - reserve the top tier for the hardest work.** A sub-agent's model/effort is a cost lever: match it to the task, never default everything to the most capable tier. Heavy cross-language parity (real multi-engine DB, mutation proofs, migrations, AutoCrud) earns a high tier; standard single-subsystem features and mechanical edits (docs, ticks, small fixes) run mid or low. Correctness is the gate - drop a tier only if the cheaper run still yields the correct, verified result; if a gate fails, step the tier up and note it. This is agent-agnostic: Claude maps it to model + reasoning-effort, Codex to its model/effort selector, Cursor to its model picker. Spend capability where the difficulty is, not uniformly.
+
 ### Every instruction is allocated to a plan
 No maintenance happens off-plan. `<repo>/plan/` holds a **master plan** — the overview of every task
 and its cross-framework status — plus one detailed plan per task. A new request → **rescope it into

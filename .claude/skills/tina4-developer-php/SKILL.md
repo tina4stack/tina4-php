@@ -70,6 +70,8 @@ what lets them observe and steer while the work happens. The main agent scopes, 
 reports; workers build and update the plan. When a worker finishes an item, surface it to the
 developer.
 
+- **Delegate at the right capability tier - reserve the top tier for the hardest work.** A sub-agent's model/effort is a cost lever: match it to the task, never default everything to the most capable tier. Heavy cross-language parity (real multi-engine DB, mutation proofs, migrations, AutoCrud) earns a high tier; standard single-subsystem features and mechanical edits (docs, ticks, small fixes) run mid or low. Correctness is the gate - drop a tier only if the cheaper run still yields the correct, verified result; if a gate fails, step the tier up and note it. This is agent-agnostic: Claude maps it to model + reasoning-effort, Codex to its model/effort selector, Cursor to its model picker. Spend capability where the difficulty is, not uniformly.
+
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
 plan** as new `[ ]` items. A genuinely new feature → **scope it with the developer first**, then
