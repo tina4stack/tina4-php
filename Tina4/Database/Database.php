@@ -1353,18 +1353,19 @@ class Database implements DatabaseAdapter
         } catch (\Throwable) {
             // Row likely already exists (PK conflict) — fine, keep going.
         }
-        $adapter->execute(
-            'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ?',
-            [$seqName]
-        );
+        // Single ATOMIC increment-and-return. The old path did the UPDATE then a
+        // SEPARATE SELECT: between them another caller could increment and commit,
+        // so both read the same value and returned a DUPLICATE id (a TOCTOU).
+        // PostgreSQL (the engine that reaches this fallback) supports UPDATE ...
+        // RETURNING, so the value we read is exactly the one this statement wrote.
         $row = $adapter->fetchOne(
-            'SELECT current_value FROM tina4_sequences WHERE seq_name = ?',
+            'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ? RETURNING current_value',
             [$seqName]
         );
-        if ($row === null) {
+        if ($row === null || !isset($row['current_value'])) {
             throw new \RuntimeException("getNextId: sequence row '{$seqName}' missing");
         }
-        return (int) ($row['current_value'] ?? 1);
+        return (int) $row['current_value'];
     }
 
     /**
@@ -1435,31 +1436,44 @@ class Database implements DatabaseAdapter
         // PostgreSQL — try nextval() first, auto-create sequence if missing
         if ($raw instanceof PostgresAdapter || $raw instanceof PdoPostgresAdapter) {
             $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
+            // Fast path: the sequence already exists — nextval() is atomic.
             try {
                 $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
                 if ($row !== null && isset($row['next_id'])) {
                     return (int) $row['next_id'];
                 }
             } catch (\Throwable) {
-                // Sequence does not exist — try to create it seeded from MAX
-                try {
-                    $seed = 0;
-                    $maxRow = $adapter->fetchOne("SELECT COALESCE(MAX({$pkColumn}), 0) AS max_id FROM {$table}");
-                    if ($maxRow !== null) {
-                        $seed = (int) ($maxRow['max_id'] ?? 0);
-                    }
-
-                    $adapter->execute("CREATE SEQUENCE {$seqName} START WITH " . ($seed + 1));
-                    $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
-                    if ($row !== null && isset($row['next_id'])) {
-                        return (int) $row['next_id'];
-                    }
-                } catch (\Throwable) {
-                    // Fall through to sequence table
-                }
+                // Sequence missing — create it idempotently below.
             }
 
-            // PostgreSQL fallback — use sequence table
+            // First use: create the sequence IDEMPOTENTLY (CREATE SEQUENCE IF NOT
+            // EXISTS), seeded from MAX(pk). Two concurrent first-callers therefore
+            // share ONE counter — the loser's create is a no-op, not an error, so
+            // it never falls to the tina4_sequences table and draws a DUPLICATE id
+            // from a second, independent counter (the first-use race).
+            try {
+                $seed = 0;
+                $maxRow = $adapter->fetchOne("SELECT COALESCE(MAX({$pkColumn}), 0) AS max_id FROM {$table}");
+                if ($maxRow !== null) {
+                    $seed = (int) ($maxRow['max_id'] ?? 0);
+                }
+                $adapter->execute("CREATE SEQUENCE IF NOT EXISTS {$seqName} START WITH " . ($seed + 1));
+            } catch (\Throwable) {
+                // A concurrent creator won the catalog race — the sequence exists now.
+            }
+
+            // ALWAYS draw from the sequence now that it exists. Never fall to the
+            // sequence table just because our own CREATE lost the race.
+            try {
+                $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
+                if ($row !== null && isset($row['next_id'])) {
+                    return (int) $row['next_id'];
+                }
+            } catch (\Throwable) {
+                // Truly cannot use a sequence — last-resort table below.
+            }
+
+            // PostgreSQL fallback — use the (now atomic) sequence table
             return $this->sequenceNext("{$table}.{$pkColumn}", $table, $pkColumn, $adapter);
         }
 
@@ -1480,6 +1494,9 @@ class Database implements DatabaseAdapter
      * @param string $pkColumn Primary key column name
      * @param MongoDBAdapter $adapter
      * @return int The next available ID
+     * @throws \RuntimeException If the adapter has no live database, or the atomic
+     *                          increment produces no value (never returns 1 on error,
+     *                          which would collide with an existing row).
      */
     private function mongoNextId(string $table, string $pkColumn, MongoDBAdapter $adapter): int
     {
@@ -1487,60 +1504,66 @@ class Database implements DatabaseAdapter
         $db = $adapter->getDatabase();
 
         if ($db === null) {
-            return 1;
+            // Never return 1 on failure — that collides with a real existing row.
+            throw new \RuntimeException(
+                "getNextId: MongoDB adapter has no live database for '{$seqName}'"
+            );
         }
 
-        try {
-            $sequences = $db->selectCollection('tina4_sequences');
+        $sequences = $db->selectCollection('tina4_sequences');
 
-            // Seed from the maximum existing value if sequence row does not exist yet
-            $existing = $sequences->findOne(
-                ['_id' => $seqName],
-                ['typeMap' => ['root' => 'array', 'document' => 'array']]
-            );
+        // Seed the counter from MAX(pk) the FIRST time only ($setOnInsert), keyed
+        // by _id — its built-in unique index makes concurrent first-use upserts
+        // race-safe, so two callers can never create two counters for one table.
+        $existing = $sequences->findOne(
+            ['_id' => $seqName],
+            ['typeMap' => ['root' => 'array', 'document' => 'array']]
+        );
 
-            if ($existing === null) {
-                $seed = 0;
-                try {
-                    $collection = $db->selectCollection($table);
-                    $maxDoc = $collection->findOne(
-                        [],
-                        [
-                            'sort'    => [$pkColumn => -1],
-                            'typeMap' => ['root' => 'array', 'document' => 'array'],
-                        ]
-                    );
-                    if ($maxDoc !== null && isset($maxDoc[$pkColumn])) {
-                        $seed = (int) $maxDoc[$pkColumn];
-                    }
-                } catch (\Throwable) {
-                    // Collection may not exist yet
-                }
-
-                // upsert the seed so findOneAndUpdate below starts from the right value
-                $sequences->updateOne(
-                    ['_id' => $seqName],
-                    ['$setOnInsert' => ['_id' => $seqName, 'current_value' => $seed]],
-                    ['upsert' => true]
+        if ($existing === null) {
+            $seed = 0;
+            try {
+                $collection = $db->selectCollection($table);
+                $maxDoc = $collection->findOne(
+                    [],
+                    [
+                        'sort'    => [$pkColumn => -1],
+                        'typeMap' => ['root' => 'array', 'document' => 'array'],
+                    ]
                 );
+                if ($maxDoc !== null && isset($maxDoc[$pkColumn])) {
+                    $seed = (int) $maxDoc[$pkColumn];
+                }
+            } catch (\Throwable) {
+                // Collection may not exist yet — seed 0.
             }
 
-            // Atomic increment — findOneAndUpdate returns the document AFTER the update
-            $result = $sequences->findOneAndUpdate(
+            $sequences->updateOne(
                 ['_id' => $seqName],
-                ['$inc' => ['current_value' => 1]],
-                [
-                    'upsert'         => true,
-                    'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
-                    'typeMap'        => ['root' => 'array', 'document' => 'array'],
-                ]
+                ['$setOnInsert' => ['current_value' => $seed]],
+                ['upsert' => true]
             );
-
-            return (int) ($result['current_value'] ?? 1);
-        } catch (\Throwable $e) {
-            // Fallback to 1 on any unexpected error
-            return 1;
         }
+
+        // Atomic increment-and-return. NEVER swallow an error into `return 1` — a
+        // swallowed error hands back an id that collides with an existing row.
+        $result = $sequences->findOneAndUpdate(
+            ['_id' => $seqName],
+            ['$inc' => ['current_value' => 1]],
+            [
+                'upsert'         => true,
+                'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
+                'typeMap'        => ['root' => 'array', 'document' => 'array'],
+            ]
+        );
+
+        if (!is_array($result) || !isset($result['current_value'])) {
+            throw new \RuntimeException(
+                "getNextId: MongoDB counter '{$seqName}' produced no value"
+            );
+        }
+
+        return (int) $result['current_value'];
     }
 
     /**
