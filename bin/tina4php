@@ -1201,7 +1201,24 @@ DOCKERFILE;
             mkdir($migrationsDir, 0755, true);
         }
         if (class_exists('\Tina4\Migration')) {
-            $migration = new \Tina4\Migration($migrationsDir);
+            // Resolve $db the SAME way 'migrate' / 'migrate:rollback' do (App
+            // database, falling back to DATABASE_URL) -- status() needs a real
+            // adapter to query the tracking table. Passing $migrationsDir alone
+            // used to land the DIRECTORY STRING in the constructor's ?DatabaseAdapter
+            // $db parameter, which TypeErrors before status() ever runs.
+            $db = \Tina4\App::getDatabase();
+            if ($db === null) {
+                $dbUrl = getenv('DATABASE_URL') ?: (\Tina4\DotEnv::getEnv('DATABASE_URL', '') ?? '');
+                if (!empty($dbUrl)) {
+                    $db = \Tina4\Database\Database::create($dbUrl);
+                    \Tina4\App::setDatabase($db);
+                }
+            }
+            if ($db === null) {
+                echo "Error: No database configured. Set DATABASE_URL in .env\n";
+                exit(1);
+            }
+            $migration = new \Tina4\Migration($db, $migrationsDir);
             $status = $migration->status();
 
             echo "Migration Status\n";

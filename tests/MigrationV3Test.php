@@ -380,10 +380,15 @@ class MigrationV3Test extends TestCase
             $this->migrationsDir . '/20240101000000_create_users.sql',
             'CREATE TABLE users (id INTEGER PRIMARY KEY)'
         );
+        // A real .down.sql companion is required now that rollback is
+        // fail-safe (MIG-DEC-02, 3.13.99): a missing down artifact RAISES
+        // instead of silently dropping the tracking record.
+        file_put_contents($this->migrationsDir . '/20240101000000_create_users.down.sql', 'DROP TABLE users');
         file_put_contents(
             $this->migrationsDir . '/20240102000000_create_posts.sql',
             'CREATE TABLE posts (id INTEGER PRIMARY KEY)'
         );
+        file_put_contents($this->migrationsDir . '/20240102000000_create_posts.down.sql', 'DROP TABLE posts');
 
         $migration = new Migration($this->db, $this->migrationsDir);
         $migration->migrate();
@@ -400,6 +405,9 @@ class MigrationV3Test extends TestCase
             $this->migrationsDir . '/20240101000000_create_users.sql',
             'CREATE TABLE users (id INTEGER PRIMARY KEY)'
         );
+        // Fail-safe rollback (MIG-DEC-02) needs a real down artifact to
+        // succeed -- a missing one now RAISES rather than dropping tracking.
+        file_put_contents($this->migrationsDir . '/20240101000000_create_users.down.sql', 'DROP TABLE users');
 
         $migration = new Migration($this->db, $this->migrationsDir);
         $migration->migrate();
@@ -461,6 +469,8 @@ class MigrationV3Test extends TestCase
             $this->migrationsDir . '/20240102000000_b.sql',
             'CREATE TABLE b (id INTEGER PRIMARY KEY)'
         );
+        // Fail-safe rollback (MIG-DEC-02) needs a real down artifact.
+        file_put_contents($this->migrationsDir . '/20240102000000_b.down.sql', 'DROP TABLE b');
 
         $migration2 = new Migration($this->db, $this->migrationsDir);
         $migration2->migrate();
@@ -605,6 +615,8 @@ class MigrationV3Test extends TestCase
             $this->migrationsDir . '/20240101000000_create_rb.sql',
             'CREATE TABLE rb (id INTEGER PRIMARY KEY)'
         );
+        // Fail-safe rollback (MIG-DEC-02) needs a real down artifact.
+        file_put_contents($this->migrationsDir . '/20240101000000_create_rb.down.sql', 'DROP TABLE rb');
 
         $migration = new Migration($this->db, $this->migrationsDir);
         $migration->migrate();

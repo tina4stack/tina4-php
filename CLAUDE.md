@@ -733,13 +733,18 @@ $migration->migrate(): array
   … `commit()`): on a failure the file rolls back, the error is logged, and the
   run halts at that file. Already-applied files stay applied — fix the bad file
   and re-run.
-- **Atomicity caveat:** per-file transactions are truly atomic only on engines
-  with **transactional DDL (PostgreSQL)**. MySQL, Firebird, and SQLite
-  **auto-commit DDL**, so a multi-statement migration that fails midway on those
-  engines leaves earlier statements applied — keep one logical change per file.
-  `CREATE TABLE` and `ALTER TABLE … ADD` are made idempotent on Firebird/MSSQL
-  (existence-checked via `tableExists()` / `RDB$RELATION_FIELDS`) so a re-run with
-  a raw DDL statement skips the already-existing object instead of erroring.
+- **Atomicity caveat:** per-file transactions are truly atomic on engines with
+  **transactional DDL (PostgreSQL, and SQLite)**. SQLite's DDL is transactional
+  too (autocommit is off inside `startTransaction()`), so a multi-statement
+  migration that fails midway on SQLite rolls back cleanly, including any
+  `CREATE TABLE` that already ran earlier in the same file — proven by
+  `tests/MigrationContractTest.php::testSqliteMultiStatementFailureRollsBackDdl`.
+  MySQL and Firebird **auto-commit DDL**, so the same failure on those two
+  engines leaves earlier statements applied — keep one logical change per file
+  there. `CREATE TABLE` and `ALTER TABLE … ADD` are made idempotent on
+  Firebird/MSSQL (existence-checked via `tableExists()` / `RDB$RELATION_FIELDS`)
+  so a re-run with a raw DDL statement skips the already-existing object instead
+  of erroring.
   SQLite/MySQL/PostgreSQL support `IF NOT EXISTS` and are left to the engine.
 
 **Auto-run on startup (`TINA4_AUTO_MIGRATE`, default on).** When a `migrations/`

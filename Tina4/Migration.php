@@ -234,7 +234,15 @@ class Migration
                         $this->executePHPMigration($phpFile, 'down');
                         Log::info("Executed down migration: {$fileName}");
                     } else {
-                        Log::warning("No .php file found for {$fileName}, removing tracking record only");
+                        // FAIL-SAFE (MIG-DEC-02): a missing down artifact must
+                        // RAISE, never silently fall through to removing the
+                        // tracking record below -- the schema is still applied
+                        // and must stay tracked. Throwing routes through the
+                        // SAME catch block a failing down statement already
+                        // uses, which correctly skips the DELETE.
+                        throw new \RuntimeException(
+                            "Cannot rollback {$fileName}: no .php file found"
+                        );
                     }
                 } else {
                     // Look for a .down.sql file
@@ -265,12 +273,26 @@ class Migration
 
                             Log::info("Executed down migration: " . basename($downFile));
                         }
+                        // An EXISTING but empty/comment-only .down.sql file (0
+                        // statements) is treated as a deliberate no-op success --
+                        // matches the Python reference (create_migration scaffolds
+                        // an empty .down.sql by default) -- and falls through to
+                        // remove the tracking record below.
                     } else {
-                        Log::warning("No .down.sql file found for {$fileName}, removing tracking record only");
+                        // FAIL-SAFE (MIG-DEC-02): a MISSING .down.sql must RAISE,
+                        // never silently fall through to removing the tracking
+                        // record -- the schema is still applied and must stay
+                        // tracked. This was the exact MIG-ROLLBACK-DROPS-LEDGER bug:
+                        // Log::warning() then an unconditional DELETE below.
+                        throw new \RuntimeException(
+                            "Cannot rollback {$fileName}: no .down.sql file found"
+                        );
                     }
                 }
 
-                // Remove the migration record
+                // Remove the migration record -- only reached once the down
+                // artifact actually ran (or was confirmed a deliberate no-op
+                // empty file); a missing/failed down raised above instead.
                 $this->db->execute(
                     "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration_name = :name",
                     [':name' => $fileName]
