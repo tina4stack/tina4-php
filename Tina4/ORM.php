@@ -1713,15 +1713,6 @@ abstract class ORM
     }
 
     /**
-     * Apply a named scope query.
-     * Maps to Python: scope(name, filter_sql, params)
-     *
-     * @param string $name Scope name (for identification)
-     * @param string $filterSql WHERE clause
-     * @param array $params Bound parameters
-     * @return array<int, static>
-     */
-    /**
      * Register a reusable query scope on the class.
      *
      * Usage:
@@ -1729,16 +1720,23 @@ abstract class ORM
      *   $users = User::active();           // calls where("active = ?", [1])
      *   $users = User::active(10, 5);      // with limit/offset
      *
+     * Keyed by [static::class][name] inside the ONE shared static array (feature
+     * 23, SCOPE-DEC-01): $_scopes is declared only on this abstract base, so
+     * PHP's static-property inheritance resolves every subclass's `static::$_scopes`
+     * to the SAME storage. Keying by the calling class isolates each model's
+     * scopes within that shared array — matching Python/Ruby/Node, where a scope
+     * is already a per-class registration and cannot collide across models.
+     *
      * @param string $name      Scope name — becomes a static method on the class
      * @param string $filterSql WHERE clause
      * @param array  $params    Bind parameters
      */
     public function scope(string $name, string $filterSql, array $params = []): void
     {
-        static::$_scopes[$name] = ['filter' => $filterSql, 'params' => $params];
+        static::$_scopes[static::class][$name] = ['filter' => $filterSql, 'params' => $params];
     }
 
-    /** @var array<string, array{filter: string, params: array}> */
+    /** @var array<class-string, array<string, array{filter: string, params: array}>> */
     protected static array $_scopes = [];
 
     /**
@@ -1746,8 +1744,8 @@ abstract class ORM
      */
     public static function __callStatic(string $name, array $arguments): array
     {
-        if (isset(static::$_scopes[$name])) {
-            $scope = static::$_scopes[$name];
+        if (isset(static::$_scopes[static::class][$name])) {
+            $scope = static::$_scopes[static::class][$name];
             $limit = $arguments[0] ?? 100;
             $offset = $arguments[1] ?? 0;
             return (new static())->where($scope['filter'], $scope['params'], $limit, $offset);
