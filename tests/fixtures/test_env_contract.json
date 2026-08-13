@@ -54,6 +54,7 @@
     "MYSQL": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "DB"],
     "MSSQL": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "DB"],
     "FIREBIRD": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "PATH"],
+    "ODBC": ["DSN", "AUTH_DSN", "USERNAME", "PASSWORD"],
     "MONGO": ["URI", "HOST", "PORT"],
     "REDIS": ["URL", "HOST", "PORT"],
     "VALKEY": ["URL", "HOST", "PORT"],
@@ -75,7 +76,10 @@
     "  WRITE_PATH_*      the write-path contract's own database coordinates",
     "  FROM_DEFAULT      written into a temp .env to prove loadEnv() reads it",
     "  FROM_CUSTOM       written into a temp .env to prove TINA4_ENV_FILE wins",
-    "  ENV_DB_URL        written by putenv() to prove Database::fromEnv() reads it"
+    "  ENV_DB_URL        written by putenv() to prove Database::fromEnv() reads it",
+    "  DB_PATH           the autocrud contract's own throwaway SQLite file path",
+    "  LATE_ROUTE_MARKER the swagger contract's marker proving a route registered",
+    "                    after Swagger::generate() is still picked up"
   ],
   "fixtures": [
     "TINA4_TEST_MODE",
@@ -86,7 +90,9 @@
     "TINA4_TEST_WRITE_PATH_PASSWORD",
     "TINA4_TEST_FROM_DEFAULT",
     "TINA4_TEST_FROM_CUSTOM",
-    "TINA4_TEST_ENV_DB_URL"
+    "TINA4_TEST_ENV_DB_URL",
+    "TINA4_TEST_DB_PATH",
+    "TINA4_TEST_LATE_ROUTE_MARKER"
   ],
 
   "_dynamic_comment": [
