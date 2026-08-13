@@ -299,9 +299,11 @@ class Server
 
     /**
      * @param string|null $host Host to bind to. If null, reads TINA4_HOST (default '0.0.0.0').
-     * @param int    $port Port to listen on
+     * @param int    $port Port to listen on (default: 7145, matching the documented default in
+     *   bin/tina4php and App::resolveBindPort — every real caller passes an explicit port, so this
+     *   default only matters to a direct `new Server()`, but it must not disagree — DUALPORT-DEC-02).
      */
-    public function __construct(?string $host = null, int $port = 7146)
+    public function __construct(?string $host = null, int $port = 7145)
     {
         if ($host === null || $host === '') {
             $envHost = DotEnv::getEnv('TINA4_HOST');
@@ -439,9 +441,20 @@ class Server
                     stream_set_blocking($this->aiSocket, false);
                     echo "  Test Port: http://localhost:{$this->aiPort} (stable — no hot-reload)\n";
                 } else {
+                    // stream_socket_server() returns FALSE on failure, not null.
+                    // $this->aiSocket must stay exactly null (its declared default)
+                    // on a skip, never false: acceptLoop()'s read-set builder tests
+                    // `$this->aiSocket !== null`, and false !== null is true, so an
+                    // unreset false was fed straight into stream_select() as an
+                    // invalid stream resource -- crashing the WHOLE server (base
+                    // port included) the instant the accept loop next ran. A busy
+                    // AI port must warn and skip, never take the base port down
+                    // with it (the opposite of takeover, feature 129).
+                    $this->aiSocket = null;
                     echo "  Test Port: SKIPPED (port {$this->aiPort} in use)\n";
                 }
             } catch (\Throwable $e) {
+                $this->aiSocket = null;
                 echo "  Test Port: SKIPPED ({$e->getMessage()})\n";
             }
         }
