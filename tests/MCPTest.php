@@ -566,6 +566,40 @@ class MCPTest extends TestCase
         }
     }
 
+    /**
+     * Regression (3.13.99 hygiene): writeClaudeConfig()'s default $port must
+     * match the framework's real default serve port (7145 — bin/tina4php +
+     * App::resolveBindPort()), not the stale 7146 that Server.php already
+     * moved away from in feature 128.
+     */
+    public function testWriteClaudeConfigDefaultPortMatchesFrameworkDefault(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/mcp_config_default_port_test_' . uniqid();
+        mkdir($tmpDir, 0755, true);
+        $oldCwd = getcwd();
+        chdir($tmpDir);
+
+        try {
+            $server = new McpServer('/my-mcp', 'My MCP Server');
+            $server->writeClaudeConfig(); // no explicit port - exercise the default
+
+            $configFile = $tmpDir . '/.claude/settings.json';
+            $this->assertFileExists($configFile);
+
+            $config = json_decode(file_get_contents($configFile), true);
+            $this->assertSame(
+                'http://localhost:7145/my-mcp',
+                $config['mcpServers']['my-mcp-server']['url'],
+                'writeClaudeConfig() default port drifted from the framework default (7145)'
+            );
+        } finally {
+            chdir($oldCwd);
+            @unlink($tmpDir . '/.claude/settings.json');
+            @rmdir($tmpDir . '/.claude');
+            @rmdir($tmpDir);
+        }
+    }
+
     // ── Multiple Tools and Resources ─────────────────────────────
 
     public function testMultipleToolsRegistration(): void

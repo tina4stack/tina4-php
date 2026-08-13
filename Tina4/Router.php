@@ -1509,8 +1509,17 @@ class Router
      *
      *   1. a path parameter of that name wins;
      *   2. otherwise a `Request` type hint (or the literal name `request`)
-     *      gets the request;
-     *   3. everything else gets the response.
+     *      gets the request, a `Response` type hint (or the literal name
+     *      `response`) gets the response;
+     *   3. a param that matches NEITHER (untyped, unrecognised name) is
+     *      unclaimed - with exactly two unclaimed-or-request/response params
+     *      total and no OTHER param already claiming the request, the FIRST
+     *      unclaimed one positionally becomes the request (parity with the
+     *      Python/Ruby/Node masters, which bind an ambiguous 2-param handler
+     *      positionally). This is what makes an untyped `fn($req, $res)`
+     *      bind `$req` to the Request instead of both params silently
+     *      landing on the Response (the pre-3.13.99 misbinding);
+     *   4. anything still unclaimed after that gets the response.
      *
      * @param Request  $request  Candidate for injection, and the source of path params
      * @param Response $response The default injection for an unmatched parameter
@@ -1521,19 +1530,43 @@ class Router
     {
         $refParams = (new \ReflectionFunction($callback))->getParameters();
         $routeParams = $request->params;
-        $args = [];
 
-        foreach ($refParams as $p) {
+        $args = [];
+        $unclaimed = [];        // indices into $args a Request/Response type/name never pinned
+        $requestClaimed = false; // some param already unambiguously claimed the request
+        $remainingCount = 0;     // params not resolved by a path-parameter name
+
+        foreach ($refParams as $i => $p) {
             $name = $p->getName();
             if (array_key_exists($name, $routeParams)) {
-                $args[] = $routeParams[$name];
+                $args[$i] = $routeParams[$name];
                 continue;
             }
+
+            $remainingCount++;
             $type = $p->getType();
             $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
-            $args[] = ($typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request')
-                ? $request
-                : $response;
+            $isRequest = $typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request';
+            $isResponse = $typeName === Response::class || $typeName === 'Tina4\\Response' || $name === 'response';
+
+            if ($isRequest) {
+                $args[$i] = $request;
+                $requestClaimed = true;
+            } elseif ($isResponse) {
+                $args[$i] = $response;
+            } else {
+                $unclaimed[] = $i;
+                $args[$i] = $response; // default; corrected below if it wins the positional fallback
+            }
+        }
+
+        // Positional fallback: exactly two non-path params (the documented
+        // `($request, $response)` arity) and nothing already pinned the
+        // request explicitly - the first unclaimed param IS the request.
+        // A param with an explicit type hint or literal name always wins;
+        // this only ever corrects params that gave no signal at all.
+        if ($remainingCount === 2 && !$requestClaimed && count($unclaimed) > 0) {
+            $args[$unclaimed[0]] = $request;
         }
 
         return $args;

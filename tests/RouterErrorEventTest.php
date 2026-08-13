@@ -131,10 +131,11 @@ class RouterErrorEventTest extends TestCase
         $response = $this->dispatch500();
         $body = $response->getBody();
 
-        // The error page should still surface a 12-char request id so
-        // support can correlate to logs.
+        // The error page should still surface a request id (8 hex chars —
+        // Router::dispatch() mints bin2hex(random_bytes(4))) so support can
+        // correlate to logs.
         $this->assertMatchesRegularExpression(
-            '/[a-f0-9]{12}/',
+            '/[a-f0-9]{8}/',
             $body,
             'request_id still surfaced in 500 page'
         );
