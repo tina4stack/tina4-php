@@ -154,7 +154,9 @@ jobs:
       TINA4_TEST_MQTT_USERNAME: tina4
       TINA4_TEST_MQTT_PASSWORD: testpass
       # Live MySQL (#262) — matches the mysql:8 service container above.
-      TINA4_TEST_MYSQL_HOST: localhost
+      # mysql2 / mysqli / PDO treat the literal "localhost" as a UNIX-socket request
+      # (ignoring the port); the CI MySQL service is TCP-only, so pin 127.0.0.1.
+      TINA4_TEST_MYSQL_HOST: 127.0.0.1
       TINA4_TEST_MYSQL_PORT: '3306'
       TINA4_TEST_MYSQL_USERNAME: tina4
       TINA4_TEST_MYSQL_PASSWORD: tina4

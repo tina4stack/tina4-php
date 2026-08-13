@@ -45,7 +45,7 @@ class MySQLMSSQLLiveTest extends TestCase
 
     private static function mysqlHost(): string
     {
-        return getenv('TINA4_TEST_MYSQL_HOST') ?: 'localhost';
+        return getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1';
     }
 
     private static function mysqlPort(): int
