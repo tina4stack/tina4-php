@@ -1,3 +1,96 @@
+### Breaking: `$request->params` is route-params-only
+
+Client input now lives only in `$request->query` and `$request->body`; `$request->params`
+holds route params and nothing else, closing a param-pollution surface in the other three
+frameworks. Header `header()` lookup is case-fold only now.
+
+**Migration.** Replace any `$request->params[...]` read of a client-supplied value with
+`$request->query[...]` or `$request->body[...]`.
+
+### Breaking: security headers, CSRF, and the dev server default on
+
+`Content-Security-Policy: default-src 'self'` and the other security headers now emit by
+default (relax with `TINA4_CSP`; HSTS on HTTPS via `TINA4_HSTS`). `TINA4_CSRF=true` now
+actually attaches the CSRF middleware instead of being inert, and a blank `TINA4_SECRET`
+fails closed instead of minting a forgeable public-default token. The dev server binds
+`127.0.0.1` by default (`TINA4_HOST=0.0.0.0` to expose it), refuses a cross-origin `/__dev`
+mutation, and never serves `.env` through the file endpoints. The public-directory search
+order is now `public` before `src/public`.
+
+**Migration.** Set `TINA4_CSP` if you depend on inline scripts or a third-party CDN. Set
+`TINA4_HOST=0.0.0.0` if you need the dev server reachable from another machine.
+
+### Breaking: Mongo, Firebird, and file-upload footguns closed
+
+An unparseable/unsupported MongoDB WHERE now raises instead of silently matching every
+document (a DELETE/UPDATE with no WHERE is rejected). MongoDB's next-id generator now raises
+on error instead of silently returning `1`. Firebird's `$db->insert()->lastId` /
+`$db->update()`/`$db->delete()` `->affectedRows` return real values instead of a missing or
+zero value. A repeated multipart file field now yields a list instead of silently dropping
+every upload but the last; the safe-save helper rejects `..`/absolute filenames, and an
+over-limit upload now answers `413` mid-stream instead of after buffering the whole body.
+Frond `{% include %}`/`{% extends %}`/`{% import %}` now raise on a path that escapes the
+templates directory.
+
+**Migration.** Add an explicit WHERE to any Mongo query relying on the old match-all
+fallback, or call `truncate()`. Handle `$request->files[x]` as a list when multiple files can
+share a field name.
+
+### Breaking: `App::background()` returns a handle, not `$this`
+
+`App::background()` used to be fluent, returning `$this`. It now returns a
+`Tina4\BackgroundTask` handle, the same stop-handle surface Python/Ruby/Node share.
+
+**Migration.** Split a chained `->background(a)->background(b)` into two separate calls.
+
+### Breaking: ORM write-path and AutoCrud parity fixes
+
+`datetime` name-inference is anchored now, so a column whose name only substring-matched
+(`runtime`, `downtime`, `updated_by`) is no longer typed as a datetime. `create_table()`
+injects `is_deleted` for a `softDelete = true` model automatically. A soft-deleted child no
+longer appears through relationship traversal. The imperative `hasMany` cap changes from a
+silent 100 to the whole result set. AutoCrud returns `422` (was `500`) on an invalid
+create/update, and never accepts `is_deleted` or a client-supplied primary key in the write
+body. `seed_table` now routes through the parameterized adapter insert instead of hand-written
+MySQL/SQLite backtick SQL. The two validators now speak one canonical message vocabulary;
+PHP's own messages drop the trailing colon (`"name: is required"` -> `"name is required"`).
+
+**Migration.** Declare an explicit `\DateTime` property (or an `*_at`/`*_date`/`*_time` name)
+on a column that relied on the old substring datetime match.
+
+### Breaking: response, database-adapter, and dev-tooling fixes
+
+Responses gzip-compress when eligible; a cacheable 200 gets a strong ETag, and the
+static-file ETag format is unified to `W/"<size>-<mtime>"` across all four frameworks. A
+`403` now negotiates HTML vs JSON like `404`/`500`, and `404` carries a `request_id`. The
+Swagger UI CDN default moves to jsdelivr, off unpkg. A route group's prefix join is
+normalized (PHP's own join was already correct). `tina4php serve` no longer crashes the
+process when the AI port (`base + 1000`) is busy; it warns and skips. `new Server()`'s
+default port changes from 7146 to 7145 (only affects a direct no-argument construct). The
+CLI's `--version`/`commands --json` report the real framework version instead of `0.0.0` in
+a git checkout. The session cookie now emits under a testing `Response`. The inline `@tests`
+descriptor builders are renamed `Testing::assert*` -> `Testing::expect*`;
+`Testing::discover()` now scans only an explicit tests directory and parses `@tests`
+arguments as literals, never `eval`. `DatabaseAdapter`'s interface no longer requires the
+removed `query`/`lastInsertId`/`error` methods and now requires `connect`/`getDatabaseType`/
+`autocommit`, which `CachedDatabase`/`Database` were both missing and would have hard-fatalled
+on class load. `Database::executeMany()` now delegates once instead of looping through the
+facade.
+
+**Migration.** Rename any `Testing::assert*` descriptor call to `Testing::expect*`. Move an
+`@tests` docblock into the tests directory if it lived outside it. Expect every cache to
+revalidate once after upgrade, since the static-file ETag format changed.
+
+### Fixed: router literal-parenthesis 404, and the built-in server's first-time session cookie
+
+`Router::compilePath()` interpolated a literal path segment unescaped, so a route like
+`/products/(sale)` 404'd because `(`/`)`/`.` compiled as regex syntax; only `{param}` becomes
+a capture group now. Separately, `emitSessionCookie()` branched on `headers_sent()`, which is
+never true under `Tina4\Server`'s raw socket, so a first-time login through `tina4 serve`
+produced no `Set-Cookie` header and session auth silently failed. A new
+`Response::$rawSocket` flag (kept separate from the `testing` flag, which would also break
+SSE streaming) fixes it.
+
 ### Changed (3.13.96 Swagger + Messenger cross-framework parity)
 
 Swagger and the Messenger IMAP read path were measured side by side across all
