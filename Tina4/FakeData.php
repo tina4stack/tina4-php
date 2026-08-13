@@ -20,6 +20,21 @@ namespace Tina4;
  *     // Deterministic output with a seed:
  *     $fake  = new FakeData(42);
  *     $name  = $fake->name();   // same every time
+ *
+ * Determinism is PER-LANGUAGE, not cross-language (SEED-DETERMINISM-PERLANG):
+ * `new FakeData(42)` reproduces the identical sequence on every run *within
+ * PHP*, but the same seed on Python/Ruby/Node's FakeData will NOT produce the
+ * same values — each language uses its own PRNG (PHP's per-instance Mt19937
+ * via \Random\Randomizer, Python's Mersenne Twister, Ruby's Random, Node's
+ * mulberry32). There is no shared cross-language PRNG, and hand-rolling one
+ * would add cost for no real benefit — use a seed to make ONE language's run
+ * reproducible, never to compare output across languages.
+ *
+ * NOT FOR SECRETS (SEED-SECRETS-DOC): this is a non-cryptographic PRNG meant
+ * for realistic-looking fixtures and test data. Never use it to generate API
+ * keys, passwords, tokens, or anything else that must be unguessable — use
+ * `random_bytes()`/`\Random\Randomizer` seeded from the OS CSPRNG (or
+ * `\Tina4\Auth` for password hashing) instead.
  */
 class FakeData
 {
@@ -381,16 +396,28 @@ class FakeData
      * @param bool   $clear     P2 — if true, delete every existing row in the
      *                          table before seeding so re-runs don't duplicate
      *                          rows or trip unique-PK violations.
-     * @param int|null $seed    P3 — optional PRNG seed. Provided for signature
-     *                          parity with seedOrm; seedTable's determinism comes
-     *                          from the caller's FakeData passed via $fieldMap
-     *                          (seed a FakeData(N) and pass its generators).
+     * @param int|null $seed    REMOVED (SEED-TABLE-SEED-INERT, SEED-DEC-01,
+     *                          ratified 2026-08-11). seedTable has no
+     *                          generators of its own to seed — $fieldMap
+     *                          callables are opaque, so this argument used to
+     *                          be a silent no-op that invited the wrong
+     *                          assumption. Passing anything but null now
+     *                          THROWS instead of silently doing nothing. For
+     *                          a reproducible run, build your own
+     *                          `new FakeData($seed)` and close over it in
+     *                          $fieldMap: `$fake = new FakeData(42);
+     *                          FakeData::seedTable($db, 't', fieldMap: ['name'
+     *                          => fn() => $fake->name()]);`. seedOrm/
+     *                          seedModels are unaffected — they build and
+     *                          seed their own FakeData internally.
      * @param bool   $strict    P1 — if true, re-raise on the first failed row
      *                          instead of skipping.
      *
      * @return SeedSummary {seeded, failed, errors} — also usable as the int
      *                     row-count for backward compatibility ((int) cast and
      *                     count() both yield `seeded`).
+     *
+     * @throws \InvalidArgumentException If $seed is not null (see above).
      */
     public static function seedTable(
         mixed $db,
@@ -402,6 +429,15 @@ class FakeData
         ?int $seed = null,
         bool $strict = false
     ): SeedSummary {
+        if ($seed !== null) {
+            throw new \InvalidArgumentException(
+                'seedTable() no longer accepts $seed: it has no generators of its own to seed '
+                . '($fieldMap callables are opaque). Build a seeded FakeData yourself and close '
+                . "over it in \$fieldMap, e.g. \$fake = new FakeData(42); FakeData::seedTable(\$db, "
+                . "\$table, fieldMap: ['name' => fn() => \$fake->name()])."
+            );
+        }
+
         if (empty($fieldMap)) {
             return new SeedSummary(0, 0, []);
         }
@@ -424,20 +460,19 @@ class FakeData
                     $row[$col] = is_callable($value) ? $value() : $value;
                 }
 
-                $cols = implode(', ', array_map(fn($c) => "`$c`", array_keys($row)));
-                $placeholders = implode(', ', array_fill(0, count($row), '?'));
-                $values = array_values($row);
-
-                $ok = $db->execute("INSERT INTO `$tableName` ($cols) VALUES ($placeholders)", $values);
-                // Some adapters return false (not raise) on a bad statement —
-                // convert that to a counted failure so it never passes as success.
-                if ($ok === false) {
-                    $cause = (is_object($db) && method_exists($db, 'getError')) ? $db->getError() : null;
-                    throw new \RuntimeException(
-                        "execute() returned false inserting into '{$tableName}'"
-                        . ($cause ? ": {$cause}" : '')
-                    );
-                }
+                // SEED-PHP-BACKTICK fix: route through the PARAMETERIZED
+                // adapter insert path (the same one seedOrm's ORM::save()
+                // uses) instead of hand-building dialect-specific SQL. The
+                // old code here quoted identifiers with BACKTICKS
+                // (INSERT INTO `t` (`col`) ...) — MySQL/SQLite only — so
+                // every INSERT raised a syntax error on PostgreSQL/Firebird
+                // (double-quote) and MSSQL (brackets), and the dev-admin
+                // POST /__dev/api/seed endpoint (which delegates here) was
+                // broken on those three engines. Database::insert() already
+                // fails loud (raises DatabaseException; it never returns
+                // false), so a bad row surfaces through the catch below
+                // exactly like any other failure.
+                $db->insert($tableName, $row);
                 $seeded++;
             } catch (\Throwable $e) {
                 if ($strict) {

@@ -119,8 +119,15 @@ class TestClient
             ip: '127.0.0.1',
         );
 
-        // Dispatch through the router
-        $response = Router::dispatch($request, new Response());
+        // Dispatch through the router. testing: true marks the Response as
+        // one nobody will ever ->send() over a real transport — Router's
+        // session-cookie emission reads it (Response::isTesting()) to skip
+        // straight to attaching Set-Cookie onto the Response instead of
+        // calling PHP's native setcookie(), which a CLI process like this one
+        // has no real SAPI to send it through (feature 131, TC-DEC-02: without
+        // this a TestClient-driven login route could set request->session but
+        // the session cookie never reached TestResponse).
+        $response = Router::dispatch($request, new Response(testing: true));
 
         return new TestResponse($response);
     }
@@ -135,6 +142,9 @@ class TestResponse
     public readonly string $body;
     public readonly array $headers;
     public readonly string $contentType;
+
+    /** @var array<string, string[]> Every value sent per header name (lowercased), in emission order. */
+    private readonly array $headerList;
 
     public function __construct(Response $response)
     {
@@ -151,8 +161,49 @@ class TestResponse
 
         $this->status = $response->getStatusCode() ?? 200;
         $this->body = $body;
-        $this->headers = $response->getHeaders();
+
+        // Build the multi-map. getHeaders() is a plain name=>value array (a
+        // header set twice already overwrote itself at the source, Response::
+        // header()) — one value each. Cookies live SEPARATELY precisely so
+        // more than one survives (Response::cookie() keys its own store by
+        // cookie NAME, not header name), and getHeaders() never included
+        // them at all — a real gap, not a collapse: TestResponse could not
+        // see a Set-Cookie before this fix. Response::cookieHeaderLines() is
+        // the SAME builder Server.php's raw-socket writer renders from, so a
+        // cookie set twice comes out identical whether the request went over
+        // a real socket or through TestClient (feature 131, TC-DEC-02).
+        $list = [];
+        foreach ($response->getHeaders() as $name => $value) {
+            $list[strtolower($name)][] = $value;
+        }
+        foreach ($response->cookieHeaderLines() as $cookie) {
+            $list['set-cookie'][] = $cookie;
+        }
+        $this->headerList = $list;
+
+        // `headers` stays the back-compat single-value view — the LAST value
+        // per name, same shape every existing reader already expects.
+        $flat = [];
+        foreach ($list as $name => $values) {
+            $flat[$name] = $values[array_key_last($values)];
+        }
+        $this->headers = $flat;
         $this->contentType = $this->headers['content-type'] ?? '';
+    }
+
+    /**
+     * Every value sent for $name (case-insensitive), in emission order.
+     *
+     * A header sent once returns a one-item list; a header never sent
+     * returns an empty array. This is the one place a duplicate response
+     * header (two Set-Cookie) is visible — headers[name] always collapses to
+     * the LAST value, same as before (TC-HEADER-COLLAPSE, TC-DEC-02).
+     *
+     * @return string[]
+     */
+    public function getList(string $name): array
+    {
+        return $this->headerList[strtolower($name)] ?? [];
     }
 
     /**

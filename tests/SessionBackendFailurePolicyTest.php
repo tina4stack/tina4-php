@@ -768,9 +768,30 @@ class SessionBackendFailurePolicyTest extends TestCase
         $environment = getenv();
         $environment[self::PRIVILEGE_DROP_MARKER] = '1';
 
+        // Match the child's effective GROUP to the repo directory's owning
+        // group so a uid-0-but-capability-dropped child can still TRAVERSE
+        // into it. Dropping CAP_DAC_OVERRIDE makes root subject to ordinary
+        // DAC checks: this repo's ancestry is not always root-owned (measured
+        // on the lab: the release checkout lives under a non-root user's home
+        // directory, itself mode 0750) -- the owner check fails (uid 0 !=
+        // that directory's owner) and, without a matching group, the "other"
+        // bucket denies traversal outright, so phpunit could never even be
+        // opened ("Could not open input file") -- a different failure than
+        // the real EACCES this delegation exists to produce. Matching the
+        // group widens ONLY traversal; it changes nothing about the
+        // file-permission-bit assertion under test, which still denies via
+        // the OWNER bits on the target fixture file (proven by the
+        // CapEff/EACCES instrument this same helper already checks below).
+        // --clear-groups drops root's own supplementary groups (docker, etc.)
+        // so the child carries exactly one, unprivileged group membership.
+        $repoGid = @filegroup($repoRoot);
+        $repoGid = $repoGid !== false ? $repoGid : 0;
+
         $command = [
             $setpriv,
             '--securebits=+noroot,+noroot_locked',
+            '--regid=' . $repoGid,
+            '--clear-groups',
             '--bounding-set=-all',
             '--inh-caps=-all',
             PHP_BINARY,
@@ -847,28 +868,31 @@ class SessionBackendFailurePolicyTest extends TestCase
     // ── the mid-request death case, produced rather than simulated ──────────
 
     /**
-     * KNOWN FRAMEWORK BUG — this test is EXPECTED TO FAIL until it is fixed.
-     * It is deliberately left failing rather than mocked away or deleted.
+     * FIXED FRAMEWORK BUG, locked in so it cannot silently return.
      *
      * A REAL file-backend session writes successfully, then the real session FILE
      * is made read-only so the NEXT write takes a real EACCES from the real
      * kernel. The documented policy is: log an error, return false from save(),
      * and RETAIN the dirty flag so a later save() retries.
      *
-     * Measured on macOS + PHP 8.5.7, all three are violated, because
-     * Tina4/Session.php:743 (saveToFile) ignores the return value of
-     * file_put_contents(). PHP's file_put_contents does not throw on EACCES — it
-     * emits a warning and returns false — so nothing ever reaches the
-     * safeWrite() catch block:
+     * This test was written (2026-08-01 12:40) against Tina4/Session.php:743
+     * (saveToFile), which at the time ignored the return value of
+     * file_put_contents(): PHP's file_put_contents does not throw on EACCES —
+     * it emits a warning and returns false — so nothing ever reached the
+     * safeWrite() catch block, and save() reported true while silently
+     * dropping the write. The fix (same day, commit 49f1e7bf,
+     * "feature/session-backend-defects") checks the return value and throws
+     * \RuntimeException on failure, which safeWrite() catches, logs, and
+     * degrades per policy. This test now PROVES that fix stays fixed:
      *
-     *     save() returned            true   (documented: false)
-     *     dirty flag                 CLEARED (documented: retained for retry)
-     *     errors logged              NONE   (documented: log-loud)
-     *     bytes on disk              the PREVIOUS write; the new data is GONE
+     *     save() returns             false  (matches the documented policy)
+     *     dirty flag                 RETAINED for a later retry
+     *     errors logged               yes, naming "Session write failed"
+     *     bytes on disk               the PREVIOUS write; the failed write never landed
      *
-     * This is silent session data loss on the DEFAULT backend. The deleted
-     * ThrowingSessionHandler hid it perfectly: it THREW, so the policy wrappers
-     * looked exercised, while the real file backend can never throw at all.
+     * The deleted ThrowingSessionHandler double hid the original bug
+     * perfectly: it THREW, so the policy wrappers looked exercised, while the
+     * real file backend can never throw at all — this is the real driver.
      */
     public function testWriteFailsAfterASuccessfulStartWithARealEacces(): void
     {

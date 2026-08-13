@@ -37,7 +37,9 @@ class RequestLoggingTest extends TestCase
         $_ENV['TINA4_DEBUG'] = 'true';
         @putenv('TINA4_DEBUG=true');
         Log::reset();
-        Log::configure(logDir: $this->tempDir, development: true);
+        // `development:` is retired -- format is debug-derived now (Decision
+        // 3), and TINA4_DEBUG=true above already selects text + file output.
+        Log::configure(logDir: $this->tempDir);
         RequestLogger::reset();
     }
 

@@ -23,6 +23,16 @@ use Tina4\Database\DatabaseResult;
  */
 class AutoCrud
 {
+    /**
+     * PAGE-DEC-01: the maximum per-page size the list handler will honour, no
+     * matter what a caller asks for via ?limit=/?per_page=. 100 is not an
+     * arbitrary pick - it is the SAME row cap ORM::all()/db->fetch() already
+     * default to, and the number Node's AutoCrud shares via its own
+     * DEFAULT_ROW_CAP constant. Without this a client could request the whole
+     * table in one query (?limit=1000000).
+     */
+    private const MAX_PER_PAGE = 100;
+
     /** @var array<string, class-string<ORM>> Registered model classes indexed by table name */
     private array $models = [];
     /** @var array<string, bool> tableName -> public-writes flag (default secure) */
@@ -171,7 +181,13 @@ class AutoCrud
 
             // Accept limit/offset (canonical) or per_page/page (aliases)
             $limit  = (int)($request->query['limit'] ?? $request->query['per_page'] ?? 10);
+            // PAGE-DEC-01: cap an oversized ?limit=/?per_page= BEFORE it is used to
+            // derive $offset below, so the offset lines up with the size actually
+            // used (a client can no longer request the whole table in one query).
+            $limit  = min($limit, self::MAX_PER_PAGE);
             $page   = (int)($request->query['page'] ?? 1);
+            // PAGE-DEC-01 (already correct here): a page <= 1 forces offset 0 - the
+            // reference behaviour Python/Ruby/Node were made to match.
             $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
 
             // Build filter from query params
@@ -248,14 +264,35 @@ class AutoCrud
         $db = $this->db;
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
-            $data = is_array($request->body) ? $request->body : [];
+            $rawData = is_array($request->body) ? $request->body : [];
+            // CRUD-MASS-ASSIGNMENT: allow-list before the body ever reaches
+            // the model (guards is_deleted + strips the PK - see the helper).
+            $probe = new $modelClass($db);
+            $data = $this->allowListedData($probe, $rawData, true);
+
             $model = new $modelClass($db, $data);
+
+            // CRUD-VALIDATION-STATUS (CRUD-DEC-01): a consistent 422 with the
+            // FIELD errors on invalid input - checked BEFORE save() so an
+            // invalid model never reaches the driver, and the error source
+            // is the model's OWN validate(), never the adapter's bare
+            // error() this handler used to read regardless of whether the
+            // DB was ever touched.
+            $errors = $model->validate();
+            if (!empty($errors)) {
+                return $response->json(['error' => 'Validation failed', 'detail' => $errors], 422);
+            }
 
             if ($model->save()) {
                 return $response->json($model->toDict(), 201);
             }
 
-            return $response->json(['error' => 'Failed to create record', 'detail' => $db->error()], 500);
+            // A genuine driver failure (NOT NULL, duplicate key, missing
+            // table, ...) - validate() already proved the model itself is
+            // valid, so this really is a save()/DB problem. getError() is
+            // save()'s OWN recorded cause (it prefers the real adapter error
+            // over a stale/unrelated one), not the bare adapter accessor.
+            return $response->json(['error' => 'Failed to create record', 'detail' => $model->getError()], 500);
         };
     }
 
@@ -274,15 +311,80 @@ class AutoCrud
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
-            $data = is_array($request->body) ? $request->body : [];
+            $rawData = is_array($request->body) ? $request->body : [];
+            // CRUD-MASS-ASSIGNMENT: allow-list - the row is addressed by the
+            // URL {id}, never by the body (see the helper).
+            $data = $this->allowListedData($model, $rawData, false);
             $model->fill($data);
+
+            // CRUD-VALIDATION-STATUS / CRUD-PUT-NOVALIDATE: validated
+            // explicitly (same as create) - 422 with field errors, never a
+            // 500. Because load() ran first, an untouched required field
+            // keeps the value already in the DB (it was valid when
+            // written), so this is naturally a partial-update check: only
+            // what the body actually changed is freshly validated.
+            $errors = $model->validate();
+            if (!empty($errors)) {
+                return $response->json(['error' => 'Validation failed', 'detail' => $errors], 422);
+            }
 
             if ($model->save()) {
                 return $response->json($model->toDict());
             }
 
-            return $response->json(['error' => 'Failed to update record', 'detail' => $db->error()], 500);
+            return $response->json(['error' => 'Failed to update record', 'detail' => $model->getError()], 500);
         };
+    }
+
+    /**
+     * Guard a write body's DANGEROUS keys before it reaches fill()/the
+     * constructor (CRUD-MASS-ASSIGNMENT).
+     *
+     * PHP models may declare columns as typed properties OR leave them
+     * fully dynamic - {@see ORM::getModelProperties()} explicitly merges in
+     * `__set()`-captured dynamic properties by design, and AutoCrudV3Test's
+     * own `CrudItem` fixture declares NO typed properties at all, relying
+     * entirely on dynamic assignment. So there is no closed "known columns"
+     * set to allow-list against without locking a dynamic-property model's
+     * create/update out of every column (measured: a strict allow-list on
+     * `getFieldDefinitions()` alone turns `testCreateItem` red - `name`
+     * never reaches the row, NOT NULL fails). This is a DENY-list of the two
+     * genuinely dangerous keys instead: `is_deleted` is never
+     * client-writable (soft-delete is mutated only by delete()/restore());
+     * the primary key is never taken from the body - insert() only drops a
+     * FALSY client PK (a truthy one can flip save() onto its update()
+     * branch, silently overwriting an unrelated existing row), and on a PUT
+     * a body PK would move update()'s own WHERE clause off the
+     * URL-addressed row (fill() assigns properties before save()/pkWhere()
+     * run) - so it is stripped on create AND update, except a genuinely
+     * natural (single-column, non-auto-increment) key on CREATE, where a
+     * caller-chosen key is the documented way to create a row
+     * (buildExample() keeps such a key in the sample body).
+     *
+     * @param array<string, mixed> $data
+     */
+    private function allowListedData(ORM $probe, array $data, bool $isCreate): array
+    {
+        $pkProps = $probe->getPrimaryKeys();
+        $defs = $probe->getFieldDefinitions();
+        $reverseMapping = array_flip($probe->fieldMapping);
+
+        $singlePk = count($pkProps) === 1 ? $pkProps[0] : null;
+        $autoIncrement = $singlePk !== null && ($defs[$singlePk]['auto_increment'] ?? false);
+        $stripPk = $isCreate ? !($singlePk !== null && !$autoIncrement) : true;
+
+        $allowed = [];
+        foreach ($data as $key => $value) {
+            $propName = $reverseMapping[$key] ?? $key;
+            if ($propName === 'is_deleted') {
+                continue;
+            }
+            if ($stripPk && in_array($propName, $pkProps, true)) {
+                continue;
+            }
+            $allowed[$key] = $value;
+        }
+        return $allowed;
     }
 
     /**

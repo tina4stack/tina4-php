@@ -9,25 +9,35 @@
 namespace Tina4\Middleware;
 
 use Tina4\Auth;
-use Tina4\DotEnv;
+use Tina4\Middleware;
 use Tina4\Request;
 use Tina4\Response;
 
 /**
  * CSRF middleware — validates form tokens on state-changing requests.
  *
- * Off by default — only active when TINA4_CSRF=true in .env or when
- * registered explicitly via Router::use(CsrfMiddleware::class).
+ * OFF by default: with TINA4_CSRF unset the middleware is NOT attached at boot
+ * (see attachFromEnv()), so a default app has no CSRF gate. Set TINA4_CSRF=true
+ * (or 1/yes/on) and the framework auto-attaches it at boot so every write is
+ * gated; or register it explicitly via Router::use(CsrfMiddleware::class). Once
+ * attached, TINA4_CSRF=false (or 0/no) is the kill switch that disables
+ * enforcement again.
  *
  * Behaviour:
  *   - Skips GET, HEAD, OPTIONS requests.
  *   - Skips routes marked with ->noAuth() / @noauth().
+ *   - Fails CLOSED: with TINA4_SECRET unset the signing secret resolves to
+ *     blank (there is NO built-in default), and a blank HMAC key is publicly
+ *     reproducible — so no token can be trusted and every write is rejected
+ *     (403). This is the SEC-01 no-default-secret guarantee.
  *   - Skips requests with a valid Authorization: Bearer header (API clients).
  *   - Checks request->body["formToken"] then request->headers["X-Form-Token"].
  *   - Rejects if token found in request->query["formToken"] (log warning, 403).
- *   - Validates token with Auth::validToken using SECRET env var.
+ *   - Validates token with Auth::validToken using the resolved SECRET, and
+ *     enforces that the token's `type` claim is `form` — a non-form JWT
+ *     presented in the formToken slot is rejected.
  *   - If token payload has session_id, verifies it matches current session.
- *   - Returns 403 with response->error() on failure.
+ *   - Returns 403 with response->error("CSRF_INVALID", ...) on failure.
  */
 class CsrfMiddleware
 {
@@ -66,17 +76,29 @@ class CsrfMiddleware
             }
         }
 
-        // Skip requests with valid Bearer token (API clients)
+        // Resolve the signing secret ONCE, fail-closed (blank when TINA4_SECRET
+        // is unset — there is NO built-in default). A blank HMAC key is publicly
+        // reproducible, so a token signed with it (or with the retired public
+        // 'tina4-default-secret') is a forgery: reject every write rather than
+        // validate against a guessable key. SEC-01, fail closed hard.
+        $secret = Auth::resolveSecret();
+        if ($secret === '') {
+            return [$request, $response->error(
+                'CSRF_INVALID',
+                'CSRF token cannot be validated: TINA4_SECRET is not set',
+                403
+            )];
+        }
+
+        // Skip requests with a valid Bearer token (API clients). The secret is
+        // non-blank here, so a valid bearer is genuinely trusted.
         $authHeader = $request->headers['Authorization']
             ?? $request->headers['authorization']
             ?? '';
         if (str_starts_with($authHeader, 'Bearer ')) {
             $bearerToken = trim(substr($authHeader, 7));
-            if ($bearerToken !== '') {
-                $secret = DotEnv::getEnv('TINA4_SECRET') ?? $_ENV['TINA4_SECRET'] ?? 'tina4-default-secret';
-                if (Auth::validToken($bearerToken, $secret)) {
-                    return [$request, $response];
-                }
+            if ($bearerToken !== '' && Auth::validToken($bearerToken, $secret)) {
+                return [$request, $response];
             }
         }
 
@@ -114,8 +136,7 @@ class CsrfMiddleware
             )];
         }
 
-        // Validate the token
-        $secret = DotEnv::getEnv('TINA4_SECRET') ?? $_ENV['TINA4_SECRET'] ?? 'tina4-default-secret';
+        // Validate the token signature / expiry against the resolved secret.
         if (!Auth::validToken($token, $secret)) {
             return [$request, $response->error(
                 'CSRF_INVALID',
@@ -125,6 +146,17 @@ class CsrfMiddleware
         }
 
         $payload = Auth::getPayload($token) ?? [];
+
+        // Enforce the form-token TYPE — a valid signature is not enough: a
+        // non-form JWT (e.g. an auth/session token) must never be accepted in
+        // the formToken slot.
+        if (($payload['type'] ?? null) !== 'form') {
+            return [$request, $response->error(
+                'CSRF_INVALID',
+                'Invalid or missing form token',
+                403
+            )];
+        }
 
         // Session binding — if token has session_id, verify it matches
         $tokenSessionId = $payload['session_id'] ?? null;
@@ -154,5 +186,33 @@ class CsrfMiddleware
         }
 
         return [$request, $response];
+    }
+
+    /**
+     * Auto-attach this middleware when TINA4_CSRF is enabled in the env.
+     *
+     * CSRF is OFF by default: with TINA4_CSRF unset the middleware is never
+     * attached, so a default app has no CSRF gate. Setting TINA4_CSRF to a
+     * truthy value (true/1/yes/on, case-insensitive, whitespace-trimmed)
+     * attaches it globally so every state-changing route is gated — the env
+     * flag is the switch, no code change needed. Idempotent (Middleware::use
+     * de-dupes). Mirrors tina4_python's attach_csrf_from_env().
+     *
+     * The framework calls this once during App::start() (after routes are
+     * discovered, before serving); a false/0/no value still lets an explicit
+     * Router::use opt-in be disabled at runtime by the kill switch in
+     * beforeCsrf().
+     *
+     * @return bool True when the middleware is now attached, false otherwise.
+     */
+    public static function attachFromEnv(): bool
+    {
+        $raw = getenv('TINA4_CSRF');
+        $value = $raw === false ? '' : strtolower(trim($raw));
+        if (in_array($value, ['true', '1', 'yes', 'on'], true)) {
+            Middleware::use(self::class);
+            return true;
+        }
+        return false;
     }
 }

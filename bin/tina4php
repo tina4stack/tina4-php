@@ -267,8 +267,8 @@ function fieldsOrDefault(string $fieldsStr): array
 function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
-    $booleanFlags = ['no-browser', 'no-reload', 'production', 'managed', 'all', 'clear', 'json',
-                     'public', 'no-migration', 'once'];
+    $booleanFlags = ['no-browser', 'no-reload', 'no-kill', 'production', 'managed', 'all', 'clear',
+                     'json', 'public', 'no-migration', 'once'];
 
     $flags = [];
     $positional = [];
@@ -300,37 +300,29 @@ function parseFlags(array $args): array
 }
 
 /**
- * Kill any process listening on the given port.
+ * Reclaim *port* from a stale Tina4 dev server, only when it is safe.
+ *
+ * Routes through the shared identity-checked takeover (TAKEOVER-DEC-01/02): a
+ * holder is signalled ONLY when a Tina4 dev server recorded its PID in the
+ * per-port PID file. A foreign holder is left running and a clear message is
+ * printed; takeover is also skipped in a container, outside dev mode, and when
+ * opted out (TINA4_NO_TAKEOVER / --no-kill).
+ *
+ * @return bool True only when a Tina4 holder was actually signalled.
  */
 function killProcessOnPort(int $port): bool
 {
-    if (PHP_OS_FAMILY === 'Windows') {
-        return false;
-    }
-    // Reclaiming a port makes sense on a dev machine, where a previous serve
-    // may still hold it. Inside a container the server IS the container, so
-    // there is no stale sibling -- and trying is dangerous: casting a
-    // non-numeric lsof field yields 1, and SIGTERM to PID 1 is the container's
-    // own init. That is what produced "Killed existing process on port 7145
-    // (PID: 1 /usr/local/bin/php ...)" in a real image.
-    if (tina4InContainer()) {
-        return false;
-    }
-    $output = @shell_exec("lsof -ti :{$port} 2>/dev/null");
-    if (!empty(trim($output ?? ''))) {
-        $me = function_exists('posix_getpid') ? posix_getpid() : getmypid();
-        $myGroup = function_exists('posix_getpgrp') ? posix_getpgrp() : null;
-        $killed = [];
-        foreach (tina4SelectablePids(trim($output), $me, $myGroup) as $pid) {
-            @posix_kill($pid, 15);      // SIGTERM
-            $killed[] = (string)$pid;
-        }
-        if (empty($killed)) {
-            return false;
-        }
-        usleep(500000); // 0.5s
-        echo "  Warning: Killed existing process on port {$port} (PID: " . implode(', ', $killed) . ")\n";
+    $result = \Tina4\PortTakeover::takeOverPort(
+        $port,
+        \Tina4\PortTakeover::isDev(),
+        \Tina4\PortTakeover::noTakeoverOptedOut()
+    );
+    if ($result['status'] === \Tina4\PortTakeover::KILLED) {
+        echo "  Warning: {$result['message']}\n";
         return true;
+    }
+    if ($result['message'] !== '' && in_array($result['status'], \Tina4\PortTakeover::REFUSALS, true)) {
+        echo "  {$result['message']}\n";
     }
     return false;
 }
@@ -342,50 +334,21 @@ function killProcessOnPort(int $port): bool
  */
 function tina4InContainer(): bool
 {
-    if (is_file('/.dockerenv') || is_file('/run/.containerenv')) {
-        return true;
-    }
-    $blob = @file_get_contents('/proc/1/cgroup');
-    if ($blob === false) {
-        return false;
-    }
-    return str_contains($blob, 'docker')
-        || str_contains($blob, 'containerd')
-        || str_contains($blob, 'kubepods');
+    return \Tina4\PortTakeover::inContainer();
 }
 
 /**
  * The PIDs from `lsof -ti` output that are safe to signal.
  *
- * Pure so the safety rule can be tested directly. An unvalidated parse is a
- * footgun with real teeth: where lsof prints a different shape than -ti
- * implies, a non-numeric field casts to 0, and signalling PID 0 hits EVERY
- * process in the caller's own process group -- the server kills itself.
- *
- * Accepts only all-digit tokens; never PID 0 (our group), PID 1 (init),
- * ourselves, or our own process group.
+ * Thin wrapper over the shared \Tina4\PortTakeover::selectablePids so the CLI
+ * and the runtime bind-failure path share ONE implementation. Never casts junk
+ * into a PID and never signals PID 0/1, ourselves, or our own process group.
  *
  * @return int[]
  */
 function tina4SelectablePids(string $lsofOutput, int $me, ?int $myGroup = null): array
 {
-    $pids = [];
-    foreach (preg_split('/\s+/', trim($lsofOutput)) as $token) {
-        if ($token === '' || !ctype_digit($token)) {
-            continue;               // never cast junk into a PID
-        }
-        $pid = (int)$token;
-        if ($pid <= 1 || $pid === $me) {
-            continue;               // 0 = our group, 1 = init, me = suicide
-        }
-        if ($myGroup !== null && $pid === $myGroup) {
-            continue;
-        }
-        if (!in_array($pid, $pids, true)) {
-            $pids[] = $pid;
-        }
-    }
-    return $pids;
+    return \Tina4\PortTakeover::selectablePids($lsofOutput, $me, $myGroup);
 }
 
 
@@ -394,7 +357,16 @@ function tina4SelectablePids(string $lsofOutput, int $me, ?int $myGroup = null):
 // Extracted as a function so it can be unit-tested.
 function resolveHostPort(?string $cliArg = null): array
 {
-    $defaultHost = '0.0.0.0';
+    // DEVADMIN-DEC-02 (feature 127): in dev/serve mode the /__dev dashboard
+    // exposes an unauthenticated file/SQL/RCE surface, so the DEFAULT bind is
+    // loopback, not 0.0.0.0. Only the default changes: an explicit --host /
+    // positional host / TINA4_HOST / HOST still wins (the production Docker CMD
+    // passes --host 0.0.0.0, and production does not set TINA4_DEBUG), so a
+    // developer who WANTS network exposure sets TINA4_HOST=0.0.0.0 deliberately.
+    $debugOn = class_exists('\Tina4\DotEnv')
+        ? \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DEBUG', 'false'))
+        : in_array(strtolower(trim((string) getenv('TINA4_DEBUG'))), ['true', '1', 'yes', 'on'], true);
+    $defaultHost = $debugOn ? '127.0.0.1' : '0.0.0.0';
     $defaultPort = '7145';
 
     $host = null;
@@ -409,9 +381,11 @@ function resolveHostPort(?string $cliArg = null): array
         }
     }
 
-    // 2. ENV vars (fill in anything not set by CLI)
+    // 2. ENV vars (fill in anything not set by CLI). TINA4_HOST wins over the
+    // legacy plain HOST (parity with Python/Ruby) so a stray OS-level HOST on a
+    // shared runner cannot silently override the framework's bind address.
     if ($host === null) {
-        $envHost = getenv('HOST');
+        $envHost = getenv('TINA4_HOST') ?: getenv('HOST');
         if ($envHost !== false && $envHost !== '') {
             $host = $envHost;
         }
@@ -556,34 +530,34 @@ function tina4DelegateToClient(string $command, array $args): int
 }
 
 /**
- * Resolve the framework version WITHOUT booting the app or loading heavy classes.
+ * Resolve the framework version WITHOUT booting the app (no config resolution,
+ * no DB connection, no App::start() side effects).
  *
- * tina4: deliberately mirrors \Tina4\App::resolveVersion() (composer.json ->
- * installed.json) rather than calling it, so `commands` stays boot-free — the
- * tina4 Rust client calls it on every `tina4 --help`, in any directory. Both read
- * the same package metadata, so the reported version matches the running app's.
+ * VERSION-DEC-01 (feature 130, single-resolver convergence): this used to
+ * mirror a since-deleted \Tina4\App::resolveVersion() by re-reading
+ * composer.json's `version` key (this repo's composer.json has none --
+ * Packagist derives the version from git tags) and vendor/composer/installed.json
+ * (no self-entry, because in THIS repo Tina4 IS the project, not a vendored
+ * dependency). Both paths missed, so a plain git checkout always fell to the
+ * '0.0.0' floor -- while the app itself reported the real \Tina4\App::$VERSION,
+ * and the MCP serverInfo reported yet a THIRD value (its constructor default
+ * '1.0.0'). Three sources, three answers, one running framework.
+ *
+ * Now there is ONE source: \Tina4\App::$VERSION (the declared constant every
+ * other surface -- health, banner, dashboard, MCP serverInfo -- already reads).
+ * Referencing it only autoloads the App class DEFINITION (a `class App { ... }`
+ * with no top-level side effects) -- it does not call App::start(), so this
+ * stays exactly as boot-free as the composer-reading version was. The
+ * autoloader is already required at the top of this file before any command
+ * dispatches, so the class is always reachable here.
  */
-function tina4FrameworkVersion(string $frameworkRoot): string
+function tina4FrameworkVersion(): string
 {
-    $composer = $frameworkRoot . '/composer.json';
-    if (is_file($composer)) {
-        $data = json_decode((string)file_get_contents($composer), true);
-        if (!empty($data['version'])) {
-            return (string)$data['version'];
-        }
+    if (class_exists('\Tina4\App')) {
+        return \Tina4\App::$VERSION;
     }
-    // Packagist/git installs carry the version in composer's installed.json instead.
-    foreach ([$frameworkRoot . '/../../composer/installed.json',
-              $frameworkRoot . '/vendor/composer/installed.json'] as $installed) {
-        if (is_file($installed)) {
-            $data = json_decode((string)file_get_contents($installed), true);
-            foreach ((array)($data['packages'] ?? $data) as $pkg) {
-                if (($pkg['name'] ?? '') === 'tina4stack/tina4php') {
-                    return (string)($pkg['version'] ?? '0.0.0');
-                }
-            }
-        }
-    }
+    // Only reachable when no composer autoloader was found at all (see the
+    // top of this file) -- in that state the rest of the CLI is unusable too.
     return '0.0.0';
 }
 
@@ -969,6 +943,13 @@ DOCKERFILE;
             putenv('TINA4_NO_RELOAD=true');
             $_ENV['TINA4_NO_RELOAD'] = 'true';
         }
+        // --no-kill opts out of port takeover for the whole process, so the CLI
+        // path here AND the runtime bind-failure fallback both honour it
+        // (TAKEOVER-DEC-03).
+        if (isset($serveFlags['no-kill'])) {
+            putenv('TINA4_NO_TAKEOVER=true');
+            $_ENV['TINA4_NO_TAKEOVER'] = 'true';
+        }
         $positionalArg = $servePositional[0] ?? null;
 
         [$host, $port] = resolveHostPort($positionalArg);
@@ -1220,7 +1201,24 @@ DOCKERFILE;
             mkdir($migrationsDir, 0755, true);
         }
         if (class_exists('\Tina4\Migration')) {
-            $migration = new \Tina4\Migration($migrationsDir);
+            // Resolve $db the SAME way 'migrate' / 'migrate:rollback' do (App
+            // database, falling back to DATABASE_URL) -- status() needs a real
+            // adapter to query the tracking table. Passing $migrationsDir alone
+            // used to land the DIRECTORY STRING in the constructor's ?DatabaseAdapter
+            // $db parameter, which TypeErrors before status() ever runs.
+            $db = \Tina4\App::getDatabase();
+            if ($db === null) {
+                $dbUrl = getenv('DATABASE_URL') ?: (\Tina4\DotEnv::getEnv('DATABASE_URL', '') ?? '');
+                if (!empty($dbUrl)) {
+                    $db = \Tina4\Database\Database::create($dbUrl);
+                    \Tina4\App::setDatabase($db);
+                }
+            }
+            if ($db === null) {
+                echo "Error: No database configured. Set DATABASE_URL in .env\n";
+                exit(1);
+            }
+            $migration = new \Tina4\Migration($db, $migrationsDir);
             $status = $migration->status();
 
             echo "Migration Status\n";
@@ -1379,21 +1377,39 @@ DOCKERFILE;
     // TEST — Run tests
     // ────────────────────────────────────────────
     case 'test':
-        // Propagate the runner's exit code so `tina4php test || exit 1` CI
-        // gates actually fail on a red suite (python#96 parity). passthru's
-        // second by-ref arg captures the child process exit code — the same
-        // pattern `build` and `migrate` above use. A missing runner is itself
-        // a failure: a CI gate must exit non-zero when it cannot run tests.
+        // Inline @tests stage — discover decorated inline tests from the EXPLICIT
+        // tests dir and run them with a real exit code (INLINE-DEC-01). Discovery
+        // never eval's the docblock args nor require_once's a file outside tests/
+        // (INLINE-DEC-02), so it cannot execute a scanned source file.
+        \Tina4\Testing::reset();
+        $inlineDiscovered = \Tina4\Testing::discover($cwd . '/tests');
+        $inlineFailed = false;
+        if ($inlineDiscovered > 0) {
+            $inlineResults = \Tina4\Testing::runAll();
+            $inlineFailed = ($inlineResults['failed'] + $inlineResults['errors']) > 0;
+        }
+
+        // External suite stage — propagate the PHPUnit / smoke runner's exit code
+        // so `tina4php test || exit 1` CI gates fail on a red suite (python#96
+        // parity). passthru's second by-ref arg captures the child exit code.
         $testExit = 0;
+        $ranSuite = false;
         if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
             passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'), $testExit);
+            $ranSuite = true;
         } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
             passthru($cwd . '/vendor/bin/phpunit tests --colors=always', $testExit);
-        } else {
-            echo "No test runner found. Install phpunit or create tests/test_v3_smoke.php\n";
-            $testExit = 1;
+            $ranSuite = true;
         }
-        exit($testExit);
+
+        // Nothing to run at all is itself a failure — a CI gate must exit non-zero
+        // when it cannot run any tests.
+        if ($inlineDiscovered === 0 && !$ranSuite) {
+            echo "No tests found. Add inline @tests to files under tests/, install phpunit, or create tests/test_v3_smoke.php\n";
+            exit(1);
+        }
+
+        exit(($inlineFailed || $testExit) ? 1 : 0);
 
     // ────────────────────────────────────────────
     // SEED — Run seeders
@@ -1589,11 +1605,14 @@ DOCKERFILE;
     // COMMANDS — Self-describing command surface (for the tina4 client)
     // ────────────────────────────────────────────
     // CHEAP + side-effect-free by contract: prints only the static registry + the
-    // resolved version. It never bootstraps the app, opens a DB, runs migrations,
-    // or autoloads framework/app classes — the tina4 Rust client calls it on every
-    // `tina4 --help`, in any directory, so it stays instant and safe to run anywhere.
+    // resolved version. It never bootstraps the app, opens a DB, or runs
+    // migrations — the tina4 Rust client calls it on every `tina4 --help`, in
+    // any directory, so it stays instant and safe to run anywhere.
+    // tina4FrameworkVersion() DOES autoload one framework class (\Tina4\App,
+    // for its single-source $VERSION constant, VERSION-DEC-01) — that is only
+    // a class DEFINITION with no top-level side effects, never App::start().
     case 'commands':
-        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion((string)$frameworkRoot), $TINA4_DELEGATED);
+        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion(), $TINA4_DELEGATED);
         if (in_array('--json', $args, true)) {
             echo json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
         } else {

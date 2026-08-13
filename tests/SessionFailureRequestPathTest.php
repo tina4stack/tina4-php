@@ -75,7 +75,10 @@ class SessionFailureRequestPathTest extends TestCase
         putenv('TINA4_LOG_DIR=' . $this->logDir);
         putenv('TINA4_LOG_FORMAT=json');
         putenv('TINA4_LOG_LEVEL=debug');
-        Log::configure(logDir: $this->logDir, minLevel: 'debug');
+        // logger_contract rewrite (2026-08-13): configure() takes `level`,
+        // not the retired `minLevel`. TINA4_LOG_OUTPUT=file (set above)
+        // enables the file sink.
+        Log::configure(logDir: $this->logDir, level: 'debug');
 
         // DRIVER SANITY. Without this, every "was logged" assertion below would
         // be vacuous and every "logged nothing" assertion trivially true - the

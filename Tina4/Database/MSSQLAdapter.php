@@ -27,6 +27,10 @@ class MSSQLAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     /**
@@ -207,6 +211,8 @@ class MSSQLAdapter implements DatabaseAdapter
             // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
             // stringifies `false` to '' — same class of bug as PG).
             $values = empty($params) ? [] : self::normalizeBoolParams(array_values($params), nativeBoolean: false);
+            // Splice raw-binary params as 0x literals (FreeTDS cannot bind them).
+            [$sql, $values] = self::inlineBinaryParams($sql, $values);
 
             if ($this->driver === 'pdo') {
                 $stmt = $this->db->prepare($sql);
@@ -334,6 +340,8 @@ class MSSQLAdapter implements DatabaseAdapter
             // MSSQL BIT takes 1/0; bind PHP booleans as 1/0 (sqlsrv otherwise
             // stringifies `false` to '' — same class of bug as PG).
             $values = empty($params) ? [] : self::normalizeBoolParams(array_values($params), nativeBoolean: false);
+            // Splice raw-binary params as 0x literals (FreeTDS cannot bind them).
+            [$sql, $values] = self::inlineBinaryParams($sql, $values);
 
             if ($this->driver === 'pdo') {
                 // PDO is in ERRMODE_EXCEPTION — a bad statement raises a
@@ -577,5 +585,85 @@ class MSSQLAdapter implements DatabaseAdapter
             'password' => $this->password,
             'database' => $this->database,
         ];
+    }
+
+    /**
+     * Inline any BINARY parameter as a T-SQL `0x` varbinary literal, returning
+     * the rewritten SQL and the remaining bound values.
+     *
+     * MSSQL-BUFFER: neither backend can carry raw binary through a `?` bind -
+     * FreeTDS (pdo_dblib) breaks the TDS stream on a NUL byte (MEASURED against
+     * real SQL Server: even PDO::PARAM_LOB fails with "Incorrect syntax"), and
+     * ext-sqlsrv mishandles it the same way - so a value that is not valid UTF-8
+     * text is spliced as `0x<hex>`, which round-trips byte-for-byte on both
+     * backends. Ordinary UTF-8 text keeps the bound `?` path (a crafted string is
+     * still parameterised, never inlined).
+     *
+     * @param string $sql    SQL whose placeholders are all positional `?`
+     *                       (post SQLTranslator::namedToPositional).
+     * @param array  $values Positional bind values, in order.
+     * @return array{0: string, 1: array} The rewritten SQL and the kept values.
+     */
+    private static function inlineBinaryParams(string $sql, array $values): array
+    {
+        if ($values === []) {
+            return [$sql, $values];
+        }
+        $out = '';
+        $kept = [];
+        $index = 0;
+        $length = strlen($sql);
+        $inString = false;
+        for ($position = 0; $position < $length; $position++) {
+            $char = $sql[$position];
+            if ($char === "'") {
+                // A doubled '' inside a literal is an escaped quote, not a close.
+                if ($inString && $position + 1 < $length && $sql[$position + 1] === "'") {
+                    $out .= "''";
+                    $position++;
+                    continue;
+                }
+                $inString = !$inString;
+                $out .= $char;
+                continue;
+            }
+            if ($char === '?' && !$inString) {
+                $value = $values[$index] ?? null;
+                $index++;
+                if (is_string($value) && self::isBinaryParam($value)) {
+                    $out .= '0x' . bin2hex($value);
+                } else {
+                    $out .= '?';
+                    $kept[] = $value;
+                }
+                continue;
+            }
+            $out .= $char;
+        }
+        // Any values past the placeholders we scanned (should not happen) are kept.
+        for ($count = count($values); $index < $count; $index++) {
+            $kept[] = $values[$index];
+        }
+        return [$out, $kept];
+    }
+
+    /**
+     * Whether a string parameter is raw BINARY (inline it as `0x<hex>`) rather
+     * than text. True when it holds a NUL byte or is not valid UTF-8 - both cases
+     * a `?` bind cannot carry over FreeTDS. Valid UTF-8 text stays bound.
+     *
+     * @param string $value The candidate bind value.
+     * @return bool True when the value must be inlined as a varbinary literal.
+     */
+    private static function isBinaryParam(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+        if (strpos($value, "\0") !== false) {
+            return true;
+        }
+        // preg_match with the /u flag returns 1 for valid UTF-8, false otherwise.
+        return @preg_match('//u', $value) !== 1;
     }
 }

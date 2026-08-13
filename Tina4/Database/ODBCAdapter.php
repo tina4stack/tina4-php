@@ -24,6 +24,10 @@ class ODBCAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     // Shared SQL normalisation: the row-cap detectors (scrub + anchor) and the
@@ -140,71 +144,71 @@ class ODBCAdapter implements DatabaseAdapter
         $this->ensureOpen();
         $this->lastError = null;
 
-        try {
-            // Total count. The closing paren goes on its OWN LINE
-            // (wrapCountSubquery): inline, a trailing `-- comment` in the user
-            // SQL comments it out and the probe fails on otherwise-valid SQL.
-            $countSql = self::wrapCountSubquery($sql, '_tina4_count');
-            $countRow = $this->fetchOne($countSql, $params);
-            // COUNT(*) column may be uppercased by some ODBC drivers
-            $total = (int) ($countRow['total'] ?? $countRow['TOTAL'] ?? 0);
-
-            // Pagination — skip if the statement already ENDS with its own row
-            // cap, or if $limit <= 0 (v3.13.12: fetchAll's "give me all rows").
-            //
-            // This used to be a bare `stripos($sql, 'LIMIT') !== false` over a
-            // `--`-stripped copy. MEASURED: a column named `rate_limit`, or a
-            // literal `WHERE label != 'LIMIT'`, or a LIMIT inside a SUBQUERY all
-            // read as "the caller supplied their own cap", so the cap was
-            // dropped and the WHOLE TABLE came back — the production incident
-            // the cap exists to prevent. The shared detectors scrub literals and
-            // comments and anchor to the END of the statement.
-            if ($limit <= 0 || self::hasTrailingLimit($sql) || self::hasTrailingFetch($sql)) {
-                $pagedSql = $sql;
-            } else {
-                // Try OFFSET/FETCH NEXT (SQL standard, supported by most ODBC
-                // targets). NEW LINE: appended inline the cap lands inside a
-                // trailing `-- comment` and is silently swallowed.
-                $pagedSql = self::appendSqlClause(
-                    $sql,
-                    "OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY"
-                );
-            }
-
-            $data = $this->query($pagedSql, $params);
-
-            return [
-                'data'   => $data,
-                'total'  => $total,
-                'limit'  => $limit,
-                'offset' => $offset,
-            ];
-        } catch (\Exception $e) {
-            $this->lastError = $e->getMessage();
-            return [
-                'data'   => [],
-                'total'  => 0,
-                'limit'  => $limit,
-                'offset' => $offset,
-            ];
+        // FAIL LOUD (parity with PostgresAdapter + the Python master): query()
+        // records the driver error on error() and returns []. fetch() must RAISE
+        // that instead of swallowing it into an empty result set - the old
+        // catch-return-empty hid a real query error as "no rows". query() clears
+        // lastError on entry, so a non-null lastError after the call means the
+        // statement failed.
+        // The closing paren goes on its OWN LINE (wrapCountSubquery): inline, a
+        // trailing `-- comment` in the user SQL comments it out and the probe
+        // fails on otherwise-valid SQL.
+        $countSql = self::wrapCountSubquery($sql, '_tina4_count');
+        $countRow = $this->query($countSql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('ODBC fetch() failed: ' . $this->lastError);
         }
+        // COUNT(*) column may be uppercased by some ODBC drivers
+        $total = (int) ($countRow[0]['total'] ?? $countRow[0]['TOTAL'] ?? 0);
+
+        // Pagination — skip if the statement already ENDS with its own row cap,
+        // or if $limit <= 0 (v3.13.12: fetchAll's "give me all rows").
+        //
+        // This used to be a bare `stripos($sql, 'LIMIT') !== false` over a
+        // `--`-stripped copy. MEASURED: a column named `rate_limit`, or a
+        // literal `WHERE label != 'LIMIT'`, or a LIMIT inside a SUBQUERY all read
+        // as "the caller supplied their own cap", so the cap was dropped and the
+        // WHOLE TABLE came back — the production incident the cap exists to
+        // prevent. The shared detectors scrub literals and comments and anchor to
+        // the END of the statement.
+        if ($limit <= 0 || self::hasTrailingLimit($sql) || self::hasTrailingFetch($sql)) {
+            $pagedSql = $sql;
+        } else {
+            // Try OFFSET/FETCH NEXT (SQL standard, supported by most ODBC
+            // targets). NEW LINE: appended inline the cap lands inside a trailing
+            // `-- comment` and is silently swallowed.
+            $pagedSql = self::appendSqlClause(
+                $sql,
+                "OFFSET {$offset} ROWS FETCH NEXT {$limit} ROWS ONLY"
+            );
+        }
+
+        $data = $this->query($pagedSql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('ODBC fetch() failed: ' . $this->lastError);
+        }
+
+        return [
+            'data'   => $data,
+            'total'  => $total,
+            'limit'  => $limit,
+            'offset' => $offset,
+        ];
     }
 
     public function fetchOne(string $sql, array $params = []): ?array
     {
         $this->ensureOpen();
-        $this->lastError = null;
-
-        try {
-            $stmt = $this->pdo->prepare($sql);
-            $this->bindParams($stmt, $params);
-            $stmt->execute();
-            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-            return $row !== false ? $row : null;
-        } catch (\PDOException $e) {
-            $this->lastError = $e->getMessage();
-            return null;
+        // FAIL LOUD (parity with PostgresAdapter + the Python master): query()
+        // clears lastError on entry and records the driver error on failure
+        // (returning []), so a non-null lastError after the call means the
+        // statement failed — RAISE it instead of returning null (which a caller
+        // reads as "no row").
+        $rows = $this->query($sql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException('ODBC fetchOne() failed: ' . $this->lastError);
         }
+        return $rows[0] ?? null;
     }
 
     public function execute(string $sql, array $params = []): bool|DatabaseResult
@@ -306,15 +310,57 @@ class ODBCAdapter implements DatabaseAdapter
                 [$table]
             );
 
+            // Real PK, from INFORMATION_SCHEMA - not the old `false` stub.
+            // Feature 4's filterless-write guard reads primaryKey, so without
+            // this a PK-keyed update(table, data) on ODBC could not introspect
+            // the key and threw.
+            $pkColumns = $this->primaryKeyColumns($table);
             return array_map(fn($row) => [
                 'name'     => $row['COLUMN_NAME'] ?? $row['column_name'] ?? '',
                 'type'     => $row['DATA_TYPE']   ?? $row['data_type']   ?? '',
                 'nullable' => strtoupper($row['IS_NULLABLE'] ?? $row['is_nullable'] ?? 'YES') === 'YES',
                 'default'  => $row['COLUMN_DEFAULT'] ?? $row['column_default'] ?? null,
-                'primaryKey'  => false, // INFORMATION_SCHEMA.COLUMNS does not expose PK directly
+                'primaryKey' => in_array(
+                    strtolower((string) ($row['COLUMN_NAME'] ?? $row['column_name'] ?? '')),
+                    $pkColumns,
+                    true
+                ),
             ], $rows);
         } catch (\Exception $e) {
             $this->lastError = $e->getMessage();
+            return [];
+        }
+    }
+
+    /**
+     * The table's primary-key columns, lower-cased for case-insensitive matching.
+     *
+     * PDO_ODBC exposes no SQLPrimaryKeys catalog call, so this reads the portable
+     * INFORMATION_SCHEMA constraint views (PostgreSQL, MySQL and MSSQL all
+     * implement them). Empty on any target that does not report a primary key -
+     * the write-guard then requires an explicit filter.
+     *
+     * @param string $table Table name
+     * @return string[] Lower-cased primary-key column names
+     */
+    private function primaryKeyColumns(string $table): array
+    {
+        try {
+            $rows = $this->query(
+                'SELECT kcu.COLUMN_NAME AS column_name '
+                . 'FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc '
+                . 'JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu '
+                . '  ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME '
+                . ' AND kcu.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA '
+                . 'WHERE tc.CONSTRAINT_TYPE = ? AND tc.TABLE_NAME = ? '
+                . 'ORDER BY kcu.ORDINAL_POSITION',
+                ['PRIMARY KEY', $table]
+            );
+            return array_map(
+                static fn($r) => strtolower((string) ($r['column_name'] ?? $r['COLUMN_NAME'] ?? '')),
+                $rows
+            );
+        } catch (\Exception) {
             return [];
         }
     }

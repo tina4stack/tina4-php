@@ -364,7 +364,6 @@ Old names removed across all frameworks: `render()`, `renderProduction()`, `rend
 | Method | Python | PHP | Ruby | Node |
 |--------|--------|-----|------|------|
 | Render overlay | `render_error_overlay()` | `renderErrorOverlay()` | `render_error_overlay` | `renderErrorOverlay()` |
-| Production error | `render_production_error()` | `renderProductionError()` | `render_production_error` | `renderProductionError()` |
 | Check debug | `is_debug_mode()` | `isDebugMode()` | `is_debug_mode` | `isDebugMode()` |
 
 ---

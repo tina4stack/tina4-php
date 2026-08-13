@@ -49,5 +49,55 @@ final class AppTestSupport
             restore_exception_handler();
             $exceptionFlag->setValue($app, false);
         }
+
+        self::releaseErrorTrackerHandlers();
+    }
+
+    /**
+     * Release the process-global handler pair Tina4\ErrorTracker::register()
+     * installs when a dev-mode App::start() cascades into DevAdmin::register()
+     * (Tina4\DevAdmin::register() -> Tina4\ErrorTracker::register(), both
+     * declared in Tina4/DevAdmin.php). This is a SEPARATE handler layer from
+     * App's own instance handlers released above — App and ErrorTracker each
+     * independently call set_error_handler()/set_exception_handler(), so
+     * releasing one never releases the other, and a test that only released
+     * App's handlers left ErrorTracker's pair dangling past its own PHPUnit
+     * boundary (flagged "did not remove its own error/exception handlers").
+     *
+     * Tina4\Testing\HandlerStackHygieneExtension resets
+     * ErrorTracker::$handlerDepth to 0 immediately before every test's
+     * PHPUnit handler-stack snapshot, so a nonzero depth observed here can
+     * only mean THIS test's own boot pushed it — releasing it is always safe
+     * and can never pop a handler an earlier test left behind. Deliberately
+     * narrower than ErrorTracker::reset() (a test-only helper that also wipes
+     * captured errors + the on-disk store): this method's only job is
+     * handlers, so callers that don't care about ErrorTracker at all see no
+     * side effect beyond the OS-level handler stack.
+     */
+    private static function releaseErrorTrackerHandlers(): void
+    {
+        // ErrorTracker is declared inside Tina4/DevAdmin.php, not its own
+        // PSR-4 file. If it isn't loaded, DevAdmin::register() was never
+        // called, so ErrorTracker::register() was never called either —
+        // nothing to release. Never force-autoload it here.
+        if (!class_exists(\Tina4\ErrorTracker::class, false)) {
+            return;
+        }
+
+        $depthProperty = new \ReflectionProperty(\Tina4\ErrorTracker::class, 'handlerDepth');
+        $depth = $depthProperty->getValue(null);
+        if ($depth <= 0) {
+            return;
+        }
+
+        while ($depth > 0) {
+            restore_error_handler();
+            restore_exception_handler();
+            $depth--;
+        }
+        $depthProperty->setValue(null, 0);
+
+        $registeredProperty = new \ReflectionProperty(\Tina4\ErrorTracker::class, 'registered');
+        $registeredProperty->setValue(null, false);
     }
 }

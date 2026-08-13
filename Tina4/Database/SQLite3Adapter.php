@@ -18,6 +18,10 @@ class SQLite3Adapter implements DatabaseAdapter
 
     use AutocommitTrait;
 
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
+
     /**
      * The SQL dialect this adapter speaks.
      *
@@ -302,9 +306,20 @@ class SQLite3Adapter implements DatabaseAdapter
             $this->lastError = $this->db->lastErrorMsg();
             throw new DatabaseException('SQLite3 executeMany() failed: ' . ($this->lastError ?: 'prepare failed'));
         }
+        // ADR-0044 (DBA-B05): a ragged/short parameter set must fail BEFORE
+        // any durable partial success. SQLite3Stmt silently binds a missing
+        // trailing position as NULL rather than erroring, so a mismatched
+        // row would otherwise write a wrong value instead of raising.
+        $expectedParams = $stmt->paramCount();
 
         try {
             foreach ($paramsList as $params) {
+                if (count($params) !== $expectedParams) {
+                    throw new DatabaseException(
+                        'SQLite3 executeMany() failed: binding count mismatch — expected '
+                        . "{$expectedParams} parameters, got " . count($params)
+                    );
+                }
                 $stmt->reset();
                 $stmt->clear();
                 $this->bindParams($stmt, $params);
@@ -382,12 +397,18 @@ class SQLite3Adapter implements DatabaseAdapter
         $columns = [];
 
         foreach ($rows as $row) {
+            $pk = (int)$row['pk'];
             $columns[] = [
                 'name' => $row['name'],
                 'type' => $row['type'],
                 'nullable' => (int)$row['notnull'] === 0,
                 'default' => $row['dflt_value'],
-                'primaryKey' => (int)$row['pk'] > 0,
+                'primaryKey' => $pk > 0,
+                // ADR-0044 amendment (Feature 5 Decision 7, 2026-08-10): null
+                // for a non-key column; for a composite key, SQLite's own
+                // PRAGMA `pk` value IS the 1-based declared position within
+                // PRIMARY KEY (...), not table-column order.
+                'primaryKeyPosition' => $pk > 0 ? $pk : null,
             ];
         }
 

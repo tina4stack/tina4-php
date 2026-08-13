@@ -647,7 +647,9 @@ class Database implements DatabaseAdapter
 
         // executeMany() pins one adapter, opens a transaction, runs every row,
         // commits, and RE-RAISES (rolling back) on the first failed row.
-        $count = $this->executeMany($sql, $paramsList);
+        // Returns the shared aggregate DatabaseResult (ADR-0044); affectedRows
+        // is the total row count.
+        $count = $this->executeMany($sql, $paramsList)->affectedRows;
 
         // After a successful batch the pin is released; getLastId() reads from
         // the (now committed) connection's last insert id where the engine
@@ -803,9 +805,27 @@ class Database implements DatabaseAdapter
         if (!array_key_exists($table, $this->pkCache)) {
             try {
                 $columns = $this->getColumns($table);
+                $pkColumns = array_values(array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey'])));
+                // ADR-0044 amendment: sort by primaryKeyPosition so a composite
+                // PRIMARY KEY (b, a) returns ["b", "a"] (declared key order), not
+                // table-column order. A column with no reported position sorts last.
+                usort($pkColumns, static function (array $a, array $b): int {
+                    $posA = $a['primaryKeyPosition'] ?? null;
+                    $posB = $b['primaryKeyPosition'] ?? null;
+                    if ($posA === $posB) {
+                        return 0;
+                    }
+                    if ($posA === null) {
+                        return 1;
+                    }
+                    if ($posB === null) {
+                        return -1;
+                    }
+                    return $posA <=> $posB;
+                });
                 $this->pkCache[$table] = array_values(array_map(
                     static fn(array $c): string => (string)$c['name'],
-                    array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey']))
+                    $pkColumns
                 ));
             } catch (\Throwable) {
                 $this->pkCache[$table] = [];
@@ -892,6 +912,31 @@ class Database implements DatabaseAdapter
     public function open(): void
     {
         // Connections are opened in the constructor — this satisfies the interface.
+    }
+
+    /**
+     * Connect (ADR-0044 canonical name; no-op for the same reason as open()
+     * above — connections are opened lazily in the constructor).
+     */
+    public function connect(): void
+    {
+        // Connections are opened in the constructor — this satisfies the interface.
+    }
+
+    /**
+     * The canonical, credential-free engine name of the current adapter.
+     */
+    public function getDatabaseType(): string
+    {
+        return $this->getNextAdapter()->getDatabaseType();
+    }
+
+    /**
+     * Get the current autocommit setting, or set it on the active adapter.
+     */
+    public function autocommit(?bool $on = null): bool
+    {
+        return $this->getNextAdapter()->autocommit($on);
     }
 
     public function close(): void
@@ -1353,18 +1398,19 @@ class Database implements DatabaseAdapter
         } catch (\Throwable) {
             // Row likely already exists (PK conflict) — fine, keep going.
         }
-        $adapter->execute(
-            'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ?',
-            [$seqName]
-        );
+        // Single ATOMIC increment-and-return. The old path did the UPDATE then a
+        // SEPARATE SELECT: between them another caller could increment and commit,
+        // so both read the same value and returned a DUPLICATE id (a TOCTOU).
+        // PostgreSQL (the engine that reaches this fallback) supports UPDATE ...
+        // RETURNING, so the value we read is exactly the one this statement wrote.
         $row = $adapter->fetchOne(
-            'SELECT current_value FROM tina4_sequences WHERE seq_name = ?',
+            'UPDATE tina4_sequences SET current_value = current_value + 1 WHERE seq_name = ? RETURNING current_value',
             [$seqName]
         );
-        if ($row === null) {
+        if ($row === null || !isset($row['current_value'])) {
             throw new \RuntimeException("getNextId: sequence row '{$seqName}' missing");
         }
-        return (int) ($row['current_value'] ?? 1);
+        return (int) $row['current_value'];
     }
 
     /**
@@ -1435,31 +1481,44 @@ class Database implements DatabaseAdapter
         // PostgreSQL — try nextval() first, auto-create sequence if missing
         if ($raw instanceof PostgresAdapter || $raw instanceof PdoPostgresAdapter) {
             $seqName = strtolower($table) . '_' . strtolower($pkColumn) . '_seq';
+            // Fast path: the sequence already exists — nextval() is atomic.
             try {
                 $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
                 if ($row !== null && isset($row['next_id'])) {
                     return (int) $row['next_id'];
                 }
             } catch (\Throwable) {
-                // Sequence does not exist — try to create it seeded from MAX
-                try {
-                    $seed = 0;
-                    $maxRow = $adapter->fetchOne("SELECT COALESCE(MAX({$pkColumn}), 0) AS max_id FROM {$table}");
-                    if ($maxRow !== null) {
-                        $seed = (int) ($maxRow['max_id'] ?? 0);
-                    }
-
-                    $adapter->execute("CREATE SEQUENCE {$seqName} START WITH " . ($seed + 1));
-                    $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
-                    if ($row !== null && isset($row['next_id'])) {
-                        return (int) $row['next_id'];
-                    }
-                } catch (\Throwable) {
-                    // Fall through to sequence table
-                }
+                // Sequence missing — create it idempotently below.
             }
 
-            // PostgreSQL fallback — use sequence table
+            // First use: create the sequence IDEMPOTENTLY (CREATE SEQUENCE IF NOT
+            // EXISTS), seeded from MAX(pk). Two concurrent first-callers therefore
+            // share ONE counter — the loser's create is a no-op, not an error, so
+            // it never falls to the tina4_sequences table and draws a DUPLICATE id
+            // from a second, independent counter (the first-use race).
+            try {
+                $seed = 0;
+                $maxRow = $adapter->fetchOne("SELECT COALESCE(MAX({$pkColumn}), 0) AS max_id FROM {$table}");
+                if ($maxRow !== null) {
+                    $seed = (int) ($maxRow['max_id'] ?? 0);
+                }
+                $adapter->execute("CREATE SEQUENCE IF NOT EXISTS {$seqName} START WITH " . ($seed + 1));
+            } catch (\Throwable) {
+                // A concurrent creator won the catalog race — the sequence exists now.
+            }
+
+            // ALWAYS draw from the sequence now that it exists. Never fall to the
+            // sequence table just because our own CREATE lost the race.
+            try {
+                $row = $adapter->fetchOne("SELECT nextval('{$seqName}') AS next_id");
+                if ($row !== null && isset($row['next_id'])) {
+                    return (int) $row['next_id'];
+                }
+            } catch (\Throwable) {
+                // Truly cannot use a sequence — last-resort table below.
+            }
+
+            // PostgreSQL fallback — use the (now atomic) sequence table
             return $this->sequenceNext("{$table}.{$pkColumn}", $table, $pkColumn, $adapter);
         }
 
@@ -1480,6 +1539,9 @@ class Database implements DatabaseAdapter
      * @param string $pkColumn Primary key column name
      * @param MongoDBAdapter $adapter
      * @return int The next available ID
+     * @throws \RuntimeException If the adapter has no live database, or the atomic
+     *                          increment produces no value (never returns 1 on error,
+     *                          which would collide with an existing row).
      */
     private function mongoNextId(string $table, string $pkColumn, MongoDBAdapter $adapter): int
     {
@@ -1487,60 +1549,66 @@ class Database implements DatabaseAdapter
         $db = $adapter->getDatabase();
 
         if ($db === null) {
-            return 1;
+            // Never return 1 on failure — that collides with a real existing row.
+            throw new \RuntimeException(
+                "getNextId: MongoDB adapter has no live database for '{$seqName}'"
+            );
         }
 
-        try {
-            $sequences = $db->selectCollection('tina4_sequences');
+        $sequences = $db->selectCollection('tina4_sequences');
 
-            // Seed from the maximum existing value if sequence row does not exist yet
-            $existing = $sequences->findOne(
-                ['_id' => $seqName],
-                ['typeMap' => ['root' => 'array', 'document' => 'array']]
-            );
+        // Seed the counter from MAX(pk) the FIRST time only ($setOnInsert), keyed
+        // by _id — its built-in unique index makes concurrent first-use upserts
+        // race-safe, so two callers can never create two counters for one table.
+        $existing = $sequences->findOne(
+            ['_id' => $seqName],
+            ['typeMap' => ['root' => 'array', 'document' => 'array']]
+        );
 
-            if ($existing === null) {
-                $seed = 0;
-                try {
-                    $collection = $db->selectCollection($table);
-                    $maxDoc = $collection->findOne(
-                        [],
-                        [
-                            'sort'    => [$pkColumn => -1],
-                            'typeMap' => ['root' => 'array', 'document' => 'array'],
-                        ]
-                    );
-                    if ($maxDoc !== null && isset($maxDoc[$pkColumn])) {
-                        $seed = (int) $maxDoc[$pkColumn];
-                    }
-                } catch (\Throwable) {
-                    // Collection may not exist yet
-                }
-
-                // upsert the seed so findOneAndUpdate below starts from the right value
-                $sequences->updateOne(
-                    ['_id' => $seqName],
-                    ['$setOnInsert' => ['_id' => $seqName, 'current_value' => $seed]],
-                    ['upsert' => true]
+        if ($existing === null) {
+            $seed = 0;
+            try {
+                $collection = $db->selectCollection($table);
+                $maxDoc = $collection->findOne(
+                    [],
+                    [
+                        'sort'    => [$pkColumn => -1],
+                        'typeMap' => ['root' => 'array', 'document' => 'array'],
+                    ]
                 );
+                if ($maxDoc !== null && isset($maxDoc[$pkColumn])) {
+                    $seed = (int) $maxDoc[$pkColumn];
+                }
+            } catch (\Throwable) {
+                // Collection may not exist yet — seed 0.
             }
 
-            // Atomic increment — findOneAndUpdate returns the document AFTER the update
-            $result = $sequences->findOneAndUpdate(
+            $sequences->updateOne(
                 ['_id' => $seqName],
-                ['$inc' => ['current_value' => 1]],
-                [
-                    'upsert'         => true,
-                    'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
-                    'typeMap'        => ['root' => 'array', 'document' => 'array'],
-                ]
+                ['$setOnInsert' => ['current_value' => $seed]],
+                ['upsert' => true]
             );
-
-            return (int) ($result['current_value'] ?? 1);
-        } catch (\Throwable $e) {
-            // Fallback to 1 on any unexpected error
-            return 1;
         }
+
+        // Atomic increment-and-return. NEVER swallow an error into `return 1` — a
+        // swallowed error hands back an id that collides with an existing row.
+        $result = $sequences->findOneAndUpdate(
+            ['_id' => $seqName],
+            ['$inc' => ['current_value' => 1]],
+            [
+                'upsert'         => true,
+                'returnDocument' => \MongoDB\Operation\FindOneAndUpdate::RETURN_DOCUMENT_AFTER,
+                'typeMap'        => ['root' => 'array', 'document' => 'array'],
+            ]
+        );
+
+        if (!is_array($result) || !isset($result['current_value'])) {
+            throw new \RuntimeException(
+                "getNextId: MongoDB counter '{$seqName}' produced no value"
+            );
+        }
+
+        return (int) $result['current_value'];
     }
 
     /**
@@ -1554,40 +1622,49 @@ class Database implements DatabaseAdapter
      * @return array<int, bool> Array of execute() results
      * @throws \Exception If any execution fails (transaction is rolled back)
      */
-    public function executeMany(string $sql, array $paramsList = []): int
+    public function executeMany(string $sql, array $paramsList = []): DatabaseResult
     {
-        $count = 0;
-        // ONE round-trip per CHUNK instead of one per ROW. Looping execute()
-        // here pays a full network round-trip for every row: 500 rows took
-        // 9848ms on PostgreSQL against 15.8ms as a single multi-row VALUES
-        // (625x), MySQL 216x, MSSQL 121x. buildBatchInserts() returns an empty
-        // array for anything it cannot collapse safely — RETURNING, upserts,
-        // non-INSERT statements, ragged rows, Firebird — and the row-at-a-time
-        // loop below then runs unchanged.
-        $engine = $this->getNextAdapter()->getDatabaseType();
-        $batched = \Tina4\SQLTranslator::buildBatchInserts($sql, $paramsList, $engine);
+        // ADR-0044 (DBA-B01): empty input is a successful no-op — it opens no
+        // transaction, calls no adapter, and performs no write.
+        if ($paramsList === []) {
+            return new DatabaseResult([], affectedRows: 0, lastId: null);
+        }
 
+        // ADR-0044 (DBA-D02): the facade delegates to the adapter's OWN
+        // executeMany() exactly ONCE — it does not loop execute() itself.
+        // Native batching (one multi-row VALUES round-trip instead of one per
+        // row: 500 rows measured 9848ms on PostgreSQL row-at-a-time against
+        // 15.8ms batched — 625x, MySQL 216x, MSSQL 121x) is the ADAPTER's job.
         $this->startTransaction();
+        $adapter = $this->getNextAdapter(); // now returns the just-pinned adapter
         try {
-            if ($batched !== []) {
-                foreach ($batched as [$chunkSql, $chunkParams]) {
-                    $this->execute($chunkSql, $chunkParams);
-                }
-                // The collapse must be invisible: the count is the total ROW
-                // count, never the number of statements run.
-                $count = count($paramsList);
-            } else {
-                foreach ($paramsList as $params) {
-                    $this->execute($sql, $params);
-                    $count++;
-                }
+            if (!$adapter->supportsAtomicBatch() && count($paramsList) > 1) {
+                throw new UnsupportedAtomicBatchException(
+                    "provider '{$adapter->getDatabaseType()}' cannot guarantee an atomic "
+                    . 'batch write on this deployment (required deployment capability: '
+                    . 'a transaction-capable configuration) — rejected before the first '
+                    . 'write rather than risking partial durability'
+                );
             }
+            $raw = $adapter->executeMany($sql, $paramsList);
             $this->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->rollback();
+            $this->lastError = $e->getMessage();
             throw $e;
         }
-        return $count;
+
+        // Normalise whatever the adapter returned (a bare int today, or a
+        // DatabaseResult) into the shared aggregate result. affectedRows is
+        // the total ROW count — chunking/native batching must stay invisible.
+        $affected = $raw instanceof DatabaseResult ? $raw->affectedRows : (int)$raw;
+        $lastId = null;
+        try {
+            $lastId = $adapter->lastInsertId();
+        } catch (\Throwable) {
+            // Not every adapter can report one; last_id stays null.
+        }
+        return new DatabaseResult([], affectedRows: $affected, lastId: $lastId ?: null);
     }
 
     /**
@@ -1930,6 +2007,23 @@ class Database implements DatabaseAdapter
                 $path = substr($path, 1);
             }
             return self::makeSqlite($path === '' ? ':memory:' : $path, $autoCommit);
+        }
+
+        // ODBC: the part after odbc:/// is a raw ODBC connection string
+        // (DSN=... or DRIVER={...};...), NOT a parseable URL - parse_url() chokes
+        // on the braces, spaces and semicolons, so it must be special-cased like
+        // sqlite BEFORE the generic parser (which is why `odbc:///...` used to
+        // fail "Cannot determine database type" despite being in the map). The
+        // credentials passed separately are honoured by ODBCAdapter.
+        if (str_starts_with($url, 'odbc:')) {
+            if (str_starts_with($url, 'odbc:///')) {
+                $connectionString = substr($url, 8);
+            } elseif (str_starts_with($url, 'odbc://')) {
+                $connectionString = substr($url, 7);
+            } else {
+                $connectionString = substr($url, 5);   // "odbc:"
+            }
+            return new ODBCAdapter($connectionString, $username, $password, $autoCommit);
         }
 
         // For a bare file path ending in .db or .sqlite, assume SQLite

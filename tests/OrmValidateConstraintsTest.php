@@ -11,9 +11,10 @@
  * documented `$errors = $model->validate()` pattern silently accepted invalid
  * input. These tests pin the real contract — validate() COLLECTS one message
  * per violated constraint, never raises for a constraint, and returns [] only
- * when the model is genuinely valid. Each message is "<field>: <what was
- * wrong>", using the Node reference vocabulary so a 400 body reads the same in
- * every framework.
+ * when the model is genuinely valid. Each message is "<field> <what was
+ * wrong>" (feature 19, VALID-TWO-MESSAGES: the canonical request-Validator
+ * vocabulary, space-separated, so the ORM validator and the request-body
+ * Validator read identically) so a 400 body reads the same in every framework.
  *
  * Pure in-memory: validate() touches no database, so these run with no server
  * (the plan's cheapest suite). Every violation test is a GATE — it goes RED on
@@ -121,7 +122,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->name  = 'Alexander';   // 9 chars > maxLength 5
         $user->email = 'alan@example.com';
 
-        $this->assertContains('name: must be at most 5 characters', $user->validate());
+        $this->assertContains('name must be at most 5 characters', $user->validate());
     }
 
     public function testMinLengthViolationIsReported(): void
@@ -130,7 +131,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->name  = 'A';           // 1 char < minLength 2
         $user->email = 'alan@example.com';
 
-        $this->assertContains('name: must be at least 2 characters', $user->validate());
+        $this->assertContains('name must be at least 2 characters', $user->validate());
     }
 
     public function testMinViolationIsReported(): void
@@ -140,7 +141,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->email = 'alan@example.com';
         $user->age   = -5;            // < min 0
 
-        $this->assertContains('age: must be at least 0', $user->validate());
+        $this->assertContains('age must be at least 0', $user->validate());
     }
 
     public function testMaxViolationIsReported(): void
@@ -150,7 +151,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->email = 'alan@example.com';
         $user->age   = 999;           // > max 65
 
-        $this->assertContains('age: must be at most 65', $user->validate());
+        $this->assertContains('age must be at most 65', $user->validate());
     }
 
     public function testPatternViolationIsReported(): void
@@ -159,7 +160,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->name  = 'Alan';
         $user->email = 'not-an-email'; // fails the email pattern
 
-        $this->assertContains('email: does not match required pattern', $user->validate());
+        $this->assertContains('email does not match the required format', $user->validate());
     }
 
     // --- required fires on an empty model ------------------------------------
@@ -169,8 +170,8 @@ final class OrmValidateConstraintsTest extends TestCase
         // name and email default to "" (blank); both are required.
         $errors = (new ValidatedUser())->validate();
 
-        $this->assertContains('name: is required', $errors);
-        $this->assertContains('email: is required', $errors);
+        $this->assertContains('name is required', $errors);
+        $this->assertContains('email is required', $errors);
     }
 
     public function testRequiredTrueMeansTheFieldMustBePresent(): void
@@ -180,9 +181,9 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->email = 'alan@example.com';
 
         $errors = $user->validate();
-        $this->assertContains('name: is required', $errors);
+        $this->assertContains('name is required', $errors);
         // required short-circuits: no minLength message piled on top of it.
-        $this->assertNotContains('name: must be at least 2 characters', $errors);
+        $this->assertNotContains('name must be at least 2 characters', $errors);
     }
 
     // --- Every constraint is checked; none is silently skipped ---------------
@@ -200,17 +201,17 @@ final class OrmValidateConstraintsTest extends TestCase
 
         $errors = $user->validate();
 
-        $this->assertContains('name: must be at least 2 characters', $errors);
-        $this->assertContains('age: must be at most 65', $errors);
-        $this->assertContains('email: does not match required pattern', $errors);
-        $this->assertContains('bio: must be at most 10 characters', $errors);
+        $this->assertContains('name must be at least 2 characters', $errors);
+        $this->assertContains('age must be at most 65', $errors);
+        $this->assertContains('email does not match the required format', $errors);
+        $this->assertContains('bio must be at most 10 characters', $errors);
         // Exactly those four — no constraint silently unchecked, none invented.
         $this->assertCount(4, $errors);
     }
 
-    // --- Message format: every message names the field it failed -------------
+    // --- Message format: every message names the field then a space ----------
 
-    public function testEveryMessageStartsWithTheFieldNameFollowedByAColon(): void
+    public function testEveryMessageStartsWithTheFieldNameFollowedByASpace(): void
     {
         $user = new ValidatedUser();
         $user->name  = 'Alexander';             // maxLength
@@ -220,10 +221,12 @@ final class OrmValidateConstraintsTest extends TestCase
         $errors = $user->validate();
         $this->assertNotEmpty($errors);
         foreach ($errors as $message) {
+            // Feature 19 (VALID-TWO-MESSAGES): "<field> <what>", space-separated,
+            // matching the request-body Validator word for word (no colon).
             $this->assertMatchesRegularExpression(
-                '/^[a-z_][a-zA-Z0-9_]*: \S/',
+                '/^[a-z_][a-zA-Z0-9_]* \S/',
                 $message,
-                "Message must be formatted '<field>: <what>': {$message}"
+                "Message must be formatted '<field> <what>': {$message}"
             );
         }
     }
@@ -239,7 +242,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $user->name  = str_repeat('x', 100);    // far over maxLength 5
         $user->email = 'alan@example.com';
 
-        $this->assertContains('name: must be at most 5 characters', $user->validate());
+        $this->assertContains('name must be at most 5 characters', $user->validate());
     }
 
     public function testATypeErrorIsStillRaisedAtAssignmentNotReturnedAsAMessage(): void
@@ -274,7 +277,7 @@ final class OrmValidateConstraintsTest extends TestCase
         $capped = new ValidatedUser();
         $capped->name  = 'abcdefghij';          // maxLength 5
         $capped->email = 'alan@example.com';
-        $this->assertContains('name: must be at most 5 characters', $capped->validate());
+        $this->assertContains('name must be at most 5 characters', $capped->validate());
     }
 
     // --- Both option spellings are accepted ----------------------------------
@@ -283,11 +286,11 @@ final class OrmValidateConstraintsTest extends TestCase
     {
         $tooLong = new SnakeCaseConstraintModel();
         $tooLong->title = 'toolong';            // 7 chars > max_length 5
-        $this->assertContains('title: must be at most 5 characters', $tooLong->validate());
+        $this->assertContains('title must be at most 5 characters', $tooLong->validate());
 
         $tooShort = new SnakeCaseConstraintModel();
         $tooShort->title = 'a';                 // 1 char < min_length 2
-        $this->assertContains('title: must be at least 2 characters', $tooShort->validate());
+        $this->assertContains('title must be at least 2 characters', $tooShort->validate());
     }
 
     // --- An unconstrained / null optional field is left alone ----------------

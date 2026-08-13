@@ -24,6 +24,10 @@ class FirebirdAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     /**
@@ -456,15 +460,19 @@ class FirebirdAdapter implements DatabaseAdapter
                 throw new DatabaseException('Firebird execute() failed: ' . ($this->lastError ?? 'unknown error'));
             }
 
-            // Best-effort affected-row count. ibase_affected_rows() reads the
-            // count from the transaction/link that ran the statement; capture it
-            // before any auto-commit tears that transaction down. Guarded so it
-            // can never break the write path; defaults to 0 (e.g. DDL, or when the
-            // driver reports no count). NOTE: not verified against live Firebird.
+            // Real affected-row count (FB-AFFECTED-FAB). ibase_affected_rows()
+            // returns the count for the last query IN THE GIVEN TRANSACTION, so it
+            // MUST be read from the SAME context the statement ran on -- the
+            // explicit transaction, else the long-lived READ COMMITTED default
+            // transaction ($this->defaultTx) that doExecute() ran it in. Reading
+            // it off $this->db (the LINK's implicit transaction, which did
+            // nothing) returned 0 -- MEASURED on the lab; the old "not verified
+            // against live Firebird" note was the tell. Captured before the
+            // auto-commit below tears $this->defaultTx down.
             $affectedFn = $this->fn . 'affected_rows';
             if (function_exists($affectedFn)) {
                 try {
-                    $count = @$affectedFn($this->transaction ?? $this->db);
+                    $count = @$affectedFn($this->transaction ?? $this->defaultTx ?? $this->db);
                     $this->affectedRows = is_int($count) && $count > 0 ? $count : 0;
                 } catch (\Throwable) {
                     $this->affectedRows = 0;
@@ -597,6 +605,19 @@ class FirebirdAdapter implements DatabaseAdapter
             fn($row) => trim($row['TABLE_NAME'] ?? $row['table_name'] ?? ''),
             $rows
         );
+    }
+
+    /**
+     * Append RETURNING * to a single-row INSERT so the last-id is read from the
+     * returned row (FB-LASTID-GAP). Firebird 2.0+ supports RETURNING natively, so
+     * `INSERT ... RETURNING *` returns the inserted row (whose PK the BEFORE
+     * INSERT trigger drew from the generator) and execute() captures its first
+     * column as lastId. Without this, db.insert()->lastId was 0 on the native
+     * path (only the PDO fallback declared RETURNING). Mirrors PdoFirebirdAdapter.
+     */
+    public function insertReturningClause(): string
+    {
+        return ' RETURNING *';
     }
 
     public function lastInsertId(): int|string
@@ -1030,7 +1051,13 @@ class FirebirdAdapter implements DatabaseAdapter
     {
         if ($this->defaultTx === null) {
             $transFn = $this->fn . 'trans';
-            $this->defaultTx = $transFn(
+            // @-suppressed like every other ibase_* call here: on a dead link
+            // (e.g. the first statement after a forced disconnect, before the
+            // reconnect fires) ibase_trans warns "connection shutdown"; that is
+            // the expected transient the reconnect path handles, so it must not
+            // surface as a PHP warning. The subsequent ibase_query still fails
+            // loud and drives the reconnect.
+            $this->defaultTx = @$transFn(
                 IBASE_WRITE | IBASE_COMMITTED | IBASE_REC_VERSION | IBASE_WAIT,
                 $this->db,
             );

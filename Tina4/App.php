@@ -34,7 +34,7 @@ class App
      *
      * @var string
      */
-    public static string $VERSION = '3.13.98';
+    public static string $VERSION = '3.13.99';
 
     /**
      * The health path that is registered no matter what TINA4_HEALTH_PATH says.
@@ -287,21 +287,22 @@ class App
         // actionable warning. Never throws — boot must not crash.
         Auth::ensureDevSecret($this->basePath);
 
-        // Configure logger
-        $isDev = $this->development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        // No logDir here, deliberately (ADR-0041). This used to pass
-        // "$basePath/logs", which is the FRAMEWORK'S DEFAULT and not something
-        // the user asked for -- and an argument outranks TINA4_LOG_DIR. It only
-        // worked because the precedence was inverted, so the operator's env var
-        // beat the bootstrap by accident; correcting the precedence without
-        // this line would have made TINA4_LOG_DIR dead in every booted app,
-        // which is measurably what happened to Ruby. Resolution now runs
-        // TINA4_LOG_DIR, then 'logs', matching Python and Node, whose
-        // bootstraps have never passed a directory.
-        Log::configure(development: $isDev);
+        // Configure logger. Bootstrap invents NO explicit defaults (LOG-I01 /
+        // Decision 17): call configure() with no arguments so level/format/
+        // output/log_dir all resolve purely from TINA4_LOG_* env + the
+        // framework default, exactly like any other first-use caller. This
+        // used to pass "$basePath/logs" and a computed `development` flag as
+        // if they were the caller's own instructions, which is what made
+        // TINA4_LOG_DIR dead in every booted app once the env>argument
+        // precedence bug (ADR-0041) was fixed elsewhere -- the fix is to
+        // never pass a framework-computed value through the argument channel
+        // at all, not to keep re-deriving one that happens to agree with env.
+        Log::configure();
 
-        // Generate request ID
-        Log::setRequestId($this->generateRequestId());
+        // NOTE: the request id is generated PER REQUEST in Router::dispatch()
+        // (feature 43), not here. A single id minted in the constructor is
+        // process-scoped - under the long-running built-in server every request
+        // in the process would share it, which is useless for correlation.
 
         // ext-openssl is SUGGESTED, not required — HMAC JWT, PBKDF2 passwords and
         // random_bytes all need none of it. But PHP's `https` stream wrapper is
@@ -622,6 +623,19 @@ class App
                 Log::error("Route discovery failed: {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}");
             }
         }
+
+        // Auto-attach CSRF protection when TINA4_CSRF is truthy (true/1/yes/on).
+        // OFF by default (unset → not attached); the env flag is the switch, and
+        // once attached TINA4_CSRF=false is the kill switch. Idempotent. Done
+        // after route discovery (so the middleware sees a full route table) and
+        // before serving. Mirrors the Python master's attach_csrf_from_env().
+        \Tina4\Middleware\CsrfMiddleware::attachFromEnv();
+
+        // Security headers: register in the default chain UNCONDITIONALLY
+        // (secure-by-default, SECHDR-DEC-01). Unlike CSRF this needs no opt-in — a
+        // default app ships X-Frame-Options/X-Content-Type-Options/CSP/etc. with no
+        // code change. HSTS stays HTTPS-only. Idempotent.
+        \Tina4\Middleware\SecurityHeadersMiddleware::attach();
 
         // Auto-wire i18n → template global t() if locale files exist
         $this->autoWireI18n();
@@ -1167,16 +1181,61 @@ HTML;
 
     /**
      * Register a background task that runs periodically in the server event loop.
-     * Matches Python's App.background(fn, interval) pattern.
+     *
+     * Returns a {@see BackgroundTask} handle — call `->stop()` to end and
+     * deregister the task. This is the ONE background surface (a stop-handle plus
+     * a count) shared with Python/Ruby/Node.
+     *
+     * Breaking (3.13.99): this used to return `$this` (fluent). Split a chained
+     * `->background(a)->background(b)` into two separate calls, and use the
+     * returned handle's `->stop()` (or {@see stopBackground()}) to stop a task.
+     *
+     * BG-PHP-FPM-SWOOLE-NOOP guard: under a non-persistent SAPI (php-fpm,
+     * apache2handler, php -S / cli-server) there is no long-lived accept loop to
+     * run the tick, so the task would SILENTLY never fire. We warn LOUDLY with
+     * the remedy rather than drop it in silence. The `cli` SAPI (the Tina4 socket
+     * server, `tina4 serve`) does run ticks, so it passes without noise.
      *
      * @param callable $callback  Function to call (no arguments)
      * @param float    $interval  Seconds between invocations (default: 1.0)
-     * @return self Fluent
+     * @return BackgroundTask A handle whose stop() ends and deregisters the task.
      */
-    public function background(callable $callback, float $interval = 1.0): self
+    public function background(callable $callback, float $interval = 1.0): BackgroundTask
     {
+        $warning = self::backgroundSapiWarning(php_sapi_name());
+        if ($warning !== null) {
+            Log::warning($warning);
+        }
+
         $this->tickCallbacks[] = ['callback' => $callback, 'interval' => $interval];
-        return $this;
+
+        return new BackgroundTask($this, $callback);
+    }
+
+    /**
+     * The loud remedy to warn with when background() is called under a SAPI that
+     * cannot run cooperative ticks — or null when the current SAPI runs them.
+     *
+     * Pure + static so the FPM guard is testable without a live php-fpm: pass the
+     * SAPI name. `cli` is the persistent Tina4 socket server (its accept loop runs
+     * the ticks); every request-scoped web SAPI (`fpm-fcgi`, `apache2handler`,
+     * `cli-server`, `litespeed`) has no long-lived loop, so a task registered
+     * there would silently never run (BG-PHP-FPM-SWOOLE-NOOP). Mirrors the SAPI
+     * guard already on {@see run()}.
+     *
+     * @param  string      $sapi The php_sapi_name() to judge (e.g. 'cli', 'fpm-fcgi').
+     * @return string|null The remedy message, or null when ticks run under $sapi.
+     */
+    public static function backgroundSapiWarning(string $sapi): ?string
+    {
+        if ($sapi === 'cli') {
+            return null;
+        }
+
+        return "background() task registered under the '{$sapi}' SAPI, which has "
+            . "no long-lived worker to run it — the task will NOT tick here. Run "
+            . "under `tina4 serve` (the persistent socket server) or a Swoole "
+            . "worker, or use \\Tina4\\Queue for durable out-of-request work.";
     }
 
     /**
@@ -1331,10 +1390,20 @@ HTML;
             return;
         }
 
-        // Resolve host: explicit arg > TINA4_HOST > '0.0.0.0'
+        // Resolve host: explicit arg > TINA4_HOST > default.
+        // DEVADMIN-DEC-02: in dev/serve mode (TINA4_DEBUG) the /__dev dashboard
+        // exposes an unauthenticated file/SQL/RCE surface, so the DEFAULT bind is
+        // loopback, not 0.0.0.0. Only the default changes: an explicit host arg or
+        // TINA4_HOST still wins (production passes one and does not set
+        // TINA4_DEBUG, and FPM/Swoole never call run()), so a developer who WANTS
+        // network exposure sets TINA4_HOST=0.0.0.0 to override deliberately.
         if ($host === null || $host === '') {
             $envHost = DotEnv::getEnv('TINA4_HOST');
-            $host = ($envHost !== null && $envHost !== '') ? $envHost : '0.0.0.0';
+            if ($envHost !== null && $envHost !== '') {
+                $host = $envHost;
+            } else {
+                $host = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false')) ? '127.0.0.1' : '0.0.0.0';
+            }
         }
 
         // Resolve port: explicit arg > TINA4_PORT > PORT (deprecated) > 7145.
@@ -1694,11 +1763,4 @@ HTML;
         }
     }
 
-    /**
-     * Generate a short unique request ID.
-     */
-    private function generateRequestId(): string
-    {
-        return substr(bin2hex(random_bytes(8)), 0, 16);
-    }
 }

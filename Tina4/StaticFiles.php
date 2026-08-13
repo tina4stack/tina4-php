@@ -76,6 +76,14 @@ class StaticFiles
             return null;
         }
 
+        // Security: never serve a dotfile (.env, .git/config, .htpasswd, ...).
+        // Reject any leading-dot segment in the REQUEST path before touching the
+        // filesystem. The resolved-path check below also refuses a symlink that
+        // points AT a dotfile inside the public dir.
+        if (self::hasHiddenSegment(str_replace('\\', '/', $path), '/')) {
+            return null;
+        }
+
         // Security: don't serve PHP files
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         if ($extension === 'php') {
@@ -98,15 +106,18 @@ class StaticFiles
             return null;
         }
 
-        // Search directories in order: TINA4_PUBLIC_DIR override, app public,
-        // then framework built-in public (tina4.min.js etc.)
+        // Search directories in ONE order shared across all four frameworks
+        // (ST-SEARCHDIR-DIVERGE): TINA4_PUBLIC_DIR override first, then the app's
+        // public then src/public, then the framework's built-in public
+        // (tina4.min.js etc.) last so an app asset is never shadowed by a
+        // framework one.
         $searchDirs = [];
         $customPublic = getenv('TINA4_PUBLIC_DIR');
         if ($customPublic !== false && $customPublic !== '') {
             $searchDirs[] = rtrim($customPublic, DIRECTORY_SEPARATOR);
         }
-        $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
         $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'public';
+        $searchDirs[] = $basePath . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
         $searchDirs[] = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'public';
 
         // Normalise the request path to a relative file path
@@ -134,9 +145,22 @@ class StaticFiles
                     continue;
                 }
 
-                // Security: ensure resolved path is inside the search directory
+                // Security: ensure resolved path is inside the search directory.
+                // realpath() collapses `..` and follows symlinks, so a symlink
+                // (or a sibling-prefix dir like publicsecret) that escapes the
+                // root is refused here; the trailing separator is what defeats
+                // the sibling-prefix match. Reference guard, ADR-0050.
                 $realDir = realpath($dir);
                 if ($realDir === false || !str_starts_with($realPath, $realDir . DIRECTORY_SEPARATOR)) {
+                    continue;
+                }
+
+                // Security: never emit bytes from a dotfile, even when a symlink
+                // inside the public dir points AT one. Check the segments BELOW
+                // the public dir so a public dir that itself lives under a
+                // dot-directory is unaffected.
+                $relative = substr($realPath, strlen($realDir) + 1);
+                if (self::hasHiddenSegment($relative, DIRECTORY_SEPARATOR)) {
                     continue;
                 }
 
@@ -146,11 +170,15 @@ class StaticFiles
                 $fileSize = filesize($realPath);
                 $modifiedTime = filemtime($realPath);
 
-                // Validators: a weak ETag from mtime + size, and an HTTP-date
+                // Validators: a weak ETag from size + mtime, and an HTTP-date
                 // Last-Modified. The asset may be cached but must be revalidated
                 // before use, so a redeployed file reaches the browser on the
-                // next load without a manual hard refresh.
-                $eTag = sprintf('W/"%d-%d"', $modifiedTime, $fileSize);
+                // next load without a manual hard refresh. Format PINNED across
+                // all four frameworks (feature 40, CE-DEC-02): decimal
+                // `W/"<size>-<mtime>"`, integer-second mtime — a client behind a
+                // reverse proxy sees an identical validator for the same file
+                // regardless of backend language.
+                $eTag = sprintf('W/"%d-%d"', $fileSize, $modifiedTime);
                 $lastModified = gmdate('D, d M Y H:i:s', $modifiedTime) . ' GMT';
 
                 // Conditional request — a matching validator means the browser
@@ -200,7 +228,9 @@ class StaticFiles
     private static function isNotModified(?string $ifNoneMatch, ?string $ifModifiedSince, string $eTag, int $modifiedTime): bool
     {
         if ($ifNoneMatch !== null && $ifNoneMatch !== '') {
-            return self::eTagMatches($ifNoneMatch, $eTag);
+            // Shared with the dynamic conditional-GET path (Response::etagMatches,
+            // feature 40) so both use IDENTICAL RFC-7232 weak-comparison semantics.
+            return Response::etagMatches($ifNoneMatch, $eTag);
         }
 
         if ($ifModifiedSince !== null && $ifModifiedSince !== '') {
@@ -214,42 +244,24 @@ class StaticFiles
     }
 
     /**
-     * Match an `If-None-Match` header value against our ETag.
+     * Whether any segment of a path is hidden (starts with a dot).
      *
-     * Uses weak comparison (RFC 7232 §3.2): an optional `W/` prefix is ignored
-     * on both sides. Accepts a comma-separated list of candidate tags and the
-     * wildcard `*`.
+     * Used to refuse serving a dotfile (`.env`, `.git/config`, `.htpasswd`). A
+     * `..` segment also starts with a dot, so this doubles as a belt on traversal.
      *
-     * @param string $ifNoneMatch The raw `If-None-Match` header value
-     * @param string $eTag The validator this response would carry
-     * @return bool True when any candidate tag matches (or is `*`)
+     * @param string $path The path to inspect (already separator-normalised)
+     * @param string $separator The path separator to split on
+     * @return bool True when a segment begins with `.`
      */
-    private static function eTagMatches(string $ifNoneMatch, string $eTag): bool
+    private static function hasHiddenSegment(string $path, string $separator): bool
     {
-        $ourTag = self::stripWeakPrefix($eTag);
-
-        foreach (explode(',', $ifNoneMatch) as $candidate) {
-            $candidate = trim($candidate);
-            if ($candidate === '*') {
-                return true;
-            }
-            if (self::stripWeakPrefix($candidate) === $ourTag) {
+        foreach (explode($separator, $path) as $segment) {
+            if ($segment !== '' && $segment[0] === '.') {
                 return true;
             }
         }
 
         return false;
-    }
-
-    /**
-     * Strip an optional leading `W/` weak-validator prefix from an ETag.
-     *
-     * @param string $eTag The ETag value (possibly weak, e.g. `W/"abc"`)
-     * @return string The ETag with any `W/` prefix removed
-     */
-    private static function stripWeakPrefix(string $eTag): string
-    {
-        return str_starts_with($eTag, 'W/') ? substr($eTag, 2) : $eTag;
     }
 
     /**

@@ -12,10 +12,16 @@ namespace Tina4;
  * Inline testing framework — attach test assertions to functions/methods
  * and run them all at once.
  *
+ * The builders are named expect* — deliberately distinct from the xUnit-style
+ * assert* the PHPUnit suites use — so importing the wrong surface can never
+ * silently change call semantics. expect* are DESCRIPTORS: expectEqual([args],
+ * expected) records "call the function with args and check the result equals
+ * expected" for runAll() to execute later.
+ *
  * Option 1: Explicit registration
  *
  *     Testing::tests(
- *         [Testing::assertEqual([5, 3], 8), Testing::assertRaises('InvalidArgumentException', [null])],
+ *         [Testing::expectEqual([5, 3], 8), Testing::expectRaises('InvalidArgumentException', [null])],
  *         function ($a, $b = null) {
  *             if ($b === null) throw new \InvalidArgumentException("b required");
  *             return $a + $b;
@@ -23,17 +29,21 @@ namespace Tina4;
  *         'add'
  *     );
  *
- * Option 2: Docblock annotations (auto-discovered)
+ * Option 2: Docblock annotations (auto-discovered from an EXPLICIT tests dir)
  *
  *     /**
- *      * @tests assertEqual([5, 3], 8)
- *      * @tests assertEqual([0, 0], 0)
- *      * @tests assertRaises(InvalidArgumentException::class, [null])
+ *      * @tests expectEqual([5, 3], 8)
+ *      * @tests expectEqual([0, 0], 0)
+ *      * @tests expectRaises(InvalidArgumentException::class, [null])
  *      *\/
  *     function add(int $a, ?int $b = null): int { ... }
  *
- *     Testing::discover('src/');   // scans for @tests docblocks
+ *     Testing::discover('tests');   // scans an EXPLICIT tests dir for @tests docblocks
  *     Testing::runAll();
+ *
+ * SECURITY: discover() never evaluates the docblock arguments (they are parsed
+ * as LITERALS only) and only require_once's files under the resolved tests
+ * directory, so scanning cannot execute arbitrary code (INLINE-DEC-02).
  */
 class Testing
 {
@@ -43,33 +53,33 @@ class Testing
     // ── Assertion builders ─────────────────────────────────────────
 
     /**
-     * Assert that calling the function with $args returns $expected.
+     * Expect that calling the function with $args returns $expected.
      */
-    public static function assertEqual(array $args, mixed $expected): array
+    public static function expectEqual(array $args, mixed $expected): array
     {
         return ['type' => 'equal', 'args' => $args, 'expected' => $expected];
     }
 
     /**
-     * Assert that calling the function with $args throws $exceptionClass.
+     * Expect that calling the function with $args throws $exceptionClass.
      */
-    public static function assertRaises(string $exceptionClass, array $args): array
+    public static function expectRaises(string $exceptionClass, array $args): array
     {
         return ['type' => 'raises', 'exception' => $exceptionClass, 'args' => $args];
     }
 
     /**
-     * Assert that calling the function with $args returns a truthy value.
+     * Expect that calling the function with $args returns a truthy value.
      */
-    public static function assertTrue(array $args): array
+    public static function expectTrue(array $args): array
     {
         return ['type' => 'true', 'args' => $args];
     }
 
     /**
-     * Assert that calling the function with $args returns a falsy value.
+     * Expect that calling the function with $args returns a falsy value.
      */
-    public static function assertFalse(array $args): array
+    public static function expectFalse(array $args): array
     {
         return ['type' => 'false', 'args' => $args];
     }
@@ -163,34 +173,55 @@ class Testing
     // ── Docblock discovery ────────────────────────────────────────
 
     /**
-     * Scan PHP files for functions/methods with @tests docblock annotations
-     * and auto-register them.
+     * Scan an EXPLICIT tests directory for functions/methods with @tests docblock
+     * annotations and auto-register them.
      *
      * Supports standalone functions and static class methods.
      *
-     *     /** @tests assertEqual([5, 3], 8) *\/
+     *     /** @tests expectEqual([5, 3], 8) *\/
      *     function add(int $a, int $b): int { return $a + $b; }
      *
-     * @param string $path  Directory to scan recursively
+     * SECURITY (INLINE-DEC-02): discovery is confined to the resolved tests
+     * directory — a scanned file whose realpath escapes it (e.g. via a symlink)
+     * is skipped and never require_once'd, so pointing discovery at a project can
+     * never execute a source file outside the tests dir. The docblock arguments
+     * are parsed as LITERALS (see parseAssertionLine) and never eval'd.
+     *
+     * @param string $path  Explicit tests directory to scan (default 'tests')
      * @return int Number of functions discovered
      */
-    public static function discover(string $path): int
+    public static function discover(string $path = 'tests'): int
     {
+        $root = realpath($path);
+        if ($root === false || !is_dir($root)) {
+            return 0;
+        }
+
         $count = 0;
-        $files = self::globRecursive($path, '*.php');
+        $files = self::globRecursive($root, '*.php');
 
         foreach ($files as $file) {
-            $source = file_get_contents($file);
+            // Confine every required file under the resolved tests dir — a
+            // symlink pointing outside it is refused, so discovery can never
+            // require_once (and thus execute) a file outside the tests tree.
+            $real = realpath($file);
+            if ($real === false || strpos($real, $root . DIRECTORY_SEPARATOR) !== 0) {
+                continue;
+            }
+
+            $source = file_get_contents($real);
             if ($source === false || strpos($source, '@tests') === false) {
                 continue;
             }
 
-            // Include the file so functions/classes are available via reflection
-            require_once $file;
+            // Include the file so functions/classes are available via reflection.
+            // The tests dir is the developer's own trusted code (PHPUnit requires
+            // its files the same way); source files outside it are never touched.
+            require_once $real;
 
             // Find all docblocks containing @tests followed by a function declaration
-            $count += self::discoverFunctions($source, $file);
-            $count += self::discoverMethods($source, $file);
+            $count += self::discoverFunctions($source, $real);
+            $count += self::discoverMethods($source, $real);
         }
 
         return $count;
@@ -333,46 +364,168 @@ class Testing
         return $assertions;
     }
 
+    /** Sentinel returned by parseLiteral() when a token is not a plain literal. */
+    private const NOT_A_LITERAL = "\0__tina4_not_a_literal__\0";
+
     /**
-     * Parse a single assertion expression like "assertEqual([5, 3], 8)".
+     * Parse a single assertion expression like "expectEqual([5, 3], 8)".
+     *
+     * SECURITY (INLINE-DEC-02): the arguments are parsed as LITERALS ONLY —
+     * there is NO eval(). A non-literal argument (a function call, a variable,
+     * an operator) makes the assertion unparseable, so it is skipped rather than
+     * executed. This closes the arbitrary-code-execution hole the old eval() had.
      */
     private static function parseAssertionLine(string $line): ?array
     {
-        // Match: methodName(...)
-        if (!preg_match('/^(assertEqual|assertRaises|assertTrue|assertFalse)\s*\((.+)\)$/s', $line, $m)) {
+        // Match: expectMethod(...)
+        if (!preg_match('/^(expectEqual|expectRaises|expectTrue|expectFalse)\s*\((.*)\)$/s', $line, $m)) {
             return null;
         }
 
         $method = $m[1];
         $argsStr = trim($m[2]);
 
-        // Evaluate the arguments safely using PHP's eval
-        // We wrap in an array context so the expression becomes valid PHP
-        try {
-            $evaluated = eval("return [{$argsStr}];");
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (!is_array($evaluated)) {
-            return null;
+        $values = [];
+        foreach (self::splitTopLevel($argsStr) as $part) {
+            $lit = self::parseLiteral(trim($part));
+            if ($lit === self::NOT_A_LITERAL) {
+                return null;   // refuse anything that is not a plain literal
+            }
+            $values[] = $lit;
         }
 
         return match ($method) {
-            'assertEqual' => count($evaluated) >= 2
-                ? self::assertEqual((array)$evaluated[0], $evaluated[1])
+            'expectEqual' => count($values) >= 2
+                ? self::expectEqual((array)$values[0], $values[1])
                 : null,
-            'assertRaises' => count($evaluated) >= 2
-                ? self::assertRaises((string)$evaluated[0], (array)$evaluated[1])
+            'expectRaises' => count($values) >= 2
+                ? self::expectRaises((string)$values[0], (array)$values[1])
                 : null,
-            'assertTrue' => count($evaluated) >= 1
-                ? self::assertTrue((array)$evaluated[0])
+            'expectTrue' => count($values) >= 1
+                ? self::expectTrue((array)$values[0])
                 : null,
-            'assertFalse' => count($evaluated) >= 1
-                ? self::assertFalse((array)$evaluated[0])
+            'expectFalse' => count($values) >= 1
+                ? self::expectFalse((array)$values[0])
                 : null,
             default => null,
         };
+    }
+
+    /**
+     * Split a comma-separated argument list at the TOP level only — commas
+     * inside [] brackets or '…'/"…" strings are not split points.
+     *
+     * @return array<int, string>
+     */
+    private static function splitTopLevel(string $s): array
+    {
+        $parts = [];
+        $depth = 0;
+        $buf = '';
+        $quote = null;
+        $len = strlen($s);
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $s[$i];
+
+            if ($quote !== null) {
+                $buf .= $ch;
+                if ($ch === '\\' && $i + 1 < $len) {
+                    $buf .= $s[++$i];   // keep an escaped char with its backslash
+                } elseif ($ch === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ($ch === "'" || $ch === '"') {
+                $quote = $ch;
+                $buf .= $ch;
+            } elseif ($ch === '[') {
+                $depth++;
+                $buf .= $ch;
+            } elseif ($ch === ']') {
+                $depth--;
+                $buf .= $ch;
+            } elseif ($ch === ',' && $depth === 0) {
+                $parts[] = $buf;
+                $buf = '';
+            } else {
+                $buf .= $ch;
+            }
+        }
+
+        if (trim($buf) !== '' || $parts !== []) {
+            $parts[] = $buf;
+        }
+        return $parts;
+    }
+
+    /**
+     * Parse ONE literal token — an int, float, bool, null, quoted string, an
+     * array of literals ([a, b, …]), or a class reference (Foo::class / a bare
+     * class name → the class-name string). Anything else (a function call, a
+     * variable, an arithmetic expression) returns the NOT_A_LITERAL sentinel and
+     * is refused — the eval-free, injection-safe replacement for the old eval().
+     *
+     * @return mixed the literal value, or self::NOT_A_LITERAL
+     */
+    private static function parseLiteral(string $tok): mixed
+    {
+        $tok = trim($tok);
+        if ($tok === '') {
+            return self::NOT_A_LITERAL;
+        }
+
+        // Array literal: [ elem, elem, … ] of literals.
+        if ($tok[0] === '[' && substr($tok, -1) === ']') {
+            $inner = trim(substr($tok, 1, -1));
+            if ($inner === '') {
+                return [];
+            }
+            $out = [];
+            foreach (self::splitTopLevel($inner) as $elem) {
+                $val = self::parseLiteral(trim($elem));
+                if ($val === self::NOT_A_LITERAL) {
+                    return self::NOT_A_LITERAL;
+                }
+                $out[] = $val;
+            }
+            return $out;
+        }
+
+        // Quoted string.
+        $q = $tok[0];
+        if (($q === "'" || $q === '"') && substr($tok, -1) === $q && strlen($tok) >= 2) {
+            $body = substr($tok, 1, -1);
+            return $q === "'"
+                ? str_replace(["\\'", "\\\\"], ["'", "\\"], $body)
+                : stripcslashes($body);
+        }
+
+        // Class reference: Foo::class → the class-name string.
+        if (str_ends_with($tok, '::class')) {
+            return ltrim(substr($tok, 0, -strlen('::class')), '\\');
+        }
+
+        $lower = strtolower($tok);
+        if ($lower === 'true')  { return true; }
+        if ($lower === 'false') { return false; }
+        if ($lower === 'null')  { return null; }
+
+        if (preg_match('/^-?\d+$/', $tok)) {
+            return (int) $tok;
+        }
+        if (preg_match('/^-?\d+\.\d+$/', $tok)) {
+            return (float) $tok;
+        }
+
+        // A bare class-name reference (expectRaises without ::class).
+        if (preg_match('/^\\\\?[A-Za-z_][A-Za-z0-9_\\\\]*$/', $tok)) {
+            return ltrim($tok, '\\');
+        }
+
+        return self::NOT_A_LITERAL;
     }
 
     /**

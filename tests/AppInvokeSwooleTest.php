@@ -36,8 +36,8 @@ class AppInvokeSwooleTest extends TestCase
 {
     private string $appDir = '';
 
-    /** True once this test booted an App, which installs the handlers. */
-    private bool $bootedApp = false;
+    /** Set once this test booted an App, which installs the handlers. */
+    private ?App $bootedApp = null;
 
     protected function setUp(): void
     {
@@ -72,26 +72,36 @@ PHP);
      * removes them, so a test that boots an App leaves the process dirtier than
      * it found it - PHPUnit reports that as risky, correctly. Unwind them here
      * rather than leaving three risky tests in the suite.
+     *
+     * Uses AppTestSupport::releaseHandlers($app) rather than a blind
+     * restore_error_handler()/restore_exception_handler() pair. The blind pair
+     * only pops whatever happens to be on TOP of the stack, which is correct
+     * for a single isolated test but desyncs once two or more of this file's
+     * App-booting tests run in the same PHPUnit process (measured on the lab:
+     * any two of testASwooleGetRequestIsRoutedAndAnswered /
+     * testASwoolePostBodyReachesTheHandler /
+     * testASwooleRequestNeverTakesThePsr7Branch run together, then a LATER,
+     * unrelated test such as DocsTest::testSearchFindsFrameworkRender gets
+     * flagged "removed error handlers other than its own"). AppTestSupport
+     * releases exactly what THIS App instance's own errorHandlerSet/
+     * exceptionHandlerSet flags say it installed (plus the separate
+     * ErrorTracker layer DevAdmin::register() may have pushed), so repeated
+     * boots across methods never drift.
      */
     protected function tearDown(): void
     {
-        // ONLY unwind when this test actually booted an App. A blanket restore
-        // pops whatever was on the stack, which in the instrument test below is
-        // somebody else's handler - PHPUnit reports that as "removed error
-        // handlers other than its own", correctly, and it was doing exactly
-        // that on the lab.
-        if ($this->bootedApp) {
-            restore_error_handler();
-            restore_exception_handler();
-            $this->bootedApp = false;
+        if ($this->bootedApp !== null) {
+            AppTestSupport::releaseHandlers($this->bootedApp);
+            $this->bootedApp = null;
         }
     }
 
-    /** Boot an App and remember that we did, so tearDown unwinds exactly once. */
+    /** Boot an App and remember it, so tearDown releases its handlers exactly once. */
     private function makeApp(): App
     {
-        $this->bootedApp = true;
-        return new App($this->appDir);
+        $app = new App($this->appDir);
+        $this->bootedApp = $app;
+        return $app;
     }
 
     /** Build a real Swoole request from real bytes. */

@@ -375,7 +375,9 @@ class LiveReloadTest extends TestCase
     {
         $server = new Server();
         $this->assertSame('0.0.0.0', $server->getHost());
-        $this->assertSame(7146, $server->getPort());
+        // 7145, matching bin/tina4php + App::resolveBindPort (DUALPORT-DEC-02,
+        // DUALPORT-DEFAULT-SMELL) -- was 7146, a value nothing else agreed with.
+        $this->assertSame(7145, $server->getPort());
     }
 
     public function testServerCustomHostPort(): void

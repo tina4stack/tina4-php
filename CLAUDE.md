@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.98 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.99 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -733,13 +733,18 @@ $migration->migrate(): array
   … `commit()`): on a failure the file rolls back, the error is logged, and the
   run halts at that file. Already-applied files stay applied — fix the bad file
   and re-run.
-- **Atomicity caveat:** per-file transactions are truly atomic only on engines
-  with **transactional DDL (PostgreSQL)**. MySQL, Firebird, and SQLite
-  **auto-commit DDL**, so a multi-statement migration that fails midway on those
-  engines leaves earlier statements applied — keep one logical change per file.
-  `CREATE TABLE` and `ALTER TABLE … ADD` are made idempotent on Firebird/MSSQL
-  (existence-checked via `tableExists()` / `RDB$RELATION_FIELDS`) so a re-run with
-  a raw DDL statement skips the already-existing object instead of erroring.
+- **Atomicity caveat:** per-file transactions are truly atomic on engines with
+  **transactional DDL (PostgreSQL, and SQLite)**. SQLite's DDL is transactional
+  too (autocommit is off inside `startTransaction()`), so a multi-statement
+  migration that fails midway on SQLite rolls back cleanly, including any
+  `CREATE TABLE` that already ran earlier in the same file — proven by
+  `tests/MigrationContractTest.php::testSqliteMultiStatementFailureRollsBackDdl`.
+  MySQL and Firebird **auto-commit DDL**, so the same failure on those two
+  engines leaves earlier statements applied — keep one logical change per file
+  there. `CREATE TABLE` and `ALTER TABLE … ADD` are made idempotent on
+  Firebird/MSSQL (existence-checked via `tableExists()` / `RDB$RELATION_FIELDS`)
+  so a re-run with a raw DDL statement skips the already-existing object instead
+  of erroring.
   SQLite/MySQL/PostgreSQL support `IF NOT EXISTS` and are left to the engine.
 
 **Auto-run on startup (`TINA4_AUTO_MIGRATE`, default on).** When a `migrations/`
@@ -950,19 +955,22 @@ $app->run();
 
 | Method | Description |
 |--------|-------------|
-| `$app->background(callable $callback, float $interval = 1.0): self` | Register a periodic task. Callback takes no arguments. Interval is in seconds. Returns `$app` for chaining. |
-| `$app->stopBackground(callable $callback): bool` | Stop a registered task and DEREGISTER it. Pass the SAME callable you registered — matching is by identity, and only the FIRST registration of it is removed. Works before and after `run()` (it also stops the live tick). Idempotent; returns `false` when nothing matched. |
+| `$app->background(callable $callback, float $interval = 1.0): \Tina4\BackgroundTask` | Register a periodic task. Callback takes no arguments. Interval is in seconds. Returns a `BackgroundTask` HANDLE — call `->stop()` to end and deregister it. Under a non-persistent SAPI (php-fpm/apache/`php -S`) it warns LOUDLY with the remedy (the tick loop lives only in the persistent `tina4 serve` socket server), never a silent drop. |
+| `$handle->stop(): bool` | Stop this task and DEREGISTER it. Idempotent — `true` the first time it removes a live task, `false` thereafter. |
+| `$app->stopBackground(callable $callback): bool` | Stop a registered task and DEREGISTER it by callable identity (without a handle). Only the FIRST registration of that callable is removed. Works before and after `run()` (it also stops the live tick). Idempotent; returns `false` when nothing matched. |
 | `$app->backgroundTaskCount(): int` | How many background tasks are currently REGISTERED (stopped ones are already gone). |
 
-`background()` deliberately stays fluent — the stop is a separate call, so
-existing chains keep working:
+`background()` returns a stop-handle — the ONE background surface shared with
+Python/Ruby/Node (a handle with a boolean `stop()` plus a count). **Breaking
+(3.13.99): it used to return `$this` (fluent); split a chained
+`->background(a)->background(b)` into two calls.**
 
 ```php
-$callback = static fn() => processOrders($queue);
-$app->background($callback, 2.0);   // still returns $app
+$handle = $app->background(static fn() => processOrders($queue), 2.0);
 // ...later, before or during run():
-$app->stopBackground($callback);    // true — task ended and deregistered
+$handle->stop();                    // true — task ended and deregistered
 $app->backgroundTaskCount();        // 0
+// stopBackground($callback) still stops by identity when you have no handle.
 ```
 
 Server-level access (advanced):
@@ -1087,12 +1095,11 @@ Renders syntax-highlighted stack traces with source context, request details, an
 // Render a full HTML error overlay (dev mode)
 ErrorOverlay::renderErrorOverlay(\Throwable $e, ?array $request = null): string
 
-// Render a safe, generic error page (production)
-ErrorOverlay::renderProductionError(int $statusCode = 500, string $message = 'Internal Server Error'): string
-
 // Check if TINA4_DEBUG is enabled
 ErrorOverlay::isDebugMode(): bool
 ```
+
+The overlay is dev-only (gated on `isDebugMode()`/`TINA4_DEBUG`). The production 500 is NOT rendered here — `Router::renderError` renders `errors/500.twig` with an empty `error_message` (CWE-209), so the exception detail stays in the server log only. Sensitive request fields (Authorization / Cookie / Set-Cookie headers and password-like body/param keys) are redacted even in the overlay, the frame count is capped, and the router guards the render.
 
 Example:
 ```php
@@ -1100,9 +1107,7 @@ try {
     $handler($request, $response);
 } catch (\Throwable $e) {
     if (ErrorOverlay::isDebugMode()) {
-        echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);
-    } else {
-        echo ErrorOverlay::renderProductionError(500);
+        echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);   // dev only
     }
 }
 ```
@@ -1167,27 +1172,38 @@ Attach test assertions directly to functions and run them all at once.
 // Register a function with test assertions
 Testing::tests(array $assertions, callable $fn, string $name = 'anonymous'): void
 
-// Assertion builders
-Testing::assertEqual(array $args, mixed $expected): array
-Testing::assertRaises(string $exceptionClass, array $args): array
-Testing::assertTrue(array $args): array
-Testing::assertFalse(array $args): array
+// Assertion builders (DESCRIPTORS — named expect* so they never collide with the
+// xUnit assert* the PHPUnit suites use)
+Testing::expectEqual(array $args, mixed $expected): array
+Testing::expectRaises(string $exceptionClass, array $args): array
+Testing::expectTrue(array $args): array
+Testing::expectFalse(array $args): array
 
 // Run all registered tests
 Testing::runAll(bool $quiet = false, bool $failfast = false): array
 // Returns: ['passed' => int, 'failed' => int, 'errors' => int, 'details' => array]
 
+// Discover @tests docblocks from an EXPLICIT tests dir (default 'tests'). Args are
+// parsed as LITERALS — never eval'd — and only files under the tests dir are loaded.
+Testing::discover(string $path = 'tests'): int
+
 // Reset the test registry
 Testing::reset(): void
+```
+
+Run inline @tests from the CLI (real exit code — non-zero on any failure):
+
+```bash
+bin/tina4php test     # discovers @tests in tests/, runs them, then the PHPUnit suite
 ```
 
 Example:
 ```php
 Testing::tests(
     [
-        Testing::assertEqual([5, 3], 8),
-        Testing::assertEqual([0, 0], 0),
-        Testing::assertRaises('InvalidArgumentException', [null]),
+        Testing::expectEqual([5, 3], 8),
+        Testing::expectEqual([0, 0], 0),
+        Testing::expectRaises('InvalidArgumentException', [null]),
     ],
     function ($a, $b = null) {
         if ($b === null) throw new \InvalidArgumentException("b required");
@@ -1272,7 +1288,7 @@ $result = SQLTranslator::remember(
 |---|---|
 | `TINA4_SWAGGER_ENABLED` | On/off for the `/swagger` endpoints. Explicit `true`/`false` wins; unset falls back to `TINA4_DEBUG`. Set `false` to DISABLE swagger in any environment; `true` to expose it in production. |
 | `TINA4_SWAGGER_SERVERS` | Comma-separated server URLs for the OpenAPI `servers[]` block; falls back to `SWAGGER_DEV_URL`. |
-| `TINA4_SWAGGER_UI_CDN` | Base URL for the Swagger UI assets (default `https://unpkg.com/swagger-ui-dist@5`); point at a self-hosted mirror for air-gapped use. |
+| `TINA4_SWAGGER_UI_CDN` | Base URL for the Swagger UI assets (default `https://cdn.jsdelivr.net/npm/swagger-ui-dist@5`, matching python/ruby/node); point at a self-hosted mirror for air-gapped use. |
 | `TINA4_SWAGGER_TITLE` / `_VERSION` / `_DESCRIPTION` | `info` block title, version, description. |
 | `TINA4_SWAGGER_CONTACT_EMAIL` / `_LICENSE` | Optional `info.contact.email` and `info.license`. |
 | `TINA4_SWAGGER_OPENAPI` | OpenAPI version: `3.0.3` (default) or `3.1` (emits `3.1.0`). |

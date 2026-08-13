@@ -36,19 +36,42 @@ write-back. Cursor todos / chat checklists are **not** the plan.
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
-| 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
-| 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (approved to start) |
-| 3. Delegate | Prefer a worker per task; main session stays free when possible | worker(s) (or you) running off the plan |
-| 4. Test-first | Write REAL tests before any code | failing tests that pin the behaviour |
+| 1. Scope | Restate the request AND its intended outcome (ask if unstated), agree the slice | a feature entry in `plan/<feature>.md` |
+| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
+| 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
+| 4. Test-first | The worker writes REAL tests before any code | failing tests that pin the behaviour |
 | 5. Scaffold + Build | **Scaffold** with `tina4php generate` → fill the `AI-FILL` placeholder → ground the custom ~20% with `tina4_context` | tests now green |
 | 6. Verify + tick | Run it for real; **edit the plan file now** — `[x]` Scope/Tests + Commits line | plan file updated in the same turn |
 | 7. Report | Relay completions as a ✅/❌ table that matches the plan file | the status dashboard |
 
-### 1. Keep the main session free when you can — always keep the plan current
-Prefer: allocate the ask to a plan, spawn a worker, keep the main session free so the developer can
-steer while Tina4 hot-reloads. **Required either way:** whoever builds must update `plan/<feature>.md`
-in the **same turn** they claim progress. Saying "done" in chat while the plan file still shows
-`[ ]` is a process failure — fix the file before you report.
+### Establish the outcome before you scope - ask when it is not explicit
+
+Scoping starts with knowing what DONE looks like. If the developer's instruction does not state the intended
+**outcome** - the observable end state that counts as success - ask for it in one line before you plan,
+delegate, or write code. "Add a login page" names a task; the outcome might be "a user signs in with email and
+password, lands on the dashboard, and a wrong password shows an error" - and only the developer knows which.
+Guess wrong and a whole worker builds toward the wrong target.
+
+Ask one specific question and offer your best read as the default, so a quick "yes" moves the work:
+
+> You asked for X. I am taking the outcome to be: <one-line observable end state>. Is that the goal, or is it
+> <alternative>?
+
+Write the agreed outcome as an **Outcome:** line at the top of the plan, above the checklist. Every worker
+then builds toward the same end state, and you check the result against it. Never start building on an
+unstated outcome - a plan with no agreed outcome is a guess with a commit hash.
+
+### 1. Keep the main session free — delegate to a worker
+When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
+spawn a separate worker to execute it**, so the main session is always free for the next input.
+Tina4 **hot-reloads on save** (DevReload), so as the worker edits routes, models, and templates the
+developer watches the interface change **live in the browser** — keeping the main session open is
+what lets them observe and steer while the work happens. The main agent scopes, dispatches, and
+reports; workers build and update the plan. When a worker finishes an item, surface it to the
+developer. Whoever builds updates `plan/<feature>.md` in the **same turn** they claim progress:
+saying "done" while the plan still shows `[ ]` is a process failure, so fix the file before you report.
+
+- **Delegate at the right capability tier - reserve the top tier for the hardest work.** A sub-agent's model/effort is a cost lever: match it to the task, never default everything to the most capable tier. Heavy cross-language parity (real multi-engine DB, mutation proofs, migrations, AutoCrud) earns a high tier; standard single-subsystem features and mechanical edits (docs, ticks, small fixes) run mid or low. Correctness is the gate - drop a tier only if the cheaper run still yields the correct, verified result; if a gate fails, step the tier up and note it. This is agent-agnostic: Claude maps it to model + reasoning-effort, Codex to its model/effort selector, Cursor to its model picker. Spend capability where the difficulty is, not uniformly.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
@@ -679,6 +702,11 @@ hard to reproduce. Trigger the real failure (a real connection error, a real tim
 row), never a simulated one. The only tests that need no live dependency are pure functions that
 have no dependency at all. A green mock test proves nothing. Only a real run is verification.
 
+- **A green test for your change is not proof you broke nothing else.** When you change
+  something SHARED - a validation message, a model's columns, an error shape, an env var - other
+  tests across the same subsystem may still assert the old behaviour. Run the whole relevant suite
+  (the ORM / validation / model tests together), not just your new case, before you call it done.
+
 
 **Ghost tests are not acceptable, in any circumstances.** A ghost test is one
 that LOOKS like coverage and never actually runs, or runs and proves nothing.
@@ -947,6 +975,7 @@ When helping developers:
 - **Show the simplest way** — Tina4 has shortcuts for common patterns, use them
 - **Mention alternatives** — If there's a simpler approach, say so
 - **Don't over-engineer** — A developer asking for a login page doesn't need a full RBAC system
+- **Terse output, depth-scaled reasoning.** Default to the shortest output that conveys the result - a status line, a bullet, or a table. No preamble, no restating the task, no thinking-out-loud. Ask short questions. Elaborate ONLY when the user asks for more. Scale reasoning DEPTH (not word count) with difficulty: a hard call earns more STEPS in compact form (`claim -> check -> decision`, a decision tree, a checklist), an easy one gets a single line. This applies to replies, to questions, AND to the private thinking process - dense structure, minimal language. Verbosity costs the user time and tokens.
 
 ## Commit authorship — Tina4 co-authors what it helped build
 

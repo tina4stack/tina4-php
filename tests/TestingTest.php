@@ -15,9 +15,9 @@ class TestingTest extends TestCase
 
         Testing::tests(
             [
-                Testing::assertEqual([5, 3], 8),
-                Testing::assertEqual([0, 0], 0),
-                Testing::assertEqual([-1, 1], 0),
+                Testing::expectEqual([5, 3], 8),
+                Testing::expectEqual([0, 0], 0),
+                Testing::expectEqual([-1, 1], 0),
             ],
             function (int $a, int $b): int {
                 return $a + $b;
@@ -27,8 +27,8 @@ class TestingTest extends TestCase
 
         Testing::tests(
             [
-                Testing::assertEqual(['hello'], 'HELLO'),
-                Testing::assertEqual(['World'], 'WORLD'),
+                Testing::expectEqual(['hello'], 'HELLO'),
+                Testing::expectEqual(['World'], 'WORLD'),
             ],
             function (string $s): string {
                 return strtoupper($s);
@@ -38,8 +38,8 @@ class TestingTest extends TestCase
 
         Testing::tests(
             [
-                Testing::assertRaises('InvalidArgumentException', [null]),
-                Testing::assertEqual([5, 3], 8),
+                Testing::expectRaises('InvalidArgumentException', [null]),
+                Testing::expectEqual([5, 3], 8),
             ],
             function ($a, $b = null) {
                 if ($b === null) {
@@ -52,10 +52,10 @@ class TestingTest extends TestCase
 
         Testing::tests(
             [
-                Testing::assertTrue([10]),
-                Testing::assertTrue([1]),
-                Testing::assertFalse([0]),
-                Testing::assertFalse(['']),
+                Testing::expectTrue([10]),
+                Testing::expectTrue([1]),
+                Testing::expectFalse([0]),
+                Testing::expectFalse(['']),
             ],
             function ($value) {
                 return (bool) $value;
@@ -80,7 +80,7 @@ class TestingTest extends TestCase
         Testing::reset();
 
         Testing::tests(
-            [Testing::assertEqual([1, 1], 999)],
+            [Testing::expectEqual([1, 1], 999)],
             function ($a, $b) { return $a + $b; },
             'bad_add'
         );
@@ -96,7 +96,7 @@ class TestingTest extends TestCase
         Testing::reset();
 
         Testing::tests(
-            [Testing::assertEqual([1], 1)],
+            [Testing::expectEqual([1], 1)],
             function ($a) { throw new RuntimeException("boom"); },
             'will_crash'
         );

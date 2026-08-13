@@ -104,8 +104,10 @@ class CacheProviderSelectionTest extends TestCase
         }
         \Tina4\DotEnv::resetEnv();
         // Put the process-global logger back the way the rest of the suite
-        // expects it; testAnUnreachableBackendLogsAWarning repoints it.
-        \Tina4\Log::configure('logs', false, 'info');
+        // expects it; testAnUnreachableBackendLogsAWarning repoints it. The
+        // old positional (dir, bool, level) signature is gone since the
+        // logger_contract rewrite (2026-08-13) -- named args only.
+        \Tina4\Log::configure(logDir: 'logs', level: 'info');
 
         foreach ($this->temporaryDirs as $dir) {
             foreach ((glob($dir . '/*') ?: []) as $file) {
@@ -346,7 +348,7 @@ class CacheProviderSelectionTest extends TestCase
         $this->setEnv('TINA4_CACHE_DIR', $this->tempDir('warned-cache'));
         $this->setEnv('TINA4_LOG_DIR', $logDir);
         $this->setEnv('TINA4_LOG_OUTPUT', 'both');
-        \Tina4\Log::configure($logDir, false, 'debug');
+        \Tina4\Log::configure(logDir: $logDir, level: 'debug', output: 'both');
 
         CacheFactory::create('redis', 'redis://127.0.0.1:' . $this->closedPort());
 

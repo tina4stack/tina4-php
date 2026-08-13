@@ -264,7 +264,14 @@ class McpServer
     public static function getDefaultServer(): McpServer
     {
         if (self::$defaultServer === null) {
-            self::$defaultServer = new McpServer('/__dev/mcp', 'Tina4 Dev Tools');
+            // VERSION-DEC-01 (feature 130): the built-in dev server's serverInfo
+            // must report the SAME version every other surface does, not the
+            // constructor's generic '1.0.0' default -- App::$VERSION is the one
+            // declared source of truth (health, banner, dashboard already read
+            // it). A user's OWN custom `new McpServer($path, $name)` (no third
+            // arg) is unaffected -- that default stays '1.0.0' for app authors
+            // who have not set their own tool-server version.
+            self::$defaultServer = new McpServer('/__dev/mcp', 'Tina4 Dev Tools', App::$VERSION);
             try {
                 McpDevTools::register(self::$defaultServer);
             } catch (\Throwable $exc) {
@@ -744,7 +751,7 @@ class McpServer
     /**
      * Write/update .claude/settings.json with this MCP server config.
      */
-    public function writeClaudeConfig(int $port = 7146): void
+    public function writeClaudeConfig(int $port = 7145): void
     {
         $configDir = '.claude';
         if (!is_dir($configDir)) {
@@ -784,7 +791,7 @@ class McpServer
      */
     public static function isLocalhost(): bool
     {
-        $host = DotEnv::getEnv('TINA4_HOST_NAME', 'localhost:7146') ?? 'localhost:7146';
+        $host = DotEnv::getEnv('TINA4_HOST_NAME', 'localhost:7145') ?? 'localhost:7145';
         $hostPart = explode(':', $host)[0];
         return in_array($hostPart, ['localhost', '127.0.0.1', '0.0.0.0', '::1', ''], true);
     }

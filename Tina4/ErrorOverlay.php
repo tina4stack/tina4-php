@@ -21,8 +21,14 @@ namespace Tina4;
  *       echo ErrorOverlay::renderErrorOverlay($e, $_SERVER);
  *   }
  *
- * Only activate when TINA4_DEBUG is true.
- * In production, call ErrorOverlay::renderProductionError() instead.
+ * Only activate when TINA4_DEBUG is true. The production 500 is NOT rendered here —
+ * the router renders errors/500.twig with an empty error_message (CWE-209), so the
+ * exception detail stays in the server log only, never in the response body.
+ *
+ * Sensitive request fields (Authorization / Cookie / Set-Cookie headers and
+ * password-like body/param keys) are redacted even in the dev overlay, the frame
+ * count is capped, and the router wraps this render in a guard, so a broken overlay
+ * or a recursive stack still yields a bounded, safe 500.
  */
 class ErrorOverlay
 {
@@ -41,6 +47,17 @@ class ErrorOverlay
     private const ERROR_LINE_BG = 'rgba(243,139,168,0.15)';
 
     private const CONTEXT_LINES = 7;
+
+    // OVERLAY-DEC-03: cap the rendered frames so a deep/recursive stack yields a
+    // bounded page, not one source-file read per frame.
+    private const MAX_FRAMES = 50;
+
+    // OVERLAY-DEC-02: request fields whose KEY matches this are masked in the dev
+    // overlay (Authorization/Cookie/Set-Cookie headers via authorization|cookie;
+    // password/token/secret/api_key body/param keys via the rest). Over-matching a
+    // benign field is the SAFE direction in a dev tool — over-masking leaks nothing.
+    private const SENSITIVE_KEY_PATTERN = '/password|passwd|secret|token|authorization|cookie|key/i';
+    private const REDACTED = '[redacted]';
 
     /**
      * Render a rich HTML error overlay.
@@ -74,12 +91,26 @@ class ErrorOverlay
         // ── Main error location ──
         $framesHtml = self::formatFrame($file, $line, '{main}', $capturedAt);
 
-        // ── Stack trace frames ──
+        // ── Stack trace frames (OVERLAY-DEC-03: capped) ──
+        // A recursive stack of thousands of frames would otherwise do one
+        // source-file read per frame and emit an unbounded page; render only the
+        // innermost MAX_FRAMES (the main frame counts as the first) and note the rest.
+        $shown = 1;
         foreach ($trace as $frame) {
+            if ($shown >= self::MAX_FRAMES) {
+                break;
+            }
             $frameFile = $frame['file'] ?? '[internal]';
             $frameLine = $frame['line'] ?? 0;
             $frameFunc = ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '');
             $framesHtml .= self::formatFrame($frameFile, $frameLine, $frameFunc, $capturedAt);
+            $shown++;
+        }
+        $hidden = (1 + count($trace)) - $shown;
+        if ($hidden > 0) {
+            $subtext = self::SUBTEXT;
+            $framesHtml .= "<div style=\"color:{$subtext};padding:8px 0;font-size:13px;\">"
+                . "&#8230; {$hidden} more stack frames hidden (truncated at " . self::MAX_FRAMES . ")</div>";
         }
 
         // ── Request info ──
@@ -93,15 +124,24 @@ class ErrorOverlay
             ];
             foreach ($request as $k => $v) {
                 if (in_array($k, $interesting, true) || str_starts_with($k, 'HTTP_')) {
-                    $requestPairs[] = [$k, is_string($v) ? $v : json_encode($v)];
+                    $val = is_string($v) ? $v : json_encode($v);
+                    $requestPairs[] = [$k, self::redact((string)$k, (string)$val)];
                 }
             }
-            // Also include non-$_SERVER style dicts (headers, params, body)
+            // Also include non-$_SERVER style dicts (headers, params, body). The
+            // router hands headers in as a CaseInsensitiveArray (Traversable, not a
+            // plain array), so accept any iterable and RENDER + REDACT it deliberately
+            // (OVERLAY-DEC-02) — do not rely on the accidental array-only skip that
+            // previously hid ALL headers, including a bearer token, on other frameworks.
             foreach (['headers', 'params', 'body'] as $key) {
-                if (isset($request[$key]) && is_array($request[$key])) {
-                    if (!empty($request[$key])) {
-                        foreach ($request[$key] as $hk => $hv) {
-                            $requestPairs[] = ["$key.$hk", is_string($hv) ? $hv : json_encode($hv)];
+                $bag = $request[$key] ?? null;
+                if (is_array($bag) || $bag instanceof \Traversable) {
+                    $entries = is_array($bag) ? $bag : iterator_to_array($bag);
+                    if (!empty($entries)) {
+                        foreach ($entries as $hk => $hv) {
+                            $pairKey = "$key.$hk";
+                            $val = is_string($hv) ? $hv : json_encode($hv);
+                            $requestPairs[] = [$pairKey, self::redact($pairKey, (string)$val)];
                         }
                     } else {
                         $requestPairs[] = [$key, '(empty)'];
@@ -202,50 +242,15 @@ HTML;
     }
 
     /**
-     * Render a safe, generic error page for production.
+     * Mask a sensitive request value (OVERLAY-DEC-02).
+     *
+     * Returns '[redacted]' when $key names a secret field (an
+     * Authorization/Cookie/Set-Cookie header or a password/token/secret/key-like
+     * body/param key), otherwise the value unchanged.
      */
-    public static function renderProductionError(int $statusCode = 500, string $message = 'Internal Server Error', string $path = ''): string
+    private static function redact(string $key, string $value): string
     {
-        $e_msg = self::esc($message);
-        $e_path = self::esc($path);
-        $codeColor = match (true) {
-            $statusCode === 403 => '#f59e0b',
-            $statusCode === 404 => '#3b82f6',
-            default => '#ef4444',
-        };
-        $pathHtml = $path !== '' ? "<div class=\"error-path\">{$e_path}</div><br>" : '';
-
-        return <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{$statusCode} — {$e_msg}</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-.error-card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 3rem; text-align: center; max-width: 520px; width: 90%; }
-.error-code { font-size: 8rem; font-weight: 900; color: {$codeColor}; opacity: 0.6; line-height: 1; margin-bottom: 0.5rem; }
-.error-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
-.error-msg { color: #94a3b8; font-size: 1rem; margin-bottom: 1.5rem; line-height: 1.5; }
-.error-path { font-family: 'SF Mono', monospace; background: #0f172a; color: {$codeColor}; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; word-break: break-all; margin-bottom: 1.5rem; display: inline-block; }
-.error-home { display: inline-block; padding: 0.6rem 2rem; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 0.5rem; font-size: 0.9rem; font-weight: 600; }
-.error-home:hover { opacity: 0.9; }
-.logo { font-size: 1.5rem; margin-bottom: 1rem; opacity: 0.5; }
-</style>
-</head>
-<body>
-<div class="error-card">
-    <div class="error-code">{$statusCode}</div>
-    <div class="error-title">{$e_msg}</div>
-    <div class="error-msg">Something went wrong while processing your request.</div>
-    {$pathHtml}
-    <a href="/" class="error-home">Go Home</a>
-</div>
-</body>
-</html>
-HTML;
+        return preg_match(self::SENSITIVE_KEY_PATTERN, $key) === 1 ? self::REDACTED : $value;
     }
 
     /**

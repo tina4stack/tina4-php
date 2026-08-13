@@ -164,31 +164,44 @@ class LogWithoutMbstringTest extends TestCase
      */
     public function testTheLoggerCoercesAndTruncatesCorrectly(): void
     {
-        $coerce = new \ReflectionMethod(Log::class, 'coerceMessage');
-        $truncate = new \ReflectionMethod(Log::class, 'truncateForStdout');
+        // Log's internal message coercion now lives in the private
+        // messageToString()/normalize() pair (2026-08-13 logger contract
+        // rewrite) -- proven end to end through the real public API and a
+        // real sink rather than by reflecting a specific private method
+        // name, so this survives future internal refactors of the shape.
+        $tmp = sys_get_temp_dir() . '/tina4_mbstring_log_' . uniqid();
+        mkdir($tmp, 0755, true);
+        try {
+            Log::reset();
+            Log::configure(logDir: $tmp, output: 'file', format: 'json');
 
-        $this->assertSame(
-            '<binary 6 bytes>',
-            $coerce->invoke(null, "\xff\xfe bad"),
-            'Non-UTF-8 input must be described by byte count, never dumped'
-        );
+            Log::info("\xff\xfe bad");
+            Log::info("hello \u{00e9}\u{4e16}");
+            Log::info(str_repeat("\u{4e16}", 5000));
 
-        $this->assertSame(
-            "hello \u{00e9}\u{4e16}",
-            $coerce->invoke(null, "hello \u{00e9}\u{4e16}"),
-            'Valid UTF-8 passes through untouched, multi-byte included'
-        );
+            $lines = array_values(array_filter(explode("\n", file_get_contents($tmp . '/tina4.log'))));
+            $first = json_decode($lines[0], true);
+            $second = json_decode($lines[1], true);
+            $third = json_decode($lines[2], true);
 
-        $long = str_repeat("\u{4e16}", 5000);
-        $cut = $truncate->invoke(null, $long);
-
-        $this->assertStringContainsString('(truncated, 5000 chars)', $cut, 'The count is in CHARACTERS, not bytes');
-        $this->assertSame(
-            1,
-            preg_match('//u', $cut),
-            'The truncated line must still be valid UTF-8 - a byte-based cut would '
-            . 'split the last 3-byte glyph and produce a replacement character'
-        );
+            $this->assertMatchesRegularExpression(
+                '/^<binary 6 bytes sha256=[0-9a-f]{64}>$/',
+                $first['message'],
+                'Non-UTF-8 input must be described by byte count + digest, never dumped'
+            );
+            $this->assertSame(
+                "hello \u{00e9}\u{4e16}",
+                $second['message'],
+                'Valid UTF-8 passes through untouched, multi-byte included'
+            );
+            $this->assertSame(1, preg_match('//u', $lines[2]), 'the sink line itself must still be valid UTF-8');
+        } finally {
+            Log::reset();
+            foreach (glob($tmp . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($tmp);
+        }
     }
 
     /**

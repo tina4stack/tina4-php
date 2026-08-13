@@ -246,6 +246,14 @@ class Server
     /** @var int Body bytes accepted before 413. */
     private int $maxRequestBody = self::DEFAULT_MAX_REQUEST_BODY;
 
+    /**
+     * @var int Running per-chunk upload cap (TINA4_MAX_UPLOAD_SIZE). Enforced on
+     * the ACTUAL bytes received as they arrive, so a chunked or under-declared
+     * over-size body is refused before it is buffered whole - the declared
+     * Content-Length guard above cannot see that case.
+     */
+    private int $maxUploadSize = self::DEFAULT_MAX_REQUEST_BODY;
+
     /** @var int Seconds the current drain may take, resolved from TINA4_SHUTDOWN_TIMEOUT */
     private int $shutdownTimeout = self::DEFAULT_SHUTDOWN_TIMEOUT;
 
@@ -291,9 +299,11 @@ class Server
 
     /**
      * @param string|null $host Host to bind to. If null, reads TINA4_HOST (default '0.0.0.0').
-     * @param int    $port Port to listen on
+     * @param int    $port Port to listen on (default: 7145, matching the documented default in
+     *   bin/tina4php and App::resolveBindPort — every real caller passes an explicit port, so this
+     *   default only matters to a direct `new Server()`, but it must not disagree — DUALPORT-DEC-02).
      */
-    public function __construct(?string $host = null, int $port = 7146)
+    public function __construct(?string $host = null, int $port = 7145)
     {
         if ($host === null || $host === '') {
             $envHost = DotEnv::getEnv('TINA4_HOST');
@@ -304,55 +314,34 @@ class Server
     }
 
     /**
-     * Kill whatever process is listening on the given port.
+     * Reclaim *port* from a stale Tina4 dev server via the shared, guarded path.
      *
-     * Uses lsof on macOS/Linux and netstat + taskkill on Windows.
-     * Throws RuntimeException if the port cannot be freed.
+     * This is the runtime bind-failure fallback. It used to SIGTERM whatever held
+     * the port with NONE of the CLI's guards -- no identity check, no container
+     * guard, no PID-safety filter -- so a foreign holder (another dev server, a
+     * database) was killed on any bind failure. It now routes through the SAME
+     * identity-checked helper the CLI uses (TAKEOVER-DEC-02), so only a
+     * PID-file-confirmed Tina4 dev server is ever signalled.
+     *
+     * @throws \RuntimeException when the port is held by a non-Tina4 process (or
+     *   takeover is opted out / disabled outside dev), so the bind fails loudly
+     *   with a clear message instead of killing an innocent process.
      */
     private function freePort(int $port): void
     {
-        echo "  Port {$port} in use — killing existing process...\n";
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            $output = [];
-            exec('netstat -ano', $output);
-            $pid = null;
-            foreach ($output as $line) {
-                if (str_contains($line, ":{$port}") &&
-                    (str_contains($line, 'LISTENING') || str_contains($line, 'ESTABLISHED'))) {
-                    $parts = preg_split('/\s+/', trim($line));
-                    $last = end($parts);
-                    if (ctype_digit($last)) {
-                        $pid = (int)$last;
-                        break;
-                    }
-                }
-            }
-            if ($pid !== null) {
-                exec("taskkill /PID {$pid} /F");
-            } else {
-                throw new \RuntimeException("Could not free port {$port}: no PID found");
-            }
-        } else {
-            $pids = [];
-            exec("lsof -ti :{$port}", $pids);
-            if (empty($pids)) {
-                // Nothing found — port may have freed itself
-                return;
-            }
-            foreach ($pids as $pid) {
-                $pid = trim($pid);
-                if (ctype_digit($pid) && function_exists('posix_kill')) {
-                    posix_kill((int)$pid, defined('SIGTERM') ? SIGTERM : 15);
-                } elseif (ctype_digit($pid)) {
-                    exec("kill -15 {$pid}");
-                }
-            }
+        $result = PortTakeover::takeOverPort(
+            $port,
+            PortTakeover::isDev(),
+            PortTakeover::noTakeoverOptedOut()
+        );
+        if ($result['status'] === PortTakeover::KILLED) {
+            echo "  {$result['message']}\n";
+            return;
         }
-
-        // Give the OS a moment to reclaim the port
-        usleep(500000);
-        echo "  Port {$port} freed\n";
+        if (in_array($result['status'], PortTakeover::REFUSALS, true)) {
+            throw new \RuntimeException($result['message']);
+        }
+        // NOTHING / container: nothing to reclaim -- let the real bind decide.
     }
 
     /**
@@ -419,6 +408,9 @@ class Server
         stream_set_blocking($this->socket, false);
         $this->running = true;
         self::$instance = $this;
+        // Record THIS process as the Tina4 dev server on the main port, so a
+        // later `tina4 serve` can identify it as reclaimable (TAKEOVER-DEC-01).
+        PortTakeover::writePidfile($this->port);
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
         // Disable the internal file watcher when launched by the Rust CLI (--managed).
         // The Rust CLI owns file watching, SCSS compilation, and browser reload.
@@ -449,9 +441,20 @@ class Server
                     stream_set_blocking($this->aiSocket, false);
                     echo "  Test Port: http://localhost:{$this->aiPort} (stable — no hot-reload)\n";
                 } else {
+                    // stream_socket_server() returns FALSE on failure, not null.
+                    // $this->aiSocket must stay exactly null (its declared default)
+                    // on a skip, never false: acceptLoop()'s read-set builder tests
+                    // `$this->aiSocket !== null`, and false !== null is true, so an
+                    // unreset false was fed straight into stream_select() as an
+                    // invalid stream resource -- crashing the WHOLE server (base
+                    // port included) the instant the accept loop next ran. A busy
+                    // AI port must warn and skip, never take the base port down
+                    // with it (the opposite of takeover, feature 129).
+                    $this->aiSocket = null;
                     echo "  Test Port: SKIPPED (port {$this->aiPort} in use)\n";
                 }
             } catch (\Throwable $e) {
+                $this->aiSocket = null;
                 echo "  Test Port: SKIPPED ({$e->getMessage()})\n";
             }
         }
@@ -518,6 +521,7 @@ class Server
         $this->requestTimeout = self::resolveLimit('TINA4_REQUEST_TIMEOUT', self::DEFAULT_REQUEST_TIMEOUT, true);
         $this->maxRequestHeader = self::resolveLimit('TINA4_MAX_REQUEST_HEADER', self::DEFAULT_MAX_REQUEST_HEADER);
         $this->maxRequestBody = self::resolveLimit('TINA4_MAX_REQUEST_BODY', self::DEFAULT_MAX_REQUEST_BODY);
+        $this->maxUploadSize = self::resolveLimit('TINA4_MAX_UPLOAD_SIZE', self::DEFAULT_MAX_REQUEST_BODY);
         $this->maxRequestsPerWorker = self::resolveLimit('TINA4_SERVE_MAX_REQUESTS', 0, true);
 
 
@@ -708,6 +712,8 @@ class Server
         $this->shutdownTimeout = self::resolveShutdownTimeout();
 
         $this->closeListeners();
+        // Drop our identity marker so a later takeover does not match a dead PID.
+        PortTakeover::removePidfile($this->port);
 
         Log::info(sprintf(
             'Graceful shutdown started (%s) — not accepting new connections, draining for up to %ds',
@@ -800,12 +806,16 @@ class Server
      * Useful for testing and embedding — does not require an active socket
      * connection. Cross-framework parity with Python and Node.js.
      *
+     * rawSocket: true — a caller of this method transports the Response
+     * itself (there is no PHP SAPI involved), same reasoning as the real
+     * per-connection dispatch below; see Response::isRawSocket().
+     *
      * @param Request $request The request to handle
      * @return Response The response from the router
      */
     public function handle(Request $request): Response
     {
-        return Router::dispatch($request, new Response());
+        return Router::dispatch($request, new Response(rawSocket: true));
     }
 
     /**
@@ -1028,8 +1038,14 @@ class Server
             DevAdmin::$suppressReload = true;
         }
 
-        // Dispatch through Tina4 Router
-        $response = Router::dispatch($request, new Response());
+        // Dispatch through Tina4 Router. rawSocket: true -- this Response IS
+        // really transported (writeFully() below writes it to the client
+        // socket), but by us, not a PHP SAPI: header()/setcookie() have no
+        // client to reach, so headers_sent() never legitimately flips true
+        // here. Router::emitSessionCookie() reads this to attach a
+        // first-time session cookie onto the Response instead of calling
+        // native setcookie() into the void (real-bug pre-merge, 3.13.99).
+        $response = Router::dispatch($request, new Response(rawSocket: true));
 
         // Restore reload suppression flag
         DevAdmin::$suppressReload = false;
@@ -1436,6 +1452,21 @@ class Server
             return false;
         }
 
+        // Running per-chunk counter: refuse the moment the ACTUAL body bytes
+        // received exceed TINA4_MAX_UPLOAD_SIZE, regardless of - or in the
+        // absence of - a declared Content-Length. This closes the chunked /
+        // under-declared over-size bypass the declared-length check above
+        // cannot see, and it fires as the bytes arrive rather than after the
+        // whole body is buffered. Parity with Python/Node, which run the same
+        // running counter in their body readers.
+        if ($this->maxUploadSize > 0
+            && (strlen($buffer) - ($headerEnd + 4)) > $this->maxUploadSize
+        ) {
+            $this->sendHttpError($client, 413, 'Request body too large');
+            $this->removeClient($client);
+            return false;
+        }
+
         return true;
     }
 
@@ -1503,31 +1534,17 @@ class Server
      * Render the Set-Cookie header lines for a response.
      *
      * setcookie() writes into the SAPI header list, which is never sent on a
-     * raw socket, so the socket server serialises $response->cookie() itself.
+     * raw socket, so the socket server serialises $response->cookie() itself
+     * — via the one shared value-builder, Response::cookieHeaderLines(), so a
+     * cookie set twice renders identically here and through TestClient
+     * (feature 131, TC-DEC-02).
      *
      * @return string Zero or more "Set-Cookie: ...\r\n" lines.
      */
     private static function cookieHeaderLines(Response $response): string
     {
         $lines = '';
-        foreach ($response->getCookies() as $name => $opts) {
-            $cookie = urlencode($name) . '=' . urlencode($opts['value']);
-            if (!empty($opts['expires'])) {
-                $cookie .= '; Expires=' . gmdate('D, d M Y H:i:s T', $opts['expires']);
-            }
-            $cookie .= '; Path=' . ($opts['path'] ?? '/');
-            if (!empty($opts['domain'])) {
-                $cookie .= '; Domain=' . $opts['domain'];
-            }
-            if (!empty($opts['secure'])) {
-                $cookie .= '; Secure';
-            }
-            if (!empty($opts['httponly'])) {
-                $cookie .= '; HttpOnly';
-            }
-            if (!empty($opts['samesite'])) {
-                $cookie .= '; SameSite=' . $opts['samesite'];
-            }
+        foreach ($response->cookieHeaderLines() as $cookie) {
             $lines .= "Set-Cookie: {$cookie}\r\n";
         }
         return $lines;
@@ -2361,13 +2378,26 @@ class Server
 
             if ($filename !== null) {
                 // File upload — matches normaliseFiles() format in Request.php
-                $files[$name] = [
+                $descriptor = [
                     'fieldName' => $name,
                     'filename' => $filename,
                     'type' => $fileType,
                     'content' => $content,  // raw binary
                     'size' => strlen($content),
                 ];
+                // Repeated field name -> collect ALL descriptors into a list;
+                // never silently keep only the last (the multi-file data-loss
+                // bug). A single occurrence stays a plain descriptor. A single
+                // descriptor carries a 'filename' key; a list of them does not.
+                if (isset($files[$name])) {
+                    if (isset($files[$name]['filename'])) {
+                        $files[$name] = [$files[$name], $descriptor];
+                    } else {
+                        $files[$name][] = $descriptor;
+                    }
+                } else {
+                    $files[$name] = $descriptor;
+                }
             } else {
                 // Regular form field
                 $fields[$name] = $content;
@@ -2477,6 +2507,12 @@ class Server
         // disconnect instead of reaping an abandoned session. Resilient — a
         // driver that fails to close is logged, never fatal.
         App::closeDatabase();
+
+        Log::info('Server stopped.');
+        // Graceful shutdown owns the final call to reset() (Decision 24 /
+        // LOG-I02): flush+close owned sinks AFTER the shutdown record above,
+        // exactly once.
+        Log::reset();
 
         if (self::$instance === $this) {
             self::$instance = null;

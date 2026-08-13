@@ -67,18 +67,107 @@ class SQLTranslator
         return $sql;
     }
 
+    // ── Literal-safe rewriting ──────────────────────────────────────
+    //
+    // A dialect rewrite (|| -> CONCAT, TRUE -> 1, ILIKE -> LOWER LIKE) must NEVER
+    // touch text inside a string literal, a quoted identifier or a comment: a
+    // column value of 'a||b', a label 'TRUE', or a LIKE pattern that mentions
+    // ILIKE is DATA, not SQL. Each transform masks every literal/identifier/
+    // comment to an opaque token, rewrites the masked SQL, then restores the
+    // tokens, so the rewrite only ever sees real SQL structure.
+
+    /**
+     * A concat/ilike operand: a masked literal-or-identifier token, a simple
+     * function call, a (qualified) identifier, a placeholder, or a number. The
+     * function-call args exclude `|` so a nested `||` never splits the chain.
+     */
+    private const PRIMARY = '(?:\x00\d+\x00|[A-Za-z_][\w$]*\s*\([^()|]*\)|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|:[A-Za-z_]\w*|\$\d+|\?|%s|\d+(?:\.\d+)?)';
+
+    /**
+     * Replace string literals, quoted identifiers and comments with opaque
+     * `\x00N\x00` tokens (doubled-quote escapes handled).
+     *
+     * @return array{0: string, 1: array<int, string>} [maskedSql, literals]
+     */
+    private static function maskLiterals(string $sql): array
+    {
+        $literals = [];
+        $out = '';
+        $i = 0;
+        $n = strlen($sql);
+        while ($i < $n) {
+            $c = $sql[$i];
+            $next = $i + 1 < $n ? $sql[$i + 1] : '';
+            if ($c === "'" || $c === '"' || $c === '`') {
+                $start = $i;
+                $i++;
+                while ($i < $n) {
+                    if ($sql[$i] === $c) {
+                        if ($i + 1 < $n && $sql[$i + 1] === $c) {
+                            $i += 2;
+                            continue;
+                        }
+                        $i++;
+                        break;
+                    }
+                    $i++;
+                }
+                $out .= "\x00" . count($literals) . "\x00";
+                $literals[] = substr($sql, $start, $i - $start);
+                continue;
+            }
+            if ($c === '-' && $next === '-') {
+                $start = $i;
+                while ($i < $n && $sql[$i] !== "\n") {
+                    $i++;
+                }
+                $out .= "\x00" . count($literals) . "\x00";
+                $literals[] = substr($sql, $start, $i - $start);
+                continue;
+            }
+            if ($c === '/' && $next === '*') {
+                $start = $i;
+                $i += 2;
+                while ($i < $n && !($sql[$i] === '*' && $i + 1 < $n && $sql[$i + 1] === '/')) {
+                    $i++;
+                }
+                $i = min($i + 2, $n);
+                $out .= "\x00" . count($literals) . "\x00";
+                $literals[] = substr($sql, $start, $i - $start);
+                continue;
+            }
+            $out .= $c;
+            $i++;
+        }
+        return [$out, $literals];
+    }
+
+    /**
+     * Inverse of {@see maskLiterals()}.
+     *
+     * @param array<int, string> $literals
+     */
+    private static function restoreLiterals(string $masked, array $literals): string
+    {
+        return preg_replace_callback('/\x00(\d+)\x00/', static fn($m) => $literals[(int) $m[1]], $masked);
+    }
+
     // ── Boolean Translation ─────────────────────────────────────────
 
     /**
-     * Translate boolean TRUE/FALSE literals to 1/0 (for Firebird and others
-     * that don't support native boolean keywords in SQL).
+     * Translate a bare boolean TRUE/FALSE literal to 1/0 (for Firebird/MSSQL and
+     * others without native boolean keywords in SQL). A TRUE/FALSE INSIDE a
+     * string literal is data and is left untouched (`WHERE label = 'TRUE'`).
      */
     public static function booleanToInt(string $sql): string
     {
-        // Replace standalone TRUE/FALSE (not inside quotes)
-        $sql = preg_replace('/\bTRUE\b/i', '1', $sql);
-        $sql = preg_replace('/\bFALSE\b/i', '0', $sql);
-        return $sql;
+        if (!preg_match('/\b(?:TRUE|FALSE)\b/i', $sql)) {
+            return $sql;
+        }
+        [$masked, $literals] = self::maskLiterals($sql);
+        $masked = preg_replace('/\bTRUE\b/i', '1', $masked);
+        $masked = preg_replace('/\bFALSE\b/i', '0', $masked);
+        return self::restoreLiterals($masked, $literals);
     }
 
     // ── ILIKE Translation ───────────────────────────────────────────
@@ -89,12 +178,19 @@ class SQLTranslator
      */
     public static function ilikeToLike(string $sql): string
     {
-        // Match: column ILIKE 'pattern'
-        return preg_replace(
-            '/(\S+)\s+ILIKE\s+(\S+)/i',
-            'LOWER($1) LIKE LOWER($2)',
-            $sql
+        if (stripos($sql, 'ilike') === false) {
+            return $sql;
+        }
+        [$masked, $literals] = self::maskLiterals($sql);
+        // The pattern operand is captured WHOLE (a masked token), so a multi-word
+        // '%two words%' survives instead of being truncated by a greedy \S+.
+        $pattern = '/(' . self::PRIMARY . ')\s+ILIKE\s+(' . self::PRIMARY . ')/i';
+        $rewritten = preg_replace_callback(
+            $pattern,
+            static fn($m) => 'LOWER(' . $m[1] . ') LIKE LOWER(' . $m[2] . ')',
+            $masked
         );
+        return self::restoreLiterals($rewritten, $literals);
     }
 
     // ── Concatenation Translation ───────────────────────────────────
@@ -108,14 +204,19 @@ class SQLTranslator
         if (strpos($sql, '||') === false) {
             return $sql;
         }
-
-        // Split on || and wrap in CONCAT()
-        $parts = preg_split('/\s*\|\|\s*/', $sql);
-        if (count($parts) <= 1) {
-            return $sql;
+        [$masked, $literals] = self::maskLiterals($sql);
+        if (strpos($masked, '||') === false) {
+            return $sql; // every || was inside a literal or comment
         }
-
-        return 'CONCAT(' . implode(', ', array_map('trim', $parts)) . ')';
+        // Rewrite ONLY the operand chain, never the whole statement:
+        //   SELECT a || b FROM t  ->  SELECT CONCAT(a, b) FROM t
+        $chain = '/' . self::PRIMARY . '(?:\s*\|\|\s*' . self::PRIMARY . ')+/';
+        $rewritten = preg_replace_callback(
+            $chain,
+            static fn($m) => 'CONCAT(' . implode(', ', preg_split('/\s*\|\|\s*/', $m[0])) . ')',
+            $masked
+        );
+        return self::restoreLiterals($rewritten, $literals);
     }
 
     // ── Auto-Increment Syntax ───────────────────────────────────────
@@ -136,13 +237,21 @@ class SQLTranslator
                 return str_ireplace('AUTOINCREMENT', 'AUTO_INCREMENT', $sql);
 
             case 'postgresql':
-                // Replace "INTEGER PRIMARY KEY AUTOINCREMENT" with "SERIAL PRIMARY KEY"
+                // BIGINT  PRIMARY KEY AUTOINCREMENT -> BIGSERIAL (a real 64-bit
+                // sequence); INTEGER PRIMARY KEY AUTOINCREMENT -> SERIAL. A plain
+                // BIGINT with the keyword merely stripped has no sequence and
+                // cannot auto-increment.
                 $sql = preg_replace(
-                    '/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/i',
+                    '/\bBIGINT\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/i',
+                    'BIGSERIAL PRIMARY KEY',
+                    $sql
+                );
+                $sql = preg_replace(
+                    '/\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/i',
                     'SERIAL PRIMARY KEY',
                     $sql
                 );
-                // Also handle standalone AUTOINCREMENT
+                // Any leftover AUTOINCREMENT is not valid PostgreSQL syntax.
                 return str_ireplace('AUTOINCREMENT', '', $sql);
 
             case 'mssql':

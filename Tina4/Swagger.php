@@ -1169,16 +1169,19 @@ class Swagger
     }
 
     /**
-     * Render the Swagger UI HTML page using unpkg.com CDN assets.
+     * Render the Swagger UI HTML page using jsdelivr.net CDN assets.
      */
     private static function renderSwaggerUI(): string
     {
         $title = DotEnv::getEnv('TINA4_SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
         // The Swagger UI assets load from a CDN by default (keeps the framework
         // zero-dependency / small — we don't vendor ~1.4MB of swagger-ui-dist).
-        // Air-gapped deployments point TINA4_SWAGGER_UI_CDN at a self-hosted
-        // mirror (a base URL serving swagger-ui.css + swagger-ui-bundle.js).
-        $cdn = rtrim((string) (DotEnv::getEnv('TINA4_SWAGGER_UI_CDN', 'https://unpkg.com/swagger-ui-dist@5') ?? 'https://unpkg.com/swagger-ui-dist@5'), '/');
+        // jsdelivr (SWAG-CDN-NO-SRI, ADR-0004) — the SAME default as the Python
+        // and Ruby masters, so all four frameworks pull the UI bundle from one
+        // CDN rather than splitting jsdelivr/unpkg. Air-gapped deployments point
+        // TINA4_SWAGGER_UI_CDN at a self-hosted mirror (a base URL serving
+        // swagger-ui.css + swagger-ui-bundle.js).
+        $cdn = rtrim((string) (DotEnv::getEnv('TINA4_SWAGGER_UI_CDN', 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5') ?? 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5'), '/');
 
         return <<<HTML
 <!DOCTYPE html>

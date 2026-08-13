@@ -13,9 +13,10 @@
  * repeatedly, and introspection reported stopped tasks as still registered.
  *
  * PHP had no per-task stop at all, so the leak could not occur here — the parity
- * gap was the missing capability. `App::background()` stays fluent (it still
- * returns `$this`, unchanged), and the stop is a separate
- * `App::stopBackground($callback)` / `Server::stopTick($callback)` that removes
+ * gap was the missing capability. `App::background()` returns a
+ * `Tina4\BackgroundTask` handle (3.13.99 — the ONE shared surface; it used to
+ * return `$this`), and the stop is either `$handle->stop()` or the separate
+ * `App::stopBackground($callback)` / `Server::stopTick($callback)`, which removes
  * the registration by callable identity.
  *
  * NO MOCKS. Real `App` and `Server` objects, real closures, and the REAL private
@@ -65,18 +66,27 @@ class BackgroundStopTest extends TestCase
     }
 
     /**
-     * background() must STILL be fluent — stopBackground is purely additive.
+     * background() returns a BackgroundTask HANDLE (the ONE shared surface,
+     * 3.13.99 — it used to return $this). Two registrations count as two, and the
+     * handle's stop() deregisters just its own task.
      */
-    public function testBackgroundStaysFluent(): void
+    public function testBackgroundReturnsAStopHandle(): void
     {
         $app = $this->makeApp();
         $first = static fn() => null;
         $second = static fn() => null;
 
-        $returned = $app->background($first, 5.0)->background($second, 5.0);
+        $firstHandle = $app->background($first, 5.0);
+        $secondHandle = $app->background($second, 5.0);
 
-        $this->assertSame($app, $returned, 'background() must keep returning $this');
+        $this->assertInstanceOf(\Tina4\BackgroundTask::class, $firstHandle);
+        $this->assertInstanceOf(\Tina4\BackgroundTask::class, $secondHandle);
         $this->assertSame(2, $app->backgroundTaskCount());
+
+        $this->assertTrue($firstHandle->stop());
+        $this->assertSame(1, $app->backgroundTaskCount());
+        $this->assertTrue($secondHandle->stop());
+        $this->assertSame(0, $app->backgroundTaskCount());
 
         AppTestSupport::releaseHandlers($app);
     }

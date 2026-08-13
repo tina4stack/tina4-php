@@ -191,16 +191,18 @@ class MiddlewareEventsTest extends TestCase
         MwGateThenAudit::$ran = [];
 
         // Point Log at a temp dir so we can assert "logged, never silent"
-        // by reading the log file. Default minLevel is INFO so WARNING +
-        // ERROR both land. Pin dev (TINA4_DEBUG=true) so the log FILE is
-        // written — since v3.13.39 the file is dev-gated by default
-        // (prod/containers are stdout-only).
+        // by reading the log file. Pin dev (TINA4_DEBUG=true) so the log FILE
+        // is written — since v3.13.39 the file is dev-gated by default
+        // (prod/containers are stdout-only) — and explicitly request DEBUG
+        // level + both sinks (logger_contract rewrite, 2026-08-13: configure()
+        // takes `level` as a string, not the retired `minLevel`/`LEVEL_DEBUG`)
+        // so every emitted level lands in the file.
         $_ENV['TINA4_DEBUG'] = 'true';
         @putenv('TINA4_DEBUG=true');
         $this->tempLogDir = sys_get_temp_dir() . '/tina4_mwevt_' . uniqid();
         mkdir($this->tempLogDir, 0755, true);
         Log::reset();
-        Log::configure(logDir: $this->tempLogDir, minLevel: Log::LEVEL_DEBUG);
+        Log::configure(logDir: $this->tempLogDir, level: 'DEBUG', output: 'both');
     }
 
     protected function tearDown(): void

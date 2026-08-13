@@ -66,6 +66,8 @@ sections below own each step (**Plan-Driven Workflow**, **Independent Verificati
 | 6. Verify + tick | **Re-run the full suite yourself at HEAD** (no mocks); **edit the plan now** — `[x]` + Commits line | plan file updated in the same turn |
 | 7. Report | A ✅/❌ dashboard per framework that matches the plan file | the status table |
 
+- **Delegate at the right capability tier - reserve the top tier for the hardest work.** A sub-agent's model/effort is a cost lever: match it to the task, never default everything to the most capable tier. Heavy cross-language parity (real multi-engine DB, mutation proofs, migrations, AutoCrud) earns a high tier; standard single-subsystem features and mechanical edits (docs, ticks, small fixes) run mid or low. Correctness is the gate - drop a tier only if the cheaper run still yields the correct, verified result; if a gate fails, step the tier up and note it. This is agent-agnostic: Claude maps it to model + reasoning-effort, Codex to its model/effort selector, Cursor to its model picker. Spend capability where the difficulty is, not uniformly.
+
 ### Every instruction is allocated to a plan
 No maintenance happens off-plan. `<repo>/plan/` holds a **master plan** — the overview of every task
 and its cross-framework status — plus one detailed plan per task. A new request → **rescope it into
@@ -263,6 +265,25 @@ commit, merge, or release:
   language version, and DB engine** whenever behaviour could differ there — sessions, file paths,
   path separators, SSL/cert stores, native extensions, line endings, and case-sensitivity are the
   classic per-platform divergences. If you didn't test it on a platform, say so; don't imply you did.
+- **A cross-cutting change breaks tests your feature gate never runs.** A per-feature gate that
+  runs only the feature's OWN suite is blind to a SHARED contract you changed - a message/error
+  string, a response shape, a status code, a DDL column, an env var. Other suites across the
+  subsystem still assert the OLD contract and go red, but the gate never runs them, so the break
+  ships "green" and surfaces only at the far-off full-suite merge gate, or gets misread as a flake.
+  When a change touches anything more than one test file could assert, run the BROADER affected
+  suites (the whole subsystem neighbourhood - ORM + validation + model + footguns, in every
+  language) before calling it done. Example: feature 19 unified the validation message vocabulary;
+  its gate ran only the validation suite, so a Node `orm.test.ts` assertion on the old "pattern"
+  wording and a Ruby footguns assertion on the old "null" DB error both shipped red until a later
+  feature's broader run caught them.
+- **Prove a flake before you call it one.** "Flaky" or "seed-dependent" is a claim to PROVE, never
+  assume - run the suspect in ISOLATION and at several seeds. A test that fails DETERMINISTICALLY in
+  isolation is a real regression wearing a flake's coat; labelling it an "order-dependent state
+  leak" buries a genuine contract break. Example: a Ruby footguns spec was reported as a seed flake;
+  isolated at seed 1 it failed every time - feature 19's richer `validate()` answered "name is
+  required" where the test still expected the driver's "null". Real regression, wrong label. Real
+  order-dependent leaks DO exist in Tina4 - the point is to DISTINGUISH them by isolating and
+  varying the seed, not to guess.
 
 
 **Ghost tests are not acceptable, in any circumstances.** A ghost test is one
@@ -1019,6 +1040,8 @@ never release-per-tiny-change.
 
 This is not optional. Every response that involves assessing, building, auditing, or reviewing
 Tina4 code must include visual status dashboards. Don't narrate — show.
+
+- **Terse output, depth-scaled reasoning.** Default to the shortest output that conveys the result - a status line, a bullet, or a table. No preamble, no restating the task, no thinking-out-loud. Ask short questions. Elaborate ONLY when the user asks for more. Scale reasoning DEPTH (not word count) with difficulty: a hard call earns more STEPS in compact form (`claim -> check -> decision`, a decision tree, a checklist), an easy one gets a single line. This applies to replies, to questions, AND to the private thinking process - dense structure, minimal language. Verbosity costs the user time and tokens.
 
 ### Status Dashboards
 

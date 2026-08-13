@@ -32,6 +32,10 @@ class PostgresAdapter implements DatabaseAdapter
     }
 
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     /**

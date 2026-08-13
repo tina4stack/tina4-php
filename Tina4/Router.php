@@ -617,6 +617,31 @@ class Router
         // v3.13.14: stamp the request start so we can log elapsed time below.
         $reqStart = microtime(true);
 
+        // Feature 43: PER-REQUEST correlation id (was process-scoped in the App
+        // constructor - useless for correlation under the long-running server,
+        // where every request shared one id). Honour a sanitized inbound
+        // X-Request-ID so a client/upstream can thread its own id through; an
+        // attacker-controlled CR/LF, over-long or illegal-charset value is
+        // rejected (never echoed), and an absent one is generated. Thread it into
+        // the logger NOW so every log line for this request - including the 500
+        // handler and logRequest() below - carries it; it is echoed on the
+        // response at the end of dispatch().
+        $requestId = Log::sanitizeRequestId($request->header('X-Request-ID'))
+            ?? bin2hex(random_bytes(4));
+        Log::setRequestId($requestId);
+        try {
+            return self::dispatchBody($request, $response, $requestId, $reqStart);
+        } finally {
+            // The request pipeline installs the id before its first log and
+            // clears it in `finally` after its last (Decision 12 / LOG-Q03),
+            // so an overlapping request can never observe a stale id from a
+            // request that already finished.
+            Log::clearRequestId();
+        }
+    }
+
+    private static function dispatchBody(Request $request, Response $response, string $requestId, float $reqStart): Response
+    {
         // Request-scoped DB query cache (default-on). Tina4 PHP runs a
         // LONG-RUNNING built-in server, so in-memory cache state persists
         // across requests. Clear the request-scoped layer on every live
@@ -665,8 +690,23 @@ class Router
         // renamed cookie was written but never read back, so the session silently
         // never resumed. $_COOKIE is keyed on the exact cookie name, so this is an
         // exact-name match (a renamed "tina4_session_foo" can never collide).
+        //
+        // $request->cookies FIRST (feature 131, TC-DEC-01 parity fix):
+        // $_COOKIE is a raw PHP superglobal that only a real HTTP SAPI
+        // (Apache/FPM/`php -S`) ever populates by parsing the actual `Cookie:`
+        // header itself receives — a caller that builds $request by hand
+        // (TestClient, over a CLI process with no such SAPI) can set
+        // $request->cookies (Request::create() parses it from the SAME `Cookie`
+        // header it was given) but can never make $_COOKIE agree. Reading
+        // $_COOKIE alone meant a session-token login-then-authenticated-request
+        // flow was structurally unreachable through TestClient: a login route
+        // could set request->session, but the follow-up request replaying that
+        // cookie could never resume it. For a real SAPI request the two sources
+        // already agree (both parse the identical incoming header), so this is
+        // additive there; $_COOKIE stays as the fallback for any caller that
+        // never threads a Cookie header onto $request at all.
         $sessionCookieName = Session::cookieName();
-        $sessionCookie = $_COOKIE[$sessionCookieName] ?? null;
+        $sessionCookie = $request->cookies[$sessionCookieName] ?? $_COOKIE[$sessionCookieName] ?? null;
         // LOG LOUD, THEN DEGRADE (ADR-0021). Session's own read/write policy
         // already logs and degrades, but CONSTRUCTION sits outside it: a
         // refused TINA4_SESSION_BACKEND throws from the constructor, and a
@@ -704,12 +744,28 @@ class Router
             self::saveSessionAndSetCookie($session, $sessionCookie, $sessionCookieName, $result);
         }
 
+        // Compression + ETag + conditional-GET (feature 40, CE-DEC-01/02) — the
+        // ONE header-builder step every response funnels through, matching
+        // Python's build_headers() + app() dispatch. Runs BEFORE stripHeadBody
+        // so a HEAD response's preserved Content-Length reflects the (possibly
+        // compressed) body the equivalent GET would have sent.
+        $result = self::applyConditionalGet(
+            $request,
+            self::compressAndTag($request, $result)
+        );
+
         $result = self::stripHeadBody($request, $result);
 
         self::logRequest($request, $result, $reqStart);
 
+        // Echo the correlation id on the response (the SAME id as the log lines
+        // and the error page), whatever outcome dispatchInner produced - 200,
+        // 404 or 500 - so a client or downstream service can reference it.
+        $result->header('X-Request-ID', $requestId);
+
         return $result;
     }
+
 
     /**
      * Whether to emit a per-request log line (v3.13.14).
@@ -811,26 +867,43 @@ class Router
             }
 
             if (ErrorOverlay::isDebugMode()) {
-                // Rich error overlay with stack trace, source context, and line numbers
-                $overlayHtml = ErrorOverlay::renderErrorOverlay($e, [
-                    'REQUEST_METHOD' => $request->method,
-                    'REQUEST_URI' => $request->path,
-                    'CONTENT_TYPE' => $request->contentType ?? '',
-                    'REMOTE_ADDR' => $request->ip ?? '',
-                    'QUERY_STRING' => $request->query ?? '',
-                    'headers' => $request->headers ?? [],
-                    'params' => $request->params ?? [],
-                    'body' => is_array($request->body) ? $request->body : [],
-                ]);
-                return $response->html($overlayHtml, 500);
+                // OVERLAY-DEC-03: guard the dev-overlay render. This call site sits
+                // INSIDE the catch, so if the overlay itself throws (a malformed
+                // frame, an unrenderable request value) it would double-fault out of
+                // dispatch. Wrap it and fall back to the same safe production page, so
+                // a broken overlay still yields a bounded 500 — never a crash.
+                try {
+                    $overlayHtml = ErrorOverlay::renderErrorOverlay($e, [
+                        'REQUEST_METHOD' => $request->method,
+                        'REQUEST_URI' => $request->path,
+                        'CONTENT_TYPE' => $request->contentType ?? '',
+                        'REMOTE_ADDR' => $request->ip ?? '',
+                        'QUERY_STRING' => $request->query ?? '',
+                        'headers' => $request->headers ?? [],
+                        'params' => $request->params ?? [],
+                        'body' => is_array($request->body) ? $request->body : [],
+                    ]);
+                    return $response->html($overlayHtml, 500);
+                } catch (\Throwable $overlayErr) {
+                    try {
+                        Log::warning(sprintf(
+                            'Error overlay render failed, serving the safe page: %s: %s',
+                            $overlayErr::class,
+                            $overlayErr->getMessage()
+                        ));
+                    } catch (\Throwable) {
+                        // Log failures must never block the 500 render.
+                    }
+                    // fall through to the safe production page below
+                }
             }
             // v3.13.7 SECURITY (CWE-209): production response body must
             // NOT contain the stack trace. The trace stays in Log::error
             // above and in any listener consumers. Clients only see the
-            // generic page + request_id.
-            $errorResp = self::renderError($response, 500, 'Server Error', $request->path, [
+            // generic page + request_id (request_id itself is resolved
+            // centrally by renderError() from Log::getRequestId()).
+            $errorResp = self::renderError($response, 500, 'Server Error', $request, [
                 'error_message' => '',
-                'request_id'    => substr(md5(uniqid('', true)), 0, 12),
             ]);
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
@@ -901,7 +974,9 @@ class Router
         ?array $result
     ): Response {
         if (!empty($afterMiddleware)) {
-            [$request, $finalResponse] = Middleware::runAfter($afterMiddleware, $request, $finalResponse);
+            [$request, $finalResponse] = Middleware::runAfter(
+                $afterMiddleware, $request, $finalResponse, self::renderForbidden(...)
+            );
         }
 
         $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
@@ -1041,7 +1116,9 @@ class Router
             return null;
         }
 
-        [$request, $response, $shortCircuit] = Middleware::runBefore($middleware, $request, $response);
+        [$request, $response, $shortCircuit] = Middleware::runBefore(
+            $middleware, $request, $response, self::renderForbidden(...)
+        );
         if ($shortCircuit !== null) {
             return $shortCircuit;
         }
@@ -1230,10 +1307,40 @@ class Router
                 || strcasecmp($sameSite, 'None') === 0
                 || Request::isSecureScheme();
 
-            if (headers_sent()) {
+            if (headers_sent() || $result->isTesting() || $result->isRawSocket()) {
                 // Built-in server mode: headers are managed via the Response object,
                 // so setcookie() would trigger a fatal error. Build the Set-Cookie
                 // header manually and attach it to the Response instead.
+                //
+                // $result->isTesting() (feature 131, TC-DEC-02 fix) catches a
+                // case headers_sent() alone never could: a CLI process
+                // (TestClient, PHPUnit) that will never send real headers at
+                // all, so headers_sent() stays false for the whole request.
+                // Before this, the ELSE branch below called PHP's native
+                // setcookie() into the void -- no real SAPI ever reads it
+                // back, so a TestClient-driven login route set
+                // request->session, but the session cookie never reached
+                // TestResponse, making a login-then-authenticated-request
+                // test structurally impossible to write.
+                //
+                // $result->isRawSocket() (real-bug pre-merge, 3.13.99) closes
+                // the gap feature 131 found and deliberately left open:
+                // Tina4\Server (tina4 serve's OWN raw-socket engine) ALSO
+                // never triggers headers_sent() -- a raw socket engages no
+                // real PHP SAPI header-sending mechanism at all, so it isn't
+                // caught by isTesting() either (a Server-driven Response is
+                // genuinely transported, over a real socket, unlike a
+                // TestClient Response that nothing ever sends). Before this,
+                // the ELSE branch's native setcookie() call was reached under
+                // Tina4\Server, into the same void -- no real SAPI ever reads
+                // it back -- so a first-time session login under `tina4
+                // serve` silently emitted NO Set-Cookie at all: session auth
+                // was broken on the framework's own recommended dev/prod
+                // server. Server::handleHttp() and Server::handle() both
+                // construct their Response with rawSocket: true for exactly
+                // this reason; App::__invoke() (Apache/nginx/FPM/php -S,
+                // where headers_sent() is a REAL, meaningful signal) does
+                // not, so this branch's reach on that path is unchanged.
                 $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
                 $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
                 if ($secure) {
@@ -1272,6 +1379,79 @@ class Router
      * @param Response $result  The response to strip
      * @return Response The same response, body removed when this was a HEAD
      */
+    /**
+     * Gzip-compress + attach an ETag (feature 40, CE-DEC-01) — the one
+     * header-builder step every response funnels through. A streaming
+     * response (SSE) has no buffered body to compress or hash, so it is
+     * skipped, mirroring Python's "streaming responses bypass ETag/compression".
+     *
+     * @param Request  $request  The incoming request (read for Accept-Encoding)
+     * @param Response $response The response to compress/tag in place
+     * @return Response The same instance, mutated
+     */
+    private static function compressAndTag(Request $request, Response $response): Response
+    {
+        if ($response->isStreaming()) {
+            return $response;
+        }
+        $response->compressAndTag($request->headers['accept-encoding'] ?? '');
+        return $response;
+    }
+
+    /**
+     * Answer a matching conditional GET with a 304 that PRESERVES whichever
+     * validators (ETag / Last-Modified) the 200 would have carried (feature 40,
+     * CE-PY-304-DROPS-VALIDATORS was a Python-only bug — PHP's static path
+     * already preserved them; this extends the SAME preservation to a dynamic
+     * response, which never carried a validator to preserve before CE-DEC-01).
+     *
+     * A static-file 304 is already terminal by the time this runs
+     * (StaticFiles::tryServe's own short-circuit already answered it, so its
+     * status is 304, not 200) — the guard below leaves it untouched rather than
+     * re-deciding it, so nothing here can double-304 or diverge from that
+     * already-tested path.
+     *
+     * @param Request  $request  The incoming request (read for the conditional headers)
+     * @param Response $response The candidate 200 response
+     * @return Response Either $response unchanged, or a fresh 304
+     */
+    private static function applyConditionalGet(Request $request, Response $response): Response
+    {
+        if ($response->getStatusCode() !== 200 || $response->getBody() === '') {
+            return $response;
+        }
+
+        $etag = $response->getHeader('ETag');
+        $lastModified = $response->getHeader('Last-Modified');
+        $ifNoneMatch = $request->headers['if-none-match'] ?? '';
+        $ifModifiedSince = $request->headers['if-modified-since'] ?? '';
+
+        // If-None-Match takes precedence over If-Modified-Since (RFC 9110 S13.1.3).
+        $notModified = false;
+        if ($ifNoneMatch !== '' && $etag !== null) {
+            $notModified = Response::etagMatches($ifNoneMatch, $etag);
+        } elseif ($ifNoneMatch === '' && $ifModifiedSince !== '' && $lastModified !== null) {
+            $since = strtotime($ifModifiedSince);
+            $modified = strtotime($lastModified);
+            $notModified = $since !== false && $modified !== false && $modified <= $since;
+        }
+
+        if (!$notModified) {
+            return $response;
+        }
+
+        $notModifiedResponse = new Response();
+        $notModifiedResponse->status(304);
+        if ($etag !== null) {
+            $notModifiedResponse->header('ETag', $etag);
+        }
+        if ($lastModified !== null) {
+            $notModifiedResponse->header('Last-Modified', $lastModified);
+        }
+        $notModifiedResponse->setBody('');
+        return $notModifiedResponse;
+    }
+
     private static function stripHeadBody(Request $request, Response $result): Response
     {
         // RFC 9110 §9.3.2: the server MUST NOT send content in a HEAD
@@ -1329,8 +1509,17 @@ class Router
      *
      *   1. a path parameter of that name wins;
      *   2. otherwise a `Request` type hint (or the literal name `request`)
-     *      gets the request;
-     *   3. everything else gets the response.
+     *      gets the request, a `Response` type hint (or the literal name
+     *      `response`) gets the response;
+     *   3. a param that matches NEITHER (untyped, unrecognised name) is
+     *      unclaimed - with exactly two unclaimed-or-request/response params
+     *      total and no OTHER param already claiming the request, the FIRST
+     *      unclaimed one positionally becomes the request (parity with the
+     *      Python/Ruby/Node masters, which bind an ambiguous 2-param handler
+     *      positionally). This is what makes an untyped `fn($req, $res)`
+     *      bind `$req` to the Request instead of both params silently
+     *      landing on the Response (the pre-3.13.99 misbinding);
+     *   4. anything still unclaimed after that gets the response.
      *
      * @param Request  $request  Candidate for injection, and the source of path params
      * @param Response $response The default injection for an unmatched parameter
@@ -1341,19 +1530,43 @@ class Router
     {
         $refParams = (new \ReflectionFunction($callback))->getParameters();
         $routeParams = $request->params;
-        $args = [];
 
-        foreach ($refParams as $p) {
+        $args = [];
+        $unclaimed = [];        // indices into $args a Request/Response type/name never pinned
+        $requestClaimed = false; // some param already unambiguously claimed the request
+        $remainingCount = 0;     // params not resolved by a path-parameter name
+
+        foreach ($refParams as $i => $p) {
             $name = $p->getName();
             if (array_key_exists($name, $routeParams)) {
-                $args[] = $routeParams[$name];
+                $args[$i] = $routeParams[$name];
                 continue;
             }
+
+            $remainingCount++;
             $type = $p->getType();
             $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : '';
-            $args[] = ($typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request')
-                ? $request
-                : $response;
+            $isRequest = $typeName === Request::class || $typeName === 'Tina4\\Request' || $name === 'request';
+            $isResponse = $typeName === Response::class || $typeName === 'Tina4\\Response' || $name === 'response';
+
+            if ($isRequest) {
+                $args[$i] = $request;
+                $requestClaimed = true;
+            } elseif ($isResponse) {
+                $args[$i] = $response;
+            } else {
+                $unclaimed[] = $i;
+                $args[$i] = $response; // default; corrected below if it wins the positional fallback
+            }
+        }
+
+        // Positional fallback: exactly two non-path params (the documented
+        // `($request, $response)` arity) and nothing already pinned the
+        // request explicitly - the first unclaimed param IS the request.
+        // A param with an explicit type hint or literal name always wins;
+        // this only ever corrects params that gave no signal at all.
+        if ($remainingCount === 2 && !$requestClaimed && count($unclaimed) > 0) {
+            $args[$unclaimed[0]] = $request;
         }
 
         return $args;
@@ -1468,7 +1681,7 @@ class Router
      */
     private static function renderForbidden(Request $request, Response $response): Response
     {
-        return self::renderError($response, 403, 'Forbidden', $request->path);
+        return self::renderError($response, 403, 'Forbidden', $request);
     }
 
     /**
@@ -1710,7 +1923,7 @@ class Router
                 // the body stays empty.
                 return $response->status(204);
             }
-            $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request->path);
+            $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request);
             $errorResp->header('Allow', $allowHeader);
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
@@ -1739,7 +1952,7 @@ class Router
             }
         }
 
-        $errorResp = self::renderError($response, 404, 'Not Found', $request->path);
+        $errorResp = self::renderError($response, 404, 'Not Found', $request);
         return self::injectDevToolbar($request, $errorResp, 'error');
     }
 
@@ -1987,25 +2200,67 @@ class Router
         return $count;
     }
 
+    /** Machine-readable error codes for the negotiated JSON envelope (ERR-DEC-02). */
+    private const ERROR_CODE_NAMES = [
+        403 => 'FORBIDDEN', 404 => 'NOT_FOUND', 405 => 'METHOD_NOT_ALLOWED', 500 => 'INTERNAL_SERVER_ERROR',
+    ];
+
     /**
-     * Render an error page via Frond templates with fallback to JSON.
+     * The ONE JSON error envelope for a negotiated 403/404/405/500 (ERR-DEC-02).
      *
-     * Resolution order:
+     * Reuses the existing `Response::errorResponse()` envelope
+     * (`error: true, code, message, status`) already shared by app-level
+     * `$response->error()` calls, plus `request_id` for correlation
+     * (feature 43, ERR-404-REQUESTID) - the SAME shape Python/Ruby/Node build.
+     *
+     * @param int $code HTTP status code
+     * @param string $message Human-readable message (never the raw exception - CWE-209)
+     * @param string $requestId The request's correlation id
+     * @return array The JSON-ready error body
+     */
+    private static function errorJsonBody(int $code, string $message, string $requestId): array
+    {
+        $body = Response::errorResponse(self::ERROR_CODE_NAMES[$code] ?? ('HTTP_' . $code), $message, $code);
+        $body['request_id'] = $requestId;
+        return $body;
+    }
+
+    /**
+     * Render an error page via Frond templates, negotiated on Accept, with a
+     * JSON fallback.
+     *
+     * ERR-DEC-02 (content negotiation, the ONE shared decision reused by
+     * 403/404/405/500 - see {@see Request::wantsJson()}): a JSON API client
+     * gets the canonical JSON error envelope directly - no template attempt at
+     * all. A browser negotiates the HTML page:
      *   1. User override:    src/templates/errors/{code}.twig
      *   2. Framework default: __DIR__/templates/errors/{code}.twig
-     *   3. JSON fallback
+     *   3. JSON fallback (defensive only - the framework ships a template for
+     *      every code this is called with)
      *
      * @param Response $response The response object
      * @param int $code HTTP status code
-     * @param string $message Error message
-     * @param string $path Request path (for display in template)
-     * @param array $extraData Additional template variables
+     * @param string $message Error message (the CWE-209 guard: the 500 caller
+     *                        passes a generic message here, never the real
+     *                        exception - see extraData's error_message)
+     * @param Request $request The incoming request (path + Accept + request id)
+     * @param array $extraData Additional template variables (e.g. the 500
+     *                        caller forces error_message='' in production)
      * @return Response
      */
-    private static function renderError(Response $response, int $code, string $message, string $path = '', array $extraData = []): Response
+    private static function renderError(Response $response, int $code, string $message, Request $request, array $extraData = []): Response
     {
+        $requestId = $extraData['request_id'] ?? (Log::getRequestId() ?? '');
+
+        if ($request->wantsJson()) {
+            return $response->json(self::errorJsonBody($code, $message, $requestId), $code);
+        }
+
         $templateFile = "errors/{$code}.twig";
-        $data = array_merge(['path' => $path, 'error_message' => $message], $extraData);
+        $data = array_merge(
+            ['path' => $request->path, 'error_message' => $message, 'request_id' => $requestId],
+            $extraData
+        );
 
         // 1. Try user override in src/templates/
         $userTemplateDir = 'src/templates';
@@ -2031,8 +2286,8 @@ class Router
             }
         }
 
-        // 3. JSON fallback
-        return $response->json(['error' => $message], $code);
+        // 3. JSON fallback (no template found at all)
+        return $response->json(self::errorJsonBody($code, $message, $requestId), $code);
     }
 
     /**
@@ -2397,44 +2652,69 @@ class Router
     private static function compilePath(string $path): array
     {
         $paramNames = [];
+        $paramTypes = [];
         $catchAll = false;
         $catchAllName = null;
+        $regexParts = [];
 
-        // Support bare * wildcard: /docs/* becomes a catch-all with key "*"
-        if (preg_match('#/\*$#', $path)) {
-            $path = preg_replace('#/\*$#', '/(?P<__wildcard__>.+)', $path);
-            $paramNames[] = '*';
-            $catchAll = true;
-            $catchAllName = '*';
+        // Segment-by-segment, matching Python's/Ruby's compiler (the fix for
+        // tina4-book real-bug audit, 3.13.99): a LITERAL segment is quoted
+        // with preg_quote so every character in it -- ( ) . + ? [ { etc. --
+        // matches only itself. Before this, the whole $path string was
+        // scanned for {param} once and everything else passed through
+        // UNESCAPED into the final regex, so a literal regex metacharacter in
+        // a path silently changed what the compiled pattern matched: e.g.
+        // registering `/blocked-xss(1)` compiled the trailing `(1)` as a
+        // capture group, so the exact literal path it was registered for
+        // 404'd (`preg_match` required the URL WITHOUT the parens). Only the
+        // {name}/{name:type} placeholder syntax below still becomes a regex
+        // capture group; every other character, in every other segment, is
+        // now matched literally.
+        $segments = explode('/', trim($path, '/'));
+        foreach ($segments as $segment) {
+            // Bare wildcard: matches the remainder of the path. Mirrors
+            // Python, which also breaks out on the first bare `*` segment
+            // wherever it appears (in practice always the last one).
+            if ($segment === '*') {
+                $paramNames[] = '*';
+                $catchAll = true;
+                $catchAllName = '*';
+                $regexParts[] = '(?P<__wildcard__>.+)';
+                break;
+            }
+
+            if (preg_match('#^\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}$#', $segment, $m)) {
+                $name = $m[1];
+                $type = $m[2] ?? 'string';
+
+                if (!array_key_exists($type, self::PARAM_TYPE_PATTERNS)) {
+                    $valid = array_filter(array_keys(self::PARAM_TYPE_PATTERNS), fn($k) => $k !== '.*');
+                    sort($valid);
+                    throw new \InvalidArgumentException(
+                        "Unknown param type '{$type}' in route '{$path}'. " .
+                        "Valid types: " . implode(', ', $valid) . "."
+                    );
+                }
+
+                $paramNames[] = $name;
+                $paramTypes[$name] = $type;
+
+                if ($type === 'path' || $type === '.*') {
+                    $catchAll = true;
+                    $catchAllName = $name;
+                }
+
+                $regexParts[] = '(?P<' . $name . '>' . self::PARAM_TYPE_PATTERNS[$type] . ')';
+                continue;
+            }
+
+            // Literal segment -- quote every regex metacharacter (and the
+            // `#` delimiter this class compiles with) so it matches itself
+            // only.
+            $regexParts[] = preg_quote($segment, '#');
         }
 
-        // Replace typed and untyped params: {name}, {name:int}, {name:float}, {name:path}, {name:.*}
-        $paramTypes = [];
-        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}#', function ($m) use (&$paramNames, &$paramTypes, &$catchAll, &$catchAllName, $path) {
-            $name = $m[1];
-            $type = $m[2] ?? 'string';
-            $paramNames[] = $name;
-            $paramTypes[$name] = $type;
-
-            if (!array_key_exists($type, self::PARAM_TYPE_PATTERNS)) {
-                $valid = array_filter(array_keys(self::PARAM_TYPE_PATTERNS), fn($k) => $k !== '.*');
-                sort($valid);
-                throw new \InvalidArgumentException(
-                    "Unknown param type '{$type}' in route '{$path}'. " .
-                    "Valid types: " . implode(', ', $valid) . "."
-                );
-            }
-
-            if ($type === 'path' || $type === '.*') {
-                $catchAll = true;
-                $catchAllName = $name;
-            }
-
-            return '(?P<' . $name . '>' . self::PARAM_TYPE_PATTERNS[$type] . ')';
-        }, $path);
-
-        // Escape forward slashes and anchor
-        $regex = '#^' . $regex . '$#';
+        $regex = '#^/' . implode('/', $regexParts) . '$#';
 
         return [
             'regex' => $regex,

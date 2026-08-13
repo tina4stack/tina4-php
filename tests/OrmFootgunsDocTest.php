@@ -68,7 +68,7 @@ class DocArticle extends ORM
 
     public ?int    $id         = null;
     public ?string $title      = null;
-    public int     $is_deleted = 0;   // REQUIRED — createTable() injects nothing
+    public int     $is_deleted = 0;   // declared here; createTable() also INJECTS it for a soft-delete model that omits it (SOFTDEL-DEC-02)
 }
 
 /**
@@ -232,16 +232,30 @@ class OrmFootgunsDocTest extends TestCase
     }
 
     /**
-     * createTable() does NOT inject is_deleted for a soft-delete model — the
-     * generated DDL contains the column ONLY because DocArticle declares it.
+     * SOFTDEL-DEC-02: createTable() INJECTS is_deleted for a soft-delete model
+     * that does NOT declare it, so the soft-delete lifecycle works with no manual
+     * column (the old footgun -- a table with no is_deleted column -- is closed).
      */
-    public function testCreateTableInjectsNothingForSoftDelete(): void
+    public function testCreateTableInjectsIsDeletedForSoftDelete(): void
     {
-        (new DocArticle($this->db))->createTable();
+        $model = new class ($this->db) extends ORM {
+            public string $tableName = 'doc_soft_auto';
+            public bool $softDelete = true;
+            public bool $autoMap = true;
+            public ?int $id = null;
+            public ?string $title = null;
+        };
+        $this->assertTrue($model->createTable());
         $row = $this->db->fetchOne(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='doc_articles'"
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='doc_soft_auto'"
         );
-        $this->assertStringContainsString('is_deleted', $row['sql'], 'the declared column is in the DDL');
+        $this->assertStringContainsString('is_deleted', $row['sql'], 'createTable() injected the flag column');
+
+        // The injected column is usable: soft delete flags + excludes the row.
+        $model->title = 'x';
+        $this->assertNotFalse($model->save());
+        $this->assertTrue($model->delete());
+        $this->assertCount(0, (new $model($this->db))->all());
     }
 
     // ── delete()/restore() PHP contract — false on a precondition, no raise ──

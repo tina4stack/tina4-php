@@ -43,6 +43,10 @@ trait PdoAdapterTrait
 {
     use ConnectTimeoutTrait;
 
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
+
     private ?\PDO $pdo = null;
     private ?string $lastError = null;
     private bool $autoCommit = true;

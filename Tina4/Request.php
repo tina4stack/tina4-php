@@ -336,6 +336,60 @@ class Request
     }
 
     /**
+     * Persist an uploaded file's content inside $targetDir under a SAFE name.
+     *
+     * The client-supplied filename is untrusted. Directory components are
+     * stripped (so "../../evil" or "/etc/passwd" becomes "evil"/"passwd"), a
+     * NUL byte or an unusable name ('', '.', '..') is refused, and the resolved
+     * path is confined to $targetDir (realpath containment) so an upload can
+     * never write outside it.
+     *
+     * @param array       $file      An uploaded-file descriptor
+     *                               ($request->files[$name]) carrying 'content'
+     *                               (raw bytes); 'filename' is used when
+     *                               $filename is not given.
+     * @param string      $targetDir The directory to write into (created if missing).
+     * @param string|null $filename  An explicit name to use instead of the client filename.
+     * @return string The absolute path written.
+     * @throws \InvalidArgumentException When the derived name is unsafe or would escape.
+     */
+    public static function saveUpload(array $file, string $targetDir, ?string $filename = null): string
+    {
+        $raw = $filename ?? ($file['filename'] ?? '');
+        if (!is_string($raw)) {
+            $raw = (string)$raw;
+        }
+        if (str_contains($raw, "\0")) {
+            throw new \InvalidArgumentException('upload filename contains a null byte');
+        }
+        // Reduce to a single path segment, handling BOTH separators so a Windows
+        // "..\\..\\evil" cannot smuggle a directory part past a POSIX basename.
+        $base = str_replace('\\', '/', $raw);
+        $slash = strrpos($base, '/');
+        if ($slash !== false) {
+            $base = substr($base, $slash + 1);
+        }
+        if ($base === '' || $base === '.' || $base === '..') {
+            throw new \InvalidArgumentException("upload filename is not a usable name: {$raw}");
+        }
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+        }
+        $dest = rtrim($targetDir, '/') . '/' . $base;
+        // Defence in depth: the resolved parent of the destination must be
+        // exactly the resolved target dir (guards a pre-existing symlink at
+        // target/base).
+        $realDir = realpath($targetDir);
+        $realParent = realpath(dirname($dest));
+        if ($realDir === false || $realParent === false || $realParent !== $realDir) {
+            throw new \InvalidArgumentException("refusing to write outside {$targetDir}: {$raw}");
+        }
+        $content = $file['content'] ?? '';
+        file_put_contents($dest, is_string($content) ? $content : (string)$content);
+        return $dest;
+    }
+
+    /**
      * Check if the request method matches.
      */
     public function isMethod(string $method): bool
@@ -345,11 +399,69 @@ class Request
 
     /**
      * Check if the request expects JSON response.
+     *
+     * The shared content-negotiation rule (feature 42, ERR-DEC-02): an API
+     * client sending `Accept: application/json` gets a JSON error body; a
+     * browser (`text/html`, the wildcard media range, or no header at all)
+     * gets the HTML error page. See {@see acceptPrefersJson()}.
      */
     public function wantsJson(): bool
     {
-        $accept = $this->headers['accept'] ?? '';
-        return str_contains($accept, 'application/json');
+        return self::acceptPrefersJson($this->headers['accept'] ?? '');
+    }
+
+    /**
+     * Content negotiation for an error response (feature 42, ERR-DEC-02): does
+     * an Accept header prefer application/json over text/html?
+     *
+     * `Accept: application/json` (an API client) prefers JSON; a browser
+     * Accept (`text/html`, `*\/*`, or no header at all) prefers HTML. A mixed
+     * Accept header - a real browser's
+     * `text/html,application/xhtml+xml,application/xml;q=0.9,*\/*;q=0.8` - is
+     * resolved by q-value: whichever of the two media types this method cares
+     * about is weighted higher wins; a tie or neither present defaults to
+     * HTML, the historical/back-compatible behaviour for an unspecified
+     * client. This is the ONE shared decision reused by the 403/404/405/500
+     * error paths in Router::renderError, so a JSON API client sees the SAME
+     * negotiated shape everywhere (ERR-403-SPLIT) - ported with the same
+     * algorithm to Python/Ruby/Node.
+     *
+     * @param string $accept The raw Accept header value
+     * @return bool True when JSON is preferred over HTML
+     */
+    public static function acceptPrefersJson(string $accept): bool
+    {
+        if ($accept === '') {
+            return false;
+        }
+        $bestJson = -1.0;
+        $bestHtml = -1.0;
+        foreach (explode(',', $accept) as $part) {
+            $segments = explode(';', trim($part));
+            $media = strtolower(trim($segments[0]));
+            $q = 1.0;
+            foreach (array_slice($segments, 1) as $param) {
+                $param = trim($param);
+                if (str_starts_with($param, 'q=')) {
+                    $qStr = substr($param, 2);
+                    if (is_numeric($qStr)) {
+                        $q = (float)$qStr;
+                    }
+                }
+            }
+            if ($media === 'application/json') {
+                $bestJson = max($bestJson, $q);
+            } elseif (in_array($media, ['text/html', '*/*', 'application/xhtml+xml'], true)) {
+                $bestHtml = max($bestHtml, $q);
+            }
+        }
+        if ($bestJson < 0) {
+            return false;
+        }
+        if ($bestHtml < 0) {
+            return true;
+        }
+        return $bestJson > $bestHtml;
     }
 
     /**

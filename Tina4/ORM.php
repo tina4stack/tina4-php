@@ -79,9 +79,34 @@ abstract class ORM
      *   'user_id' => 'User'                                          // simple: model name
      *   'user_id' => ['model' => 'User', 'related_name' => 'posts']  // extended: with custom has-many key
      *
+     * REL-DEC-01: relationships are READ-SIDE-ONLY. This wires up traversal
+     * accessors but emits NO DB-level FK / ON DELETE clause — referential
+     * integrity is the migration/DDL's job (consistent with the no-FK Firebird
+     * rule), so deleting a parent does NOT cascade to children at the engine level.
+     *
      * @var array<string, string|array>
      */
     public array $foreignKeys = [];
+
+    /**
+     * Per-column fixed-precision numeric overlay, keyed by property name:
+     * `['price' => [12, 4]]` asks createTable() to emit a real `DECIMAL(12, 4)`
+     * column for the `price` property instead of the floating `REAL` a typed
+     * `float` property maps to. It exists because a PHP typed property cannot
+     * carry a precision/scale the way Python's `DecimalField(precision, scale)`,
+     * Ruby's `decimal_field precision:, scale:` and Node's
+     * `{ type: 'decimal', precision, scale }` can — so the idiomatic PHP channel
+     * (a declared array property, exactly like $foreignKeys / $fieldMapping) is
+     * how a model asks for one. The in-memory value stays a PHP `float` (the
+     * documented money guidance: store minor units in an int for exact
+     * arithmetic); the fixed scale lives in the COLUMN.
+     *
+     *     public float $price = 0.0;
+     *     public array $decimals = ['price' => [12, 4]];   // DECIMAL(12,4)
+     *
+     * @var array<string, array{0:int,1:int}>
+     */
+    public array $decimals = [];
 
     /**
      * Per-field validation constraints, keyed by property name, read by
@@ -139,6 +164,16 @@ abstract class ORM
      * @var array<string, array<int, array{key: string, spec: string}>>
      */
     private static array $_fkRegistry = [];
+
+    /**
+     * REL-EAGER-UNBOUNDED: max parent PKs per eager `WHERE fk IN (...)` query, so
+     * a very large parent set never yields an unbounded IN list (a query-size /
+     * driver parameter-limit risk). Each chunk is one query.
+     */
+    private const EAGER_IN_CHUNK = 500;
+
+    /** Rows fetched per page so no relation is ever silently truncated. */
+    private const EAGER_PAGE_SIZE = 1000;
 
     /**
      * Bind a database to ORM models. Equivalent to Python's bind_database(db, name=None).
@@ -378,6 +413,13 @@ abstract class ORM
             $this->fill($data);
         }
 
+        // Resolve per-instance field defaults (incl. callable/Closure defaults)
+        // for any column the caller did not supply — the PHP equivalent of
+        // Python's _resolve_default / Ruby's per-instance default / Node's
+        // structuredClone default. Runs on EVERY construct, so a `new Widget()`
+        // with no data still gets its defaults.
+        $this->applyFieldDefaults();
+
         // Auto-wire relationships from $foreignKeys declarations
         $this->_processForeignKeys();
 
@@ -498,6 +540,56 @@ abstract class ORM
      *
      * @return $this
      */
+    /**
+     * Per-instance field defaults, resolved on construct. Override in a
+     * subclass to give a column a default a PHP typed property cannot express —
+     * most importantly a CALLABLE (Closure) default, which PHP property syntax
+     * forbids (a property default must be a constant expression). A Closure is
+     * resolved PER INSTANCE (so each row gets its own uuid / timestamp) and is
+     * DROPPED from the DDL (the default is applied in PHP, never as a SQL
+     * literal); a non-Closure value is used verbatim. Only a column the caller
+     * did NOT supply is defaulted. This closes the one field-model parity gap:
+     * callable defaults now work in all four frameworks.
+     *
+     *     protected function fieldDefaults(): array
+     *     {
+     *         return [
+     *             'token'      => fn() => bin2hex(random_bytes(8)),   // per-instance
+     *             'created_at' => fn() => (new \DateTime())->format('c'),
+     *             'status'     => 'new',                              // plain value
+     *         ];
+     *     }
+     *
+     * @return array<string, mixed>  property name => value|Closure
+     */
+    protected function fieldDefaults(): array
+    {
+        return [];
+    }
+
+    /**
+     * Apply {@see fieldDefaults()} to this instance: for each declared default
+     * the caller did NOT supply, set the property — invoking a Closure PER
+     * INSTANCE so two rows created back to back get distinct values. A
+     * non-Closure default is used as-is. Only a Closure is treated as callable
+     * (never a bare string that happens to name a function), matching Python's
+     * "callable and not a type", Ruby's "responds to call and not a Class" and
+     * Node's "typeof === 'function'".
+     */
+    private function applyFieldDefaults(): void
+    {
+        foreach ($this->fieldDefaults() as $name => $default) {
+            if (isset($this->_assignedFields[$name])) {
+                continue;   // the caller supplied it — never override
+            }
+            $value = $default instanceof \Closure ? $default() : $default;
+            // Set natively (declared property) or via __set (dynamic). A default
+            // is NOT a caller assignment, so do not record it in _assignedFields.
+            $this->$name = $value;
+            unset($this->_assignedFields[$name]);
+        }
+    }
+
     public function fill(array $data): self
     {
         // When autoMap is enabled, auto-generate fieldMapping for incoming
@@ -557,16 +649,43 @@ abstract class ORM
                 }
             }
 
-            // #165: record the caller assignment BEFORE the native set — a
-            // declared public property is set natively (bypassing __set), so
-            // fill() is the only place its assignment can be tracked. This lets
-            // save() write an explicit null as NULL while omitting a column the
-            // caller never touched (so its DB DEFAULT applies).
-            $this->_assignedFields[$propName] = true;
-
             // Set directly on the object — declared properties get set natively,
-            // undeclared ones go through __set → _dynamicProps
-            $this->$propName = $value;
+            // undeclared ones go through __set → _dynamicProps.
+            //
+            // LOAD-DEC-01 (feature 26, 3.13.99): a stored row can legitimately
+            // hold SQL NULL in a column whose PHP property is declared
+            // NON-NULLABLE — the documented "required" idiom is exactly
+            // `public string $name = '';` + `$fields['name']['required']`
+            // (see OrmValidateConstraintsTest). PHP's own type system then
+            // THROWS TypeError on `$this->name = null`, which — unhandled —
+            // aborts the WHOLE select()/find()/all() for one non-conforming
+            // row. That is fill()'s PHP-shaped twin of Python's
+            // LOAD-PY-REVALIDATE (a stored/legacy row, or one written before a
+            // property was tightened to non-nullable, becomes unreadable).
+            // Business-constraint enforcement (including "required") belongs
+            // to validate()/save(), never to hydration, so a null-into-
+            // non-nullable assignment here is swallowed and the property is
+            // left at its already-initialized class default — reading
+            // continues. Any OTHER TypeError (a genuinely un-coercible
+            // non-null value — real data corruption) still propagates; only
+            // the null case is a business-constraint concern.
+            try {
+                $this->$propName = $value;
+            } catch (\TypeError $e) {
+                if ($value !== null) {
+                    throw $e;
+                }
+                continue;
+            }
+
+            // #165: record the caller assignment AFTER a successful native
+            // set — fill() is the only place a declared property's assignment
+            // can be tracked (it bypasses __set). This lets save() write an
+            // explicit null as NULL while omitting a column the caller never
+            // touched (so its DB DEFAULT applies). A value the assignment
+            // above SKIPPED (null-into-non-nullable) is correctly NOT
+            // recorded here — the property was never actually touched.
+            $this->_assignedFields[$propName] = true;
         }
 
         return $this;
@@ -677,6 +796,8 @@ abstract class ORM
 
         $this->lastError = null;
         $this->_exists = true;
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $this;
     }
 
@@ -876,8 +997,6 @@ abstract class ORM
             return false;
         }
 
-        $pkColumn = $this->getDbColumn($this->getPrimaryKeys()[0]);
-
         if ($this->softDelete) {
             [$whereSql, $whereParams] = $this->pkWhere('id');
             $sql = "UPDATE {$this->tableName} SET is_deleted = 1 WHERE {$whereSql}";
@@ -905,6 +1024,8 @@ abstract class ORM
             throw $e;
         }
 
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $result;
     }
 
@@ -1026,7 +1147,7 @@ abstract class ORM
     }
 
     /**
-     * Count records matching conditions (respects soft delete and tableFilter).
+     * Count records matching conditions (respects soft delete).
      *
      * @param ?string $conditions Optional WHERE clause
      * @param array   $params     Bind parameters
@@ -1039,9 +1160,6 @@ abstract class ORM
         $whereParts = [];
         if ($this->softDelete) {
             $whereParts[] = "is_deleted = 0";
-        }
-        if ($this->tableFilter) {
-            $whereParts[] = $this->tableFilter;
         }
         if ($conditions !== null) {
             $whereParts[] = "({$conditions})";
@@ -1262,8 +1380,8 @@ abstract class ORM
      * autoMap models) and reads the value from the declared property or the
      * dynamic-property bag — whichever holds it.
      *
-     * Used by belongsTo(), belongsToMethod(), and the eager-load belongsTo /
-     * hasMany-grouping branches so the documented snake_case FK form resolves.
+     * Used by belongsTo() and the eager-load belongsTo / hasMany-grouping
+     * branches so the documented snake_case FK form resolves.
      *
      * @param string $fkColumn The FK column name (e.g. "author_id").
      * @return mixed The FK value, or null if unset.
@@ -1449,6 +1567,8 @@ abstract class ORM
             throw $e;
         }
 
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $result;
     }
 
@@ -1491,6 +1611,8 @@ abstract class ORM
             throw $e;
         }
 
+        // Bust cached reads of any table this write touched (CACHE-DEC-01).
+        $this->clearCache();
         return $result;
     }
 
@@ -1537,10 +1659,12 @@ abstract class ORM
      * A TYPE error (assigning the wrong PHP type to a typed property) still
      * raises at assignment through PHP's own type system; that is a programming
      * error and is never returned here. Each message is formatted
-     * "<field>: <what was wrong>", using the Node reference vocabulary so a 400
-     * body reads identically across the frameworks. A field with no declared
-     * constraint is unconstrained — only what $fields declares is checked, and
-     * `length` (a DDL sizing hint) is deliberately never validated.
+     * "<field> <what was wrong>", the canonical request-Validator vocabulary
+     * (feature 19, VALID-TWO-MESSAGES) so a 400 body reads identically across
+     * the frameworks AND matches the request-body Validator word for word
+     * ("name is required", "name does not match the required format"). A field
+     * with no declared constraint is unconstrained — only what $fields declares
+     * is checked, and `length` (a DDL sizing hint) is deliberately never validated.
      *
      * Override to add cross-field rules: call parent::validate() and merge.
      *
@@ -1565,7 +1689,7 @@ abstract class ORM
             // (parity with the Node reference's early `continue`).
             $blank = !$present || (is_string($value) && trim($value) === '');
             if (!empty($rules['required']) && $blank) {
-                $errors[] = "{$name}: is required";
+                $errors[] = "{$name} is required";
                 continue;
             }
 
@@ -1586,16 +1710,16 @@ abstract class ORM
 
                 $minLength = $rules['minLength'] ?? $rules['min_length'] ?? null;
                 if ($minLength !== null && $length < (int)$minLength) {
-                    $errors[] = "{$name}: must be at least {$minLength} characters";
+                    $errors[] = "{$name} must be at least {$minLength} characters";
                 }
 
                 $maxLength = $rules['maxLength'] ?? $rules['max_length'] ?? null;
                 if ($maxLength !== null && $length > (int)$maxLength) {
-                    $errors[] = "{$name}: must be at most {$maxLength} characters";
+                    $errors[] = "{$name} must be at most {$maxLength} characters";
                 }
 
                 if (isset($rules['pattern']) && !preg_match((string)$rules['pattern'], $value)) {
-                    $errors[] = "{$name}: does not match required pattern";
+                    $errors[] = "{$name} does not match the required format";
                 }
             }
 
@@ -1603,11 +1727,11 @@ abstract class ORM
             // numeric string from a request body).
             if (is_numeric($value)) {
                 if (isset($rules['min']) && (float)$value < (float)$rules['min']) {
-                    $errors[] = "{$name}: must be at least {$rules['min']}";
+                    $errors[] = "{$name} must be at least {$rules['min']}";
                 }
 
                 if (isset($rules['max']) && (float)$value > (float)$rules['max']) {
-                    $errors[] = "{$name}: must be at most {$rules['max']}";
+                    $errors[] = "{$name} must be at most {$rules['max']}";
                 }
             }
         }
@@ -1616,15 +1740,6 @@ abstract class ORM
     }
 
     /**
-     * Apply a named scope query.
-     * Maps to Python: scope(name, filter_sql, params)
-     *
-     * @param string $name Scope name (for identification)
-     * @param string $filterSql WHERE clause
-     * @param array $params Bound parameters
-     * @return array<int, static>
-     */
-    /**
      * Register a reusable query scope on the class.
      *
      * Usage:
@@ -1632,16 +1747,23 @@ abstract class ORM
      *   $users = User::active();           // calls where("active = ?", [1])
      *   $users = User::active(10, 5);      // with limit/offset
      *
+     * Keyed by [static::class][name] inside the ONE shared static array (feature
+     * 23, SCOPE-DEC-01): $_scopes is declared only on this abstract base, so
+     * PHP's static-property inheritance resolves every subclass's `static::$_scopes`
+     * to the SAME storage. Keying by the calling class isolates each model's
+     * scopes within that shared array — matching Python/Ruby/Node, where a scope
+     * is already a per-class registration and cannot collide across models.
+     *
      * @param string $name      Scope name — becomes a static method on the class
      * @param string $filterSql WHERE clause
      * @param array  $params    Bind parameters
      */
     public function scope(string $name, string $filterSql, array $params = []): void
     {
-        static::$_scopes[$name] = ['filter' => $filterSql, 'params' => $params];
+        static::$_scopes[static::class][$name] = ['filter' => $filterSql, 'params' => $params];
     }
 
-    /** @var array<string, array{filter: string, params: array}> */
+    /** @var array<class-string, array<string, array{filter: string, params: array}>> */
     protected static array $_scopes = [];
 
     /**
@@ -1649,8 +1771,8 @@ abstract class ORM
      */
     public static function __callStatic(string $name, array $arguments): array
     {
-        if (isset(static::$_scopes[$name])) {
-            $scope = static::$_scopes[$name];
+        if (isset(static::$_scopes[static::class][$name])) {
+            $scope = static::$_scopes[static::class][$name];
             $limit = $arguments[0] ?? 100;
             $offset = $arguments[1] ?? 0;
             return (new static())->where($scope['filter'], $scope['params'], $limit, $offset);
@@ -1690,11 +1812,11 @@ abstract class ORM
      *
      * @param string $relatedClass Fully qualified class name of the related ORM model
      * @param string|null $foreignKey Foreign key column (defaults to thisTable_id)
-     * @param int $limit Max results
+     * @param int|null $limit Max results; null (the default) returns the WHOLE set
      * @param int $offset Starting offset
      * @return array<int, static>
      */
-    public function hasMany(string $relatedClass, ?string $foreignKey = null, int $limit = 100, int $offset = 0): array
+    public function hasMany(string $relatedClass, ?string $foreignKey = null, ?int $limit = null, int $offset = 0): array
     {
         $this->ensureDb();
         $pkValue = $this->getPrimaryKeyValue();
@@ -1708,7 +1830,36 @@ abstract class ORM
 
         /** @var ORM $related */
         $related = new $relatedClass($this->_db);
-        return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+
+        // Explicit limit -> single explicit page (never silent truncation).
+        if ($limit !== null) {
+            return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+        }
+
+        // IMPREL-PHP-PARALLEL + cap unify: with no explicit limit, page through
+        // ALL matching rows -- the same paged/uncapped behaviour as the lazy and
+        // eager paths (feature 21), so an imperatively-loaded has_many yields the
+        // SAME row count as the lazy accessor instead of a silent 100-row cap.
+        // where() already applies the soft-delete filter, so a soft-deleted child
+        // stays excluded from this traversal. This is the ONE implementation the
+        // declarative path (_loadRelationship) also uses -- no parallel copy.
+        $orderCol = $related->getDbColumn($related->getPrimaryKeys()[0]);
+        $all = [];
+        $pageOffset = $offset;
+        do {
+            $batch = $related->where(
+                "{$foreignKey} = :fk",
+                [':fk' => $pkValue],
+                self::EAGER_PAGE_SIZE,
+                $pageOffset,
+                null,
+                $orderCol
+            );
+            $all = array_merge($all, $batch);
+            $pageOffset += self::EAGER_PAGE_SIZE;
+        } while (count($batch) === self::EAGER_PAGE_SIZE);
+
+        return $all;
     }
 
     /**
@@ -1814,6 +1965,11 @@ abstract class ORM
         $pkProperty = $this->getPrimaryKeys()[0];
         $colDefs = [];
 
+        // A column with a per-instance field default (esp. a callable one) is
+        // defaulted in PHP on construct, so it must NOT carry a SQL DEFAULT in
+        // the DDL — parity with Python/Ruby/Node dropping a callable default.
+        $fieldDefaults = $this->fieldDefaults();
+
         foreach ($this->getColumnDefinitions() as $name => $def) {
             $type = $def['type'];
             $colName = $this->resolveDbColumn($name);
@@ -1822,6 +1978,10 @@ abstract class ORM
             $sqlType = match ($type) {
                 'int'      => 'INTEGER',
                 'float'    => 'REAL',
+                // A fixed-precision column ($decimals overlay): a real
+                // DECIMAL(p, s), identical syntax on PG/MySQL/MSSQL/Firebird/
+                // SQLite. FloatField-equivalent `float` stays REAL.
+                'decimal'  => 'DECIMAL(' . (int) ($def['precision'] ?? 10) . ',' . (int) ($def['scale'] ?? 2) . ')',
                 'bool'     => $boolSql,
                 'datetime' => $datetimeSql,
                 'json'     => $jsonSql,
@@ -1855,7 +2015,8 @@ abstract class ORM
             // needs TRUE/FALSE; an INTEGER- or BIT-backed bool (SQLite, Firebird,
             // MSSQL) needs 1/0. `DEFAULT 0` on a PG BOOLEAN raises
             // "default expression is of type integer".
-            if ($type === 'bool' && $def['hasDefault'] && is_bool($def['default'])) {
+            if ($type === 'bool' && $def['hasDefault'] && is_bool($def['default'])
+                && !isset($fieldDefaults[$name])) {
                 if ($boolSql === 'BOOLEAN') {
                     $parts[] = 'DEFAULT ' . ($def['default'] ? 'TRUE' : 'FALSE');
                 } else {
@@ -1873,6 +2034,23 @@ abstract class ORM
             $colDefs[] = "{$pkColumn} INTEGER PRIMARY KEY AUTOINCREMENT";
         }
 
+        // SOFTDEL-DEC-02: a $softDelete model needs an is_deleted flag column,
+        // but createTable() built the table from DECLARED properties ONLY — so a
+        // $softDelete = true model that never declared is_deleted produced a
+        // table with NO such column, and every soft-delete read/write then
+        // errored on the missing column. Inject it here (INTEGER 0/1, default 0)
+        // unless the model already declares it, so the generated schema always
+        // matches the soft-delete behaviour.
+        if ($this->softDelete) {
+            $declaredColumns = array_map(
+                fn (string $prop): string => $this->resolveDbColumn($prop),
+                array_keys($this->getColumnDefinitions())
+            );
+            if (!in_array('is_deleted', $declaredColumns, true)) {
+                $colDefs[] = 'is_deleted INTEGER DEFAULT 0';
+            }
+        }
+
         // A COMPOSITE key is declared ONCE, at table level; the per-column inline
         // form above is suppressed for it, because two inline primary keys is
         // invalid DDL on every engine.
@@ -1882,7 +2060,12 @@ abstract class ORM
             $colDefs[] = 'PRIMARY KEY (' . implode(', ', $pkCols) . ')';
         }
 
-        $sql = "CREATE TABLE IF NOT EXISTS {$this->tableName} (" . implode(', ', $colDefs) . ")";
+        // MSSQL and Firebird reject `IF NOT EXISTS` on CREATE TABLE (a syntax
+        // error). The tableExists() guard at the top of createTable() already
+        // returns early when the table is present, so `IF NOT EXISTS` is pure
+        // redundancy on every engine and is simply omitted where it does not parse.
+        $ifNotExists = in_array($dialect, ['mssql', 'firebird'], true) ? '' : 'IF NOT EXISTS ';
+        $sql = "CREATE TABLE {$ifNotExists}{$this->tableName} (" . implode(', ', $colDefs) . ")";
 
         // Translate the generic AUTOINCREMENT to the engine's syntax
         // (SERIAL on PG, AUTO_INCREMENT on MySQL, IDENTITY(1,1) on MSSQL, …).
@@ -2010,7 +2193,12 @@ abstract class ORM
         static $frameworkProps = [
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
-            'foreignKeys', 'tableFilter',
+            'foreignKeys',
+            // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
+            // never a column itself — exclude it even when a subclass redeclares
+            // it (which is how a model asks for a real DECIMAL(p, s) column, since
+            // a PHP typed `float` property cannot carry a precision/scale).
+            'decimals',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
@@ -2036,13 +2224,19 @@ abstract class ORM
                 continue;
             }
 
+            // A property listed in $decimals is a fixed-precision numeric column:
+            // its logical type is 'decimal' and it carries the declared
+            // precision/scale, which createTable() renders as DECIMAL(p, s).
+            $isDecimal = isset($this->decimals[$name]);
             $columns[$name] = [
-                'type'       => $this->logicalTypeFor($prop, $name),
+                'type'       => $isDecimal ? 'decimal' : $this->logicalTypeFor($prop, $name),
                 'hasDefault' => $prop->hasDefaultValue(),
                 'default'    => $prop->hasDefaultValue() ? $prop->getDefaultValue() : null,
                 // A declared non-nullable type (`string`, `int`) is NOT NULL; a
                 // nullable type (`?string`) or an untyped property is nullable.
                 'nullable'   => $prop->getType()?->allowsNull() ?? true,
+                'precision'  => $isDecimal ? (int) ($this->decimals[$name][0] ?? 10) : null,
+                'scale'      => $isDecimal ? (int) ($this->decimals[$name][1] ?? 2) : null,
             ];
         }
 
@@ -2105,7 +2299,16 @@ abstract class ORM
             $typeName === \DateTime::class
                 || $typeName === \DateTimeImmutable::class
                 || $typeName === \DateTimeInterface::class => 'datetime',
-            (bool) preg_match('/(_at$|date|time)/i', $snaked) => 'datetime',
+            // A NAME heuristic, only reached when the property is NOT explicitly
+            // typed \DateTime (prefer the real type above). It is ANCHORED to a
+            // whole trailing segment so a substring never misfires: the old
+            // `/(_at$|date|time)/i` matched INSIDE a word, so `updated_by` (has
+            // "date" in "up-date-d"), `runtime` and `downtime` (both end in
+            // "time") were wrongly inferred as datetime. This matches only a
+            // `_at` suffix or a final `date`/`time`/`datetime`/`timestamp`
+            // segment, so `created_at`, `updated_at`, a `*_date` and a `*_time`
+            // column still resolve while the substrings above do not.
+            (bool) preg_match('/(_at$)|((?:^|_)(?:date|time|datetime|timestamp)$)/i', $snaked) => 'datetime',
             default => 'string',
         };
     }
@@ -2156,13 +2359,85 @@ abstract class ORM
     }
 
     /**
+     * The ONE process-wide, tag-aware query cache shared by EVERY model, so a
+     * write on one model busts a cross-table query cached on another
+     * (CACHE-DEC-01). Mirrors the Python master's module-level `_query_cache`. It
+     * is the existing {@see QueryCache} subsystem (TTL + tags) -- zero new deps --
+     * and is separate from the adapter-level auto-cache (SQLTranslator's static
+     * cache), which is env-gated and off by default.
+     */
+    private static ?QueryCache $modelQueryCache = null;
+
+    /**
+     * Lazily build and return the shared model query cache.
+     */
+    protected static function queryCache(): QueryCache
+    {
+        return self::$modelQueryCache ??= new QueryCache(0, 500);
+    }
+
+    /**
+     * Table names a query reads FROM / JOINs -- lowercased, schema-stripped.
+     *
+     * Best-effort: for each FROM/JOIN keyword it takes the following identifier,
+     * drops any quoting (backticks, double quotes, square brackets) and schema
+     * prefix (public.users -> users), and ignores the alias. A cached query is
+     * tagged with these tables so a write to any one of them busts it.
+     *
+     * @return array<int, string>
+     */
+    protected static function tablesInSql(string $sql): array
+    {
+        preg_match_all(
+            '/\b(?:FROM|JOIN)\s+([`"\[]?[A-Za-z_][\w$]*[`"\]]?(?:\.[`"\[]?[A-Za-z_][\w$]*[`"\]]?)?)/i',
+            $sql,
+            $matches
+        );
+        $tables = [];
+        foreach ($matches[1] as $raw) {
+            $name = trim($raw, '`"[]');
+            if (str_contains($name, '.')) {
+                $name = trim((string) substr(strrchr($name, '.'), 1), '`"[]');
+            }
+            if ($name !== '') {
+                $tables[strtolower($name)] = true;
+            }
+        }
+        return array_keys($tables);
+    }
+
+    /**
+     * Every table a cached query touches: this model's table plus every FROM/JOIN
+     * table in `$sql`. A write to any of these busts the entry (CACHE-DEC-01).
+     *
+     * @return array<int, string>
+     */
+    protected function cacheTags(string $sql): array
+    {
+        $tags = [strtolower($this->tableName)];
+        foreach (self::tablesInSql($sql) as $table) {
+            if (!in_array($table, $tags, true)) {
+                $tags[] = $table;
+            }
+        }
+        return $tags;
+    }
+
+    /**
      * Run a raw SQL query and cache the results for `$ttl` seconds.
-     * Results are tagged with the model class name so clearCache() invalidates them all.
+     *
+     * Invalidation (CACHE-DEC-01): the entry is tagged by every table the query
+     * touches (this model's table plus any FROM/JOIN tables), so a write through
+     * the ORM (save/delete/forceDelete/restore) to ANY of those tables busts it.
+     * `$ttl <= 0` means NO-CACHE -- the query runs and the rows are returned but
+     * nothing is stored, so every read hits the database (it is NOT an
+     * infinite-lived entry).
+     *
      * Maps to Python: cached(sql, params, ttl, limit, offset)
      *
      * @param string     $sql    Raw SELECT SQL
      * @param array      $params Bound parameters
-     * @param int        $ttl    Cache lifetime in seconds (default 60)
+     * @param int        $ttl    Cache lifetime in seconds (default 60; <= 0 = no-cache)
      * @param int        $limit  Max results
      * @param int        $offset Starting offset
      * @param array|null $include Relationship names to eager-load
@@ -2170,26 +2445,36 @@ abstract class ORM
      */
     public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 100, int $offset = 0, ?array $include = null): array
     {
-        $cacheKey = static::class . ':' . SQLTranslator::queryKey($sql, $params) . ":{$limit}:{$offset}";
-        $hit = SQLTranslator::cacheGet($cacheKey);
+        // ttl <= 0 is NO-CACHE: run it live, store nothing, read nothing.
+        if ($ttl <= 0) {
+            return $this->select($sql, $params, $limit, $offset, $include);
+        }
+
+        $cacheKey = static::class . ':' . QueryCache::queryKey($sql, $params) . ":{$limit}:{$offset}";
+        $hit = self::queryCache()->get($cacheKey);
         if ($hit !== null) {
             return $hit;
         }
 
         $result = $this->select($sql, $params, $limit, $offset, $include);
-        SQLTranslator::cacheSet($cacheKey, $result, $ttl);
+        self::queryCache()->set($cacheKey, $result, $ttl, $this->cacheTags($sql));
         return $result;
     }
 
     /**
-     * Clear all cached query results for this model class.
+     * Invalidate every cached query that touches this model's table.
+     *
+     * Tag-scoped, NOT a wholesale flush: a cached JOIN on another model that
+     * reads this table is busted too (it carries this table's tag), while a
+     * query that never touches this table is left intact. Called after every ORM
+     * write (save/delete/forceDelete/restore) so a read-after-write never serves
+     * a stale/deleted row (CACHE-DEC-01).
+     *
      * Maps to Python: clear_cache()
      */
     public function clearCache(): void
     {
-        // SQLTranslator cache doesn't support tag-based clearing, so we clear all.
-        // For per-model isolation, prefix keys are used but a full clear is the safe option.
-        SQLTranslator::cacheClear();
+        self::queryCache()->clearTag(strtolower($this->tableName));
     }
 
     /**
@@ -2507,7 +2792,12 @@ abstract class ORM
         static $frameworkProps = [
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
             'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
-            'foreignKeys', 'tableFilter',
+            'foreignKeys',
+            // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
+            // never a column itself — exclude it even when a subclass redeclares
+            // it (which is how a model asks for a real DECIMAL(p, s) column, since
+            // a PHP typed `float` property cannot carry a precision/scale).
+            'decimals',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
@@ -2635,30 +2925,21 @@ abstract class ORM
      */
     private function _loadRelationship(string $name, string $definition, string $type): ORM|array|null
     {
-        $this->ensureDb();
-
+        // IMPREL-PHP-PARALLEL: the declarative path shares the ONE public
+        // imperative implementation (hasOne/hasMany/belongsTo) rather than a
+        // parallel private copy that can drift. Those methods call ensureDb() and
+        // resolve the default foreign key themselves, so a null $foreignKey (no
+        // key in the definition string) resolves the same default here as before.
         $parts = explode('.', $definition, 2);
         $relatedClass = $parts[0];
         $foreignKey = $parts[1] ?? null;
 
-        if ($type === 'hasOne') {
-            if ($foreignKey === null) {
-                $foreignKey = self::defaultForeignKey($this);
-            }
-            return $this->hasOneMethod($relatedClass, $foreignKey);
-        } elseif ($type === 'hasMany') {
-            if ($foreignKey === null) {
-                $foreignKey = self::defaultForeignKey($this);
-            }
-            return $this->hasManyMethod($relatedClass, $foreignKey);
-        } elseif ($type === 'belongsTo') {
-            if ($foreignKey === null) {
-                $foreignKey = self::defaultForeignKey($relatedClass);
-            }
-            return $this->belongsToMethod($relatedClass, $foreignKey);
-        }
-
-        return null;
+        return match ($type) {
+            'hasOne' => $this->hasOne($relatedClass, $foreignKey),
+            'hasMany' => $this->hasMany($relatedClass, $foreignKey),
+            'belongsTo' => $this->belongsTo($relatedClass, $foreignKey),
+            default => null,
+        };
     }
 
     /**
@@ -2675,10 +2956,27 @@ abstract class ORM
         }
 
         if ($db === null) {
-            $db = static::getDb();
+            // REL-PHP-EAGERLOAD-STATIC: the public ORM::eagerLoad($rows, $include)
+            // is a STATIC call, so it must resolve the DB via the static path.
+            // getDb() is an INSTANCE method (returns $this->_db) and fatals in a
+            // static context ("using $this when not in object context"); resolveDb()
+            // is the static default/global/env resolver used by every other static
+            // finder.
+            $db = static::resolveDb();
         }
 
         $sample = $instances[0];
+
+        // REL auto-wire parity: merge any FK-registry has-many entries onto the
+        // sample so an FK-auto-wired has-many resolves through the EAGER path too,
+        // exactly as __get() merges them for the lazy path. Without this, an
+        // include=['posts'] for a $foreignKeys-declared relation silently finds
+        // nothing unless the relation had been touched lazily first.
+        foreach (self::$_fkRegistry[get_class($sample)] ?? [] as $fkEntry) {
+            if (!isset($sample->hasMany[$fkEntry['key']])) {
+                $sample->hasMany[$fkEntry['key']] = $fkEntry['spec'];
+            }
+        }
 
         // Group includes: top-level and nested
         $topLevel = [];
@@ -2735,16 +3033,29 @@ abstract class ORM
 
                 /** @var ORM $relTemplate */
                 $relTemplate = new $relatedClass($db);
-                $placeholders = implode(',', array_fill(0, count($pkValues), '?'));
-                $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders})";
-                $result = $db->fetch($sql, $pkValues, count($pkValues) * 1000, 0);
+                // REL-SOFTDELETE-TRAVERSAL: a soft-deleted child must not surface
+                // through eager traversal (parity with the lazy where() path).
+                $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
+                $orderCol = $relTemplate->getDbColumn($relTemplate->getPrimaryKeys()[0]);
 
+                // REL-EAGER-UNBOUNDED: chunk the parent PKs so the IN list stays
+                // bounded, and page each chunk so no relation is truncated.
                 $related = [];
-                foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
-                    $model = new $relatedClass($db);
-                    $model->fill($row);
-                    $model->_exists = true;
-                    $related[] = $model;
+                foreach (array_chunk($pkValues, self::EAGER_IN_CHUNK) as $chunk) {
+                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                    $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders}){$soft} ORDER BY {$orderCol}";
+                    $offset = 0;
+                    do {
+                        $result = $db->fetch($sql, $chunk, self::EAGER_PAGE_SIZE, $offset);
+                        $rows = is_array($result) ? ($result['data'] ?? $result) : $result->records;
+                        foreach ($rows as $row) {
+                            $model = new $relatedClass($db);
+                            $model->fill($row);
+                            $model->_exists = true;
+                            $related[] = $model;
+                        }
+                        $offset += self::EAGER_PAGE_SIZE;
+                    } while (count($rows) === self::EAGER_PAGE_SIZE);
                 }
 
                 // Eager load nested
@@ -2796,17 +3107,21 @@ abstract class ORM
                     continue;
                 }
 
-                $placeholders = implode(',', array_fill(0, count($fkValues), '?'));
                 $relPk = $relTemplate->primaryKey;
-                $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders})";
-                $result = $db->fetch($sql, $fkValues, count($fkValues) * 10, 0);
-
+                // REL-SOFTDELETE-TRAVERSAL: exclude a soft-deleted parent (parity
+                // with findById). REL-EAGER-UNBOUNDED: chunk the FK values.
+                $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
                 $lookup = [];
-                foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
-                    $model = new $relatedClass($db);
-                    $model->fill($row);
-                    $model->_exists = true;
-                    $lookup[$model->getPrimaryKeyValue()] = $model;
+                foreach (array_chunk($fkValues, self::EAGER_IN_CHUNK) as $chunk) {
+                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                    $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders}){$soft}";
+                    $result = $db->fetch($sql, $chunk, count($chunk), 0);
+                    foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
+                        $model = new $relatedClass($db);
+                        $model->fill($row);
+                        $model->_exists = true;
+                        $lookup[$model->getPrimaryKeyValue()] = $model;
+                    }
                 }
 
                 if (!empty($nested) && !empty($lookup)) {
@@ -2820,50 +3135,6 @@ abstract class ORM
                 }
             }
         }
-    }
-
-    /**
-     * Internal: has-one query (used by lazy and explicit loading).
-     */
-    private function hasOneMethod(string $relatedClass, string $foreignKey): ?ORM
-    {
-        $pkValue = $this->getPrimaryKeyValue();
-        if ($pkValue === null) {
-            return null;
-        }
-
-        /** @var ORM $related */
-        $related = new $relatedClass($this->_db);
-        $results = $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], 1);
-        return $results[0] ?? null;
-    }
-
-    /**
-     * Internal: has-many query (used by lazy and explicit loading).
-     */
-    private function hasManyMethod(string $relatedClass, string $foreignKey, int $limit = 100, int $offset = 0): array
-    {
-        $pkValue = $this->getPrimaryKeyValue();
-        if ($pkValue === null) {
-            return [];
-        }
-
-        /** @var ORM $related */
-        $related = new $relatedClass($this->_db);
-        return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
-    }
-
-    /**
-     * Internal: belongs-to query (used by lazy and explicit loading).
-     */
-    private function belongsToMethod(string $relatedClass, string $foreignKey): ?ORM
-    {
-        $fkValue = $this->resolveFkValue($foreignKey);
-        if ($fkValue === null) {
-            return null;
-        }
-
-        return $relatedClass::findById($fkValue);
     }
 
     /**
