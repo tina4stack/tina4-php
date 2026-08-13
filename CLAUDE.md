@@ -1288,7 +1288,7 @@ $result = SQLTranslator::remember(
 |---|---|
 | `TINA4_SWAGGER_ENABLED` | On/off for the `/swagger` endpoints. Explicit `true`/`false` wins; unset falls back to `TINA4_DEBUG`. Set `false` to DISABLE swagger in any environment; `true` to expose it in production. |
 | `TINA4_SWAGGER_SERVERS` | Comma-separated server URLs for the OpenAPI `servers[]` block; falls back to `SWAGGER_DEV_URL`. |
-| `TINA4_SWAGGER_UI_CDN` | Base URL for the Swagger UI assets (default `https://unpkg.com/swagger-ui-dist@5`); point at a self-hosted mirror for air-gapped use. |
+| `TINA4_SWAGGER_UI_CDN` | Base URL for the Swagger UI assets (default `https://cdn.jsdelivr.net/npm/swagger-ui-dist@5`, matching python/ruby/node); point at a self-hosted mirror for air-gapped use. |
 | `TINA4_SWAGGER_TITLE` / `_VERSION` / `_DESCRIPTION` | `info` block title, version, description. |
 | `TINA4_SWAGGER_CONTACT_EMAIL` / `_LICENSE` | Optional `info.contact.email` and `info.license`. |
 | `TINA4_SWAGGER_OPENAPI` | OpenAPI version: `3.0.3` (default) or `3.1` (emits `3.1.0`). |

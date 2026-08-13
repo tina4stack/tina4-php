@@ -420,6 +420,113 @@ final class SwaggerContractTest extends TestCase
         );
     }
 
+    // ── invariant 11: spec-reflects-a-route-added-after-boot ─────────────
+
+    /**
+     * The document reflects a route registered AFTER an earlier fetch to the
+     * SAME running server. `php -S` re-executes the whole front-controller
+     * script on EVERY request, so a marker file the fixture app checks each
+     * time simulates a route a hot-reload adds mid-run (the real mechanism
+     * Node uses). Node's generator closed over a BOOT-TIME
+     * `router.getRoutes()` snapshot (SWAG-NODE-BOOT-SNAPSHOT); PHP's
+     * Swagger::generate() always re-reads Router::getRoutes() fresh, and this
+     * pins that so all four frameworks carry the same named regression.
+     */
+    public function testSpecReflectsARouteAddedAfterBoot(): void
+    {
+        $app = dirname(__DIR__) . '/tests/fixtures/swagger_contract_app.php';
+        $marker = tempnam(sys_get_temp_dir(), 'tina4_late_route_marker_');
+        $this->assertNotFalse($marker, 'could not reserve a marker file path');
+        unlink($marker); // start ABSENT — the late route must not exist yet
+
+        $env = self::baseEnv();
+        $env['TINA4_DEBUG'] = 'true';
+        $env['TINA4_TEST_LATE_ROUTE_MARKER'] = $marker;
+
+        $server = TestServer::start($app, $env, self::$workDir);
+        try {
+            $before = self::fetchJson($server->port, '/swagger/openapi.json');
+            $this->assertArrayNotHasKey(
+                '/contract/late-added',
+                $before['paths'],
+                'premise broken: the late route must not exist before the marker is created'
+            );
+            $this->assertArrayHasKey('/health', $before['paths'], 'an ordinary route is documented before the late add');
+
+            // Simulate a hot-reload registering a NEW route mid-run.
+            file_put_contents($marker, '1');
+
+            $after = self::fetchJson($server->port, '/swagger/openapi.json');
+            $this->assertArrayHasKey(
+                '/contract/late-added',
+                $after['paths'],
+                'the document must reflect a route registered after an earlier fetch, not a frozen boot snapshot'
+            );
+            $this->assertArrayHasKey('/health', $after['paths'], 'the earlier route must still be documented too');
+        } finally {
+            $server->stop();
+            @unlink($marker);
+        }
+    }
+
+    // ── invariant 12: internal-feedback-route-is-never-in-the-spec ───────
+
+    /**
+     * /__feedback/* is excluded by the SAME shared internal-prefix rule as
+     * /swagger and /__dev, regardless of how or when it was registered.
+     * Node's /__feedback/* was kept out of the spec only by BOOT ORDERING
+     * (swagger snapshotted routes before DevAdmin registered the feedback
+     * routes), not by its exclusion list — a reorder would have published
+     * `POST /__feedback/api/turn` as a secured route (SWAG-NODE-FEEDBACK-LEAK).
+     * PHP's INTERNAL_PREFIXES already carries /__feedback (testOnlyThe...
+     * exercises it too); this is its own named case so the shared auditor can
+     * match it by name across all four frameworks.
+     */
+    public function testInternalFeedbackRouteIsNeverInTheSpec(): void
+    {
+        $paths = self::$defaultsDoc['paths'];
+
+        $this->assertArrayHasKey('/health', $paths, 'the application route must still be documented');
+        $this->assertArrayNotHasKey('/__feedback/api/turn', $paths, '/__feedback must be excluded');
+        $this->assertArrayNotHasKey('/__feedback/widget.js', $paths, '/__feedback must be excluded');
+        foreach (array_keys($paths) as $pathKey) {
+            $this->assertFalse(
+                str_starts_with((string) $pathKey, '/__feedback'),
+                "framework-internal {$pathKey} must not be in the public document"
+            );
+        }
+    }
+
+    // ── invariant 13: secured-op-per-op-shape-is-identical ───────────────
+
+    /**
+     * A secured operation's security + 401 + summary/tags shape is
+     * byte-identical across all four frameworks (SWAG-401-SHAPE +
+     * SWAG-SHAPE-DRIFT). PHP already emitted all four on an undecorated
+     * route; Python used to emit none of them and Ruby always added a
+     * `description: ""`. This pins the CONVERGED shape so a future drift is
+     * caught, and the negative control proves summary/tags populate
+     * regardless of security while no description is fabricated either way.
+     */
+    public function testSecuredOpPerOpShapeIsIdentical(): void
+    {
+        $paths = self::$defaultsDoc['paths'];
+
+        $secured = $paths['/contract/shape-item']['post'];
+        $this->assertSame([['bearerAuth' => []]], $secured['security'] ?? null, 'a secured op documents bearerAuth');
+        $this->assertSame(['description' => 'Unauthorized'], $secured['responses']['401'] ?? null, 'a secured op documents a 401');
+        $this->assertSame('POST /contract/shape-item', $secured['summary'] ?? null, 'summary defaults to METHOD + path');
+        $this->assertSame(['contract'], $secured['tags'] ?? null, 'tags default to the first path segment');
+        $this->assertArrayNotHasKey('description', $secured, 'an undecorated operation must not fabricate a description');
+
+        $public = $paths['/contract/shape-public']['post'];
+        $this->assertArrayNotHasKey('security', $public, 'an explicitly-public op documents no security');
+        $this->assertArrayNotHasKey('401', $public['responses'], 'an explicitly-public op documents no 401');
+        $this->assertSame('POST /contract/shape-public', $public['summary'] ?? null, 'summary populates regardless of security');
+        $this->assertSame(['contract'], $public['tags'] ?? null, 'tags populate regardless of security');
+        $this->assertArrayNotHasKey('description', $public);
+    }
+
     // ── helpers (not tests) ──────────────────────────────────────────────
 
     /**

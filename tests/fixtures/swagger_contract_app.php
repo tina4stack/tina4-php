@@ -83,6 +83,25 @@ Router::post('/api/widgets', fn(Request $req, Response $res) => $res->json(['cre
 Router::post('/api/public-signup', fn(Request $req, Response $res) => $res->json(['ok' => true]))
     ->noAuth();
 
+// A bare, UNDECORATED secured write + its explicitly-public twin, with no
+// swagger meta at all — the per-op SHAPE fixture (secured-op-per-op-shape-is-
+// identical): security + 401 + summary/tags must come out byte-identical to
+// the same route registered in python/ruby/node.
+Router::post('/contract/shape-item', fn(Request $req, Response $res) => $res->json(['ok' => true]));
+Router::post('/contract/shape-public', fn(Request $req, Response $res) => $res->json(['ok' => true]))
+    ->noAuth();
+
+// A route registered ONLY when a marker file exists — `php -S` re-executes
+// this whole script on EVERY request, so there is no separate "boot" moment
+// to snapshot from; the marker simulates a route a hot-reload adds mid-run
+// (Node's real mechanism) and proves the document re-reads live routes on
+// every request rather than a frozen capture (SWAG-NODE-BOOT-SNAPSHOT parity
+// — PHP was never the gap, but the invariant belongs in all four).
+$lateRouteMarker = getenv('TINA4_TEST_LATE_ROUTE_MARKER');
+if ($lateRouteMarker !== false && is_file($lateRouteMarker)) {
+    Router::get('/contract/late-added', fn(Request $req, Response $res) => $res->json(['late' => true]));
+}
+
 // ── Framework-internal routes — registered, but never documented ──────
 // PHP previously published these in the public API document. They live outside
 // the /swagger + /__dev prefixes, so the shared exclusion list must still drop
