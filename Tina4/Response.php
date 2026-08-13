@@ -86,6 +86,12 @@ class Response
     /** @var bool Whether to suppress actual output (for testing) */
     private bool $testing = false;
 
+    /**
+     * @var bool Whether Tina4\Server (the built-in raw-socket engine) — not a
+     * real PHP SAPI — owns delivering this Response.
+     */
+    private bool $rawSocket = false;
+
     /** @var callable|null Chunk source for a streamed body — set by stream() */
     private $streamSource = null;
 
@@ -95,11 +101,18 @@ class Response
     /**
      * Create a new Response instance.
      *
-     * @param bool $testing If true, suppresses actual header/output calls
+     * @param bool $testing   If true, suppresses actual header/output calls
+     *                        (TestClient — nothing will ever transport this
+     *                        Response at all).
+     * @param bool $rawSocket If true, this Response IS transported, but by
+     *                        Tina4\Server's own socket writer rather than a
+     *                        real PHP SAPI — see Router::emitSessionCookie()
+     *                        and isRawSocket().
      */
-    public function __construct(bool $testing = false)
+    public function __construct(bool $testing = false, bool $rawSocket = false)
     {
         $this->testing = $testing;
+        $this->rawSocket = $rawSocket;
     }
 
     /**
@@ -859,6 +872,20 @@ class Response
     public function isTesting(): bool
     {
         return $this->testing;
+    }
+
+    /**
+     * Whether Tina4\Server (the framework's own raw-socket engine, `tina4
+     * serve`) owns transporting this Response — real (a live socket writes
+     * it), but NOT via a PHP SAPI, so header()/setcookie() have no client to
+     * reach and headers_sent() never legitimately flips true. See
+     * Router::emitSessionCookie(), which reads this to attach a first-time
+     * session cookie onto the Response (read by Server::cookieHeaderLines()
+     * via getHeaders()) instead of calling native setcookie() into the void.
+     */
+    public function isRawSocket(): bool
+    {
+        return $this->rawSocket;
     }
 
     /**

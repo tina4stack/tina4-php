@@ -138,4 +138,49 @@ class RouteGroupsContractTest extends TestCase
         $this->assertSame(401, $response->status,
             'group middleware silently opened a secured write route under the normalized join');
     }
+
+    /**
+     * Real-bug audit (3.13.99), same Router pattern-compiler this fixture
+     * already covers: a route path containing a literal regex
+     * metacharacter must match ONLY that literal path. Before the fix,
+     * Router::compilePath() interpolated a literal path SEGMENT straight
+     * into the compiled regex UNESCAPED, so `(`, `)`, `.` etc changed what
+     * the pattern actually matched — e.g. registering `/blocked-xss(1)`
+     * compiled the trailing `(1)` as a capture group, so `preg_match`
+     * required the URL WITHOUT the parens and the exact literal path it
+     * was registered for 404'd.
+     *
+     * Mutation-proved: reverting compilePath()'s per-segment preg_quote()
+     * back to the old single preg_replace_callback scan reds this case —
+     * the paren route 404s, the paren route WRONGLY also matches the
+     * de-parenthesised form, and the dot route wrongly ALSO matches a
+     * different character in the dot's place. Restored.
+     */
+    public function testLiteralRegexMetacharactersInARoutePathMatchThemselves(): void
+    {
+        Router::get('/__router_literal/blocked-xss(1)', RouteGroupsContractTest::ok());
+        Router::get('/__router_literal/files/report.pdf', RouteGroupsContractTest::ok());
+        Router::get(
+            '/__router_literal/products/{id}',
+            static fn($request, $response, $id) => $response->json(['id' => $id])
+        );
+
+        $client = new TestClient();
+
+        $this->assertSame(200, $client->get('/__router_literal/blocked-xss(1)')->status,
+            'a literal ( ) in a route path must match its own exact path');
+        $this->assertSame(404, $client->get('/__router_literal/blocked-xss1')->status,
+            'the de-parenthesised form must NOT also match - the parens are literal, not a capture group');
+
+        $this->assertSame(200, $client->get('/__router_literal/files/report.pdf')->status,
+            'a literal . in a route path must match its own exact path');
+        $this->assertSame(404, $client->get('/__router_literal/files/reportXpdf')->status,
+            'a literal . must not behave as a regex any-char wildcard');
+
+        // Negative control: an ordinary {param} route must keep capturing.
+        $paramResponse = $client->get('/__router_literal/products/42');
+        $this->assertSame(200, $paramResponse->status);
+        $this->assertSame('42', $paramResponse->json()['id'] ?? null,
+            'a genuine {param} route must still capture correctly alongside the escaping fix');
+    }
 }

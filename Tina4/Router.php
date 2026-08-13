@@ -1294,7 +1294,7 @@ class Router
                 || strcasecmp($sameSite, 'None') === 0
                 || Request::isSecureScheme();
 
-            if (headers_sent() || $result->isTesting()) {
+            if (headers_sent() || $result->isTesting() || $result->isRawSocket()) {
                 // Built-in server mode: headers are managed via the Response object,
                 // so setcookie() would trigger a fatal error. Build the Set-Cookie
                 // header manually and attach it to the Response instead.
@@ -1308,16 +1308,26 @@ class Router
                 // back, so a TestClient-driven login route set
                 // request->session, but the session cookie never reached
                 // TestResponse, making a login-then-authenticated-request
-                // test structurally impossible to write. Scoped to
-                // TestClient::request(), which now constructs its Response
-                // with testing: true, for exactly this reason -- it does not
-                // touch Tina4\Server or App::handle(), whose Response is
-                // never testing (a separate, PRE-EXISTING gap was found and
-                // reported while diagnosing this: Tina4\Server ALSO never
-                // triggers headers_sent(), since a raw socket engages no real
-                // PHP SAPI header-sending mechanism, so a first-time session
-                // cookie is silently lost there too -- out of scope for this
-                // fix, tracked separately).
+                // test structurally impossible to write.
+                //
+                // $result->isRawSocket() (real-bug pre-merge, 3.13.99) closes
+                // the gap feature 131 found and deliberately left open:
+                // Tina4\Server (tina4 serve's OWN raw-socket engine) ALSO
+                // never triggers headers_sent() -- a raw socket engages no
+                // real PHP SAPI header-sending mechanism at all, so it isn't
+                // caught by isTesting() either (a Server-driven Response is
+                // genuinely transported, over a real socket, unlike a
+                // TestClient Response that nothing ever sends). Before this,
+                // the ELSE branch's native setcookie() call was reached under
+                // Tina4\Server, into the same void -- no real SAPI ever reads
+                // it back -- so a first-time session login under `tina4
+                // serve` silently emitted NO Set-Cookie at all: session auth
+                // was broken on the framework's own recommended dev/prod
+                // server. Server::handleHttp() and Server::handle() both
+                // construct their Response with rawSocket: true for exactly
+                // this reason; App::__invoke() (Apache/nginx/FPM/php -S,
+                // where headers_sent() is a REAL, meaningful signal) does
+                // not, so this branch's reach on that path is unchanged.
                 $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
                 $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
                 if ($secure) {
@@ -2596,44 +2606,69 @@ class Router
     private static function compilePath(string $path): array
     {
         $paramNames = [];
+        $paramTypes = [];
         $catchAll = false;
         $catchAllName = null;
+        $regexParts = [];
 
-        // Support bare * wildcard: /docs/* becomes a catch-all with key "*"
-        if (preg_match('#/\*$#', $path)) {
-            $path = preg_replace('#/\*$#', '/(?P<__wildcard__>.+)', $path);
-            $paramNames[] = '*';
-            $catchAll = true;
-            $catchAllName = '*';
+        // Segment-by-segment, matching Python's/Ruby's compiler (the fix for
+        // tina4-book real-bug audit, 3.13.99): a LITERAL segment is quoted
+        // with preg_quote so every character in it -- ( ) . + ? [ { etc. --
+        // matches only itself. Before this, the whole $path string was
+        // scanned for {param} once and everything else passed through
+        // UNESCAPED into the final regex, so a literal regex metacharacter in
+        // a path silently changed what the compiled pattern matched: e.g.
+        // registering `/blocked-xss(1)` compiled the trailing `(1)` as a
+        // capture group, so the exact literal path it was registered for
+        // 404'd (`preg_match` required the URL WITHOUT the parens). Only the
+        // {name}/{name:type} placeholder syntax below still becomes a regex
+        // capture group; every other character, in every other segment, is
+        // now matched literally.
+        $segments = explode('/', trim($path, '/'));
+        foreach ($segments as $segment) {
+            // Bare wildcard: matches the remainder of the path. Mirrors
+            // Python, which also breaks out on the first bare `*` segment
+            // wherever it appears (in practice always the last one).
+            if ($segment === '*') {
+                $paramNames[] = '*';
+                $catchAll = true;
+                $catchAllName = '*';
+                $regexParts[] = '(?P<__wildcard__>.+)';
+                break;
+            }
+
+            if (preg_match('#^\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}$#', $segment, $m)) {
+                $name = $m[1];
+                $type = $m[2] ?? 'string';
+
+                if (!array_key_exists($type, self::PARAM_TYPE_PATTERNS)) {
+                    $valid = array_filter(array_keys(self::PARAM_TYPE_PATTERNS), fn($k) => $k !== '.*');
+                    sort($valid);
+                    throw new \InvalidArgumentException(
+                        "Unknown param type '{$type}' in route '{$path}'. " .
+                        "Valid types: " . implode(', ', $valid) . "."
+                    );
+                }
+
+                $paramNames[] = $name;
+                $paramTypes[$name] = $type;
+
+                if ($type === 'path' || $type === '.*') {
+                    $catchAll = true;
+                    $catchAllName = $name;
+                }
+
+                $regexParts[] = '(?P<' . $name . '>' . self::PARAM_TYPE_PATTERNS[$type] . ')';
+                continue;
+            }
+
+            // Literal segment -- quote every regex metacharacter (and the
+            // `#` delimiter this class compiles with) so it matches itself
+            // only.
+            $regexParts[] = preg_quote($segment, '#');
         }
 
-        // Replace typed and untyped params: {name}, {name:int}, {name:float}, {name:path}, {name:.*}
-        $paramTypes = [];
-        $regex = preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z.*]+))?\}#', function ($m) use (&$paramNames, &$paramTypes, &$catchAll, &$catchAllName, $path) {
-            $name = $m[1];
-            $type = $m[2] ?? 'string';
-            $paramNames[] = $name;
-            $paramTypes[$name] = $type;
-
-            if (!array_key_exists($type, self::PARAM_TYPE_PATTERNS)) {
-                $valid = array_filter(array_keys(self::PARAM_TYPE_PATTERNS), fn($k) => $k !== '.*');
-                sort($valid);
-                throw new \InvalidArgumentException(
-                    "Unknown param type '{$type}' in route '{$path}'. " .
-                    "Valid types: " . implode(', ', $valid) . "."
-                );
-            }
-
-            if ($type === 'path' || $type === '.*') {
-                $catchAll = true;
-                $catchAllName = $name;
-            }
-
-            return '(?P<' . $name . '>' . self::PARAM_TYPE_PATTERNS[$type] . ')';
-        }, $path);
-
-        // Escape forward slashes and anchor
-        $regex = '#^' . $regex . '$#';
+        $regex = '#^/' . implode('/', $regexParts) . '$#';
 
         return [
             'regex' => $regex,

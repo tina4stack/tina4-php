@@ -806,12 +806,16 @@ class Server
      * Useful for testing and embedding — does not require an active socket
      * connection. Cross-framework parity with Python and Node.js.
      *
+     * rawSocket: true — a caller of this method transports the Response
+     * itself (there is no PHP SAPI involved), same reasoning as the real
+     * per-connection dispatch below; see Response::isRawSocket().
+     *
      * @param Request $request The request to handle
      * @return Response The response from the router
      */
     public function handle(Request $request): Response
     {
-        return Router::dispatch($request, new Response());
+        return Router::dispatch($request, new Response(rawSocket: true));
     }
 
     /**
@@ -1034,8 +1038,14 @@ class Server
             DevAdmin::$suppressReload = true;
         }
 
-        // Dispatch through Tina4 Router
-        $response = Router::dispatch($request, new Response());
+        // Dispatch through Tina4 Router. rawSocket: true -- this Response IS
+        // really transported (writeFully() below writes it to the client
+        // socket), but by us, not a PHP SAPI: header()/setcookie() have no
+        // client to reach, so headers_sent() never legitimately flips true
+        // here. Router::emitSessionCookie() reads this to attach a
+        // first-time session cookie onto the Response instead of calling
+        // native setcookie() into the void (real-bug pre-merge, 3.13.99).
+        $response = Router::dispatch($request, new Response(rawSocket: true));
 
         // Restore reload suppression flag
         DevAdmin::$suppressReload = false;
