@@ -287,18 +287,17 @@ class App
         // actionable warning. Never throws — boot must not crash.
         Auth::ensureDevSecret($this->basePath);
 
-        // Configure logger
-        $isDev = $this->development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        // No logDir here, deliberately (ADR-0041). This used to pass
-        // "$basePath/logs", which is the FRAMEWORK'S DEFAULT and not something
-        // the user asked for -- and an argument outranks TINA4_LOG_DIR. It only
-        // worked because the precedence was inverted, so the operator's env var
-        // beat the bootstrap by accident; correcting the precedence without
-        // this line would have made TINA4_LOG_DIR dead in every booted app,
-        // which is measurably what happened to Ruby. Resolution now runs
-        // TINA4_LOG_DIR, then 'logs', matching Python and Node, whose
-        // bootstraps have never passed a directory.
-        Log::configure(development: $isDev);
+        // Configure logger. Bootstrap invents NO explicit defaults (LOG-I01 /
+        // Decision 17): call configure() with no arguments so level/format/
+        // output/log_dir all resolve purely from TINA4_LOG_* env + the
+        // framework default, exactly like any other first-use caller. This
+        // used to pass "$basePath/logs" and a computed `development` flag as
+        // if they were the caller's own instructions, which is what made
+        // TINA4_LOG_DIR dead in every booted app once the env>argument
+        // precedence bug (ADR-0041) was fixed elsewhere -- the fix is to
+        // never pass a framework-computed value through the argument channel
+        // at all, not to keep re-deriving one that happens to agree with env.
+        Log::configure();
 
         // NOTE: the request id is generated PER REQUEST in Router::dispatch()
         // (feature 43), not here. A single id minted in the constructor is

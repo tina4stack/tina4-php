@@ -2508,6 +2508,12 @@ class Server
         // driver that fails to close is logged, never fatal.
         App::closeDatabase();
 
+        Log::info('Server stopped.');
+        // Graceful shutdown owns the final call to reset() (Decision 24 /
+        // LOG-I02): flush+close owned sinks AFTER the shutdown record above,
+        // exactly once.
+        Log::reset();
+
         if (self::$instance === $this) {
             self::$instance = null;
         }

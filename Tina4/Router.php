@@ -629,7 +629,19 @@ class Router
         $requestId = Log::sanitizeRequestId($request->header('X-Request-ID'))
             ?? bin2hex(random_bytes(4));
         Log::setRequestId($requestId);
+        try {
+            return self::dispatchBody($request, $response, $requestId, $reqStart);
+        } finally {
+            // The request pipeline installs the id before its first log and
+            // clears it in `finally` after its last (Decision 12 / LOG-Q03),
+            // so an overlapping request can never observe a stale id from a
+            // request that already finished.
+            Log::clearRequestId();
+        }
+    }
 
+    private static function dispatchBody(Request $request, Response $response, string $requestId, float $reqStart): Response
+    {
         // Request-scoped DB query cache (default-on). Tina4 PHP runs a
         // LONG-RUNNING built-in server, so in-memory cache state persists
         // across requests. Clear the request-scoped layer on every live
@@ -753,6 +765,7 @@ class Router
 
         return $result;
     }
+
 
     /**
      * Whether to emit a per-request log line (v3.13.14).

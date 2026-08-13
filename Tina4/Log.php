@@ -8,360 +8,413 @@
 
 namespace Tina4;
 
+/** Invalid setting, removed setting, or an inaccessible selected sink. */
+class LogConfigurationError extends \InvalidArgumentException
+{
+    public ?string $setting;
+    public $value;
+    public $accepted;
+    public ?string $sink;
+    public ?string $operation;
+
+    public function __construct(
+        string $message, ?string $setting = null, $value = null, $accepted = null,
+        ?string $sink = null, ?string $operation = null
+    ) {
+        parent::__construct($message);
+        $this->setting = $setting;
+        $this->value = $value;
+        $this->accepted = $accepted;
+        $this->sink = $sink;
+        $this->operation = $operation;
+    }
+}
+
+/** Invalid argument to a public logger method. */
+class LogArgumentError extends \InvalidArgumentException
+{
+    public ?string $argument;
+    public $accepted;
+
+    public function __construct(string $message, ?string $argument = null, $accepted = null)
+    {
+        parent::__construct($message);
+        $this->argument = $argument;
+        $this->accepted = $accepted;
+    }
+}
+
+/** A selected sink failed after configuration succeeded, under strict mode. */
+class LogWriteError extends \RuntimeException
+{
+    public ?string $sink;
+    public ?string $operation;
+
+    public function __construct(string $message, ?string $sink = null, ?string $operation = null)
+    {
+        parent::__construct($message);
+        $this->sink = $sink;
+        $this->operation = $operation;
+    }
+}
+
 /**
- * Structured logger with rotation. Zero dependencies — PHP built-ins only.
+ * One owned log file: bounded, PREDICTIVE rotation guarded by a single
+ * in-process (thread-equivalent -- PHP has no threads in the CLI SAPI, but
+ * the same lock primitive covers a future one) exclusive lock over the size
+ * check, rotation and append.
  *
- * TEXT is the output format by default, in all four Tina4 frameworks. Only
- * TINA4_LOG_FORMAT=json selects JSON. An object/array passed as the message is
- * still JSON-encoded INLINE inside the text line — that is the one implicit
- * JSON left, and it is the useful one (see {@see coerceMessage}).
+ * Decision 20 (2026-08-10 owner override): SINGLE FILE + IN-PROCESS LOCK
+ * ONLY. Cross-process exclusive locking is deliberately not implemented;
+ * concurrent PROCESSES writing the same file may interleave. Run one file
+ * per process, or route through a log shipper, for that case.
+ */
+class LogFileSink
+{
+    public string $path;
+    private int $rotateSize;
+    private int $rotateKeep;
+
+    public function __construct(string $path, int $rotateSize, int $rotateKeep)
+    {
+        $this->path = $path;
+        $this->rotateSize = $rotateSize;
+        $this->rotateKeep = $rotateKeep;
+    }
+
+    /** Create the directory and prove the file is writable. */
+    public function open(): void
+    {
+        $dir = dirname($this->path);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new LogConfigurationError(
+                "cannot open log sink {$this->path}: cannot create directory {$dir}",
+                null, null, null, $this->path, 'open'
+            );
+        }
+        $handle = @fopen($this->path, 'a');
+        if ($handle === false) {
+            throw new LogConfigurationError(
+                "cannot open log sink {$this->path}",
+                null, null, null, $this->path, 'open'
+            );
+        }
+        fclose($handle);
+    }
+
+    private function rotateIfNeeded(int $nextRecordBytes): void
+    {
+        $currentSize = is_file($this->path) ? (filesize($this->path) ?: 0) : 0;
+        if ($currentSize === 0) {
+            return;
+        }
+        if ($currentSize + $nextRecordBytes <= $this->rotateSize) {
+            return;
+        }
+        if ($this->rotateKeep <= 0) {
+            @unlink($this->path);
+            return;
+        }
+        $oldest = "{$this->path}.{$this->rotateKeep}";
+        if (is_file($oldest)) {
+            @unlink($oldest);
+        }
+        for ($n = $this->rotateKeep - 1; $n >= 1; $n--) {
+            $src = "{$this->path}.{$n}";
+            $dst = "{$this->path}." . ($n + 1);
+            if (is_file($src)) {
+                @rename($src, $dst);
+            }
+        }
+        @rename($this->path, "{$this->path}.1");
+    }
+
+    /**
+     * Append one complete encoded record, rotating first if it would cross
+     * the threshold. Throws LogWriteError to the caller, which applies the
+     * sink failure policy.
+     */
+    public function write(string $encodedLine): void
+    {
+        $clean = preg_replace('/\033\[[0-9;]*m/', '', $encodedLine) ?? $encodedLine;
+        $payloadBytes = strlen($clean);
+
+        $lockPath = $this->path . '.pid-lock';
+        $lockHandle = @fopen($lockPath, 'c');
+        if ($lockHandle === false) {
+            throw new LogWriteError("cannot open lock file for {$this->path}", $this->path, 'lock');
+        }
+        $timeoutAt = microtime(true) + Log::LOCK_TIMEOUT_SECONDS;
+        $locked = false;
+        while (microtime(true) < $timeoutAt) {
+            if (flock($lockHandle, LOCK_EX | LOCK_NB)) {
+                $locked = true;
+                break;
+            }
+            usleep(5000);
+        }
+        if (!$locked) {
+            fclose($lockHandle);
+            throw new LogWriteError("timed out acquiring the log sink lock for {$this->path}", $this->path, 'lock');
+        }
+        try {
+            $this->rotateIfNeeded($payloadBytes);
+            $written = @file_put_contents($this->path, $clean, FILE_APPEND);
+            if ($written === false) {
+                throw new LogWriteError("cannot write log sink {$this->path}", $this->path, 'write');
+            }
+        } finally {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+            @unlink($lockPath);
+        }
+    }
+}
+
+/**
+ * Structured logger with rotation. Zero dependencies -- PHP built-ins only.
+ * Conformant to the shared cross-framework contract at
+ * plan/v3/fixtures/logger_contract.json (feature 2), decided in
+ * plan/v3/features/002-structured-logger.md and ADR-0041.
  *
- * Configuration is resolved from TINA4_LOG_* on FIRST USE if nothing calls
- * {@see configure()}; configure() remains the explicit override and wins.
+ * BREAKING CHANGES from the pre-3.14 logger (this pass, 2026-08-13):
+ *
+ *  - Format defaults to JSON in production and TEXT only when TINA4_DEBUG is
+ *    truthy (Decision 3). The 2026-08-01 "text always unless
+ *    TINA4_LOG_FORMAT=json" rule is superseded.
+ *  - TINA4_LOG_APPEND is REMOVED -- setting it is now a hard configuration
+ *    error.
+ *  - TINA4_LOG_MAX_SIZE / TINA4_LOG_KEEP / TINA4_DEBUG_LEVEL /
+ *    TINA4_LOG_CRITICAL remain removed and now raise.
+ *  - TINA4_LOG_STRICT / TINA4_LOG_FUNC accept ONLY the literal tokens
+ *    "true"/"false" (case-insensitive) -- not "1"/"yes"/"on" (Decision 19:
+ *    "native booleans, not private truth-token parsing").
+ *  - Embedded CR/LF in a message is now ESCAPED in text format rather than
+ *    silently stripped (Decision 11).
+ *  - New TINA4_LOG_FILE_LEVEL (default ALL) independently gates the FILE
+ *    sink; TINA4_LOG_LEVEL now gates the CONSOLE only (2026-08-10 owner
+ *    override of Decision 8). isEnabled() accepts an optional $sink and is
+ *    sink-aware.
+ *  - Rotation is now PREDICTIVE rather than reactive; an oversized event is
+ *    replaced by a bounded, valid overflow record.
+ *  - reset() clears BOTH the snapshot and the current request id.
+ *  - The seven individual introspection getters (logDir(), logFile(), ...)
+ *    are REMOVED (LOG-A02 prohibits per-field getters) -- configuration() is
+ *    the one introspection surface.
  */
 class Log
 {
-    public const LEVEL_DEBUG = 'DEBUG';
-    public const LEVEL_INFO = 'INFO';
-    public const LEVEL_WARNING = 'WARNING';
-    public const LEVEL_ERROR = 'ERROR';
-    public const LEVEL_CRITICAL = 'CRITICAL';
-
-    /** Default rotation size in bytes (10 MB). Override via TINA4_LOG_ROTATE_SIZE. */
+    public const LEVELS = [
+        'ALL' => 0, 'DEBUG' => 1, 'INFO' => 2, 'WARNING' => 3,
+        'ERROR' => 4, 'CRITICAL' => 5, 'NONE' => 6,
+    ];
+    public const DEFAULT_LEVEL = 'INFO';
+    public const DEFAULT_FILE_LEVEL = 'ALL';
     public const DEFAULT_ROTATE_SIZE = 10 * 1024 * 1024;
-
-    /** Default number of rotated files to keep. Override via TINA4_LOG_ROTATE_KEEP. */
     public const DEFAULT_ROTATE_KEEP = 5;
+    public const MIN_ROTATE_SIZE = 1024;
+    public const STDOUT_MAX_BYTES = 8192;
+    public const OVERFLOW_MESSAGE = 'Log event omitted: encoded size exceeds sink limit';
+    public const LOCK_TIMEOUT_SECONDS = 2.0;
 
-    /** Maximum log file size before rotation in bytes. 0 disables rotation. */
-    private static int $maxFileSize = self::DEFAULT_ROTATE_SIZE;
-
-    /** Number of rotated log files to keep. */
-    private static int $keepFiles = self::DEFAULT_ROTATE_KEEP;
-
-    /** @var string|null Current request ID for correlation */
-    private static ?string $requestId = null;
-
-    /** @var string Log directory path */
-    private static string $logDir = 'logs';
-
-    /** @var string Log file name (all levels land here) */
-    private static string $logFile = 'tina4.log';
-
-    /**
-     * @var string Error-only log file name.
-     *
-     * Any entry at WARNING or above is mirrored into this file so
-     * developers can `tail -f logs/error.log` without wading through
-     * INFO/DEBUG noise. The main `tina4.log` still carries everything.
-     */
-    private static string $errorFile = 'error.log';
-
-    /** @var bool Append to the log file (default) or overwrite it at startup. */
-    private static bool $append = true;
-
-    /** @var bool Whether to output to stdout */
-    private static bool $stdout = false;
-
-    /** @var bool Whether to write to file */
-    private static bool $fileOutput = true;
-
-    /**
-     * @var bool Whether the line format is human-readable TEXT (the default)
-     *   rather than JSON. Set ONLY by TINA4_LOG_FORMAT — never by an
-     *   environment guess. See {@see configure()}.
-     */
-    private static bool $humanReadable = true;
-
-    /**
-     * @var bool Development mode — CONSOLE PRESENTATION only (ANSI colour).
-     *
-     * It does NOT select the format: colour around a JSON line makes it
-     * unparseable, and "am I in production" is not a formatting decision the
-     * logger is allowed to make for you. Mirrors the Python master's
-     * `_is_production` flag (inverted).
-     */
-    private static bool $development = false;
-
-    /**
-     * @var bool TINA4_LOG_STRICT — when truthy a log-write failure RAISES
-     *   instead of being swallowed. Documented on all four env-var pages and,
-     *   until 2026-08-01, implemented only in Ruby.
-     */
-    private static bool $strict = false;
-
-    /**
-     * @var bool Whether the TINA4_LOG_* configuration has been resolved yet.
-     *
-     * Set by {@see configure()} — explicitly by the server, or lazily by
-     * {@see ensureConfigured()} on the first log call in a process that never
-     * boots one (a worker, a CLI tool, a cron script, a test).
-     */
-    private static bool $configured = false;
-
-    /** @var string Minimum log level */
-    private static string $minLevel = self::LEVEL_DEBUG;
-
-    /** @var array<string, int> Level priorities */
-    private const LEVEL_PRIORITY = [
-        self::LEVEL_DEBUG => 0,
-        self::LEVEL_INFO => 1,
-        self::LEVEL_WARNING => 2,
-        self::LEVEL_ERROR => 3,
-        self::LEVEL_CRITICAL => 4,
+    private const REMOVED_SETTINGS = [
+        'TINA4_LOG_MAX_SIZE' => 'removed setting -- use TINA4_LOG_ROTATE_SIZE (bytes, not megabytes)',
+        'TINA4_LOG_KEEP' => 'removed setting -- use TINA4_LOG_ROTATE_KEEP',
+        'TINA4_LOG_APPEND' => 'removed setting -- logs always append; truncate explicitly outside logger startup',
+        'TINA4_DEBUG_LEVEL' => 'removed setting -- use TINA4_LOG_LEVEL',
+        'TINA4_LOG_CRITICAL' => 'removed setting -- critical always emits, subject only to TINA4_LOG_LEVEL',
     ];
 
+    private const COLORS = [
+        'DEBUG' => "\033[36m", 'INFO' => "\033[32m", 'WARNING' => "\033[33m",
+        'ERROR' => "\033[31m", 'CRITICAL' => "\033[35m",
+    ];
+    private const RESET = "\033[0m";
+
+    /** @var array<string,mixed>|null */
+    private static ?array $snapshot = null;
+    private static ?string $requestId = null;
+
+    // ── configuration ────────────────────────────────────────────────
+
     /**
-     * Configure the logger.
+     * Resolve and activate a new configuration snapshot.
      *
-     * Reads (for the settings no explicit argument supplied):
-     *   TINA4_LOG_DIR        — log directory; used when $logDir is null
-     *   TINA4_LOG_FILE       — primary log file path; if absolute, sets dir + filename
-     *   TINA4_LOG_FORMAT     — 'json' selects JSON; anything else is TEXT
-     *   TINA4_LOG_OUTPUT     — 'stdout', 'file', or 'both'
-     *   TINA4_LOG_LEVEL      — minimum console level; used when $minLevel is null
-     *   TINA4_LOG_APPEND     — append (default) or truncate at startup
-     *   TINA4_LOG_ROTATE_SIZE — rotate threshold in bytes (0 disables rotation)
-     *   TINA4_LOG_ROTATE_KEEP — number of rotated files to retain
-     *   TINA4_LOG_STRICT     — raise on a log-write failure instead of swallowing it
-     *
-     * PRECEDENCE (ADR-0041): explicit argument > environment > built-in
-     * default, for every setting. The two null-defaulted parameters exist so
-     * "the caller said nothing" is distinguishable from "the caller asked for
-     * the default value" -- with a real default those are the same input and
-     * the three-way rule cannot be expressed.
-     *
-     * Calling this is OPTIONAL: the same resolution runs on the first log call
-     * ({@see ensureConfigured()}). configure() is the explicit override and
-     * always wins.
-     *
-     * @param string|null $logDir Directory (or file path) for log files. WINS over TINA4_LOG_DIR; null means "not specified" (env, then 'logs')
-     * @param bool $development Development mode — CONSOLE COLOUR only; it does NOT choose the format
-     * @param string|null $minLevel Minimum console log level. WINS over TINA4_LOG_LEVEL; null means "not specified" (env, then INFO)
+     * Precedence for every field (ADR-0041): explicit argument, then the
+     * matching TINA4_LOG_* environment value, then the built-in default.
+     * Every field is validated BEFORE any directory is created or file is
+     * opened; a failed reconfiguration leaves the prior snapshot untouched.
      */
     public static function configure(
         ?string $logDir = null,
-        bool $development = false,
-        ?string $minLevel = null,
+        ?string $logFile = null,
+        ?string $level = null,
+        ?string $fileLevel = null,
+        ?string $format = null,
+        ?string $output = null,
+        ?int $rotateSize = null,
+        ?int $rotateKeep = null,
+        ?bool $strict = null,
+        ?bool $caller = null,
     ): void {
-        // Directory: caller arg > env > 'logs' (ADR-0041). This used to be the
-        // other way round, and the docblock above it said so ("overrides
-        // $logDir") while three lines further down it also claimed
-        // "configure() is the explicit override and always wins" -- the two
-        // halves of one docblock contradicting each other is how long it went
-        // unnoticed. An env var beating an argument the programmer wrote at the
-        // call site means "put the logs exactly here" cannot be expressed at
-        // all. A null argument still means "not specified", not "empty path" --
-        // configure(null, true) once resolved to an empty directory and
-        // silently wrote NO log files.
-        $envDir = DotEnv::getEnv('TINA4_LOG_DIR');
-        $chosen = $logDir !== null && $logDir !== '' ? $logDir : ($envDir ?? '');
-        if ($chosen === '') {
-            $chosen = 'logs';
+        foreach (self::REMOVED_SETTINGS as $name => $hint) {
+            if (getenv($name) !== false) {
+                throw new LogConfigurationError("{$name} is a removed setting -- {$hint}", $name, getenv($name));
+            }
         }
 
-        // The target accepts a DIRECTORY or a FILE PATH. Identical rule in all
-        // four: an existing directory is a directory; otherwise a basename with
-        // an extension is a file (feature 2 of the feature audit).
-        $targetFile = null;
-        if (self::targetIsFile($chosen)) {
-            $targetFile = basename($chosen);
-            $chosen = dirname($chosen);
-        }
-        self::$logDir = rtrim($chosen, '/');
+        $resolvedLevel = self::resolveLevel($level, 'TINA4_LOG_LEVEL', self::DEFAULT_LEVEL);
+        $resolvedFileLevel = self::resolveLevel($fileLevel, 'TINA4_LOG_FILE_LEVEL', self::DEFAULT_FILE_LEVEL);
+        $resolvedFormat = self::resolveFormat($format);
+        [$stdoutEnabled, $fileEnabled] = self::resolveOutput($output);
+        $resolvedRotateSize = self::resolveInt($rotateSize, 'TINA4_LOG_ROTATE_SIZE', self::DEFAULT_ROTATE_SIZE, self::MIN_ROTATE_SIZE);
+        $resolvedRotateKeep = self::resolveInt($rotateKeep, 'TINA4_LOG_ROTATE_KEEP', self::DEFAULT_ROTATE_KEEP, 0);
+        $resolvedStrict = self::resolveBool($strict, 'TINA4_LOG_STRICT', false);
+        $resolvedCaller = self::resolveBool($caller, 'TINA4_LOG_FUNC', false);
 
-        // File: TINA4_LOG_FILE may be a relative filename (joined with dir) or
-        // an absolute path (split into dir + filename). Empty/null => default.
-        // An explicit path is a hard opt-in to file output (explicit always
-        // wins — even in production), so track it for the default-output branch.
-        $envFile = DotEnv::getEnv('TINA4_LOG_FILE');
-        $explicitLogFile = ($envFile !== null && $envFile !== '') || $targetFile !== null;
-        if ($envFile !== null && $envFile !== '') {
-            if (str_contains($envFile, DIRECTORY_SEPARATOR) || str_contains($envFile, '/')) {
-                self::$logDir = rtrim(dirname($envFile), '/');
-                self::$logFile = basename($envFile);
+        $dirRaw = self::resolveStr($logDir, 'TINA4_LOG_DIR', 'logs', false);
+        $fileRaw = self::resolveStr($logFile, 'TINA4_LOG_FILE', null, true);
+
+        $projectRoot = getcwd();
+        $dirCandidate = $dirRaw;
+        $fileCandidate = $fileRaw;
+        if ($fileCandidate === null && self::targetIsFile($dirCandidate)) {
+            $fileCandidate = basename($dirCandidate);
+            $dirCandidate = dirname($dirCandidate);
+        }
+
+        $resolvedLogDir = self::isAbsolutePath($dirCandidate) ? $dirCandidate : $projectRoot . DIRECTORY_SEPARATOR . $dirCandidate;
+        $resolvedLogDir = rtrim($resolvedLogDir, '/');
+
+        if ($fileCandidate) {
+            $resolvedLogFile = self::isAbsolutePath($fileCandidate) ? $fileCandidate : $resolvedLogDir . DIRECTORY_SEPARATOR . $fileCandidate;
+            $layout = 'single';
+        } else {
+            $resolvedLogFile = null;
+            $layout = 'directory';
+        }
+
+        $outputSelector = ($stdoutEnabled && $fileEnabled) ? 'both' : ($fileEnabled ? 'file' : 'stdout');
+
+        $snap = [
+            'level' => $resolvedLevel,
+            'file_level' => $resolvedFileLevel,
+            'format' => $resolvedFormat,
+            'output' => $outputSelector,
+            'log_dir' => $resolvedLogDir,
+            'log_file' => $resolvedLogFile,
+            'layout' => $layout,
+            'rotate_size' => $resolvedRotateSize,
+            'rotate_keep' => $resolvedRotateKeep,
+            'strict' => $resolvedStrict,
+            'caller' => $resolvedCaller,
+            'stdout_enabled' => $stdoutEnabled,
+            'file_enabled' => $fileEnabled,
+            'main_sink' => null,
+            'error_sink' => null,
+        ];
+
+        if ($fileEnabled) {
+            if ($layout === 'single') {
+                $sink = new LogFileSink($resolvedLogFile, $resolvedRotateSize, $resolvedRotateKeep);
+                $sink->open();
+                $snap['main_sink'] = $sink;
             } else {
-                self::$logFile = $envFile;
-            }
-        } elseif ($targetFile !== null) {
-            // A file path passed straight to configure().
-            self::$logFile = $targetFile;
-        } else {
-            self::$logFile = 'tina4.log';
-        }
-
-        // TINA4_LOG_APPEND — append (default) or overwrite on startup.
-        //
-        // APPEND IS THE DEFAULT: a log you can lose by restarting the process is
-        // not a log. Set it false for one file per run (a short CLI, a test
-        // fixture, a container shipping logs elsewhere); the file is truncated
-        // once here at configure time, never per line.
-        $appendEnv = DotEnv::getEnv('TINA4_LOG_APPEND');
-        self::$append = $appendEnv === null
-            || in_array(strtolower(trim((string) $appendEnv)), ['1', 'true', 'yes', 'on', 'y', 't'], true);
-        if (!self::$append) {
-            foreach ([self::$logFile, self::$errorFile] as $name) {
-                $path = self::$logDir . DIRECTORY_SEPARATOR . $name;
-                if (file_exists($path)) {
-                    @file_put_contents($path, '');
-                }
+                $mainSink = new LogFileSink($resolvedLogDir . DIRECTORY_SEPARATOR . 'tina4.log', $resolvedRotateSize, $resolvedRotateKeep);
+                $mainSink->open();
+                $errorSink = new LogFileSink($resolvedLogDir . DIRECTORY_SEPARATOR . 'error.log', $resolvedRotateSize, $resolvedRotateKeep);
+                $errorSink->open();
+                $snap['main_sink'] = $mainSink;
+                $snap['error_sink'] = $errorSink;
             }
         }
 
-        // Level: caller arg > TINA4_LOG_LEVEL > INFO (ADR-0041). The env used
-        // to override the argument here too, justified in a comment as "parity
-        // with Python/Ruby/Node, which all read the env" -- which conflated
-        // READING the env with letting it beat an argument. Checked: Ruby and
-        // Node take no level argument at all, so they have nothing to conflict
-        // with, and Python's explicit `level` argument WINS (its boot path
-        // passes the env in, rather than the env overriding the caller). PHP
-        // was the only framework where a level argument existed and lost.
-        // Default is INFO (was effectively DEBUG) so deployed apps surface
-        // request/startup/warn/error without debug noise.
-        $envLevel = strtoupper((string) (DotEnv::getEnv('TINA4_LOG_LEVEL') ?? ''));
-        if ($minLevel !== null && $minLevel !== '') {
-            self::$minLevel = strtoupper($minLevel);
-        } elseif ($envLevel !== '' && isset(self::LEVEL_PRIORITY[$envLevel])) {
-            self::$minLevel = $envLevel;
-        } else {
-            self::$minLevel = self::LEVEL_INFO;
-        }
-
-        // Format — TEXT BY DEFAULT, EVERYWHERE (owner decision 2026-08-01).
-        // ONLY TINA4_LOG_FORMAT=json selects JSON.
-        //
-        // The implicit production->JSON switch is deliberately GONE. It meant
-        // four different things across the four frameworks — Node keyed off
-        // TINA4_DEBUG being unset, Ruby off TINA4_ENV/RACK_ENV/RUBY_ENV, Python
-        // off configure(production=True), and PHP had no switch at all and
-        // always shipped JSON — so one machine with one .env produced four
-        // different log formats and your format was chosen by a variable you
-        // never connected to logging. An object/array passed as the message is
-        // still JSON-encoded INLINE in the text line (see coerceMessage); that
-        // is the only implicit JSON left, and it is the useful one.
-        $envFormat = strtolower(trim((string) (DotEnv::getEnv('TINA4_LOG_FORMAT') ?? '')));
-        self::$humanReadable = $envFormat !== 'json';
-
-        // Development affects the CONSOLE PRESENTATION only (ANSI colour) —
-        // see writeStdout(). It never selects the format.
-        self::$development = $development;
-
-        // Output: env > development flag default
-        $envOutput = strtolower((string) (DotEnv::getEnv('TINA4_LOG_OUTPUT') ?? ''));
-        switch ($envOutput) {
-            case 'stdout':
-                self::$stdout = true;
-                self::$fileOutput = false;
-                break;
-            case 'file':
-                self::$stdout = false;
-                self::$fileOutput = true;
-                break;
-            case 'both':
-                self::$stdout = true;
-                self::$fileOutput = true;
-                break;
-            default:
-                // v3.13.14: stdout is ON by default (was: only in dev). Containers
-                // read PID 1 stdout (docker logs / k8s); the old dev-only default
-                // meant deployed apps logged to a file inside the container that
-                // nobody could see. TINA4_LOG_OUTPUT=file still opts out.
-                //
-                // v3.13.39: the log FILE (tina4.log + error.log) is now written by
-                // default ONLY in development (TINA4_DEBUG truthy). In production /
-                // containers the logger is stdout-only — a log file inside a
-                // container just bloats the writable layer and disk, and 12-factor
-                // wants logs on stdout for the platform to capture. An explicit
-                // TINA4_LOG_OUTPUT=file/both (handled above) or an explicit
-                // TINA4_LOG_FILE path still forces a file — explicit always wins.
-                self::$stdout = true;
-                self::$fileOutput = $explicitLogFile
-                    || DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-                break;
-        }
-
-        // Rotation — TINA4_LOG_ROTATE_SIZE is in BYTES (0 disables rotation),
-        // TINA4_LOG_ROTATE_KEEP is a file count.
-        //
-        // Breaking (2026-08-01): the legacy aliases TINA4_LOG_MAX_SIZE (in
-        // MEGABYTES) and TINA4_LOG_KEEP were DELETED. They were documented for
-        // all four frameworks and implemented in only two, and the size alias
-        // took a different UNIT from the name it aliased — so the same .env
-        // rotated at 10 MB here and nowhere else. One canonical name per
-        // setting; rename the primary rather than keep an alias.
-        // Migration: TINA4_LOG_MAX_SIZE=10 -> TINA4_LOG_ROTATE_SIZE=10485760,
-        //            TINA4_LOG_KEEP=n      -> TINA4_LOG_ROTATE_KEEP=n.
-        $rotateSize = DotEnv::getEnv('TINA4_LOG_ROTATE_SIZE');
-        self::$maxFileSize = $rotateSize !== null && $rotateSize !== ''
-            ? (int) $rotateSize
-            : self::DEFAULT_ROTATE_SIZE;
-
-        $rotateKeep = DotEnv::getEnv('TINA4_LOG_ROTATE_KEEP');
-        self::$keepFiles = $rotateKeep !== null && $rotateKeep !== ''
-            ? (int) $rotateKeep
-            : self::DEFAULT_ROTATE_KEEP;
-
-        // TINA4_LOG_STRICT — a log-write failure RAISES instead of being
-        // swallowed. Documented on all four env-var pages for a long time and
-        // implemented only in Ruby: a documented no-op in three frameworks.
-        self::$strict = DotEnv::isTruthy(DotEnv::getEnv('TINA4_LOG_STRICT', 'false'));
-
-        // Explicit configuration has landed — the lazy resolver stands down.
-        self::$configured = true;
+        self::$snapshot = $snap;
     }
 
+    /** @var int|null The PID Log's static state was last touched under. */
+    private static ?int $pid = null;
+
     /**
-     * Resolve TINA4_LOG_* on FIRST USE when nothing called {@see configure()}.
-     *
-     * MEASURED 2026-08-01: Ruby and Node resolved lazily; Python and PHP read
-     * TINA4_LOG_* only inside configure(), and only the SERVER calls it. So any
-     * script, worker, CLI tool or test that logged without booting a server
-     * silently got the class defaults and ignored the operator's .env — and the
-     * defaults were OPPOSITE across frameworks (python: stdout + text + no
-     * file; php: NO stdout + files in ./logs + json). One .env, four
-     * behaviours.
-     *
-     * configure() remains the explicit override: it sets $configured, which
-     * turns this into a no-op.
+     * PHP has no `register_at_fork`-style hook: pcntl_fork() is a raw
+     * syscall wrapper with no post-fork callback facility. A forked child
+     * inherits every static property's value at the instant of fork
+     * (including an owned file handle's OS-level state and any request id),
+     * so without this check a child would silently keep logging through the
+     * PARENT's snapshot and request id (Decision 24 / LOG-Q05 requires a
+     * forked child to discard inherited state and resolve fresh). Detecting
+     * "my PID changed since I last touched this state" on every access
+     * achieves the same observable effect as an eager fork hook, lazily.
      */
-    private static function ensureConfigured(): void
+    private static function discardStateIfForked(): void
     {
-        if (self::$configured) {
-            return;
+        $current = function_exists('posix_getpid') ? posix_getpid() : getmypid();
+        if (self::$pid !== null && self::$pid !== $current) {
+            self::$snapshot = null;
+            self::$requestId = null;
         }
-        self::configure();
+        self::$pid = $current;
+    }
+
+    private static function ensure(): array
+    {
+        self::discardStateIfForked();
+        if (self::$snapshot === null) {
+            self::configure();
+        }
+        return self::$snapshot;
     }
 
     /**
-     * Set a request ID for log correlation.
+     * Flush/close owned sinks, clear the snapshot and the current request
+     * id. Idempotent; the next use resolves a fresh snapshot.
      */
+    public static function reset(): void
+    {
+        self::$snapshot = null;
+        self::$requestId = null;
+    }
+
+    /** A defensive native-map copy of the effective, stable configuration. */
+    public static function configuration(): array
+    {
+        $snap = self::ensure();
+        return [
+            'level' => $snap['level'],
+            'file_level' => $snap['file_level'],
+            'format' => $snap['format'],
+            'output' => $snap['output'],
+            'log_dir' => $snap['log_dir'],
+            'log_file' => $snap['log_file'],
+            'layout' => $snap['layout'],
+            'rotate_size' => $snap['rotate_size'],
+            'rotate_keep' => $snap['rotate_keep'],
+            'strict' => $snap['strict'],
+            'caller' => $snap['caller'],
+            'stdout_enabled' => $snap['stdout_enabled'],
+            'file_enabled' => $snap['file_enabled'],
+        ];
+    }
+
+    // ── request id ───────────────────────────────────────────────────
+
     public static function setRequestId(?string $requestId): void
     {
+        self::discardStateIfForked();
         self::$requestId = $requestId;
     }
 
-    /**
-     * Get the current request ID.
-     */
     public static function getRequestId(): ?string
     {
+        self::discardStateIfForked();
         return self::$requestId;
     }
 
-    /**
-     * Sanitize an inbound X-Request-ID.
-     *
-     * Honours a well-formed inbound id ([A-Za-z0-9._-], 1..128 chars) so a client
-     * or an upstream service can thread its own correlation id through. Anything
-     * else - empty, over 128 chars, or carrying CR/LF, control chars or any
-     * character outside the allow-list - is rejected wholesale (returns null), so
-     * nothing attacker-controlled is ever reflected into the response header or a
-     * log line; the caller then generates a fresh id instead of echoing a raw
-     * header.
-     *
-     * @param string|null $value the raw inbound header value
-     * @return string|null the value when it is a safe correlation id, else null
-     */
+    public static function clearRequestId(): void
+    {
+        self::$requestId = null;
+    }
+
     public static function sanitizeRequestId(?string $value): ?string
     {
         if ($value === null || $value === '') {
@@ -370,227 +423,128 @@ class Log
         if (strlen($value) > 128) {
             return null;
         }
-        // Match ANY character OUTSIDE the allow-list - CR, LF, space, every other
-        // control char, any non-ASCII byte. Testing for a bad char (not anchoring
-        // ^...$) is the identical rule in all four frameworks and dodges the
-        // per-language trap where `$` still matches just before a trailing newline.
         if (preg_match('/[^A-Za-z0-9._-]/', $value) === 1) {
             return null;
         }
         return $value;
     }
 
+    // ── threshold ────────────────────────────────────────────────────
+
     /**
-     * Log a debug message.
+     * True when $level passes the queried sink's threshold and that sink is
+     * active. $sink is null (console, the historical meaning), "console"/
+     * "stdout", or "file".
      */
-    public static function debug(mixed $message, array $context = []): void
+    public static function isEnabled(string $level, ?string $sink = null): bool
     {
-        self::log(self::LEVEL_DEBUG, $message, $context);
+        $key = strtoupper(trim($level));
+        if (!isset(self::LEVELS[$key])) {
+            throw new LogArgumentError("{$level} is not a valid level", 'level', array_keys(self::LEVELS));
+        }
+        $snap = self::ensure();
+        if ($sink === null || $sink === 'console' || $sink === 'stdout') {
+            return $snap['stdout_enabled'] && self::LEVELS[$key] >= self::LEVELS[$snap['level']];
+        }
+        if ($sink === 'file') {
+            return $snap['file_enabled'] && self::LEVELS[$key] >= self::LEVELS[$snap['file_level']];
+        }
+        throw new LogArgumentError("{$sink} is not a valid sink", 'sink', ['console', 'file']);
     }
 
-    /**
-     * Log an info message.
-     */
-    public static function info(mixed $message, array $context = []): void
+    // ── event methods ────────────────────────────────────────────────
+
+    // $context stays BY VALUE here (compatible with every existing call
+    // site that passes an inline array literal -- `Log::error($m, ['x' =>
+    // 1])` -- which a by-reference parameter cannot accept at all, "could
+    // not be passed by reference"). From emit() inward the chain is BY
+    // REFERENCE so the one unavoidable copy stays fixed at exactly this
+    // boundary and does not compound hop over hop; see normalize()'s
+    // docblock for why that matters for circular-reference detection.
+    public static function debug(mixed $message, array $context = []): void { self::emit('DEBUG', $message, $context); }
+    public static function info(mixed $message, array $context = []): void { self::emit('INFO', $message, $context); }
+    public static function warning(mixed $message, array $context = []): void { self::emit('WARNING', $message, $context); }
+    public static function error(mixed $message, array $context = []): void { self::emit('ERROR', $message, $context); }
+
+    /** Critical -- the highest severity. Always emitted, subject only to the configured threshold. */
+    public static function critical(mixed $message, array $context = []): void { self::emit('CRITICAL', $message, $context); }
+
+    private static function emit(string $level, mixed $message, array &$context): void
     {
-        self::log(self::LEVEL_INFO, $message, $context);
-    }
-
-    /**
-     * Log a warning message.
-     */
-    public static function warning(mixed $message, array $context = []): void
-    {
-        self::log(self::LEVEL_WARNING, $message, $context);
-    }
-
-    /**
-     * Log an error message.
-     */
-    public static function error(mixed $message, array $context = []): void
-    {
-        self::log(self::LEVEL_ERROR, $message, $context);
-    }
-
-    /**
-     * Log a critical message — the highest severity (above ERROR).
-     *
-     * Always emitted (like every other level), and mirrored into the error
-     * log (CRITICAL 4 >= WARNING 2). Use it for unrecoverable, alert-worthy
-     * failures.
-     */
-    public static function critical(mixed $message, array $context = []): void
-    {
-        self::log(self::LEVEL_CRITICAL, $message, $context);
-    }
-
-    /**
-     * Whether a message at the given level would pass the configured minimum
-     * CONSOLE level — the same threshold that gates stdout in {@see log()}.
-     *
-     * This is the single source of truth for the level comparison: both the
-     * console write in log() and the public {@see isEnabled()} predicate call
-     * it, so the predicate can never disagree with what the logger prints.
-     * Level input is case-insensitive (mapped to the upper-case priorities).
-     *
-     * @param string $level Log level (e.g. "INFO", "info", "DEBUG").
-     */
-    private static function shouldLog(string $level): bool
-    {
-        // The threshold is only meaningful once TINA4_LOG_LEVEL has been read,
-        // and isEnabled() can be the very first logger call in a process.
-        self::ensureConfigured();
-        $key = strtoupper($level);
-        return (self::LEVEL_PRIORITY[$key] ?? 0) >= (self::LEVEL_PRIORITY[self::$minLevel] ?? 0);
-    }
-
-    /**
-     * Return true if a message at $level would pass the configured minimum
-     * CONSOLE level — i.e. whether the logger would actually print it to
-     * stdout. This reflects CONSOLE (stdout) visibility only: the log FILE
-     * always records every level regardless of this threshold.
-     *
-     * Use it to skip building an expensive log payload that would not be shown:
-     *
-     *     if (Log::isEnabled('debug')) {
-     *         Log::debug('state', ['snapshot' => expensiveDump()]);
-     *     }
-     *
-     * $level is case-insensitive (debug / info / warning / error / critical).
-     * "critical" is the highest severity and flows through the same ordinary
-     * threshold as every other level — there is no special-casing.
-     *
-     * Delegates to the same {@see shouldLog()} gate the console write uses, so
-     * it never re-implements the level comparison and can never drift from the
-     * real output decision.
-     *
-     * @param string $level Log level to test (e.g. "debug", "INFO", "critical").
-     */
-    public static function isEnabled(string $level): bool
-    {
-        return self::shouldLog($level);
-    }
-
-    /**
-     * Write a log entry.
-     */
-    /**
-     * Strip ANSI escape codes from a string.
-     */
-    private static function stripAnsi(string $text): string
-    {
-        return preg_replace('/\033\[[0-9;]*m/', '', $text) ?? $text;
-    }
-
-    private static function log(string $level, mixed $message, array $context = []): void
-    {
-        // Resolve TINA4_LOG_* here, at the top of the real write path, if
-        // nothing called configure(). A worker or CLI tool must honour the same
-        // .env the server does.
-        self::ensureConfigured();
-
-        // Coerce FIRST. Anything can arrive as a message: an array from a
-        // handler, a binary payload off a socket, a 10MB string. See
-        // coerceMessage.
-        $entry = self::buildEntry($level, self::coerceMessage($message), $context);
-
-        if (self::$humanReadable) {
-            $formatted = self::formatHumanReadable($entry);
-        } else {
-            $formatted = json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $snap = self::ensure();
+        $consoleOk = $snap['stdout_enabled'] && self::LEVELS[$level] >= self::LEVELS[$snap['level']];
+        $fileOk = $snap['file_enabled'] && self::LEVELS[$level] >= self::LEVELS[$snap['file_level']];
+        if (!$consoleOk && !$fileOk) {
+            return;
         }
 
-        $line = $formatted . PHP_EOL;
+        $requestId = self::$requestId;
+        $callerName = $snap['caller'] ? self::callerName() : null;
+        $event = self::buildEvent($level, $message, $requestId, $callerName, $context);
 
-        // Console output respects TINA4_LOG_LEVEL
-        // Truncate on the CONSOLE only. The file keeps the full line so a
-        // consumer parsing it loses nothing; a terminal does not need 10MB.
-        if (self::$stdout && self::shouldLog($level)) {
-            self::writeStdout($level, self::truncateForStdout($formatted) . PHP_EOL);
+        if ($consoleOk) {
+            $stdoutLine = rtrim(self::boundedForSink($event, $snap['format'], self::STDOUT_MAX_BYTES), "\n");
+            $plain = $snap['format'] === 'json' || !self::stdoutIsTty();
+            $color = $plain ? '' : (self::COLORS[$level] ?? '');
+            $reset = $plain ? '' : self::RESET;
+            self::writeStdout("{$color}{$stdoutLine}{$reset}\n");
         }
 
-        // File output is gated by TINA4_LOG_OUTPUT (default: enabled).
-        if (self::$fileOutput) {
-            // Always write ALL levels to the main file (raw log, no filtering), strip ANSI codes
-            self::writeToFile(self::$logFile, self::stripAnsi($line));
-
-            // Mirror WARNING and above into the dedicated error log so
-            // developers can tail errors without the INFO/DEBUG noise.
-            // Parity with tina4-python's debug/_error_writer.
-            if ((self::LEVEL_PRIORITY[$level] ?? 0) >= self::LEVEL_PRIORITY[self::LEVEL_WARNING]) {
-                self::writeToFile(self::$errorFile, self::stripAnsi($line));
+        if ($fileOk && $snap['main_sink'] !== null) {
+            $mainLine = self::boundedForSink($event, $snap['format'], $snap['rotate_size']);
+            self::writeSink($snap['main_sink'], $mainLine, $snap['strict']);
+            if ($snap['layout'] === 'directory' && $snap['error_sink'] !== null && self::LEVELS[$level] >= self::LEVELS['WARNING']) {
+                self::writeSink($snap['error_sink'], $mainLine, $snap['strict']);
             }
         }
     }
 
-    /**
-     * Build a structured log entry.
-     *
-     * @return array<string, mixed>
-     */
-    private static function buildEntry(string $level, string $message, array $context): array
+    private static function writeStdout(string $line): void
     {
-        $entry = [
-            'timestamp' => gmdate('Y-m-d\TH:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000) . 'Z',
-            'level' => $level,
-            'message' => $message,
-        ];
-
-        if (self::$requestId !== null) {
-            $entry['request_id'] = self::$requestId;
+        if (defined('STDOUT')) {
+            @fwrite(\STDOUT, $line);
+            @fflush(\STDOUT);
+        } else {
+            $stdout = @fopen('php://stdout', 'w');
+            if (is_resource($stdout)) {
+                @fwrite($stdout, $line);
+                @fflush($stdout);
+                @fclose($stdout);
+            }
         }
-
-        // Inject caller function name when TINA4_LOG_FUNC is enabled.
-        // Default off — zero overhead unless opted in. Parity with
-        // tina4-python's Log._caller_name (feature #41).
-        $caller = self::callerName();
-        if ($caller !== null) {
-            $entry['function'] = $caller;
-        }
-
-        if (!empty($context)) {
-            $entry['context'] = $context;
-        }
-
-        return $entry;
     }
 
-    /**
-     * Frame method/function names that belong to Log itself.
-     *
-     * The frame walk skips past these so the caller name lands on the
-     * first non-Log frame. Kept here so tests can introspect and so
-     * future internal wrappers can extend it without forking the walk.
-     *
-     * @var array<int,string>
-     */
-    private const OWN_FRAMES = [
-        'callerName', 'buildEntry', 'formatHumanReadable',
-        'log', 'debug', 'info', 'warning', 'error', 'critical',
-    ];
+    private static function writeSink(LogFileSink $sink, string $line, bool $strict): void
+    {
+        try {
+            $sink->write($line);
+        } catch (LogWriteError $exc) {
+            if ($strict) {
+                throw $exc;
+            }
+            self::writeStdout("tina4: log sink {$sink->path} failed: {$exc->getMessage()}\n");
+        }
+    }
 
-    /**
-     * Return the function name that called Log::{debug,info,warning,error}.
-     *
-     * Active only when ``TINA4_LOG_FUNC`` is truthy — the lookup uses
-     * ``debug_backtrace`` which is ~5% overhead per log call. Walks past
-     * Log's own frames (see ``OWN_FRAMES``) to land on the real caller,
-     * so the count is robust whether the test invokes ``buildEntry``
-     * directly or goes through ``Log::info`` → ``log`` → ``buildEntry``.
-     *
-     * Returns ``null`` if the stack is too shallow, if the matched frame
-     * is anonymous (``{closure}``), or if anything goes wrong — never
-     * throws. Parity feature #41 across all four Tina4 frameworks.
-     */
+    private static function stdoutIsTty(): bool
+    {
+        if (function_exists('posix_isatty') && defined('STDOUT')) {
+            return @posix_isatty(\STDOUT);
+        }
+        if (function_exists('stream_isatty') && defined('STDOUT')) {
+            return @stream_isatty(\STDOUT);
+        }
+        return false;
+    }
+
+    // ── caller capture ───────────────────────────────────────────────
+
+    private const OWN_FRAMES = ['callerName', 'buildEvent', 'emit', 'debug', 'info', 'warning', 'error', 'critical'];
+
     public static function callerName(): ?string
     {
         try {
-            if (!Env::bool('TINA4_LOG_FUNC')) {
-                return null;
-            }
             $frames = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-            // Walk past Log's own frames. Cap the walk to defend against
-            // pathological wrapper depth.
             $cap = min(16, count($frames));
             for ($i = 0; $i < $cap; $i++) {
                 $frame = $frames[$i] ?? null;
@@ -601,14 +555,9 @@ class Log
                 if ($function === null || $function === '') {
                     continue;
                 }
-                // Skip frames inside Log itself.
                 if (in_array($function, self::OWN_FRAMES, true)) {
                     continue;
                 }
-                // Anonymous closures show up as "{closure}" (PHP < 8.4)
-                // or "{closure:File::method():line}" (PHP 8.4+) — both
-                // start with "{closure" and carry no useful symbol, so
-                // filter them out instead of leaking gibberish.
                 if (str_starts_with($function, '{closure')) {
                     return null;
                 }
@@ -620,62 +569,370 @@ class Log
         }
     }
 
-    /**
-     * Format a log entry for human-readable output.
-     */
-    /**
-     * Maximum characters written to the CONSOLE for one line. The file keeps
-     * the whole thing; a terminal does not need 10MB. Same number in all four.
-     */
-    private const STDOUT_MAX_CHARS = 2000;
+    // ── native normalization (Decision 14) ──────────────────────────
 
     /**
-     * Turn anything into a single safe line of text.
+     * Recursively normalize into the shared native domain. `$value` and
+     * `$ancestors` are BY REFERENCE on purpose: a PHP array is a
+     * copy-on-write VALUE, so a self-referential structure only exists at
+     * all via an internal PHP reference (`$c['self'] = &$c;`), and that
+     * reference chain -- and therefore the cycle -- is only observable if
+     * every hop of this walk keeps holding the SAME zval rather than a
+     * value-copied one.
      *
-     * A valid UTF-8 string passes through. Binary is described rather than
-     * dumped: raw bytes at a terminal garble it and can emit escape sequences.
-     * An array or object becomes JSON, because an array rendered as text is the
-     * whole reason the caller logged it. The logger must never be surprised by
-     * what it is handed, and must never be the reason a request dies.
+     * KNOWN, DELIBERATE PHP DIFFERENCE FROM PYTHON/RUBY/NODE: the public
+     * event methods (debug/info/...) take `$context` BY VALUE -- required
+     * for every existing call site that passes an inline array literal,
+     * which a by-reference parameter cannot accept at all. That one copy is
+     * unavoidable and means a context that is directly self-referential at
+     * its OWN top level is detected ONE LEVEL DEEPER here than in the other
+     * three languages (`{"self": {"self": "[Circular]"}}`, not
+     * `{"self": "[Circular]"}`) -- proven and pinned by
+     * LoggerFixtureContractTest::testCircularContextIsMarkedWithoutRaising.
+     * The safety property (no infinite recursion, no crash, valid JSON, a
+     * real "[Circular]" marker) holds either way; only the exact nesting
+     * depth differs, and only for a context that is circular at its very
+     * own root.
      */
-    private static function coerceMessage(mixed $message): string
+    public static function normalize(mixed &$value, array &$ancestors = []): mixed
     {
-        if (is_string($message)) {
-            if (!Str::isUtf8($message)) {
-                return '<binary ' . strlen($message) . ' bytes>';
+        if ($value === null || is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            if (!self::isUtf8($value)) {
+                return '<binary ' . strlen($value) . ' bytes sha256=' . hash('sha256', $value) . '>';
             }
-            $text = $message;
-        } elseif ($message === null) {
-            $text = '';
-        } elseif (is_scalar($message)) {
-            $text = (string) $message;
-        } else {
-            $encoded = json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $text = $encoded === false ? print_r($message, true) : $encoded;
+            return $value;
         }
-        // Strip control characters so nothing can drive the terminal.
-        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $text) ?? $text;
-    }
-
-    /** Cap a console line. The file keeps the full line. */
-    private static function truncateForStdout(string $line): string
-    {
-        $len = Str::length($line);
-        if ($len <= self::STDOUT_MAX_CHARS) {
-            return $line;
+        if (is_int($value)) {
+            return $value;
         }
-        return Str::substr($line, 0, self::STDOUT_MAX_CHARS) . "... (truncated, {$len} chars)";
+        if (is_float($value)) {
+            return is_finite($value) ? $value : '[Unsupported]';
+        }
+        if (is_array($value)) {
+            foreach ($ancestors as &$ancestor) {
+                if (self::isSameArrayReference($value, $ancestor)) {
+                    return '[Circular]';
+                }
+            }
+            unset($ancestor);
+            $ancestors[] = &$value;
+            $out = [];
+            foreach ($value as $k => &$v) {
+                $out[(string)$k] = self::normalize($v, $ancestors);
+            }
+            unset($v);
+            array_pop($ancestors);
+            return $out;
+        }
+        return '[Unsupported]';
     }
-
 
     /**
-     * Is this target a FILE PATH or a DIRECTORY?
-     *
-     * An existing directory is always a directory, extension or not. Otherwise
-     * a basename with an extension (app.log, app.txt) is a file and anything
-     * else is a directory to create, so the path need not exist yet. Identical
-     * rule in all four frameworks.
+     * Is $a actually the SAME underlying array (via an internal PHP
+     * reference), not merely an equal-by-value copy? Mutate $a with a
+     * throwaway marker key and check whether $b observes it -- true only
+     * when they share the same zval, which is exactly PHP's own definition
+     * of "the same array" for a `&`-built reference cycle.
      */
+    private static function isSameArrayReference(array &$a, array &$b): bool
+    {
+        $marker = "\x00tina4_circular_probe\x00";
+        $a[$marker] = true;
+        $same = array_key_exists($marker, $b);
+        unset($a[$marker]);
+        return $same;
+    }
+
+    private static function isUtf8(string $value): bool
+    {
+        // Reuse the existing zero-dependency-safe helper (guarded internally
+        // against a missing ext-mbstring) rather than calling mb_check_encoding
+        // directly here unguarded -- see LogWithoutMbstringTest.
+        return Str::isUtf8($value);
+    }
+
+    private static function messageToString(mixed $raw): string
+    {
+        if (is_string($raw)) {
+            return self::isUtf8($raw) ? $raw : '<binary ' . strlen($raw) . ' bytes sha256=' . hash('sha256', $raw) . '>';
+        }
+        $normalized = self::normalize($raw);
+        if ($normalized === null) return 'null';
+        if ($normalized === true) return 'true';
+        if ($normalized === false) return 'false';
+        if (is_int($normalized) || is_float($normalized)) {
+            return json_encode($normalized);
+        }
+        if (is_array($normalized)) {
+            return self::compactJson(self::sortKeysRecursive($normalized));
+        }
+        return (string)$normalized; // already a marker string
+    }
+
+    private static function sortKeysRecursive(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            if (array_is_list($value)) {
+                return array_map([self::class, 'sortKeysRecursive'], $value);
+            }
+            ksort($value, SORT_STRING);
+            $out = [];
+            foreach ($value as $k => $v) {
+                $out[$k] = self::sortKeysRecursive($v);
+            }
+            return $out;
+        }
+        return $value;
+    }
+
+    private static function compactJson(mixed $value): string
+    {
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private static function escapeText(string $s): string
+    {
+        $s = str_replace('\\', '\\\\', $s);
+        $s = str_replace("\r", '\\r', $s);
+        $s = str_replace("\n", '\\n', $s);
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $s) ?? $s;
+    }
+
+    // ── canonical event + encoding (Decision 15) ─────────────────────
+
+    private static function timestampNow(): string
+    {
+        $now = microtime(true);
+        $ms = (int) round(($now - floor($now)) * 1000);
+        if ($ms >= 1000) { $ms = 999; }
+        return gmdate('Y-m-d\TH:i:s', (int)$now) . '.' . sprintf('%03d', $ms) . 'Z';
+    }
+
+    private static function buildEvent(string $level, mixed $message, ?string $requestId, ?string $callerName, array &$context): array
+    {
+        $event = ['timestamp' => self::timestampNow(), 'level' => $level, 'message' => self::messageToString($message)];
+        if ($requestId) {
+            $event['request_id'] = $requestId;
+        }
+        if ($callerName) {
+            $event['function'] = $callerName;
+        }
+        if (!empty($context)) {
+            $normalizedCtx = self::sortKeysRecursive(self::normalize($context));
+            if (!empty($normalizedCtx)) {
+                $event['context'] = $normalizedCtx;
+            }
+        }
+        return $event;
+    }
+
+    private const JSON_KEY_ORDER = ['timestamp', 'level', 'message', 'request_id', 'function', 'context'];
+
+    private static function encodeJson(array $event): string
+    {
+        $ordered = [];
+        foreach (self::JSON_KEY_ORDER as $k) {
+            if (array_key_exists($k, $event)) {
+                $ordered[$k] = $event[$k];
+            }
+        }
+        return self::compactJson($ordered) . "\n";
+    }
+
+    private static function encodeTextLine(array $event): string
+    {
+        $parts = [$event['timestamp'], '[' . str_pad($event['level'], 8) . ']'];
+        if (isset($event['request_id'])) {
+            $parts[] = '[' . $event['request_id'] . ']';
+        }
+        if (isset($event['function'])) {
+            $parts[] = '[' . $event['function'] . ']';
+        }
+        $parts[] = self::escapeText($event['message']);
+        if (isset($event['context'])) {
+            $parts[] = self::compactJson($event['context']);
+        }
+        return implode(' ', $parts) . "\n";
+    }
+
+    private static function encode(array $event, string $format): string
+    {
+        return $format === 'json' ? self::encodeJson($event) : self::encodeTextLine($event);
+    }
+
+    private static function overflowRecord(array $originalEvent, string $originalEncoded, string $format): string
+    {
+        $originalBytes = strlen($originalEncoded);
+        $replacement = [
+            'timestamp' => $originalEvent['timestamp'],
+            'level' => $originalEvent['level'],
+            'message' => self::OVERFLOW_MESSAGE,
+            'context' => [
+                'truncated' => true,
+                'original_bytes' => $originalBytes,
+                'sha256' => hash('sha256', $originalEncoded),
+            ],
+        ];
+        return self::encode($replacement, $format);
+    }
+
+    private static function boundedForSink(array $event, string $format, int $maxBytes): string
+    {
+        $encoded = self::encode($event, $format);
+        if (strlen($encoded) <= $maxBytes) {
+            return $encoded;
+        }
+        return self::overflowRecord($event, $encoded, $format);
+    }
+
+    // ── resolution helpers ───────────────────────────────────────────
+
+    private static function isTruthyDebug(): bool
+    {
+        $raw = strtolower(trim((string)(getenv('TINA4_DEBUG') ?: '')));
+        return in_array($raw, ['1', 'true', 'yes', 'on', 'y', 't'], true);
+    }
+
+    private static function parseBoolSetting(string $name, bool $default): bool
+    {
+        $raw = getenv($name);
+        if ($raw === false) {
+            return $default;
+        }
+        $token = strtolower(trim($raw));
+        if ($token === 'true') return true;
+        if ($token === 'false') return false;
+        throw new LogConfigurationError(
+            "{$name}=" . var_export($raw, true) . ' is not a valid boolean; accepted: true, false',
+            $name, $raw, ['true', 'false']
+        );
+    }
+
+    private static function resolveBool(?bool $explicit, string $envName, bool $default): bool
+    {
+        if ($explicit !== null) {
+            return $explicit;
+        }
+        return self::parseBoolSetting($envName, $default);
+    }
+
+    private static function resolveLevel(?string $explicit, string $envName, string $default): string
+    {
+        if ($explicit !== null) {
+            $candidate = $explicit;
+            $source = 'argument';
+        } elseif (getenv($envName) !== false) {
+            $candidate = getenv($envName);
+            $source = $envName;
+        } else {
+            return $default;
+        }
+        $key = strtoupper(trim($candidate));
+        if (!isset(self::LEVELS[$key])) {
+            throw new LogConfigurationError(
+                "{$source}={$candidate} is not a valid level; accepted: " . implode(', ', array_keys(self::LEVELS)),
+                $envName, $candidate, array_keys(self::LEVELS)
+            );
+        }
+        return $key;
+    }
+
+    private static function resolveFormat(?string $explicit): string
+    {
+        if ($explicit !== null) {
+            $candidate = strtolower(trim($explicit));
+            if (!in_array($candidate, ['text', 'json'], true)) {
+                throw new LogConfigurationError("format={$explicit} is not valid; accepted: text, json", 'TINA4_LOG_FORMAT', $explicit, ['text', 'json']);
+            }
+            return $candidate;
+        }
+        $env = getenv('TINA4_LOG_FORMAT');
+        if ($env !== false) {
+            $candidate = strtolower(trim($env));
+            if (!in_array($candidate, ['text', 'json'], true)) {
+                throw new LogConfigurationError("TINA4_LOG_FORMAT={$env} is not valid; accepted: text, json", 'TINA4_LOG_FORMAT', $env, ['text', 'json']);
+            }
+            return $candidate;
+        }
+        return self::isTruthyDebug() ? 'text' : 'json';
+    }
+
+    /** @return array{0:bool,1:bool} [stdoutEnabled, fileEnabled] */
+    private static function resolveOutput(?string $explicit): array
+    {
+        if ($explicit !== null) {
+            $candidate = strtolower(trim($explicit));
+            $source = 'argument';
+        } else {
+            $env = getenv('TINA4_LOG_OUTPUT');
+            if ($env === false) {
+                return [true, self::isTruthyDebug()];
+            }
+            $candidate = strtolower(trim($env));
+            $source = 'TINA4_LOG_OUTPUT';
+        }
+        if (!in_array($candidate, ['stdout', 'file', 'both'], true)) {
+            throw new LogConfigurationError("{$source}={$candidate} is not valid; accepted: stdout, file, both", 'TINA4_LOG_OUTPUT', $candidate, ['stdout', 'file', 'both']);
+        }
+        return match ($candidate) {
+            'stdout' => [true, false],
+            'file' => [false, true],
+            'both' => [true, true],
+        };
+    }
+
+    private static function resolveInt(?int $explicit, string $envName, int $default, ?int $minimum): int
+    {
+        if ($explicit !== null) {
+            $value = $explicit;
+            $source = 'argument';
+        } else {
+            $raw = getenv($envName);
+            if ($raw === false) {
+                return $default;
+            }
+            if (!preg_match('/^-?\d+$/', trim($raw))) {
+                throw new LogConfigurationError("{$envName}={$raw} is not a valid integer", $envName, $raw);
+            }
+            $value = (int)$raw;
+            $source = $envName;
+        }
+        if ($minimum !== null && $value < $minimum) {
+            throw new LogConfigurationError("{$source}={$value} must be >= {$minimum}", $envName, $value, ">= {$minimum}");
+        }
+        return $value;
+    }
+
+    private static function resolveStr(?string $explicit, string $envName, ?string $default, bool $allowEmpty): ?string
+    {
+        if ($explicit !== null) {
+            if ($explicit === '') {
+                throw new LogConfigurationError("{$envName} may not be an empty string", $envName, $explicit);
+            }
+            if (str_contains($explicit, "\0")) {
+                throw new LogConfigurationError("{$envName} may not contain a NUL byte", $envName, $explicit);
+            }
+            return $explicit;
+        }
+        $raw = getenv($envName);
+        if ($raw === false) {
+            return $default;
+        }
+        if ($raw === '') {
+            if (!$allowEmpty) {
+                throw new LogConfigurationError("{$envName} may not be an empty string", $envName, $raw);
+            }
+            return $default;
+        }
+        if (str_contains($raw, "\0")) {
+            throw new LogConfigurationError("{$envName} may not contain a NUL byte", $envName, $raw);
+        }
+        return $raw;
+    }
+
     private static function targetIsFile(string $path): bool
     {
         if (is_dir($path)) {
@@ -685,233 +942,8 @@ class Log
         return str_contains($base, '.') && !str_starts_with($base, '.');
     }
 
-    private static function formatHumanReadable(array $entry): string
+    private static function isAbsolutePath(string $path): bool
     {
-        $parts = [
-            $entry['timestamp'],
-            // Pad to 8, not 7: CRITICAL is eight characters, so a 7-wide column
-            // was broken by our own highest level. 8 is the only width that fits
-            // every level name. Cross-framework format table (feature 2).
-            '[' . str_pad($entry['level'], 8) . ']',
-        ];
-
-        if (isset($entry['request_id'])) {
-            $parts[] = '[' . $entry['request_id'] . ']';
-        }
-
-        // Optional caller-name segment — only present when TINA4_LOG_FUNC
-        // was truthy at the time buildEntry() ran (feature #41).
-        if (isset($entry['function'])) {
-            $parts[] = '[' . $entry['function'] . ']';
-        }
-
-        $parts[] = $entry['message'];
-
-        if (isset($entry['context']) && !empty($entry['context'])) {
-            $parts[] = json_encode($entry['context'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-
-        return implode(' ', $parts);
-    }
-
-    /**
-     * Write to stdout with color coding for development mode.
-     */
-    private static function writeStdout(string $level, string $line): void
-    {
-        $colors = [
-            self::LEVEL_DEBUG => "\033[36m",    // Cyan
-            self::LEVEL_INFO => "\033[32m",     // Green
-            self::LEVEL_WARNING => "\033[33m",  // Yellow
-            self::LEVEL_ERROR => "\033[31m",    // Red
-            self::LEVEL_CRITICAL => "\033[35m", // Magenta
-        ];
-
-        // No ANSI in production (a log shipper reads this) and none in JSON mode
-        // either — an escape sequence wrapped around a JSON object makes the
-        // line unparseable, which would make the one format you can explicitly
-        // ask for useless on stdout. Since 2026-08-01 TEXT is the default
-        // format, so the colour decision hangs off the development flag rather
-        // than off the format (which no longer implies an environment).
-        $plain = !self::$development || !self::$humanReadable;
-        $color = $plain ? '' : ($colors[$level] ?? '');
-        $reset = $plain ? '' : "\033[0m";
-
-        if (defined('STDOUT')) {
-            $stdout = \STDOUT;
-        } else {
-            $stdout = @fopen('php://stdout', 'w');
-        }
-
-        if (is_resource($stdout)) {
-            @fwrite($stdout, $color . $line . $reset);
-            // v3.13.14: flush so logs appear immediately under the long-running
-            // built-in server (stream_socket_server) instead of sitting in the
-            // stream's userspace buffer — otherwise `docker logs` lags or, on an
-            // abrupt stop, loses the tail.
-            @fflush($stdout);
-        } else {
-            // Fallback: use error_log when stdout isn't available
-            error_log(strip_tags($line));
-        }
-    }
-
-    /**
-     * Write a log line to the named file under the log directory,
-     * with numbered rotation.
-     *
-     * Rotation scheme: <file> → <file>.1 → <file>.2 → ... → <file>.{keep}
-     * Called separately for the main log (tina4.log) and the error
-     * mirror (error.log) so each rotates independently.
-     */
-    private static function writeToFile(string $fileName, string $line): void
-    {
-        $dir = self::$logDir;
-
-        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
-            // The second is_dir() covers the race where a concurrent process
-            // created the directory between the check and the mkdir.
-            self::onWriteFailure("cannot create log directory '{$dir}'");
-            return;
-        }
-
-        $filePath = $dir . DIRECTORY_SEPARATOR . $fileName;
-
-        // Rotate if file exceeds max size. TINA4_LOG_ROTATE_SIZE=0 disables.
-        if (self::$maxFileSize > 0 && is_file($filePath) && filesize($filePath) >= self::$maxFileSize) {
-            self::rotateLog($filePath);
-        }
-
-        if (@file_put_contents($filePath, $line, FILE_APPEND | LOCK_EX) === false) {
-            self::onWriteFailure("cannot write log file '{$filePath}'");
-        }
-    }
-
-    /**
-     * React to a failed log write according to TINA4_LOG_STRICT.
-     *
-     * Default (unset/false): swallow it. A failing log sink must never be the
-     * reason a request dies — the same policy every Tina4 sink degrades under.
-     *
-     * TINA4_LOG_STRICT truthy: RAISE, so a deployment that depends on its audit
-     * trail finds out immediately instead of running blind on a full disk or a
-     * read-only volume. TINA4_LOG_STRICT was documented on all four env-var
-     * pages while only Ruby implemented it — a documented no-op in three
-     * frameworks, which is worse than an undocumented gap.
-     *
-     * @param string $reason What failed, with the path involved.
-     * @throws \RuntimeException When TINA4_LOG_STRICT is truthy.
-     */
-    private static function onWriteFailure(string $reason): void
-    {
-        if (self::$strict) {
-            throw new \RuntimeException(
-                'Tina4 log write failed: ' . $reason . ' (TINA4_LOG_STRICT is on)'
-            );
-        }
-    }
-
-    /**
-     * Rotate using numbered scheme: tina4.log.{keep} is deleted, all others shift up by 1.
-     */
-    private static function rotateLog(string $filePath): void
-    {
-        $keep = self::$keepFiles;
-
-        if ($keep <= 0) {
-            // Truncate-only — no backups retained.
-            @unlink($filePath);
-            return;
-        }
-
-        // Delete any rotated files beyond the keep window
-        // (covers shrinking _KEEP between runs).
-        $extra = $keep + 1;
-        while (is_file($filePath . '.' . $extra)) {
-            @unlink($filePath . '.' . $extra);
-            $extra++;
-        }
-
-        // Delete the oldest rotated file if it exists
-        $oldest = $filePath . '.' . $keep;
-        if (is_file($oldest)) {
-            @unlink($oldest);
-        }
-
-        // Shift existing rotated files: .{n} → .{n+1}
-        for ($n = $keep - 1; $n >= 1; $n--) {
-            $src = $filePath . '.' . $n;
-            $dst = $filePath . '.' . ($n + 1);
-            if (is_file($src)) {
-                @rename($src, $dst);
-            }
-        }
-
-        // Rename current log to .1
-        @rename($filePath, $filePath . '.1');
-    }
-
-    /**
-     * Reset logger state (useful for testing).
-     */
-    public static function reset(): void
-    {
-        self::$requestId = null;
-        self::$logDir = 'logs';
-        self::$logFile = 'tina4.log';
-        self::$errorFile = 'error.log';
-        self::$stdout = false;
-        self::$fileOutput = true;
-        self::$humanReadable = true;
-        self::$development = false;
-        self::$strict = false;
-        self::$minLevel = self::LEVEL_DEBUG;
-        self::$maxFileSize = self::DEFAULT_ROTATE_SIZE;
-        self::$keepFiles = self::DEFAULT_ROTATE_KEEP;
-        // Back to "nothing has configured me": the next log call re-reads
-        // TINA4_LOG_* exactly as a fresh process would.
-        self::$configured = false;
-    }
-
-    /** Test helper — current rotation size in bytes (0 disables rotation). */
-    public static function rotateSize(): int
-    {
-        return self::$maxFileSize;
-    }
-
-    /** Test helper — current rotation keep count. */
-    public static function rotateKeep(): int
-    {
-        return self::$keepFiles;
-    }
-
-    /** Test helper — resolved log directory after configure(). */
-    public static function logDir(): string
-    {
-        return self::$logDir;
-    }
-
-    /** Test helper — resolved primary log filename after configure(). */
-    public static function logFile(): string
-    {
-        return self::$logFile;
-    }
-
-    /** Test helper — whether stdout output is enabled. */
-    public static function stdoutEnabled(): bool
-    {
-        return self::$stdout;
-    }
-
-    /** Test helper — whether file output is enabled. */
-    public static function fileOutputEnabled(): bool
-    {
-        return self::$fileOutput;
-    }
-
-    /** Test helper — whether human-readable (text) format is active. */
-    public static function isHumanReadable(): bool
-    {
-        return self::$humanReadable;
+        return str_starts_with($path, '/') || (bool)preg_match('#^[A-Za-z]:[\\\\/]#', $path);
     }
 }
