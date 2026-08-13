@@ -872,13 +872,10 @@ class Router
             // v3.13.7 SECURITY (CWE-209): production response body must
             // NOT contain the stack trace. The trace stays in Log::error
             // above and in any listener consumers. Clients only see the
-            // generic page + request_id.
-            $errorResp = self::renderError($response, 500, 'Server Error', $request->path, [
+            // generic page + request_id (request_id itself is resolved
+            // centrally by renderError() from Log::getRequestId()).
+            $errorResp = self::renderError($response, 500, 'Server Error', $request, [
                 'error_message' => '',
-                // The canonical per-request id (set at the top of dispatch), so
-                // the id a user reports off the 500 page matches the log lines and
-                // the X-Request-ID response header - not a throwaway md5.
-                'request_id'    => Log::getRequestId() ?? '',
             ]);
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
@@ -949,7 +946,9 @@ class Router
         ?array $result
     ): Response {
         if (!empty($afterMiddleware)) {
-            [$request, $finalResponse] = Middleware::runAfter($afterMiddleware, $request, $finalResponse);
+            [$request, $finalResponse] = Middleware::runAfter(
+                $afterMiddleware, $request, $finalResponse, self::renderForbidden(...)
+            );
         }
 
         $matchedPattern = $result !== null ? ($result['route']['pattern'] ?? '') : 'none';
@@ -1089,7 +1088,9 @@ class Router
             return null;
         }
 
-        [$request, $response, $shortCircuit] = Middleware::runBefore($middleware, $request, $response);
+        [$request, $response, $shortCircuit] = Middleware::runBefore(
+            $middleware, $request, $response, self::renderForbidden(...)
+        );
         if ($shortCircuit !== null) {
             return $shortCircuit;
         }
@@ -1589,7 +1590,7 @@ class Router
      */
     private static function renderForbidden(Request $request, Response $response): Response
     {
-        return self::renderError($response, 403, 'Forbidden', $request->path);
+        return self::renderError($response, 403, 'Forbidden', $request);
     }
 
     /**
@@ -1831,7 +1832,7 @@ class Router
                 // the body stays empty.
                 return $response->status(204);
             }
-            $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request->path);
+            $errorResp = self::renderError($response, 405, 'Method Not Allowed', $request);
             $errorResp->header('Allow', $allowHeader);
             return self::injectDevToolbar($request, $errorResp, 'error');
         }
@@ -1860,7 +1861,7 @@ class Router
             }
         }
 
-        $errorResp = self::renderError($response, 404, 'Not Found', $request->path);
+        $errorResp = self::renderError($response, 404, 'Not Found', $request);
         return self::injectDevToolbar($request, $errorResp, 'error');
     }
 
@@ -2108,25 +2109,67 @@ class Router
         return $count;
     }
 
+    /** Machine-readable error codes for the negotiated JSON envelope (ERR-DEC-02). */
+    private const ERROR_CODE_NAMES = [
+        403 => 'FORBIDDEN', 404 => 'NOT_FOUND', 405 => 'METHOD_NOT_ALLOWED', 500 => 'INTERNAL_SERVER_ERROR',
+    ];
+
     /**
-     * Render an error page via Frond templates with fallback to JSON.
+     * The ONE JSON error envelope for a negotiated 403/404/405/500 (ERR-DEC-02).
      *
-     * Resolution order:
+     * Reuses the existing `Response::errorResponse()` envelope
+     * (`error: true, code, message, status`) already shared by app-level
+     * `$response->error()` calls, plus `request_id` for correlation
+     * (feature 43, ERR-404-REQUESTID) - the SAME shape Python/Ruby/Node build.
+     *
+     * @param int $code HTTP status code
+     * @param string $message Human-readable message (never the raw exception - CWE-209)
+     * @param string $requestId The request's correlation id
+     * @return array The JSON-ready error body
+     */
+    private static function errorJsonBody(int $code, string $message, string $requestId): array
+    {
+        $body = Response::errorResponse(self::ERROR_CODE_NAMES[$code] ?? ('HTTP_' . $code), $message, $code);
+        $body['request_id'] = $requestId;
+        return $body;
+    }
+
+    /**
+     * Render an error page via Frond templates, negotiated on Accept, with a
+     * JSON fallback.
+     *
+     * ERR-DEC-02 (content negotiation, the ONE shared decision reused by
+     * 403/404/405/500 - see {@see Request::wantsJson()}): a JSON API client
+     * gets the canonical JSON error envelope directly - no template attempt at
+     * all. A browser negotiates the HTML page:
      *   1. User override:    src/templates/errors/{code}.twig
      *   2. Framework default: __DIR__/templates/errors/{code}.twig
-     *   3. JSON fallback
+     *   3. JSON fallback (defensive only - the framework ships a template for
+     *      every code this is called with)
      *
      * @param Response $response The response object
      * @param int $code HTTP status code
-     * @param string $message Error message
-     * @param string $path Request path (for display in template)
-     * @param array $extraData Additional template variables
+     * @param string $message Error message (the CWE-209 guard: the 500 caller
+     *                        passes a generic message here, never the real
+     *                        exception - see extraData's error_message)
+     * @param Request $request The incoming request (path + Accept + request id)
+     * @param array $extraData Additional template variables (e.g. the 500
+     *                        caller forces error_message='' in production)
      * @return Response
      */
-    private static function renderError(Response $response, int $code, string $message, string $path = '', array $extraData = []): Response
+    private static function renderError(Response $response, int $code, string $message, Request $request, array $extraData = []): Response
     {
+        $requestId = $extraData['request_id'] ?? (Log::getRequestId() ?? '');
+
+        if ($request->wantsJson()) {
+            return $response->json(self::errorJsonBody($code, $message, $requestId), $code);
+        }
+
         $templateFile = "errors/{$code}.twig";
-        $data = array_merge(['path' => $path, 'error_message' => $message], $extraData);
+        $data = array_merge(
+            ['path' => $request->path, 'error_message' => $message, 'request_id' => $requestId],
+            $extraData
+        );
 
         // 1. Try user override in src/templates/
         $userTemplateDir = 'src/templates';
@@ -2152,8 +2195,8 @@ class Router
             }
         }
 
-        // 3. JSON fallback
-        return $response->json(['error' => $message], $code);
+        // 3. JSON fallback (no template found at all)
+        return $response->json(self::errorJsonBody($code, $message, $requestId), $code);
     }
 
     /**

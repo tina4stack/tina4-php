@@ -399,11 +399,69 @@ class Request
 
     /**
      * Check if the request expects JSON response.
+     *
+     * The shared content-negotiation rule (feature 42, ERR-DEC-02): an API
+     * client sending `Accept: application/json` gets a JSON error body; a
+     * browser (`text/html`, the wildcard media range, or no header at all)
+     * gets the HTML error page. See {@see acceptPrefersJson()}.
      */
     public function wantsJson(): bool
     {
-        $accept = $this->headers['accept'] ?? '';
-        return str_contains($accept, 'application/json');
+        return self::acceptPrefersJson($this->headers['accept'] ?? '');
+    }
+
+    /**
+     * Content negotiation for an error response (feature 42, ERR-DEC-02): does
+     * an Accept header prefer application/json over text/html?
+     *
+     * `Accept: application/json` (an API client) prefers JSON; a browser
+     * Accept (`text/html`, `*\/*`, or no header at all) prefers HTML. A mixed
+     * Accept header - a real browser's
+     * `text/html,application/xhtml+xml,application/xml;q=0.9,*\/*;q=0.8` - is
+     * resolved by q-value: whichever of the two media types this method cares
+     * about is weighted higher wins; a tie or neither present defaults to
+     * HTML, the historical/back-compatible behaviour for an unspecified
+     * client. This is the ONE shared decision reused by the 403/404/405/500
+     * error paths in Router::renderError, so a JSON API client sees the SAME
+     * negotiated shape everywhere (ERR-403-SPLIT) - ported with the same
+     * algorithm to Python/Ruby/Node.
+     *
+     * @param string $accept The raw Accept header value
+     * @return bool True when JSON is preferred over HTML
+     */
+    public static function acceptPrefersJson(string $accept): bool
+    {
+        if ($accept === '') {
+            return false;
+        }
+        $bestJson = -1.0;
+        $bestHtml = -1.0;
+        foreach (explode(',', $accept) as $part) {
+            $segments = explode(';', trim($part));
+            $media = strtolower(trim($segments[0]));
+            $q = 1.0;
+            foreach (array_slice($segments, 1) as $param) {
+                $param = trim($param);
+                if (str_starts_with($param, 'q=')) {
+                    $qStr = substr($param, 2);
+                    if (is_numeric($qStr)) {
+                        $q = (float)$qStr;
+                    }
+                }
+            }
+            if ($media === 'application/json') {
+                $bestJson = max($bestJson, $q);
+            } elseif (in_array($media, ['text/html', '*/*', 'application/xhtml+xml'], true)) {
+                $bestHtml = max($bestHtml, $q);
+            }
+        }
+        if ($bestJson < 0) {
+            return false;
+        }
+        if ($bestHtml < 0) {
+            return true;
+        }
+        return $bestJson > $bestHtml;
     }
 
     /**

@@ -98,6 +98,11 @@ class Middleware
      * @param array<string> $middlewareClasses Fully-qualified class names
      * @param Request $request
      * @param Response $response
+     * @param callable|null $renderForbidden Builds the fallback 403 as
+     *        fn(Request, Response): Response - see {@see applyHookResult()}.
+     *        The Router passes its own negotiated error renderer (ERR-DEC-01/
+     *        ERR-DEC-02) so a GLOBAL class-based middleware denial looks like
+     *        every other error page, same as the per-route/closure path.
      * @return array{0: Request, 1: Response, 2: Response|null} The (possibly
      *         replaced) request and response, plus the response that ended the
      *         chain — null when every hook ran. A caller destructuring
@@ -105,8 +110,12 @@ class Middleware
      *         third element because a 302 or a plain 200 Response is a
      *         short-circuit no status check could recognise.
      */
-    public static function runBefore(array $middlewareClasses, Request $request, Response $response): array
-    {
+    public static function runBefore(
+        array $middlewareClasses,
+        Request $request,
+        Response $response,
+        ?callable $renderForbidden = null
+    ): array {
         foreach ($middlewareClasses as $class) {
             $methods = self::discoverMethods($class, 'before');
 
@@ -119,7 +128,7 @@ class Middleware
                     return [$request, $response, $response];
                 }
 
-                $shortCircuit = self::applyHookResult($result, $request, $response);
+                $shortCircuit = self::applyHookResult($result, $request, $response, $renderForbidden);
                 if ($shortCircuit !== null) {
                     return [$request, $shortCircuit, $shortCircuit];
                 }
@@ -163,12 +172,18 @@ class Middleware
      * @param array<string> $middlewareClasses Fully-qualified class names
      * @param Request $request
      * @param Response $response
+     * @param callable|null $renderForbidden Builds the fallback 403 - see
+     *        {@see runBefore()} and {@see applyHookResult()}.
      * @return array{0: Request, 1: Response, 2: Response|null} The (possibly
      *         replaced) request and response, plus the response that ended the
      *         pass — null when every hook ran.
      */
-    public static function runAfter(array $middlewareClasses, Request $request, Response $response): array
-    {
+    public static function runAfter(
+        array $middlewareClasses,
+        Request $request,
+        Response $response,
+        ?callable $renderForbidden = null
+    ): array {
         foreach ($middlewareClasses as $class) {
             $methods = self::discoverMethods($class, 'after');
 
@@ -181,7 +196,7 @@ class Middleware
                     continue;
                 }
 
-                $shortCircuit = self::applyHookResult($result, $request, $response);
+                $shortCircuit = self::applyHookResult($result, $request, $response, $renderForbidden);
                 if ($shortCircuit !== null) {
                     return [$request, $shortCircuit, $shortCircuit];
                 }
@@ -224,9 +239,14 @@ class Middleware
             // "Send the response as set." A hook that only said no, without
             // saying what to send, gets the 403 it meant.
             if ($response->getStatusCode() === 200 && $response->getBody() === '') {
+                // ERR-DEC-01/ERR-DEC-02: every real caller passes its negotiated
+                // renderer (see Router::renderForbidden -> renderError). This
+                // canonical-envelope fallback only fires for a caller that
+                // supplies none, so even that path matches the agreed
+                // {error,code,message,status} shape instead of a bespoke one.
                 return $renderForbidden !== null
                     ? $renderForbidden($request, $response)
-                    : $response->json(['error' => 'Forbidden', 'status' => 403], 403);
+                    : $response->json(Response::errorResponse('FORBIDDEN', 'Forbidden', 403), 403);
             }
             return $response;
         }
