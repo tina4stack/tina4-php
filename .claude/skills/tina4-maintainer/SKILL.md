@@ -59,7 +59,7 @@ sections below own each step (**Plan-Driven Workflow**, **Independent Verificati
 | Phase | What happens | Output |
 |-------|--------------|--------|
 | 1. Scope | Restate the task; which framework(s) does it land in? | a feature entry in `<repo>/plan/<task>.md` |
-| 2. Plan | Scope + Parity + Tests + Bugs + Commits | the plan (approved to start) |
+| 2. Plan | Scope + Parity + Tests + Bugs + Commits | the plan (outcome stated, then start) |
 | 3. Delegate | Prefer a worker per task/framework; main stays free when possible | workers (or you) off the plan |
 | 4. Test-first | REAL tests (positive AND negative) before the code, in every target backend | failing tests that pin the behaviour |
 | 5. Build | Ground in the source + live API index (`tina4_context` optional) → reuse ladder → port the proven design → minimum code | tests green, parity held |
@@ -480,10 +480,13 @@ When porting a feature from Python to another language:
 Every non-trivial task starts with `<repo>/plan/<task-name>.md` (and a row in the repo's
 `plan/MASTER.md` when one exists). Trivial typos/comments are the only exception.
 
-### 1. Make the Plan (approved to start)
+### 1. Make the Plan (state the outcome, then start)
 
-Write Scope / Parity / Tests / Bugs / Commits. Present it to the master maintainer and get
-approval **to start** — not approval on every checkbox later.
+Write Scope / Parity / Tests / Bugs / Commits, with the outcome you inferred as an
+**Outcome:** line at the top. Then **start** - you do not wait for a human 'yes' to begin.
+Surface the plan so the maintainer can redirect, but the default is to proceed. Ask first
+ONLY when a wrong guess is expensive and hard to reverse: a destructive migration, a public
+release/tag, an irreversible external action.
 
 ### 2. Work the plan file
 
@@ -494,14 +497,16 @@ file still shows `[ ]` is a process failure.
 
 ### 3. Close the loop
 
-When Scope + Tests are complete and the maintainer confirms, set `## Status: Complete` and update
-MASTER. If anything changed from the original scope, note why in Commits or Bugs.
+When Scope + Tests are complete and **verified green at HEAD** (a real suite run, per
+Independent Verification), set `## Status: Complete` and update MASTER yourself - you close
+the plan on the evidence, not on a human's confirmation. If anything changed from the
+original scope, note why in Commits or Bugs.
 
 ## Before Writing Any Code
 
 Every time you're about to write or modify Tina4 code, run through this checklist:
 
-1. **Open or create the plan** — `<repo>/plan/<task>.md` in Scope / Parity / Tests / Bugs / Commits form; get approval to start
+1. **Open or create the plan** — `<repo>/plan/<task>.md` in Scope / Parity / Tests / Bugs / Commits form; state the inferred outcome and start (no approval gate)
 2. **Which framework(s)?** — Is this Python-only, or does it need to land in multiple languages?
 3. **Does the feature exist in Python?** — If yes, read the Python implementation first.
    If no, you're designing something new — check the plan docs.

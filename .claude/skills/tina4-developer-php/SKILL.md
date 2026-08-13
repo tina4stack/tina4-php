@@ -36,30 +36,31 @@ write-back. Cursor todos / chat checklists are **not** the plan.
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
-| 1. Scope | Restate the request AND its intended outcome (ask if unstated), agree the slice | a feature entry in `plan/<feature>.md` |
-| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file, approved |
+| 1. Scope | Restate the request AND the outcome you inferred (state it, proceed), agree the slice | a feature entry in `plan/<feature>.md` |
+| 2. Plan | Write the checklist `[ ]`, Bugs section, Commit log | the plan file (outcome stated, work starts) |
 | 3. Delegate | Spawn a worker per task; the main session stays free | worker(s) running off the plan |
 | 4. Test-first | The worker writes REAL tests before any code | failing tests that pin the behaviour |
 | 5. Scaffold + Build | **Scaffold** with `tina4php generate` → fill the `AI-FILL` placeholder → ground the custom ~20% with `tina4_context` | tests now green |
 | 6. Verify + tick | Run it for real; **edit the plan file now** — `[x]` Scope/Tests + Commits line | plan file updated in the same turn |
 | 7. Report | Relay completions as a ✅/❌ table that matches the plan file | the status dashboard |
 
-### Establish the outcome before you scope - ask when it is not explicit
+### Establish the outcome before you scope - infer it, state it, proceed
 
 Scoping starts with knowing what DONE looks like. If the developer's instruction does not state the intended
-**outcome** - the observable end state that counts as success - ask for it in one line before you plan,
-delegate, or write code. "Add a login page" names a task; the outcome might be "a user signs in with email and
-password, lands on the dashboard, and a wrong password shows an error" - and only the developer knows which.
-Guess wrong and a whole worker builds toward the wrong target.
+**outcome** - the observable end state that counts as success - INFER the most sensible one from the request,
+the codebase, and the project's conventions, write it as an **Outcome:** line at the top of the plan, and
+PROCEED. Do not stop to ask: a stated assumption the developer can correct beats a plan blocked waiting on a
+reply. Ask first ONLY when a wrong guess is expensive and hard to reverse.
 
 Ask one specific question and offer your best read as the default, so a quick "yes" moves the work:
 
-> You asked for X. I am taking the outcome to be: <one-line observable end state>. Is that the goal, or is it
-> <alternative>?
+> You asked for X. I am taking the outcome to be: <one-line observable end state>. I am proceeding on that
+> unless you redirect.
 
 Write the agreed outcome as an **Outcome:** line at the top of the plan, above the checklist. Every worker
-then builds toward the same end state, and you check the result against it. Never start building on an
-unstated outcome - a plan with no agreed outcome is a guess with a commit hash.
+then builds toward the same end state, and you check the result against it. State the outcome you
+inferred and build toward it; a plan that names its assumed outcome is not a guess, it is a decision
+the developer can correct.
 
 ### 1. Keep the main session free — delegate to a worker
 When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
@@ -75,8 +76,8 @@ saying "done" while the plan still shows `[ ]` is a process failure, so fix the 
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
-plan** as new `[ ]` items. A genuinely new feature → **scope it with the developer first**, then
-create `plan/<feature>.md`. Additional features are never side-quests — they are just new
+plan** as new `[ ]` items. A genuinely new feature → **scope it and state the outcome**, then
+create `plan/<feature>.md` and start. Additional features are never side-quests — they are just new
 checkboxes in a plan.
 
 ### 3. The plan folder — a master plan over feature plans

@@ -57,7 +57,7 @@ main session, **you still own the plan file**. Cursor todos / chat checklists ar
 | Phase | What happens | Output |
 |-------|--------------|--------|
 | 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
-| 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (approved to start) |
+| 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (outcome stated, then start) |
 | 3. Delegate | Prefer a worker per task; main session stays free when possible | worker(s) (or you) running off the plan |
 | 4. Test-first | Pin the behaviour BEFORE building the component | a real check that fails first |
 | 5. Build | Ground with `tina4_context` → climb the Lazy Frontend Ladder → minimum reactive code | it works in the browser |
@@ -71,12 +71,17 @@ steer while the UI hot-reloads. **Required either way:** whoever builds must upd
 file still shows `[ ]` is a process failure — fix the file before you report.
 
 Tick Scope/Tests when verified in the browser (real UI), not when waiting for per-item human
-approval. Developer approval is for **starting** the plan and for `## Status: Complete`.
+approval. You start the plan and mark it `## Status: Complete` yourself on that evidence - no approval gate; the developer can redirect.
+
+## Working reflexes
+
+- **Delegate at the right capability tier - reserve the top tier for the hardest work.** A sub-agent's model/effort is a cost lever: match it to the task, never default everything to the most capable tier. Heavy work (a full reactive feature with real cross-component state, a tricky signals/effect graph, a build/bundle-size regression) earns a high tier; standard components and mechanical edits (markup, small refactors, docs) run mid or low. Correctness is the gate - drop a tier only if the cheaper run still yields the correct, verified result; if a gate fails, step the tier up and note it. This is agent-agnostic: Claude maps it to model + reasoning-effort, Codex to its model/effort selector, Cursor to its model picker. Spend capability where the difficulty is, not uniformly.
+- **Terse output, depth-scaled reasoning.** Default to the shortest output that conveys the result - a status line, a bullet, or a table. No preamble, no restating the task, no thinking-out-loud. Ask short questions. Elaborate ONLY when the user asks for more. Scale reasoning DEPTH (not word count) with difficulty: a hard call earns more STEPS in compact form (`claim -> check -> decision`, a decision tree, a checklist), an easy one gets a single line. This applies to replies, to questions, AND to the private thinking process - dense structure, minimal language. Verbosity costs the user time and tokens.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
-plan** as new `[ ]` items. A genuinely new feature → **scope it with the developer first**, then
-create `plan/<feature>.md`. Additional features are never side-quests — they are just new
+plan** as new `[ ]` items. A genuinely new feature → **scope it and state the outcome**, then
+create `plan/<feature>.md` and start. Additional features are never side-quests — they are just new
 checkboxes in a plan.
 
 ### 3. The plan folder — a master plan over feature plans
