@@ -1027,19 +1027,16 @@ class LoggerFixtureContractTest extends TestCase
 
     public function testInaccessibleSelectedSinkFailsConfiguration(): void
     {
+        // Parent is a FILE, so a sink dir under it is ENOTDIR -- fails even as
+        // root (a chmod 0500 dir is bypassed by root's CAP_DAC_OVERRIDE; lab runs as root).
         $unwritable = $this->tempDir . '/unwritable';
-        mkdir($unwritable);
-        chmod($unwritable, 0500);
+        file_put_contents($unwritable, '');
         try {
-            try {
-                Log::configure(output: 'file', logDir: $unwritable . '/nested');
-                $this->fail('expected LogConfigurationError');
-            } catch (LogConfigurationError $e) {
-                $this->assertSame('open', $e->operation);
-                $this->assertNotNull($e->sink);
-            }
-        } finally {
-            chmod($unwritable, 0700);
+            Log::configure(output: 'file', logDir: $unwritable . '/nested');
+            $this->fail('expected LogConfigurationError');
+        } catch (LogConfigurationError $e) {
+            $this->assertSame('open', $e->operation);
+            $this->assertNotNull($e->sink);
         }
     }
 
