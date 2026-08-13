@@ -1007,15 +1007,24 @@ class Frond
 
     private function resolveInheritance(array $ast, array &$data, ?string $templateName): array
     {
-        // Find extends node
-        $extendsNode = null;
-        foreach ($ast as $node) {
-            if ($node['type'] === 'extends') {
-                $extendsNode = $node;
-                break;
-            }
+        // Find extends node(s) -- a template may extend at most one parent.
+        // Before 3.13.100 a SECOND {% extends %} tag was silently invisible:
+        // this loop broke on the first match and never looked further, so the
+        // rest -- including the second extends target -- was discarded with
+        // no signal, almost always hiding a copy-paste or a bad merge. Raise
+        // clearly instead, the same policy 3.13.89 applied to an unknown tag.
+        $extendsNodes = array_values(array_filter(
+            $ast,
+            static fn(array $node): bool => $node['type'] === 'extends',
+        ));
+        if (count($extendsNodes) > 1) {
+            throw new \RuntimeException(
+                'Frond: template has ' . count($extendsNodes) . ' "{% extends %}" tags -- '
+                . 'a template can extend only one parent'
+            );
         }
 
+        $extendsNode = $extendsNodes[0] ?? null;
         if ($extendsNode === null) return $ast;
 
         // Collect child blocks

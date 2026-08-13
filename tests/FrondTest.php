@@ -928,6 +928,44 @@ class FrondTest extends TestCase
         $this->assertSame('Title: Default Title', $result);
     }
 
+    public function testExtendsSingleStillWorks(): void
+    {
+        // Positive lock-in: one {% extends %} tag renders exactly as before.
+        $this->writeTemplate('base_solo.html', '<h1>{% block title %}Default{% endblock %}</h1>');
+        $this->writeTemplate('child_solo.html', '{% extends "base_solo.html" %}{% block title %}Solo{% endblock %}');
+        $result = $this->engine->render('child_solo.html', []);
+        $this->assertSame('<h1>Solo</h1>', $result);
+    }
+
+    public function testExtendsTwiceThrows(): void
+    {
+        // 3.13.100: a SECOND {% extends %} tag throws instead of being
+        // silently discarded. Before the fix, resolveInheritance() broke on
+        // the FIRST 'extends' AST node it found and never looked further, so
+        // the second extends target -- and the rest of the child's non-block
+        // content -- vanished with no signal. Mirrors the unknown-tag-throws
+        // policy (3.13.89): fail loud instead of guessing.
+        $this->writeTemplate('base_a.html', 'A {% block content %}{% endblock %}');
+        $this->writeTemplate('base_b.html', 'B {% block content %}{% endblock %}');
+        $this->writeTemplate(
+            'double.html',
+            "{% extends \"base_a.html\" %}\n{% extends \"base_b.html\" %}\n{% block content %}X{% endblock %}"
+        );
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/2 "\{% extends %\}" tags/');
+        $this->engine->render('double.html', []);
+    }
+
+    public function testExtendsTwiceThrowsViaRenderString(): void
+    {
+        // The same double-extends guard applies on the renderString() path.
+        $this->writeTemplate('base_a2.html', 'A');
+        $this->writeTemplate('base_b2.html', 'B');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/2 "\{% extends %\}" tags/');
+        $this->engine->renderString('{% extends "base_a2.html" %}{% extends "base_b2.html" %}', []);
+    }
+
     public function testExtendsWithLeadingWhitespace(): void
     {
         $this->writeTemplate('base3.html', '<html><body>{% block content %}default{% endblock %}</body></html>');
