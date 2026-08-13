@@ -167,11 +167,28 @@ jobs:
       TINA4_TEST_MSSQL_PASSWORD: 'TinaSQL123!Secure'
       TINA4_TEST_MSSQL_DB: tina4_test
       TINA4_TEST_MSSQL_URL: mssql://sa:TinaSQL123%21Secure@localhost:1433/tina4_test
+      # ODBC (#13) — unixODBC + the PostgreSQL Unicode driver, provisioned below,
+      # against the SAME postgres service (database tina4_odbc, created alongside
+      # tina4_rb/tina4 in "Create extra PostgreSQL databases"). 127.0.0.1 rather
+      # than "localhost" is deliberate: psqlodbc is a libpq client, and libpq only
+      # takes the TCP path when host is a real hostname/IP — an unset/empty host
+      # means a Unix socket, which does not exist for a service container on this
+      # runner. AUTH_DSN deliberately carries NO UID/PWD (they arrive only via
+      # USERNAME/PASSWORD params) so ODBCProviderContractTest::
+      # testCredentialsPassedAsParamsAreHonoured exercises that path for real.
+      TINA4_TEST_ODBC_DSN: 'DRIVER={PostgreSQL Unicode};SERVER=127.0.0.1;PORT=55432;DATABASE=tina4_odbc;UID=tina4;PWD=tina4'
+      TINA4_TEST_ODBC_AUTH_DSN: 'DRIVER={PostgreSQL Unicode};SERVER=127.0.0.1;PORT=55432;DATABASE=tina4_odbc'
+      TINA4_TEST_ODBC_USERNAME: tina4
+      TINA4_TEST_ODBC_PASSWORD: tina4
       # Turn a missing provisioned service into a hard failure (no green skips).
       # NB: native Firebird lives in its OWN job (see `firebird:` below), NOT here —
       # stacking a heavyweight Firebird container onto this already-8-service job
       # destabilised the shared runner. Firebird is excluded from the
-      # REQUIRE_SERVICES keyword set, so its absence here stays a green skip.
+      # REQUIRE_SERVICES keyword set, so its absence here stays a green skip. Only
+      # the ext-interbase SHARED OBJECT is built in this job (below) — no live
+      # server, no TINA4_TEST_FIREBIRD_URL — purely so
+      # DatabaseDriversTest::testFirebirdThrowsWithoutExtension has a real
+      # extension to remove; every URL-gated Firebird test still skips green here.
       TINA4_REQUIRE_SERVICES: '1'
 
     steps:
@@ -201,19 +218,81 @@ jobs:
           php-version: '8.2'
           # pdo_pgsql + pgsql (live PostgreSQL), mysqli + pdo_mysql (live MySQL),
           # pdo_dblib (live MSSQL via FreeTDS), mongodb (queue/session/doc-store),
-          # sockets (RabbitMQ AMQP frames), sqlite3 + pdo_sqlite (default engine).
+          # sockets (RabbitMQ AMQP frames), sqlite3 + pdo_sqlite (default engine),
+          # pdo_odbc (live ODBC via unixODBC, provisioned below — ships prebuilt
+          # as a SHARED extension on this runner image, confirmed against
+          # shivammathur/setup-php's own extension-availability wiki for PHP 8.2 /
+          # ubuntu-24.04, so requesting it here needs no compile step).
           # The shivammathur runner image PRE-BUNDLES sqlsrv/pdo_sqlsrv, so the
           # MSSQL adapter would pick the sqlsrv backend and fail on the absent
           # Microsoft ODBC driver. Disable them (:ext) so the adapter uses the
           # pdo_dblib (FreeTDS) backend the live MSSQL tests rely on.
-          extensions: pdo_pgsql, pgsql, mysqli, pdo_mysql, pdo_dblib, mongodb, sockets, sqlite3, pdo_sqlite, imap, :sqlsrv, :pdo_sqlsrv
+          extensions: pdo_pgsql, pgsql, mysqli, pdo_mysql, pdo_dblib, mongodb, sockets, sqlite3, pdo_sqlite, imap, pdo_odbc, :sqlsrv, :pdo_sqlsrv
+
+      # unixODBC + the PostgreSQL Unicode driver, so ODBCProviderContractTest
+      # exercises a REAL ODBC source (TINA4_TEST_ODBC_DSN above) instead of
+      # skipping green — CI provisioned no ODBC source at all before this. The
+      # driver path is READ from the package's own file list rather than
+      # hardcoded (same discipline as the interbase scan-dir lookups elsewhere in
+      # this file): packages.ubuntu.com confirms
+      # /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so for odbc-postgresql on noble
+      # (24.04), but deriving it from dpkg survives an arch or path change. A
+      # DSN-less `DRIVER={...}` connection string (what ODBCAdapter builds) needs
+      # the driver registered in odbcinst.ini under that exact bracketed name —
+      # no per-DSN odbc.ini entry required.
+      - name: Provision ODBC (unixODBC + PostgreSQL driver)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends unixodbc odbc-postgresql
+          driver_so="$(dpkg -L odbc-postgresql | grep -E 'psqlodbcw\.so$')"
+          [ -n "${driver_so}" ] || {
+            echo "psqlodbcw.so not found in odbc-postgresql's file list"; dpkg -L odbc-postgresql; exit 1; }
+          {
+            echo '[PostgreSQL Unicode]'
+            echo 'Description=PostgreSQL ODBC driver (Unicode)'
+            echo "Driver=${driver_so}"
+          } | sudo tee /etc/odbcinst.ini
+          # Check the file we just wrote directly rather than parse odbcinst's
+          # output — its exact format is not worth depending on when grepping
+          # our own known-good content is unambiguous and just as strong a gate.
+          grep -qx '\[PostgreSQL Unicode\]' /etc/odbcinst.ini || {
+            echo "driver section missing from odbcinst.ini"; cat /etc/odbcinst.ini; exit 1; }
+          odbcinst -q -d
+          php -m | grep -qi '^PDO_ODBC$' || { echo "pdo_odbc failed to load"; php -m; exit 1; }
+          echo "pdo_odbc ready, PostgreSQL Unicode driver registered at ${driver_so}"
+
+      # Native ext-interbase (ibase_*), EXTENSION ONLY — no live Firebird server in
+      # this job (that stays in the firebird: job below; see its comment on why a
+      # heavyweight container alongside 8 other services destabilised the shared
+      # runner). This job needs the shared object genuinely PRESENT so
+      # DatabaseDriversTest::testFirebirdThrowsWithoutExtension can remove it in a
+      # child process and prove the "install ext-interbase" error — a host that
+      # never had the extension makes that negative test prove nothing (see
+      # MissingExtensionCase::assertExtensionReallyAbsent). TINA4_TEST_FIREBIRD_URL
+      # stays UNSET here on purpose, so every URL-gated Firebird test keeps
+      # skipping green, unchanged from before.
+      - name: Build native ext-interbase from source (extension only, no live server)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libfbclient2 firebird-dev
+          git clone --depth 1 https://github.com/FirebirdSQL/php-firebird.git /tmp/php-firebird
+          cd /tmp/php-firebird
+          phpize
+          ./configure --with-firebird
+          make -j"$(nproc)"
+          sudo make install
+          scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
+          echo "extension=interbase.so" | sudo tee "${scan_dir}/99-interbase.ini"
+          php -m | grep -i interbase || { echo "ext-interbase failed to load"; exit 1; }
 
       # The postgres service only creates POSTGRES_DB (tina4_php). The two-database
-      # routing test needs tina4_rb, and the UUID-PK test connects to tina4 — create
-      # both so those provisioned-service tests run instead of erroring.
+      # routing test needs tina4_rb, the UUID-PK test connects to tina4, and
+      # ODBCProviderContractTest needs tina4_odbc (reached over ODBC, not the
+      # native pgsql/pdo_pgsql driver, but it is the same PostgreSQL server) —
+      # create all three so those provisioned-service tests run instead of erroring.
       - name: Create extra PostgreSQL databases
         run: |
-          for db in tina4_rb tina4; do
+          for db in tina4_rb tina4 tina4_odbc; do
             PGPASSWORD=tina4 psql -h localhost -p 55432 -U tina4 -d tina4_php \
               -tc "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 \
               || PGPASSWORD=tina4 psql -h localhost -p 55432 -U tina4 -d tina4_php \
@@ -309,8 +388,11 @@ jobs:
   # container onto that already-8-service runner destabilised the shared box, so
   # Firebird gets its own clean runner with nothing else competing for resources.
   # Only the Firebird-relevant test files run here; every other engine's tests stay
-  # in `test`. pdo_firebird is NOT built (only the native ext), so the pdo legs skip
-  # here — they run on macOS/local dev where pdo_firebird is present.
+  # in `test`. pdo_firebird IS enabled here too (requested from setup-php below,
+  # which ships it prebuilt as a SHARED extension on this runner image — no
+  # compile needed), so the pdo_firebird legs of PdoFirebirdAdapterTest /
+  # PdoFallbackFactoryTest / PdoFallbackParityTest run for real against the live
+  # server instead of skipping "UNVERIFIED".
   firebird:
     runs-on: ubuntu-latest
     env:
@@ -343,7 +425,16 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: sqlite3, pdo_sqlite
+          # pdo_firebird ships PREBUILT as a shared extension on the setup-php
+          # ubuntu-24.04 runner image for PHP 8.2 (confirmed against the project's
+          # own extension-availability wiki — "PDO_Firebird (shared)"), so it is
+          # requested directly here instead of via the apt package a later step
+          # used to try: that package (php8.2-interbase) does not exist — PHP
+          # versions on Ubuntu Actions runners come from the ondrej/php PPA, which
+          # carries NO "interbase" package for any PHP version (Debian/Ubuntu's
+          # OWN php8.3-interbase, the one actually measured on the lab, belongs to
+          # Ubuntu's native PHP 8.3 packaging line, not ondrej's PPA's PHP 8.2).
+          extensions: sqlite3, pdo_sqlite, pdo_firebird
 
       # Firebird 5.0.2 as a plain container (GitHub `services:` cannot wait for
       # Firebird's first-boot DB creation cleanly). FAIL the job if it never
@@ -380,58 +471,29 @@ jobs:
           scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
           echo "extension=interbase.so" | sudo tee "${scan_dir}/99-interbase.ini"
           php -m | grep -i interbase || { echo "ext-interbase failed to load"; exit 1; }
-
-      # pdo_firebird, WITHOUT disturbing the source-built native ext above.
-      #
-      # WHY THIS STEP EXISTS. Three files here - PdoFirebirdAdapterTest,
-      # PdoFallbackFactoryTest and MigrationV3Test's pdo leg - skip with
-      # "pdo_firebird driver not present ... UNVERIFIED" when it is missing. They
-      # were therefore proving NOTHING in the only environment that has a real
-      # Firebird to test against, and those skips were also the single blocker
-      # keeping TINA4_REQUIRE_SERVICES off this job ('firebird' matches inside
-      # 'pdo_firebird', and 'not present'/'unverified' are both gate hints).
-      #
-      # MEASURED on the lab host (Ubuntu 24.04, PHP 8.3.6): the distro package
-      # php8.3-interbase ships BOTH extensions as separate ini files -
-      # 20-interbase.ini and 20-pdo_firebird.ini. So the package is taken purely
-      # for its pdo_firebird.so, and its interbase ini is removed immediately:
-      # the native ext stays the maintained FirebirdSQL fork built above, and
-      # loading interbase twice would warn "module already loaded".
-      #
-      # ALSO MEASURED, because the removal only works if they are independent:
-      # `php -n -d extension=pdo.so -d extension=pdo_firebird.so -m` lists
-      # PDO_Firebird with interbase ABSENT. pdo_firebird needs the PDO core, not
-      # the native ext. (A first probe without pdo.so failed with "undefined
-      # symbol: php_pdo_unregister_driver" - that was the probe's missing
-      # dependency, not a coupling between the two drivers.)
-      #
-      # The verification is the point. If the package name is wrong for this PHP
-      # version, or pdo_firebird does not load, this step FAILS THE JOB with a
-      # named reason - it can never silently downgrade those three files back to
-      # a green skip, which is precisely the failure this whole change removes.
-      - name: Install pdo_firebird (package supplies it; native ext stays the source build)
-        run: |
-          php_ver="$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')"
-          sudo apt-get install -y --no-install-recommends "php${php_ver}-interbase" || {
-            echo "php${php_ver}-interbase is not installable - pdo_firebird cannot be provided this way"; exit 1; }
-          # Keep ONLY the PDO driver from the package; the native ext is ours.
-          # The scan dir is read from PHP itself rather than assumed, exactly as
-          # the interbase build step above does - a hardcoded /etc/php/... glob
-          # is a guess about the runner's layout.
-          scan_dir="$(php -i | awk -F' => ' '/Scan this dir for additional .ini files/ {print $2; exit}')"
-          sudo rm -f "${scan_dir}/20-interbase.ini"
+          # THE VERIFICATION IS THE POINT (this used to be a separate step, back
+          # when pdo_firebird came from an apt package — php${ver}-interbase —
+          # that had to be picked apart from the native ext's own ini file. That
+          # package does not exist for an ondrej/php-PPA-sourced PHP version (see
+          # the setup-php step above), so pdo_firebird is now requested directly
+          # from setup-php as its own independent SHARED extension: there is no
+          # ini to collide with the source-built interbase.so here, but still
+          # assert both are genuinely loaded rather than assume it. Three files -
+          # PdoFirebirdAdapterTest, PdoFallbackFactoryTest, PdoFallbackParityTest -
+          # skip "pdo_firebird driver not present ... UNVERIFIED" when it is
+          # missing, which would silently downgrade them back to a green skip in
+          # the one job with a real Firebird to test against.
           php -m | grep -qi '^PDO_Firebird$' || {
-            echo "pdo_firebird failed to load after installing php${php_ver}-interbase"; php -m; exit 1; }
-          php -m | grep -qi '^interbase$' || {
-            echo "native ext-interbase stopped loading after the package install"; php -m; exit 1; }
-          echo "both drivers present: native interbase (source build) + PDO_Firebird (package)"
+            echo "pdo_firebird (requested from setup-php as a shared extension) failed to load"; php -m; exit 1; }
+          echo "both drivers present: native interbase (source build) + PDO_Firebird (setup-php shared extension)"
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
       # Only the Firebird-relevant files (the native ORM/write/count/visibility
       # behavioural suite + the cross-engine files' Firebird cases). Non-Firebird
-      # engines skip here (no server), and pdo legs skip (native-only build).
+      # engines skip here (no server); the pdo_firebird legs of the three PDO
+      # files below RUN (both drivers are verified loaded in the step above).
       #
       # Each file runs in its OWN phpunit process on purpose. ext-interbase hands
       # every connection with identical (path,user,pass,charset) args the SAME
@@ -440,24 +502,11 @@ jobs:
       # block indefinitely at teardown. A fresh process per file gives each file
       # its own link, so no file can wedge another. A per-file `timeout` FAILS the
       # job (naming the file) rather than hanging the runner for hours.
-      - name: Run Firebird tests (native ext-interbase)
+      - name: Run Firebird tests (native ext-interbase + pdo_firebird)
         run: |
-          # Native ext-interbase tests, plus the pdo_firebird files.
-          #
-          # THIS COMMENT USED TO CLAIM pdo_firebird IS PRESENT because the
-          # setup-php image bundles it, which directly contradicted the comment
-          # on the job itself ("pdo_firebird is NOT built (only the native
-          # ext)"). Read the steps: `extensions:` asks for sqlite3 and pdo_sqlite
-          # only, the source build produces interbase.so, and the single ini
-          # written is 99-interbase.ini. NOTHING in this job loads pdo_firebird,
-          # so the job-level comment is the accurate one and this one was stale.
-          # Whether the base image happens to carry it is NOT asserted either
-          # way, because it cannot be established by reading the file - and it
-          # decides whether three PDO-Firebird files prove anything here. See the
-          # TINA4_REQUIRE_SERVICES note in this job's env: it is the one blocker
-          # keeping the gate off, and the honest fix is to build pdo_firebird
-          # rather than to leave those three skipping in the only environment
-          # with a real Firebird to test against.
+          # Native ext-interbase tests, plus the pdo_firebird files — both
+          # drivers are genuinely loaded (verified in "Build native ext-interbase
+          # from source" above), so none of these skip for a missing driver.
           files="tests/FirebirdCharsetTest.php tests/FirebirdNullParamBindingTest.php \
             tests/FirebirdOrmCountTest.php tests/FirebirdOrmWriteTest.php \
             tests/FirebirdReconnectTest.php tests/FirebirdUrlTest.php \

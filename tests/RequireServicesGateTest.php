@@ -465,16 +465,47 @@ class RequireServicesGateTest extends TestCase
      * Firebird and its two clients are matched, and so are the hint phrases that
      * used to leak. Every string here is a VERBATIM skip reason this suite
      * produced while the gate looked the other way.
+     *
+     * Firebird and PostgreSQL are both CONDITIONAL keywords (armed only when
+     * their coordinates are published — see CONDITIONAL_SERVICE_KEYWORDS), so
+     * this test controls both env vars itself, exactly like
+     * testMatcherArmsFirebirdOnlyWhenItsCoordinatesArePublished above does for
+     * Firebird alone. Without that, the result depended on which CI job
+     * happened to run it: the firebird: job publishes TINA4_TEST_FIREBIRD_URL,
+     * the main test: job deliberately does not (that job builds ext-interbase
+     * for testFirebirdThrowsWithoutExtension but promises no live Firebird
+     * server), so the FIRST assertion here failed there — not because the
+     * matcher was wrong, but because this test asked "was Firebird promised?"
+     * of a run that never promised one. The fix is isolation, the same
+     * principle the sibling test's own docblock states: "the assertion is
+     * about the code and not about the host."
      */
     public function testMatcherAcceptsFirebirdAndThePreviouslyLeakingHints(): void
     {
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('ext-interbase not installed'));
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('Firebird not reachable at localhost:53050'));
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
-            'pdo_firebird driver not present - PDO Firebird fallback UNVERIFIED here.'
-        ));
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
-            'live PostgreSQL not configured (TINA4_TEST_PG_URL)'
-        ));
+        $originalFirebird = getenv('TINA4_TEST_FIREBIRD_URL');
+        $originalPg = getenv('TINA4_TEST_PG_URL');
+        putenv('TINA4_TEST_FIREBIRD_URL=firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb');
+        putenv('TINA4_TEST_PG_URL=postgres://tina4:tina4@127.0.0.1:55432/tina4_php');
+        try {
+            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('ext-interbase not installed'));
+            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('Firebird not reachable at localhost:53050'));
+            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
+                'pdo_firebird driver not present - PDO Firebird fallback UNVERIFIED here.'
+            ));
+            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
+                'live PostgreSQL not configured (TINA4_TEST_PG_URL)'
+            ));
+        } finally {
+            if ($originalFirebird === false) {
+                putenv('TINA4_TEST_FIREBIRD_URL');
+            } else {
+                putenv('TINA4_TEST_FIREBIRD_URL=' . $originalFirebird);
+            }
+            if ($originalPg === false) {
+                putenv('TINA4_TEST_PG_URL');
+            } else {
+                putenv('TINA4_TEST_PG_URL=' . $originalPg);
+            }
+        }
     }
 }
