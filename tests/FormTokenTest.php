@@ -9,6 +9,12 @@ class FormTokenTest extends TestCase
 
     protected function setUp(): void
     {
+        // Auth::resolveSecret() reads getenv() BEFORE $_ENV, so the secret
+        // must go through putenv() too -- otherwise an ambient putenv()'d
+        // TINA4_SECRET left by earlier suite bootstrap/tests would silently
+        // win over this $_ENV-only value in the full suite (though not when
+        // this file runs alone with no such ambient value).
+        putenv('TINA4_SECRET=test-secret-key');
         $_ENV['TINA4_SECRET'] = 'test-secret-key';
         $templateDir = sys_get_temp_dir() . '/tina4-frond-formtoken-test';
         if (!is_dir($templateDir)) {
@@ -19,6 +25,7 @@ class FormTokenTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv('TINA4_SECRET');
         unset($_ENV['TINA4_SECRET']);
     }
 
@@ -239,9 +246,15 @@ class FormTokenTest extends TestCase
         $token = $this->extractToken($output);
         // Should validate with the same secret
         $this->assertNotNull(\Tina4\Auth::validToken($token));
-        // Should NOT validate with a different secret
+        // Should NOT validate with a different secret. Auth::resolveSecret()
+        // reads getenv() before $_ENV, so the mutation must go through
+        // putenv() (matching how Auth::ensureDevSecret() itself sets
+        // TINA4_SECRET) — a $_ENV-only mutation is silently overridden by
+        // whatever getenv() already returns.
+        putenv('TINA4_SECRET=wrong-secret');
         $_ENV['TINA4_SECRET'] = 'wrong-secret';
         $wrongResult = \Tina4\Auth::validToken($token);
+        putenv('TINA4_SECRET=test-secret-key');
         $_ENV['TINA4_SECRET'] = 'test-secret-key';
         $this->assertNull($wrongResult);
     }
