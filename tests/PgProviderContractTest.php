@@ -225,11 +225,16 @@ class PgProviderContractTest extends TestCase
 
     public function testExecuteManyEmptyInputIsAZeroRowNoOp(): void
     {
-        $affected = $this->db->executeMany(
+        // ADR-0044 (DBA-B01): Database::executeMany() now returns a
+        // DatabaseResult (matching insert/update/delete's DatabaseResult
+        // contract), not a raw int -- empty input is a successful no-op that
+        // opens no transaction and touches no adapter.
+        $result = $this->db->executeMany(
             'INSERT INTO ' . self::TABLE . ' (code, qty) VALUES (?, ?)',
             []
         );
-        $this->assertSame(0, $affected, 'empty input is a no-op with a zero affected count');
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $result);
+        $this->assertSame(0, $result->affectedRows, 'empty input is a no-op with a zero affected count');
         $this->assertSame([], $this->rowsOnFreshConnection(), 'empty input must write nothing');
     }
 
