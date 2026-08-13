@@ -96,37 +96,89 @@ class AI
         return sys_get_temp_dir();
     }
 
+    /** HTTP statuses worth retrying — a throttle or a server hiccup, not a real answer. */
+    private const TRANSIENT_HTTP_CODES = [429, 500, 502, 503, 504];
+
+    /** Backoff (seconds) before each retry — short, one entry per retry attempt. */
+    private const FETCH_RETRY_BACKOFF = [1, 2];
+
     /**
      * Fetch a URL's bytes, or null on any failure. Uses curl when available
-     * (clean timeout handling), else file_get_contents. 15s timeout.
+     * (clean timeout handling), else file_get_contents. 15s timeout per attempt.
+     *
+     * raw.githubusercontent.com returns an intermittent 503 under load (a
+     * freshly cut release tag is "cold" on GitHub's CDN until it warms), and
+     * `tina4 ai` makes ~30 fetches per install — a single transient blip must
+     * not abort the whole install. Retries a transient HTTP status
+     * (429/500/502/503/504) or a transport-level failure (connection
+     * refused/reset/timeout — no response at all) with a short backoff
+     * between attempts; a permanent 4xx (404, etc.) is a genuine answer and
+     * is never retried. Mirrors Python's `_fetch_bytes` and Ruby's
+     * `fetch_bytes`/`TRANSIENT_HTTP_CODES`.
      */
     private static function fetchBytes(string $url): ?string
     {
-        if (function_exists('curl_init')) {
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_CONNECTTIMEOUT => 15,
-                CURLOPT_TIMEOUT => 15,
-                CURLOPT_FAILONERROR => true,
-                CURLOPT_USERAGENT => 'tina4-php-ai-installer',
-            ]);
-            $data = curl_exec($ch);
-            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            // curl_close() is a no-op since PHP 8.0 (deprecated in 8.5); the
-            // CurlHandle is freed on GC. Leaving it out keeps 8.5 quiet.
-            if ($data !== false && $code >= 200 && $code < 300) {
-                return $data;
+        $maxAttempts = count(self::FETCH_RETRY_BACKOFF) + 1;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $code = null;
+            $transportFailed = false;
+
+            if (function_exists('curl_init')) {
+                $ch = curl_init($url);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_CONNECTTIMEOUT => 15,
+                    CURLOPT_TIMEOUT => 15,
+                    CURLOPT_FAILONERROR => true,
+                    CURLOPT_USERAGENT => 'tina4-php-ai-installer',
+                ]);
+                $data = curl_exec($ch);
+                $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                // curl_close() is a no-op since PHP 8.0 (deprecated in 8.5); the
+                // CurlHandle is freed on GC. Leaving it out keeps 8.5 quiet.
+                if ($data !== false && $code >= 200 && $code < 300) {
+                    return $data;
+                }
+                $transportFailed = ($code === 0);
+            } else {
+                $context = stream_context_create([
+                    'http' => ['timeout' => 15, 'follow_location' => 1, 'user_agent' => 'tina4-php-ai-installer'],
+                    'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+                ]);
+                $data = @file_get_contents($url, false, $context);
+                if ($data !== false) {
+                    return $data;
+                }
+                $code = self::statusCodeFromResponseHeaders($http_response_header ?? []);
+                $transportFailed = ($code === null);
             }
+
+            $transient = $transportFailed || in_array($code, self::TRANSIENT_HTTP_CODES, true);
+            $hasMoreAttempts = $attempt <= count(self::FETCH_RETRY_BACKOFF);
+            if (!$transient || !$hasMoreAttempts) {
+                return null;
+            }
+            sleep(self::FETCH_RETRY_BACKOFF[$attempt - 1]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse the numeric status code from the `$http_response_header` PHP
+     * populates after a stream-wrapper `file_get_contents()` call, or null
+     * when it is absent/unparseable (a transport failure — no response).
+     *
+     * @param string[] $headers
+     */
+    private static function statusCodeFromResponseHeaders(array $headers): ?int
+    {
+        if (!isset($headers[0]) || !preg_match('/^HTTP\/\S+\s+(\d{3})/', $headers[0], $m)) {
             return null;
         }
-        $context = stream_context_create([
-            'http' => ['timeout' => 15, 'follow_location' => 1, 'user_agent' => 'tina4-php-ai-installer'],
-            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
-        ]);
-        $data = @file_get_contents($url, false, $context);
-        return $data === false ? null : $data;
+        return (int)$m[1];
     }
 
     /**
