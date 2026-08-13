@@ -100,10 +100,19 @@ class CliTestExitCodeTest extends TestCase
     }
 
     /**
-     * NEGATIVE case — a failing smoke test must propagate a non-zero code.
+     * NEGATIVE case — a failing smoke test must yield a non-zero exit code.
      * This is the case that fails against the pre-fix CLI (which exited 0).
-     * We use exit(3) to prove the ACTUAL code is propagated, not just "some
-     * non-zero".
+     *
+     * Superseded by feature 132 (inline testing, ADR-backed
+     * inlinetesting_contract.json, ratified 2026-08-11, INLINE-DEC-01): `test`
+     * now runs TWO stages — inline @tests discovery, then the external smoke/
+     * PHPUnit runner — and FOLDS both outcomes into one process exit code: 0
+     * when everything passed, non-zero otherwise. The exact numeric code a
+     * single external runner exited with is no longer verbatim-propagated
+     * (there is no longer one sub-process whose code could be), so exit(3)
+     * here proves only that a specific non-zero code still yields SOME
+     * non-zero code, matching "tina4 test exits non zero when the inline test
+     * fails" in the shared fixture.
      */
     public function testCliPropagatesNonZeroWhenTestsFail(): void
     {
@@ -111,7 +120,7 @@ class CliTestExitCodeTest extends TestCase
 
         [$exitCode, $output] = $this->runCli();
 
-        $this->assertSame(3, $exitCode, 'CLI must propagate the runner exit code on failure; output was: ' . $output);
+        $this->assertNotSame(0, $exitCode, 'CLI must exit non-zero when the runner fails; output was: ' . $output);
     }
 
     /**
@@ -129,6 +138,12 @@ class CliTestExitCodeTest extends TestCase
     /**
      * A missing test runner is itself a failure: a CI gate must exit non-zero
      * when it cannot run the tests, never silently pass.
+     *
+     * Message text updated for feature 132 (inline testing, 2026-08-12,
+     * commit e797e9b1): the old single-stage "No test runner found. Install
+     * phpunit or create tests/test_v3_smoke.php" became "No tests found..."
+     * once the CLI also checks for inline @tests before falling through to
+     * the external smoke/PHPUnit runners.
      */
     public function testCliExitsNonZeroWhenNoRunnerFound(): void
     {
@@ -136,7 +151,7 @@ class CliTestExitCodeTest extends TestCase
         [$exitCode, $output] = $this->runCli();
 
         $this->assertNotSame(0, $exitCode, 'CLI must exit non-zero when no test runner is found; output was: ' . $output);
-        $this->assertStringContainsString('No test runner found', $output);
+        $this->assertStringContainsString('No tests found', $output);
     }
 
     /**
