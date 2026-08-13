@@ -145,8 +145,10 @@ class Parity31099Test extends TestCase
 
         $returned = $app->background($cb, 5.0);
 
-        // background() returns $this for chaining
-        $this->assertSame($app, $returned);
+        // Breaking change (3.13.99): background() no longer returns $this for
+        // chaining -- it returns a \Tina4\BackgroundTask stop-handle (split a
+        // chained ->background(a)->background(b) into two calls).
+        $this->assertInstanceOf(\Tina4\BackgroundTask::class, $returned);
 
         // Verify callback is stored in the private tickCallbacks array
         $ref = new \ReflectionProperty(App::class, 'tickCallbacks');

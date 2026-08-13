@@ -4,8 +4,8 @@
  * Tina4\Docs — Live API RAG test corpus.
  *
  * Mirrors tina4-python/tests/test_docs.py. Same test names, same
- * assertions, different language. Both files live RED until the
- * corresponding `Docs` module is implemented in each framework.
+ * assertions, different language. `Docs` is implemented in Tina4/Docs.php;
+ * this suite is green against the real module, not a stub.
  *
  * Spec: plan/v3/22-LIVE-API-RAG.md
  */
