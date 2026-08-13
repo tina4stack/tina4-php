@@ -1134,15 +1134,17 @@ class DevAdmin
         // proxy). status reports whether TINA4_MCP_TOKEN is set + its last 4
         // chars; token upserts it (empty clears).
 
-        // API: Grounding status — {configured, last4, url}.
+        // API: Grounding status — {configured, source, last4, url}.
         Router::get('/__dev/api/grounding/status', function (Request $request, Response $response) {
             $token = self::devAdminReadEnvVar('TINA4_MCP_TOKEN');
             $url = self::devAdminReadEnvVar('TINA4_MCP_URL');
             if ($url === '') {
                 $url = 'https://mcp.tina4.com';
             }
+            $source = self::groundingSourceFor($token);
             return $response->json([
                 'configured' => $token !== '',
+                'source' => $source,
                 'last4' => $token !== '' ? substr($token, -4) : '',
                 'url' => $url,
             ]);
@@ -2770,6 +2772,18 @@ class DevAdmin
             return 'not configured';
         }
         return \Tina4\DatabaseUrl::redact($url);
+    }
+
+    /**
+     * Which credential the coder uses for mcp.tina4.com grounding, for the
+     * dev-admin panel: the developer's own token → "personal"; otherwise the
+     * shared FREE-TOKEN trial the Rust agent falls back to → "free" (which
+     * drives the "register for your own" nudge). Pure — unit-testable without
+     * booting the router. (Disabling the free rung is an agent-side concern.)
+     */
+    public static function groundingSourceFor(string $token): string
+    {
+        return $token !== '' ? 'personal' : 'free';
     }
 
     /**
