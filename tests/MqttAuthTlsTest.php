@@ -331,7 +331,9 @@ class MqttAuthTlsTest extends TestCase
         $prevDebug = getenv('TINA4_DEBUG');
         putenv('TINA4_DEBUG=true');
         Log::reset();
-        Log::configure(logDir: $tmpDir, development: true);
+        // logger_contract rewrite (2026-08-13): the `development` param is
+        // gone -- request both sinks explicitly.
+        Log::configure(logDir: $tmpDir, output: 'both');
         try {
             $insecure = new Mqtt(url: $this->tlsUrl, clientId: 'tina4-phpunit-tls-insecure', tlsVerify: false, timeout: 5);
             $this->assertTrue($insecure->connected());

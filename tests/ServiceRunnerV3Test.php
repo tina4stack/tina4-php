@@ -250,7 +250,10 @@ class ServiceRunnerV3Test extends TestCase
         try {
             Log::reset();
             // INFO floor would drop debug(); set DEBUG so every level writes.
-            Log::configure(logDir: $logDir, development: true, minLevel: 'DEBUG');
+            // logger_contract rewrite (2026-08-13): configure() takes `level`
+            // (not the retired `minLevel`) and the `development` param is gone
+            // -- request both sinks explicitly instead of relying on TINA4_DEBUG.
+            Log::configure(logDir: $logDir, level: 'DEBUG', output: 'both');
 
             $logger = ServiceRunner::createContext('emit_test')->logger;
             $marker = 'ctxlog_' . uniqid();
