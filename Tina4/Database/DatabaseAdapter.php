@@ -22,7 +22,22 @@ namespace Tina4\Database;
 interface DatabaseAdapter
 {
     /**
+     * Connect to the database (ADR-0044 canonical lifecycle name).
+     *
+     * PHP adapters resolve their connection target from the constructor
+     * (config-injected), so this takes no arguments — unlike the connect
+     * (connectionString, username, password) shape in Python/Ruby/Node.
+     * `open()` is the pre-3.14 spelling; ConnectAliasTrait provides `connect`
+     * as a thin forwarding alias for every built-in adapter.
+     */
+    public function connect(): void;
+
+    /**
      * Open the database connection.
+     *
+     * @deprecated Pre-3.14 spelling of connect(). Kept as a required member
+     *   for backward compatibility; a temporary alias per ADR-0044, to be
+     *   removed or explicitly deprecated before the 3.14 stability boundary.
      */
     public function open(): void;
 
@@ -32,13 +47,20 @@ interface DatabaseAdapter
     public function close(): void;
 
     /**
-     * Execute a query with parameter binding and return results.
-     *
-     * @param string $sql SQL query
-     * @param array<mixed> $params Bound parameters
-     * @return array<int, array<string, mixed>> Array of associative arrays
+     * Return the canonical, credential-free engine name (e.g. "sqlite",
+     * "postgres", "mysql") — what the translator and DDL builders dispatch
+     * on. ADR-0044 required adapter capability.
      */
-    public function query(string $sql, array $params = []): array;
+    public function getDatabaseType(): string;
+
+    /**
+     * Get the current autocommit setting, or set it. A native boolean,
+     * readable AND writable. ADR-0044 required adapter capability.
+     *
+     * @param bool|null $on Null reads without changing anything.
+     * @return bool The setting in force after the call.
+     */
+    public function autocommit(?bool $on = null): bool;
 
     /**
      * Fetch results with pagination.
@@ -72,54 +94,20 @@ interface DatabaseAdapter
      */
     public function execute(string $sql, array $params = []): bool|DatabaseResult;
 
-    /**
-     * Build and execute an INSERT statement.
-     * Maps to Python: insert(table, data)
-     *
-     * Accepts a single associative array (one row) or a list of associative
-     * arrays (multiple rows — calls executeMany internally).
-     *
-     * @param string $table Table name
-     * @param array<string, mixed>|array<int, array<string, mixed>> $data Column => value pairs, or list of rows
-     * @return bool|DatabaseResult True on success at the adapter level; the Database wrapper returns a DatabaseResult (lastId + affectedRows)
-     */
-    public function insert(string $table, array $data): bool|DatabaseResult;
+    // insert/update/delete (ADR-0044 NOT_REQUIRED_ON_ADAPTER: engine-neutral
+    // composition) are deliberately absent from the DECLARED interface —
+    // DBA-S03. Every built-in SQL adapter still HAS working insert/update/
+    // delete methods via CrudSqlTrait, just not as part of the required
+    // contract; MongoDB keeps its own (it does not build SQL at all).
 
     /**
-     * Build and execute an UPDATE statement.
-     * Maps to Python: update(table, data)
-     *
-     * @param string $table Table name
-     * @param array<string, mixed> $data Column => value pairs
-     * @param string $where WHERE clause (without "WHERE")
-     * @param array<mixed> $whereParams Bound parameters for WHERE clause
-     * @return bool|DatabaseResult True on success at the adapter level; the Database wrapper returns a DatabaseResult (affectedRows)
-     */
-    public function update(string $table, array $data, string $where = '', array $whereParams = []): bool|DatabaseResult;
-
-    /**
-     * Build and execute a DELETE statement.
-     * Maps to Python: delete(table, filter)
-     *
-     * Accepts:
-     *   - string $filter: SQL WHERE clause (e.g. "age < 18")
-     *   - array $filter: key-value pairs to build WHERE (e.g. ["id" => 5])
-     *   - array of arrays: delete multiple rows by key match
-     *
-     * @param string $table Table name
-     * @param string|array $filter WHERE clause string, or assoc array, or list of assoc arrays
-     * @param array<mixed> $whereParams Bound parameters (only for string filter)
-     * @return bool|DatabaseResult True on success at the adapter level; the Database wrapper returns a DatabaseResult (affectedRows)
-     */
-    public function delete(string $table, string|array $filter = '', array $whereParams = []): bool|DatabaseResult;
-
-    /**
-     * Execute a single SQL statement with multiple parameter sets (batch).
-     * Maps to Python: execute_many(sql, params_list)
+     * Execute a single SQL statement with multiple parameter sets (batch) as
+     * ONE aggregate result. Maps to Python: execute_many(sql, params_list)
      *
      * @param string $sql SQL statement with placeholders
      * @param array<int, array<mixed>> $paramsList List of parameter arrays
-     * @return int Total affected rows
+     * @return int|DatabaseResult Total affected rows (Database::executeMany
+     *   normalises whichever shape an adapter returns into a DatabaseResult)
      */
     public function executeMany(string $sql, array $paramsList = []): int|DatabaseResult;
 
@@ -145,11 +133,12 @@ interface DatabaseAdapter
      */
     public function getTables(): array;
 
-    /**
-     * Get the last inserted auto-increment ID.
-     * Maps to Python: last_insert_id() (via driver)
-     */
-    public function lastInsertId(): int|string;
+    // lastInsertId/error (ADR-0044 NOT_REQUIRED_ON_ADAPTER) left the required
+    // interface — generated ids come from execute()/executeMany()'s own
+    // DatabaseResult->lastId, and a failure throws rather than being read
+    // back via a second call. Every built-in adapter still implements both as
+    // extras; SQL adapters' lastInsertId() feeds Database::executeMany()'s
+    // own last-id read, for example.
 
     /**
      * Begin a transaction.
@@ -166,9 +155,4 @@ interface DatabaseAdapter
      * Rollback the current transaction.
      */
     public function rollback(): void;
-
-    /**
-     * Get the last error message.
-     */
-    public function error(): ?string;
 }

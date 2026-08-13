@@ -24,6 +24,10 @@ class ODBCAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     // Shared SQL normalisation: the row-cap detectors (scrub + anchor) and the

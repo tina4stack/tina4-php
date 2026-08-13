@@ -35,6 +35,10 @@ namespace Tina4\Database;
 class MongoDBAdapter implements DatabaseAdapter
 {
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     /**

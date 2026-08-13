@@ -24,6 +24,10 @@ class FirebirdAdapter implements DatabaseAdapter
     use CrudSqlTrait;
 
     use AutocommitTrait;
+
+    use ConnectAliasTrait;
+
+    use SupportsAtomicBatchTrait;
     use ConnectTimeoutTrait;
 
     /**

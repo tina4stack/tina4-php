@@ -320,6 +320,11 @@ class CachedDatabase implements DatabaseAdapter
 
     // ── DatabaseAdapter interface ─────────────────────────────
 
+    public function connect(): void
+    {
+        $this->adapter->connect();
+    }
+
     public function open(): void
     {
         $this->adapter->open();
@@ -328,6 +333,21 @@ class CachedDatabase implements DatabaseAdapter
     public function close(): void
     {
         $this->adapter->close();
+    }
+
+    public function getDatabaseType(): string
+    {
+        return $this->adapter->getDatabaseType();
+    }
+
+    public function autocommit(?bool $on = null): bool
+    {
+        return $this->adapter->autocommit($on);
+    }
+
+    public function supportsAtomicBatch(?bool $set = null): bool
+    {
+        return $this->adapter->supportsAtomicBatch($set);
     }
 
     public function query(string $sql, array $params = []): array

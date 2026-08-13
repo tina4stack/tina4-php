@@ -647,7 +647,9 @@ class Database implements DatabaseAdapter
 
         // executeMany() pins one adapter, opens a transaction, runs every row,
         // commits, and RE-RAISES (rolling back) on the first failed row.
-        $count = $this->executeMany($sql, $paramsList);
+        // Returns the shared aggregate DatabaseResult (ADR-0044); affectedRows
+        // is the total row count.
+        $count = $this->executeMany($sql, $paramsList)->affectedRows;
 
         // After a successful batch the pin is released; getLastId() reads from
         // the (now committed) connection's last insert id where the engine
@@ -803,9 +805,27 @@ class Database implements DatabaseAdapter
         if (!array_key_exists($table, $this->pkCache)) {
             try {
                 $columns = $this->getColumns($table);
+                $pkColumns = array_values(array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey'])));
+                // ADR-0044 amendment: sort by primaryKeyPosition so a composite
+                // PRIMARY KEY (b, a) returns ["b", "a"] (declared key order), not
+                // table-column order. A column with no reported position sorts last.
+                usort($pkColumns, static function (array $a, array $b): int {
+                    $posA = $a['primaryKeyPosition'] ?? null;
+                    $posB = $b['primaryKeyPosition'] ?? null;
+                    if ($posA === $posB) {
+                        return 0;
+                    }
+                    if ($posA === null) {
+                        return 1;
+                    }
+                    if ($posB === null) {
+                        return -1;
+                    }
+                    return $posA <=> $posB;
+                });
                 $this->pkCache[$table] = array_values(array_map(
                     static fn(array $c): string => (string)$c['name'],
-                    array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey']))
+                    $pkColumns
                 ));
             } catch (\Throwable) {
                 $this->pkCache[$table] = [];
@@ -892,6 +912,31 @@ class Database implements DatabaseAdapter
     public function open(): void
     {
         // Connections are opened in the constructor — this satisfies the interface.
+    }
+
+    /**
+     * Connect (ADR-0044 canonical name; no-op for the same reason as open()
+     * above — connections are opened lazily in the constructor).
+     */
+    public function connect(): void
+    {
+        // Connections are opened in the constructor — this satisfies the interface.
+    }
+
+    /**
+     * The canonical, credential-free engine name of the current adapter.
+     */
+    public function getDatabaseType(): string
+    {
+        return $this->getNextAdapter()->getDatabaseType();
+    }
+
+    /**
+     * Get the current autocommit setting, or set it on the active adapter.
+     */
+    public function autocommit(?bool $on = null): bool
+    {
+        return $this->getNextAdapter()->autocommit($on);
     }
 
     public function close(): void
@@ -1577,40 +1622,49 @@ class Database implements DatabaseAdapter
      * @return array<int, bool> Array of execute() results
      * @throws \Exception If any execution fails (transaction is rolled back)
      */
-    public function executeMany(string $sql, array $paramsList = []): int
+    public function executeMany(string $sql, array $paramsList = []): DatabaseResult
     {
-        $count = 0;
-        // ONE round-trip per CHUNK instead of one per ROW. Looping execute()
-        // here pays a full network round-trip for every row: 500 rows took
-        // 9848ms on PostgreSQL against 15.8ms as a single multi-row VALUES
-        // (625x), MySQL 216x, MSSQL 121x. buildBatchInserts() returns an empty
-        // array for anything it cannot collapse safely — RETURNING, upserts,
-        // non-INSERT statements, ragged rows, Firebird — and the row-at-a-time
-        // loop below then runs unchanged.
-        $engine = $this->getNextAdapter()->getDatabaseType();
-        $batched = \Tina4\SQLTranslator::buildBatchInserts($sql, $paramsList, $engine);
+        // ADR-0044 (DBA-B01): empty input is a successful no-op — it opens no
+        // transaction, calls no adapter, and performs no write.
+        if ($paramsList === []) {
+            return new DatabaseResult([], affectedRows: 0, lastId: null);
+        }
 
+        // ADR-0044 (DBA-D02): the facade delegates to the adapter's OWN
+        // executeMany() exactly ONCE — it does not loop execute() itself.
+        // Native batching (one multi-row VALUES round-trip instead of one per
+        // row: 500 rows measured 9848ms on PostgreSQL row-at-a-time against
+        // 15.8ms batched — 625x, MySQL 216x, MSSQL 121x) is the ADAPTER's job.
         $this->startTransaction();
+        $adapter = $this->getNextAdapter(); // now returns the just-pinned adapter
         try {
-            if ($batched !== []) {
-                foreach ($batched as [$chunkSql, $chunkParams]) {
-                    $this->execute($chunkSql, $chunkParams);
-                }
-                // The collapse must be invisible: the count is the total ROW
-                // count, never the number of statements run.
-                $count = count($paramsList);
-            } else {
-                foreach ($paramsList as $params) {
-                    $this->execute($sql, $params);
-                    $count++;
-                }
+            if (!$adapter->supportsAtomicBatch() && count($paramsList) > 1) {
+                throw new UnsupportedAtomicBatchException(
+                    "provider '{$adapter->getDatabaseType()}' cannot guarantee an atomic "
+                    . 'batch write on this deployment (required deployment capability: '
+                    . 'a transaction-capable configuration) — rejected before the first '
+                    . 'write rather than risking partial durability'
+                );
             }
+            $raw = $adapter->executeMany($sql, $paramsList);
             $this->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->rollback();
+            $this->lastError = $e->getMessage();
             throw $e;
         }
-        return $count;
+
+        // Normalise whatever the adapter returned (a bare int today, or a
+        // DatabaseResult) into the shared aggregate result. affectedRows is
+        // the total ROW count — chunking/native batching must stay invisible.
+        $affected = $raw instanceof DatabaseResult ? $raw->affectedRows : (int)$raw;
+        $lastId = null;
+        try {
+            $lastId = $adapter->lastInsertId();
+        } catch (\Throwable) {
+            // Not every adapter can report one; last_id stays null.
+        }
+        return new DatabaseResult([], affectedRows: $affected, lastId: $lastId ?: null);
     }
 
     /**
