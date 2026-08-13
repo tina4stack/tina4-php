@@ -807,6 +807,61 @@ class Response
     }
 
     /**
+     * Render each cookie as a Set-Cookie VALUE string ("name=value; Path=...;
+     * ..." — no "Set-Cookie:" prefix, no line terminator), one entry per
+     * cookie, in the order cookie() was called.
+     *
+     * The ONE shared builder: the raw-socket server (Server::cookieHeaderLines(),
+     * which wraps each value in "Set-Cookie: ...\r\n") and the in-process
+     * TestClient (TestResponse::getList('set-cookie')) both render from this,
+     * so two cookies set on the same response come out byte-identical whether
+     * the request went over a real socket or through TestClient (feature 131,
+     * TC-DEC-02 — cookies live in $this->cookies, separate from $this->headers,
+     * precisely so more than one can survive; this is where they are turned
+     * back into wire-shaped strings for a caller that needs them).
+     *
+     * @return string[] Zero or more rendered cookie value strings.
+     */
+    public function cookieHeaderLines(): array
+    {
+        $lines = [];
+        foreach ($this->cookies as $name => $opts) {
+            $cookie = urlencode($name) . '=' . urlencode($opts['value']);
+            if (!empty($opts['expires'])) {
+                $cookie .= '; Expires=' . gmdate('D, d M Y H:i:s T', $opts['expires']);
+            }
+            $cookie .= '; Path=' . ($opts['path'] ?? '/');
+            if (!empty($opts['domain'])) {
+                $cookie .= '; Domain=' . $opts['domain'];
+            }
+            if (!empty($opts['secure'])) {
+                $cookie .= '; Secure';
+            }
+            if (!empty($opts['httponly'])) {
+                $cookie .= '; HttpOnly';
+            }
+            if (!empty($opts['samesite'])) {
+                $cookie .= '; SameSite=' . $opts['samesite'];
+            }
+            $lines[] = $cookie;
+        }
+        return $lines;
+    }
+
+    /**
+     * Whether this Response was built for testing (TestClient) — no real
+     * transport will ever call send() on it. Real header()/setcookie() calls
+     * are pointless (nothing reads them) or actively wrong (CLI headers_sent()
+     * never flips true the way a live SAPI request's does, so a check gated on
+     * it silently picks the wrong branch for a Response nobody will send) — see
+     * Router::emitSessionCookie(), the case this was added for (feature 131).
+     */
+    public function isTesting(): bool
+    {
+        return $this->testing;
+    }
+
+    /**
      * Check if the response has been sent.
      */
     public function isSent(): bool

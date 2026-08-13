@@ -678,8 +678,23 @@ class Router
         // renamed cookie was written but never read back, so the session silently
         // never resumed. $_COOKIE is keyed on the exact cookie name, so this is an
         // exact-name match (a renamed "tina4_session_foo" can never collide).
+        //
+        // $request->cookies FIRST (feature 131, TC-DEC-01 parity fix):
+        // $_COOKIE is a raw PHP superglobal that only a real HTTP SAPI
+        // (Apache/FPM/`php -S`) ever populates by parsing the actual `Cookie:`
+        // header itself receives — a caller that builds $request by hand
+        // (TestClient, over a CLI process with no such SAPI) can set
+        // $request->cookies (Request::create() parses it from the SAME `Cookie`
+        // header it was given) but can never make $_COOKIE agree. Reading
+        // $_COOKIE alone meant a session-token login-then-authenticated-request
+        // flow was structurally unreachable through TestClient: a login route
+        // could set request->session, but the follow-up request replaying that
+        // cookie could never resume it. For a real SAPI request the two sources
+        // already agree (both parse the identical incoming header), so this is
+        // additive there; $_COOKIE stays as the fallback for any caller that
+        // never threads a Cookie header onto $request at all.
         $sessionCookieName = Session::cookieName();
-        $sessionCookie = $_COOKIE[$sessionCookieName] ?? null;
+        $sessionCookie = $request->cookies[$sessionCookieName] ?? $_COOKIE[$sessionCookieName] ?? null;
         // LOG LOUD, THEN DEGRADE (ADR-0021). Session's own read/write policy
         // already logs and degrades, but CONSTRUCTION sits outside it: a
         // refused TINA4_SESSION_BACKEND throws from the constructor, and a
@@ -1279,10 +1294,30 @@ class Router
                 || strcasecmp($sameSite, 'None') === 0
                 || Request::isSecureScheme();
 
-            if (headers_sent()) {
+            if (headers_sent() || $result->isTesting()) {
                 // Built-in server mode: headers are managed via the Response object,
                 // so setcookie() would trigger a fatal error. Build the Set-Cookie
                 // header manually and attach it to the Response instead.
+                //
+                // $result->isTesting() (feature 131, TC-DEC-02 fix) catches a
+                // case headers_sent() alone never could: a CLI process
+                // (TestClient, PHPUnit) that will never send real headers at
+                // all, so headers_sent() stays false for the whole request.
+                // Before this, the ELSE branch below called PHP's native
+                // setcookie() into the void -- no real SAPI ever reads it
+                // back, so a TestClient-driven login route set
+                // request->session, but the session cookie never reached
+                // TestResponse, making a login-then-authenticated-request
+                // test structurally impossible to write. Scoped to
+                // TestClient::request(), which now constructs its Response
+                // with testing: true, for exactly this reason -- it does not
+                // touch Tina4\Server or App::handle(), whose Response is
+                // never testing (a separate, PRE-EXISTING gap was found and
+                // reported while diagnosing this: Tina4\Server ALSO never
+                // triggers headers_sent(), since a raw socket engages no real
+                // PHP SAPI header-sending mechanism, so a first-time session
+                // cookie is silently lost there too -- out of scope for this
+                // fix, tracked separately).
                 $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
                 $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
                 if ($secure) {

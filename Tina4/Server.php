@@ -1524,31 +1524,17 @@ class Server
      * Render the Set-Cookie header lines for a response.
      *
      * setcookie() writes into the SAPI header list, which is never sent on a
-     * raw socket, so the socket server serialises $response->cookie() itself.
+     * raw socket, so the socket server serialises $response->cookie() itself
+     * — via the one shared value-builder, Response::cookieHeaderLines(), so a
+     * cookie set twice renders identically here and through TestClient
+     * (feature 131, TC-DEC-02).
      *
      * @return string Zero or more "Set-Cookie: ...\r\n" lines.
      */
     private static function cookieHeaderLines(Response $response): string
     {
         $lines = '';
-        foreach ($response->getCookies() as $name => $opts) {
-            $cookie = urlencode($name) . '=' . urlencode($opts['value']);
-            if (!empty($opts['expires'])) {
-                $cookie .= '; Expires=' . gmdate('D, d M Y H:i:s T', $opts['expires']);
-            }
-            $cookie .= '; Path=' . ($opts['path'] ?? '/');
-            if (!empty($opts['domain'])) {
-                $cookie .= '; Domain=' . $opts['domain'];
-            }
-            if (!empty($opts['secure'])) {
-                $cookie .= '; Secure';
-            }
-            if (!empty($opts['httponly'])) {
-                $cookie .= '; HttpOnly';
-            }
-            if (!empty($opts['samesite'])) {
-                $cookie .= '; SameSite=' . $opts['samesite'];
-            }
+        foreach ($response->cookieHeaderLines() as $cookie) {
             $lines .= "Set-Cookie: {$cookie}\r\n";
         }
         return $lines;
