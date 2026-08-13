@@ -530,34 +530,34 @@ function tina4DelegateToClient(string $command, array $args): int
 }
 
 /**
- * Resolve the framework version WITHOUT booting the app or loading heavy classes.
+ * Resolve the framework version WITHOUT booting the app (no config resolution,
+ * no DB connection, no App::start() side effects).
  *
- * tina4: deliberately mirrors \Tina4\App::resolveVersion() (composer.json ->
- * installed.json) rather than calling it, so `commands` stays boot-free — the
- * tina4 Rust client calls it on every `tina4 --help`, in any directory. Both read
- * the same package metadata, so the reported version matches the running app's.
+ * VERSION-DEC-01 (feature 130, single-resolver convergence): this used to
+ * mirror a since-deleted \Tina4\App::resolveVersion() by re-reading
+ * composer.json's `version` key (this repo's composer.json has none --
+ * Packagist derives the version from git tags) and vendor/composer/installed.json
+ * (no self-entry, because in THIS repo Tina4 IS the project, not a vendored
+ * dependency). Both paths missed, so a plain git checkout always fell to the
+ * '0.0.0' floor -- while the app itself reported the real \Tina4\App::$VERSION,
+ * and the MCP serverInfo reported yet a THIRD value (its constructor default
+ * '1.0.0'). Three sources, three answers, one running framework.
+ *
+ * Now there is ONE source: \Tina4\App::$VERSION (the declared constant every
+ * other surface -- health, banner, dashboard, MCP serverInfo -- already reads).
+ * Referencing it only autoloads the App class DEFINITION (a `class App { ... }`
+ * with no top-level side effects) -- it does not call App::start(), so this
+ * stays exactly as boot-free as the composer-reading version was. The
+ * autoloader is already required at the top of this file before any command
+ * dispatches, so the class is always reachable here.
  */
-function tina4FrameworkVersion(string $frameworkRoot): string
+function tina4FrameworkVersion(): string
 {
-    $composer = $frameworkRoot . '/composer.json';
-    if (is_file($composer)) {
-        $data = json_decode((string)file_get_contents($composer), true);
-        if (!empty($data['version'])) {
-            return (string)$data['version'];
-        }
+    if (class_exists('\Tina4\App')) {
+        return \Tina4\App::$VERSION;
     }
-    // Packagist/git installs carry the version in composer's installed.json instead.
-    foreach ([$frameworkRoot . '/../../composer/installed.json',
-              $frameworkRoot . '/vendor/composer/installed.json'] as $installed) {
-        if (is_file($installed)) {
-            $data = json_decode((string)file_get_contents($installed), true);
-            foreach ((array)($data['packages'] ?? $data) as $pkg) {
-                if (($pkg['name'] ?? '') === 'tina4stack/tina4php') {
-                    return (string)($pkg['version'] ?? '0.0.0');
-                }
-            }
-        }
-    }
+    // Only reachable when no composer autoloader was found at all (see the
+    // top of this file) -- in that state the rest of the CLI is unusable too.
     return '0.0.0';
 }
 
@@ -1605,11 +1605,14 @@ DOCKERFILE;
     // COMMANDS — Self-describing command surface (for the tina4 client)
     // ────────────────────────────────────────────
     // CHEAP + side-effect-free by contract: prints only the static registry + the
-    // resolved version. It never bootstraps the app, opens a DB, runs migrations,
-    // or autoloads framework/app classes — the tina4 Rust client calls it on every
-    // `tina4 --help`, in any directory, so it stays instant and safe to run anywhere.
+    // resolved version. It never bootstraps the app, opens a DB, or runs
+    // migrations — the tina4 Rust client calls it on every `tina4 --help`, in
+    // any directory, so it stays instant and safe to run anywhere.
+    // tina4FrameworkVersion() DOES autoload one framework class (\Tina4\App,
+    // for its single-source $VERSION constant, VERSION-DEC-01) — that is only
+    // a class DEFINITION with no top-level side effects, never App::start().
     case 'commands':
-        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion((string)$frameworkRoot), $TINA4_DELEGATED);
+        $manifest = tina4CommandsManifest($TINA4_COMMANDS, tina4FrameworkVersion(), $TINA4_DELEGATED);
         if (in_array('--json', $args, true)) {
             echo json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
         } else {

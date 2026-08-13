@@ -688,15 +688,17 @@ class Api
     }
 
     /**
-     * Build the base request headers (user headers, then Authorization, then the
-     * accumulated Cookie header when the jar is enabled). Content-Type is added
+     * Build the base request headers: a default `Tina4/<version>` User-Agent
+     * first (VERSION-DEC-03), then user headers (which override it if a
+     * caller set their own 'User-Agent'), then Authorization, then the
+     * accumulated Cookie header when the jar is enabled. Content-Type is added
      * by the body-serialization step, not here.
      *
      * @return array<string,string>
      */
     private function baseHeaders(): array
     {
-        $headers = $this->headers;
+        $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->headers);
         if ($this->authHeader !== '') {
             $headers['Authorization'] = $this->authHeader;
         }
