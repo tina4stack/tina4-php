@@ -31,6 +31,12 @@ class FrondStaticFacadeTest extends TestCase
 
     /* ───────── Static (class-level) registration ─────────── */
 
+    public function testClassRegistrationIsProcessGlobal(): void
+    {
+        Frond::addFilter('class_filter', fn($value) => 'class:' . $value);
+        $this->assertSame('class:value', (new Frond())->renderString('{{ "value" | class_filter }}'));
+    }
+
     public function testStaticAddFilterRegistersAtClassLevel(): void
     {
         Frond::addFilter('money', fn($v) => number_format((float)$v, 2));
@@ -86,37 +92,33 @@ class FrondStaticFacadeTest extends TestCase
         $this->assertSame('10', $out);
     }
 
-    public function testInstanceAddFilterAlsoPopulatesClassRegistry(): void
+    public function testInstanceFilterRegistrationIsInstanceLocal(): void
     {
-        // Instance registration should ALSO update the class registry so
-        // every subsequent ``new Frond()`` inherits the filter — this is
-        // the Python ``_ClassOrInstanceMethod`` semantics (instance call
-        // updates both the class state and the local instance state).
         $first = new Frond();
         $first->addFilter('shout', fn($v) => strtoupper((string)$v) . '!');
 
         $second = new Frond();
-        $this->assertArrayHasKey('shout', $second->getFilters());
-        $this->assertSame('HELLO!', $second->renderString('{{ "hello" | shout }}'));
+        $this->assertArrayNotHasKey('shout', $second->getFilters());
+        $this->assertSame('hello', $second->renderString('{{ "hello" | shout }}'));
     }
 
-    public function testInstanceAddGlobalAlsoPopulatesClassRegistry(): void
+    public function testInstanceGlobalRegistrationIsInstanceLocal(): void
     {
         $first = new Frond();
         $first->addGlobal('SITE', 'Tina4');
 
         $second = new Frond();
-        $this->assertSame('Tina4', $second->renderString('{{ SITE }}'));
+        $this->assertSame('', $second->renderString('{{ SITE }}'));
     }
 
-    public function testInstanceAddTestAlsoPopulatesClassRegistry(): void
+    public function testInstanceTestRegistrationIsInstanceLocal(): void
     {
         $first = new Frond();
-        $first->addTest('even', fn($v) => ((int)$v) % 2 === 0);
+        $first->addTest('is_four_only', fn($v) => ((int)$v) === 4);
 
         $second = new Frond();
-        $out = $second->renderString('{% if n is even %}yes{% else %}no{% endif %}', ['n' => 4]);
-        $this->assertSame('yes', $out);
+        $out = $second->renderString('{% if n is is_four_only %}yes{% else %}no{% endif %}', ['n' => 4]);
+        $this->assertSame('no', $out);
     }
 
     /* ───────── clearRegistry ─────────── */
@@ -178,19 +180,16 @@ class FrondStaticFacadeTest extends TestCase
         $this->assertSame('$99.50 - SALE!', $out);
     }
 
-    public function testInstanceRegisteredBeforeClassConstructionStillVisible(): void
+    public function testInstanceRegisteredBeforeClassConstructionStaysLocal(): void
     {
-        // Order matters: when an INSTANCE registers a filter, future
-        // instances must see it too — instance registration writes through
-        // to the class registry.
         $earlier = new Frond();
-        $earlier->addFilter('reverse', fn($v) => strrev((string)$v));
+        $earlier->addFilter('reverse_local_only', fn($v) => strrev((string)$v));
 
         // A later static registration adds a second filter
         Frond::addFilter('upper2', fn($v) => strtoupper((string)$v));
 
         $later = new Frond();
-        $this->assertSame('cba', $later->renderString('{{ "abc" | reverse }}'));
+        $this->assertSame('abc', $later->renderString('{{ "abc" | reverse_local_only }}'));
         $this->assertSame('HI', $later->renderString('{{ "hi" | upper2 }}'));
     }
 

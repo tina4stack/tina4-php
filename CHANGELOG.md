@@ -8,6 +8,12 @@ https://tina4.com/php/36-releases
 
 ## 3.13.100 (unreleased)
 
+### Breaking: Frond instance extensions stay local
+
+Calling `addFilter`, `addGlobal`, or `addTest` on a Frond instance now changes
+that renderer only. Register on `Frond` itself when every later instance must
+inherit the extension.
+
 - Reject a second `{% extends %}` tag instead of replacing the first parent without warning.
 - Lock PHP's already-correct nested block behavior with the shared regression.
 - Bound template, fragment, and expression caches, with TTL sweeps for stale entries.

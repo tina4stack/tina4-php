@@ -418,30 +418,27 @@ class Frond
      * so we use ``__call`` (instance side) + ``__callStatic`` (class side)
      * to implement Python's ``_ClassOrInstanceMethod`` pattern:
      *
-     *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry only
-     *   ``$frond->addFilter("money", $fn)`` → ``__call``       → class registry AND
-     *                                                            instance's local map
+     *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry
+     *   ``$frond->addFilter("money", $fn)`` → ``__call``       → instance map only
      *
      * Future ``new Frond()`` instances drain the class registry in their
      * constructor, so filters/globals/tests registered statically at
-     * app-startup propagate to every later instance automatically.
+     * app-startup propagate to every later instance automatically. Instance
+     * calls remain local. tina4: ADR-0052.
      */
     public function __call(string $method, array $args): mixed
     {
         switch ($method) {
             case 'addFilter':
                 [$name, $fn] = $args;
-                self::$classFilters[$name] = $fn;
                 $this->filters[$name] = $fn;
                 return null;
             case 'addGlobal':
                 [$name, $value] = $args;
-                self::$classGlobals[$name] = $value;
                 $this->globals[$name] = $value;
                 return null;
             case 'addTest':
                 [$name, $fn] = $args;
-                self::$classTests[$name] = $fn;
                 $this->tests[$name] = $fn;
                 return null;
         }
