@@ -6,7 +6,7 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
-## 3.13.100 (unreleased)
+## 3.13.100
 
 ### Breaking: Frond instance extensions stay local
 
