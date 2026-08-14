@@ -42,7 +42,7 @@ Longer tools also get:
 
 This exact same architecture must exist in all 4 backends:
 - **Python**: `tina4_python/ai/__init__.py` — `generate_context(tool_name)`
-- **PHP**: `Tina4/AI.php` — `AI::generateContext($toolName)`
+- **PHP**: `Tina4/AITools.php` — `AITools::generateContext($toolName)`
 - **Ruby**: `lib/tina4/ai.rb` — `Tina4::AI.generate_context(tool_name)`
 - **Node.js**: `packages/core/src/ai.ts` — `generateContext(toolName)`
 

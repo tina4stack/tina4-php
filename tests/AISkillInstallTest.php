@@ -7,7 +7,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use Tina4\AI;
+use Tina4\AITools;
 
 class AISkillInstallTest extends TestCase
 {
@@ -54,7 +54,7 @@ class AISkillInstallTest extends TestCase
         $projSkills = $this->tmpDir . '/proj/.claude/skills';
         $globalSkills = $this->tmpDir . '/home/.claude/skills';
 
-        $installed = AI::installSkills(
+        $installed = AITools::installSkills(
             $this->tmpDir . '/proj',
             [$projSkills, $globalSkills]
         );
@@ -80,7 +80,7 @@ class AISkillInstallTest extends TestCase
     public function testClaudeSkillBlockUsesSplitSkillName(): void
     {
         // Private-method reflection needs no setAccessible() on PHP 8.1+.
-        $method = (new ReflectionClass(AI::class))->getMethod('skillBlock');
+        $method = (new ReflectionClass(AITools::class))->getMethod('skillBlock');
         $block = $method->invoke(null, 'CLAUDE.md');
         $this->assertStringContainsString('tina4-developer-php', $block);          // split name
         $this->assertStringNotContainsString('skills/tina4-developer/SKILL.md', $block); // old pre-split name gone

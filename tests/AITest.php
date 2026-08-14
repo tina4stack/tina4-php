@@ -7,7 +7,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use Tina4\AI;
+use Tina4\AITools;
 
 class AITest extends TestCase
 {
@@ -42,18 +42,18 @@ class AITest extends TestCase
 
     public function testAiToolsIsArray(): void
     {
-        $this->assertIsArray(AI::$AI_TOOLS);
-        $this->assertNotEmpty(AI::$AI_TOOLS);
+        $this->assertIsArray(AITools::$AI_TOOLS);
+        $this->assertNotEmpty(AITools::$AI_TOOLS);
     }
 
     public function testAiToolsHasSevenTools(): void
     {
-        $this->assertCount(7, AI::$AI_TOOLS);
+        $this->assertCount(7, AITools::$AI_TOOLS);
     }
 
     public function testAiToolsHaveRequiredKeys(): void
     {
-        foreach (AI::$AI_TOOLS as $tool) {
+        foreach (AITools::$AI_TOOLS as $tool) {
             $this->assertArrayHasKey('name', $tool);
             $this->assertArrayHasKey('description', $tool);
             $this->assertArrayHasKey('context_file', $tool);
@@ -62,7 +62,7 @@ class AITest extends TestCase
 
     public function testAiToolsIncludeExpectedTools(): void
     {
-        $names = array_column(AI::$AI_TOOLS, 'name');
+        $names = array_column(AITools::$AI_TOOLS, 'name');
         $this->assertContains('claude-code', $names);
         $this->assertContains('cursor', $names);
         $this->assertContains('copilot', $names);
@@ -77,14 +77,14 @@ class AITest extends TestCase
     public function testIsInstalledReturnsFalseWhenContextFileAbsent(): void
     {
         $tool = ['name' => 'cursor', 'context_file' => '.cursorules'];
-        $this->assertFalse(AI::isInstalled($this->tempDir, $tool));
+        $this->assertFalse(AITools::isInstalled($this->tempDir, $tool));
     }
 
     public function testIsInstalledReturnsTrueWhenContextFilePresent(): void
     {
         $tool = ['name' => 'claude-code', 'context_file' => 'CLAUDE.md'];
         file_put_contents($this->tempDir . '/CLAUDE.md', 'context');
-        $this->assertTrue(AI::isInstalled($this->tempDir, $tool));
+        $this->assertTrue(AITools::isInstalled($this->tempDir, $tool));
     }
 
     public function testIsInstalledHandlesNestedPath(): void
@@ -92,28 +92,28 @@ class AITest extends TestCase
         $tool = ['name' => 'copilot', 'context_file' => '.github/copilot-instructions.md'];
         mkdir($this->tempDir . '/.github', 0755, true);
         file_put_contents($this->tempDir . '/.github/copilot-instructions.md', 'context');
-        $this->assertTrue(AI::isInstalled($this->tempDir, $tool));
+        $this->assertTrue(AITools::isInstalled($this->tempDir, $tool));
     }
 
     // ── installSelected() ──
 
     public function testInstallSelectedSingleToolByNumber(): void
     {
-        $created = AI::installSelected($this->tempDir, '2'); // cursor
+        $created = AITools::installSelected($this->tempDir, '2'); // cursor
         $this->assertNotEmpty($created);
         $this->assertFileExists($this->tempDir . '/.cursorules');
     }
 
     public function testInstallSelectedMultipleTools(): void
     {
-        $created = AI::installSelected($this->tempDir, '1,2');
+        $created = AITools::installSelected($this->tempDir, '1,2');
         $this->assertFileExists($this->tempDir . '/CLAUDE.md');
         $this->assertFileExists($this->tempDir . '/.cursorules');
     }
 
     public function testInstallSelectedAll(): void
     {
-        AI::installSelected($this->tempDir, 'all');
+        AITools::installSelected($this->tempDir, 'all');
         $this->assertFileExists($this->tempDir . '/CLAUDE.md');
         $this->assertFileExists($this->tempDir . '/.cursorules');
         $this->assertFileExists($this->tempDir . '/.windsurfrules');
@@ -125,32 +125,32 @@ class AITest extends TestCase
     public function testInstallSelectedAlwaysOverwrites(): void
     {
         file_put_contents($this->tempDir . '/CLAUDE.md', 'old content');
-        AI::installSelected($this->tempDir, '1');
+        AITools::installSelected($this->tempDir, '1');
         $this->assertNotEquals('old content', file_get_contents($this->tempDir . '/CLAUDE.md'));
     }
 
     public function testInstallSelectedCreatesParentDirectories(): void
     {
-        AI::installSelected($this->tempDir, '3'); // copilot
+        AITools::installSelected($this->tempDir, '3'); // copilot
         $this->assertFileExists($this->tempDir . '/.github/copilot-instructions.md');
     }
 
     public function testInstallSelectedReturnsArray(): void
     {
-        $result = AI::installSelected($this->tempDir, '4'); // windsurf
+        $result = AITools::installSelected($this->tempDir, '4'); // windsurf
         $this->assertIsArray($result);
         $this->assertNotEmpty($result);
     }
 
     public function testInstallSelectedIgnoresInvalidNumbers(): void
     {
-        $result = AI::installSelected($this->tempDir, '99');
+        $result = AITools::installSelected($this->tempDir, '99');
         $this->assertIsArray($result);
     }
 
     public function testInstallSelectedHandlesEmptySelection(): void
     {
-        $result = AI::installSelected($this->tempDir, '');
+        $result = AITools::installSelected($this->tempDir, '');
         $this->assertIsArray($result);
     }
 
@@ -158,7 +158,7 @@ class AITest extends TestCase
 
     public function testInstallAllCreatesAllContextFiles(): void
     {
-        AI::installAll($this->tempDir);
+        AITools::installAll($this->tempDir);
         $this->assertFileExists($this->tempDir . '/CLAUDE.md');
         $this->assertFileExists($this->tempDir . '/.cursorules');
         $this->assertFileExists($this->tempDir . '/.windsurfrules');
@@ -169,14 +169,14 @@ class AITest extends TestCase
 
     public function testInstallAllReturnsArray(): void
     {
-        $result = AI::installAll($this->tempDir);
+        $result = AITools::installAll($this->tempDir);
         $this->assertIsArray($result);
-        $this->assertGreaterThanOrEqual(count(AI::$AI_TOOLS), count($result));
+        $this->assertGreaterThanOrEqual(count(AITools::$AI_TOOLS), count($result));
     }
 
     public function testInstallAllCreatesSubdirectories(): void
     {
-        AI::installAll($this->tempDir);
+        AITools::installAll($this->tempDir);
         $this->assertDirectoryExists($this->tempDir . '/.claude');
         $this->assertDirectoryExists($this->tempDir . '/.github');
     }
@@ -185,21 +185,21 @@ class AITest extends TestCase
 
     public function testGenerateContextReturnsNonEmptyString(): void
     {
-        $context = AI::generateContext();
+        $context = AITools::generateContext();
         $this->assertIsString($context);
         $this->assertNotEmpty($context);
     }
 
     public function testGenerateContextIncludesTina4Reference(): void
     {
-        $context = AI::generateContext();
+        $context = AITools::generateContext();
         $this->assertStringContainsString('Tina4', $context);
         $this->assertStringContainsString('tina4.com', $context);
     }
 
     public function testGenerateContextIncludesSkillsTable(): void
     {
-        $context = AI::generateContext();
+        $context = AITools::generateContext();
         $this->assertStringContainsString('Skill', $context);
     }
 
@@ -208,12 +208,12 @@ class AITest extends TestCase
     public function testStatusReportWithDetectedTools(): void
     {
         // Test that isInstalled correctly reports installed status
-        $tool = AI::$AI_TOOLS[0]; // claude-code
+        $tool = AITools::$AI_TOOLS[0]; // claude-code
         file_put_contents($this->tempDir . '/' . $tool['context_file'], 'ctx');
-        $this->assertTrue(AI::isInstalled($this->tempDir, $tool));
+        $this->assertTrue(AITools::isInstalled($this->tempDir, $tool));
 
         // Verify other tools show as not installed
-        $otherTool = AI::$AI_TOOLS[1]; // cursor
-        $this->assertFalse(AI::isInstalled($this->tempDir, $otherTool));
+        $otherTool = AITools::$AI_TOOLS[1]; // cursor
+        $this->assertFalse(AITools::isInstalled($this->tempDir, $otherTool));
     }
 }

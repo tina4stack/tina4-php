@@ -18,7 +18,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use Tina4\AI;
+use Tina4\AITools;
 
 class AIInstallerTest extends TestCase
 {
@@ -55,7 +55,7 @@ class AIInstallerTest extends TestCase
      */
     private function writeOrMerge(string $contextPath, string $contextFile, string $frameworkGuide): string
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('writeOrMerge');
         return $method->invoke(null, $contextPath, $contextFile, $frameworkGuide);
     }
@@ -64,7 +64,7 @@ class AIInstallerTest extends TestCase
 
     public function testMarkdownFilesGetHtmlCommentMarkers(): void
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('markersFor');
         $markers = $method->invoke(null, 'CLAUDE.md');
         $this->assertSame('<!-- tina4-skills:start -->', $markers[0]);
@@ -73,7 +73,7 @@ class AIInstallerTest extends TestCase
 
     public function testRuleFilesGetHashCommentMarkers(): void
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('markersFor');
         $markers = $method->invoke(null, '.cursorules');
         $this->assertSame('# tina4-skills:start', $markers[0]);
@@ -82,7 +82,7 @@ class AIInstallerTest extends TestCase
 
     public function testMarkdownSkillBlockMentionsAllThreeSkills(): void
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('skillBlock');
         $block = $method->invoke(null, 'CLAUDE.md');
         $this->assertStringContainsString('## Tina4 Skills', $block);
@@ -98,7 +98,7 @@ class AIInstallerTest extends TestCase
 
     public function testRecognisesOldFrameworkHeaders(): void
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('looksLikeOldFrameworkInstall');
         foreach (
             [
@@ -114,7 +114,7 @@ class AIInstallerTest extends TestCase
 
     public function testUserClaudeMdIsNotOld(): void
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('looksLikeOldFrameworkInstall');
         $this->assertFalse($method->invoke(null, "# My Project Notes\n\nDeploy info..."));
     }

@@ -5,7 +5,7 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Locks in the 503-retry added to Tina4\AI::fetchBytes() (3.13.100) — mirrors
+ * Locks in the 503-retry added to Tina4\AITools::fetchBytes() (3.13.100) — mirrors
  * tina4-python's tests/test_ai_fetch_retry.py and the equivalent Ruby/Node
  * specs. `install_skills()`/`installSkills()` fetches ~30 files from
  * raw.githubusercontent.com, which 503s intermittently under load (a freshly
@@ -20,7 +20,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use Tina4\AI;
+use Tina4\AITools;
 
 class AIFetchRetryTest extends TestCase
 {
@@ -39,7 +39,7 @@ class AIFetchRetryTest extends TestCase
 
     private function fetchBytes(string $url): ?string
     {
-        $ref = new ReflectionClass(AI::class);
+        $ref = new ReflectionClass(AITools::class);
         $method = $ref->getMethod('fetchBytes');
         return $method->invoke(null, $url);
     }

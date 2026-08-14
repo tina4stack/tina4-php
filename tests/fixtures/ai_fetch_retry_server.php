@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * A REAL HTTP server whose responses follow a scripted sequence per path,
- * used by AIFetchRetryTest to drive Tina4\AI::fetchBytes()'s retry loop over
+ * used by AIFetchRetryTest to drive Tina4\AITools::fetchBytes()'s retry loop over
  * real sockets — no mocks, no monkeypatched curl/file_get_contents/sleep.
  *
  * Owns its own listener (`stream_socket_server`) rather than running under

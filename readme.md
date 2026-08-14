@@ -269,6 +269,22 @@ $result = $api->sendRequest("/users/42");
 $result = $api->sendRequest("/users", "POST", ["name" => "Alice"]);
 ```
 
+### AI Client
+
+```php
+use Tina4\AI;
+
+$reply = AI::chat([["role" => "user", "content" => "Summarise this text"]]);
+$text = AI::complete("Give me a title");
+$vector = AI::embed("semantic search text");
+
+foreach (AI::chat([["role" => "user", "content" => "Stream this"]], stream: true) as $delta) {
+    echo $delta;
+}
+```
+
+Configure `TINA4_AI_PROVIDER` as `local`, `openai`, or `anthropic`. Hosted providers require `TINA4_AI_KEY`; local OpenAI-compatible endpoints do not. The AI context/skills installer is `Tina4\AITools`.
+
 ### Seeder & Fake Data
 
 ```php

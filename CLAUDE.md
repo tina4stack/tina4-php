@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.100 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.101 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -986,35 +986,35 @@ Supports: Claude Code, Cursor, GitHub Copilot, Windsurf, Aider, Cline, OpenAI Co
 
 ```php
 // Check if a specific tool's context file already exists in $root.
-// $tool is one entry from AI::$AI_TOOLS (has 'name', 'context_file', 'config_dir').
-AI::isInstalled(string $root, array $tool): bool
+// $tool is one entry from AITools::$AI_TOOLS (has 'name', 'context_file', 'config_dir').
+AITools::isInstalled(string $root, array $tool): bool
 
 // Print the numbered tool menu (with [installed] markers) and read a
 // comma-separated selection (or "all") from STDIN. Returns the raw line.
-AI::showMenu(string $root = "."): string
+AITools::showMenu(string $root = "."): string
 
 // Install context files for the tools listed in $selection ("1,3,5" or "all").
 // Returns relative paths of created/updated files.
-AI::installSelected(string $root, string $selection): array
+AITools::installSelected(string $root, string $selection): array
 
 // Install context files for ALL known AI tools (non-interactive).
-AI::installAll(string $root = "."): array
+AITools::installAll(string $root = "."): array
 
 // Generate the tool-specific Tina4 context body (used by installSelected).
-AI::generateContext(string $toolName = 'claude-code'): string
+AITools::generateContext(string $toolName = 'claude-code'): string
 ```
 
 Example:
 ```php
 // Interactive: show menu, read selection, install
-$selection = AI::showMenu('.');
-$created = AI::installSelected('.', $selection);
+$selection = AITools::showMenu('.');
+$created = AITools::installSelected('.', $selection);
 
 // Non-interactive: install everything
-$created = AI::installAll('.');
+$created = AITools::installAll('.');
 
 // Check status — re-rendering the menu shows [installed] markers per tool
-AI::showMenu('.');
+AITools::showMenu('.');
 ```
 
 ### Response Cache — GET response caching middleware

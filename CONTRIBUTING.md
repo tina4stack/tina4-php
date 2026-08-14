@@ -45,7 +45,7 @@ Rules:
 - Keep it short. If the docblock is longer than the method, the method probably
   needs splitting, or the docblock is narrating instead of describing.
 
-The AI-context generator (`Tina4\AI::generateContext`) reflects this standard so
+The AI-context generator (`Tina4\AITools::generateContext`) reflects this standard so
 generated contribution guidance matches it. A lightweight lint for missing tags
 may follow; until then this is reviewed by hand on every pull request.
 

@@ -1163,11 +1163,6 @@ class DevAdmin
             ]);
         });
 
-        // API: Metrics — quick metrics
-        Router::get('/__dev/api/metrics', function (Request $request, Response $response) {
-            return $response->json(Metrics::quickMetrics());
-        });
-
         // API: Metrics — full analysis from the native engine (ADR-0002).
         // One engine for every language, so a number here is comparable with the
         // same number in Python, Ruby or Node. No local fallback: a second

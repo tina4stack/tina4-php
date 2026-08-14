@@ -1,969 +1,529 @@
 <?php
 
-/**
- * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
- */
-
 namespace Tina4;
 
-/**
- * Simple menu-driven installer for AI tool context files.
- * The user picks which tools they use, we install the appropriate files.
- *
- * Supports: Claude Code, Cursor, GitHub Copilot, Windsurf, Aider, Cline, OpenAI Codex.
- */
-class AI
+/** Zero-dependency app-facing AI client (ADR-0053). */
+final class AI
 {
-    /** @var array Ordered list of supported AI tools */
-    public static array $AI_TOOLS = [
-        ["name" => "claude-code", "description" => "Claude Code", "context_file" => "CLAUDE.md", "config_dir" => ".claude"],
-        ["name" => "cursor", "description" => "Cursor", "context_file" => ".cursorules", "config_dir" => ".cursor"],
-        ["name" => "copilot", "description" => "GitHub Copilot", "context_file" => ".github/copilot-instructions.md", "config_dir" => ".github"],
-        ["name" => "windsurf", "description" => "Windsurf", "context_file" => ".windsurfrules", "config_dir" => null],
-        ["name" => "aider", "description" => "Aider", "context_file" => "CONVENTIONS.md", "config_dir" => null],
-        ["name" => "cline", "description" => "Cline", "context_file" => ".clinerules", "config_dir" => null],
-        ["name" => "codex", "description" => "OpenAI Codex", "context_file" => "AGENTS.md", "config_dir" => null],
-    ];
+    private const PROVIDERS = ['local', 'openai', 'anthropic'];
 
-    // ── Skill files (the SKILL.md system) ───────────────────────────────
-    // `tina4 ai` installs the actual skills — not just a CLAUDE.md pointer to
-    // them — into BOTH the project (.claude/skills, so they travel with the
-    // repo) and the user's global ~/.claude/skills (so they're available in
-    // every project). A PHP project needs the php developer skill plus the two
-    // shared skills; the developer skill ships from the tina4-php release tag,
-    // the shared skills from tina4-python. Mirrors the canonical
-    // install-skills.sh.
+    public static function chat(
+        array $messages,
+        ?string $model = null,
+        ?float $temperature = null,
+        ?int $maxTokens = null,
+        bool $stream = false,
+        ?float $timeout = null,
+        ?string $provider = null,
+    ): ChatResponse|\Generator {
+        self::validateMessages($messages);
+        $config = self::config('chat', $model, $timeout, $provider);
+        $body = self::chatBody($config, $messages, $temperature, $maxTokens, $stream);
+        if ($stream) {
+            return self::stream($config, self::headers($config), $body);
+        }
+        return self::normalizeChat($config['provider'], self::requestJson($config, self::headers($config), $body));
+    }
 
-    /** The PHP developer skill (split from the old generic tina4-developer). */
-    public const DEV_SKILL = "tina4-developer-php";
+    public static function complete(
+        string $prompt,
+        ?string $model = null,
+        ?float $temperature = null,
+        ?int $maxTokens = null,
+        ?float $timeout = null,
+        ?string $provider = null,
+    ): string {
+        return self::chat(
+            [['role' => 'user', 'content' => $prompt]],
+            model: $model,
+            temperature: $temperature,
+            maxTokens: $maxTokens,
+            timeout: $timeout,
+            provider: $provider,
+        )->text;
+    }
 
-    /**
-     * Skills installed by `tina4 ai`: skill name → source repo + reference
-     * files under references/. The developer skill comes from tina4-php; the
-     * two shared skills (tina4-js, tina4-maintainer) come from tina4-python.
-     *
-     * @return array<string, array{repo:string, refs:string[]}>
-     */
-    private static function skills(): array
+    public static function embed(
+        string|array $textOrTexts,
+        ?string $model = null,
+        ?float $timeout = null,
+        ?string $provider = null,
+    ): array {
+        $single = is_string($textOrTexts);
+        if (!$single && ($textOrTexts === [] || array_filter($textOrTexts, 'is_string') !== $textOrTexts)) {
+            throw new AIConfigError('AI embedding input must be a string or a non-empty list of strings');
+        }
+        $config = self::config('embed', $model, $timeout, $provider);
+        if ($config['provider'] === 'anthropic') {
+            throw new AIConfigError('Anthropic does not provide the embedding endpoint in this contract');
+        }
+        $raw = self::requestJson($config, self::headers($config), [
+            'model' => $config['model'],
+            'input' => $textOrTexts,
+        ]);
+        $data = $raw['data'] ?? null;
+        if (!is_array($data)) {
+            throw new AIParseError('AI provider returned a malformed embedding response');
+        }
+        usort($data, static fn (array $a, array $b): int => ($a['index'] ?? 0) <=> ($b['index'] ?? 0));
+        $vectors = [];
+        foreach ($data as $item) {
+            $vector = $item['embedding'] ?? null;
+            if (!is_array($vector) || $vector === []) {
+                throw new AIParseError('AI provider returned a malformed embedding response');
+            }
+            foreach ($vector as $value) {
+                if (!is_int($value) && !is_float($value)) {
+                    throw new AIParseError('AI provider returned a malformed embedding response');
+                }
+            }
+            $vectors[] = array_map('floatval', $vector);
+        }
+        $expected = $single ? 1 : count($textOrTexts);
+        if (count($vectors) !== $expected) {
+            throw new AIParseError('AI provider returned a malformed embedding response');
+        }
+        return $single ? $vectors[0] : $vectors;
+    }
+
+    private static function validateMessages(array $messages): void
     {
+        if ($messages === []) {
+            throw new AIConfigError('AI messages must be a non-empty list');
+        }
+        foreach ($messages as $message) {
+            if (!is_array($message)
+                || !in_array($message['role'] ?? null, ['system', 'user', 'assistant'], true)
+                || !is_string($message['content'] ?? null)) {
+                throw new AIConfigError('Each AI message needs a supported role and string content');
+            }
+        }
+    }
+
+    private static function config(string $capability, ?string $model, ?float $timeout, ?string $provider): array
+    {
+        $selected = strtolower(trim($provider ?? (getenv('TINA4_AI_PROVIDER') ?: 'local')));
+        if (!in_array($selected, self::PROVIDERS, true)) {
+            throw new AIConfigError('TINA4_AI_PROVIDER must be local, openai, or anthropic');
+        }
+        $key = getenv('TINA4_AI_KEY') ?: null;
+        if (in_array($selected, ['openai', 'anthropic'], true) && $key === null) {
+            throw new AIConfigError("TINA4_AI_KEY is required for the {$selected} provider");
+        }
+        $defaults = [
+            'local' => ['http://localhost:11437', 'llama3.2'],
+            'openai' => ['https://api.openai.com/v1', 'gpt-4o-mini'],
+            'anthropic' => ['https://api.anthropic.com/v1', 'claude-3-5-haiku-latest'],
+        ];
+        $url = $capability === 'embed' && getenv('TINA4_EMBED_URL')
+            ? getenv('TINA4_EMBED_URL')
+            : (getenv('TINA4_AI_URL') ?: $defaults[$selected][0]);
+        $url = self::endpoint((string)$url, $capability, $selected);
+        $chosenModel = trim($model ?? (getenv('TINA4_AI_MODEL') ?: $defaults[$selected][1]));
+        if ($chosenModel === '') {
+            throw new AIConfigError('AI model must be a non-empty string');
+        }
+        $total = $timeout ?? self::number('TINA4_AI_TIMEOUT', 60.0, 0.001);
+        if ($total <= 0) {
+            throw new AIConfigError('AI timeout must be greater than zero');
+        }
         return [
-            self::DEV_SKILL => [
-                "repo" => "tina4-php",
-                "refs" => ["auth-and-services.md", "data-and-orm.md", "deployment.md",
-                           "routes-and-api.md", "templates-and-frontend.md", "realtime.md"],
-            ],
-            "tina4-js" => [
-                "repo" => "tina4-python",
-                "refs" => ["html-and-components.md", "signals-and-reactivity.md",
-                           "persistence.md", "rtc.md"],
-            ],
-            "tina4-maintainer" => [
-                "repo" => "tina4-python",
-                "refs" => ["cli-and-deployment.md", "frond-and-frontend.md",
-                           "routing-and-orm.md", "subsystems.md"],
-            ],
+            'provider' => $selected,
+            'url' => $url,
+            'model' => $chosenModel,
+            'key' => $key,
+            'total_timeout' => $total,
+            'connect_timeout' => self::number('TINA4_AI_CONNECT_TIMEOUT', 10.0, 0.001),
+            'max_retries' => (int)self::number('TINA4_AI_MAX_RETRIES', 2, 0),
         ];
     }
 
-    /**
-     * Release tag to pull skills from — the installed framework version,
-     * overridable with TINA4_SKILLS_REF (e.g. to test a branch). Falls back
-     * to "main" when the version can't be resolved.
-     */
-    private static function skillsRef(): string
+    private static function number(string $name, float|int $default, float $minimum): float
     {
-        $ref = getenv('TINA4_SKILLS_REF');
-        if ($ref !== false && $ref !== '') {
-            return $ref;
+        $raw = getenv($name);
+        $value = $raw === false || $raw === '' ? (float)$default : filter_var($raw, FILTER_VALIDATE_FLOAT);
+        if ($value === false || $value < $minimum) {
+            throw new AIConfigError("{$name} must be numeric and at least {$minimum}");
         }
-        if (App::$VERSION !== '' && App::$VERSION !== '0.0.0') {
-            return App::$VERSION;
-        }
-        return 'main';
+        return (float)$value;
     }
 
-    /** The user's home directory (cross-platform), or the temp dir as a last resort. */
-    private static function homeDir(): string
+    private static function endpoint(string $value, string $capability, string $provider): string
     {
-        foreach (['HOME', 'USERPROFILE'] as $var) {
-            $home = getenv($var);
-            if ($home !== false && $home !== '') {
-                return $home;
-            }
+        $parts = parse_url($value);
+        if (!is_array($parts) || !in_array($parts['scheme'] ?? null, ['http', 'https'], true) || empty($parts['host'])) {
+            throw new AIConfigError('AI URL must be an http or https URL');
         }
-        return sys_get_temp_dir();
+        $path = rtrim($parts['path'] ?? '', '/');
+        if (in_array($path, ['', '/v1', '/api'], true)) {
+            $suffix = $provider === 'anthropic' ? '/messages' : ($capability === 'embed' ? '/embeddings' : '/chat/completions');
+            $prefix = $path !== '' ? $path : '/v1';
+            $authority = $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
+            return $parts['scheme'] . '://' . $authority . $prefix . $suffix;
+        }
+        return $value;
     }
 
-    /** HTTP statuses worth retrying — a throttle or a server hiccup, not a real answer. */
-    private const TRANSIENT_HTTP_CODES = [429, 500, 502, 503, 504];
-
-    /** Backoff (seconds) before each retry — short, one entry per retry attempt. */
-    private const FETCH_RETRY_BACKOFF = [1, 2];
-
-    /**
-     * Fetch a URL's bytes, or null on any failure. Uses curl when available
-     * (clean timeout handling), else file_get_contents. 15s timeout per attempt.
-     *
-     * raw.githubusercontent.com returns an intermittent 503 under load (a
-     * freshly cut release tag is "cold" on GitHub's CDN until it warms), and
-     * `tina4 ai` makes ~30 fetches per install — a single transient blip must
-     * not abort the whole install. Retries a transient HTTP status
-     * (429/500/502/503/504) or a transport-level failure (connection
-     * refused/reset/timeout — no response at all) with a short backoff
-     * between attempts; a permanent 4xx (404, etc.) is a genuine answer and
-     * is never retried. Mirrors Python's `_fetch_bytes` and Ruby's
-     * `fetch_bytes`/`TRANSIENT_HTTP_CODES`.
-     */
-    private static function fetchBytes(string $url): ?string
+    private static function headers(array $config): array
     {
-        $maxAttempts = count(self::FETCH_RETRY_BACKOFF) + 1;
-
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            $code = null;
-            $transportFailed = false;
-
-            if (function_exists('curl_init')) {
-                $ch = curl_init($url);
-                curl_setopt_array($ch, [
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_FOLLOWLOCATION => true,
-                    CURLOPT_CONNECTTIMEOUT => 15,
-                    CURLOPT_TIMEOUT => 15,
-                    CURLOPT_FAILONERROR => true,
-                    CURLOPT_USERAGENT => 'tina4-php-ai-installer',
-                ]);
-                $data = curl_exec($ch);
-                $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                // curl_close() is a no-op since PHP 8.0 (deprecated in 8.5); the
-                // CurlHandle is freed on GC. Leaving it out keeps 8.5 quiet.
-                if ($data !== false && $code >= 200 && $code < 300) {
-                    return $data;
-                }
-                $transportFailed = ($code === 0);
-            } else {
-                $context = stream_context_create([
-                    'http' => ['timeout' => 15, 'follow_location' => 1, 'user_agent' => 'tina4-php-ai-installer'],
-                    'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
-                ]);
-                $data = @file_get_contents($url, false, $context);
-                if ($data !== false) {
-                    return $data;
-                }
-                $code = self::statusCodeFromResponseHeaders($http_response_header ?? []);
-                $transportFailed = ($code === null);
-            }
-
-            $transient = $transportFailed || in_array($code, self::TRANSIENT_HTTP_CODES, true);
-            $hasMoreAttempts = $attempt <= count(self::FETCH_RETRY_BACKOFF);
-            if (!$transient || !$hasMoreAttempts) {
-                return null;
-            }
-            sleep(self::FETCH_RETRY_BACKOFF[$attempt - 1]);
+        $headers = ['Content-Type' => 'application/json', 'Accept' => 'application/json'];
+        if ($config['provider'] === 'openai') {
+            $headers['Authorization'] = 'Bearer ' . $config['key'];
+        } elseif ($config['provider'] === 'anthropic') {
+            $headers['x-api-key'] = $config['key'];
+            $headers['anthropic-version'] = '2023-06-01';
         }
-
-        return null;
+        return $headers;
     }
 
-    /**
-     * Parse the numeric status code from the `$http_response_header` PHP
-     * populates after a stream-wrapper `file_get_contents()` call, or null
-     * when it is absent/unparseable (a transport failure — no response).
-     *
-     * @param string[] $headers
-     */
-    private static function statusCodeFromResponseHeaders(array $headers): ?int
+    private static function chatBody(array $config, array $messages, ?float $temperature, ?int $maxTokens, bool $stream): array
     {
-        if (!isset($headers[0]) || !preg_match('/^HTTP\/\S+\s+(\d{3})/', $headers[0], $m)) {
-            return null;
+        $body = ['model' => $config['model'], 'messages' => $messages, 'stream' => $stream];
+        if ($temperature !== null) {
+            $body['temperature'] = $temperature;
         }
-        return (int)$m[1];
-    }
-
-    /**
-     * Install the Tina4 SKILL.md skills into the project AND the user's global
-     * ~/.claude/skills, fetched from the release tag matching this framework
-     * version. Returns the skills that installed fully. Network-dependent —
-     * on a fetch failure the affected skill is skipped gracefully.
-     *
-     * @param string        $root    Project root.
-     * @param string[]|null $targets Destination skills dirs. Defaults to
-     *                               <project>/.claude/skills and ~/.claude/skills.
-     * @return string[] Names of the skills fully installed.
-     */
-    public static function installSkills(string $root = ".", ?array $targets = null): array
-    {
-        $ref = self::skillsRef();
-        if ($targets === null) {
-            $projectRoot = realpath($root) ?: $root;
-            $targets = [
-                $projectRoot . '/.claude/skills',
-                self::homeDir() . '/.claude/skills',
-            ];
+        if ($maxTokens !== null) {
+            $body['max_tokens'] = $maxTokens;
         }
-
-        $installed = [];
-        foreach (self::skills() as $skill => $spec) {
-            $base = "https://raw.githubusercontent.com/tina4stack/{$spec['repo']}/{$ref}/.claude/skills";
-
-            // Fetch once, write to every target. A missing SKILL.md means the
-            // skill isn't available at this ref — skip it entirely.
-            $skillMd = self::fetchBytes("{$base}/{$skill}/SKILL.md");
-            if ($skillMd === null) {
-                continue;
-            }
-            $refData = [];
-            foreach ($spec['refs'] as $r) {
-                $rd = self::fetchBytes("{$base}/{$skill}/references/{$r}");
-                if ($rd !== null) {
-                    $refData[$r] = $rd;
+        if ($config['provider'] === 'anthropic') {
+            $system = [];
+            $body['messages'] = [];
+            foreach ($messages as $message) {
+                if ($message['role'] === 'system') {
+                    $system[] = $message['content'];
+                } else {
+                    $body['messages'][] = $message;
                 }
             }
-
-            foreach ($targets as $dest) {
-                $skillDir = $dest . '/' . $skill;
-                $refsDir = $skillDir . '/references';
-                if (!is_dir($refsDir)) {
-                    mkdir($refsDir, 0755, true);
-                }
-                file_put_contents($skillDir . '/SKILL.md', $skillMd);
-                foreach ($refData as $r => $rd) {
-                    file_put_contents($refsDir . '/' . $r, $rd);
-                }
+            $body['max_tokens'] = $maxTokens ?? 1024;
+            if ($system !== []) {
+                $body['system'] = implode("\n\n", $system);
             }
-            $installed[] = $skill;
         }
-        return $installed;
+        return $body;
     }
 
-    /**
-     * Check if a tool's context file already exists.
-     */
-    public static function isInstalled(string $root, array $tool): bool
+    /** @return array{0:resource,1:int,2:array<string,string>} */
+    private static function open(array $config, float $deadline, array $headers, array $body): array
     {
-        $root = realpath($root) ?: $root;
-        return file_exists($root . '/' . $tool['context_file']);
+        $parts = parse_url($config['url']);
+        $scheme = $parts['scheme'];
+        $host = $parts['host'];
+        $port = $parts['port'] ?? ($scheme === 'https' ? 443 : 80);
+        $remaining = $deadline - microtime(true);
+        if ($remaining <= 0) {
+            throw new AITimeoutError('AI total request timeout expired');
+        }
+        $context = stream_context_create(['ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'peer_name' => $host,
+        ]]);
+        $address = ($scheme === 'https' ? 'tls' : 'tcp') . "://{$host}:{$port}";
+        $errno = 0;
+        $errstr = '';
+        $connectStarted = microtime(true);
+        $connectLimit = min($config['connect_timeout'], $remaining);
+        $stream = @stream_socket_client(
+            $address,
+            $errno,
+            $errstr,
+            $connectLimit,
+            STREAM_CLIENT_CONNECT,
+            $context,
+        );
+        if ($stream === false) {
+            $connectElapsed = microtime(true) - $connectStarted;
+            if (microtime(true) >= $deadline
+                || $connectElapsed >= $connectLimit * 0.8
+                || str_contains(strtolower($errstr), 'timed out')) {
+                throw new AITimeoutError('AI connection timeout expired');
+            }
+            throw new AIHTTPError('AI transport failed');
+        }
+        self::applyTimeout($stream, $deadline);
+        $payload = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $path = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        $lines = ["POST {$path} HTTP/1.1", "Host: {$host}", 'Connection: close', 'Content-Length: ' . strlen($payload)];
+        foreach ($headers as $name => $value) {
+            $lines[] = "{$name}: {$value}";
+        }
+        $request = implode("\r\n", $lines) . "\r\n\r\n" . $payload;
+        $offset = 0;
+        while ($offset < strlen($request)) {
+            self::applyTimeout($stream, $deadline);
+            $written = @fwrite($stream, substr($request, $offset));
+            if ($written === false || $written === 0) {
+                fclose($stream);
+                throw new AIHTTPError('AI transport failed');
+            }
+            $offset += $written;
+        }
+        $statusLine = self::readLine($stream, $deadline);
+        if (!preg_match('/^HTTP\/\S+\s+(\d{3})/', $statusLine, $match)) {
+            fclose($stream);
+            throw new AIHTTPError('AI provider returned an invalid HTTP response');
+        }
+        $responseHeaders = [];
+        while (($line = self::readLine($stream, $deadline)) !== "\r\n" && $line !== "\n" && $line !== '') {
+            if (str_contains($line, ':')) {
+                [$name, $value] = explode(':', $line, 2);
+                $responseHeaders[strtolower(trim($name))] = trim($value);
+            }
+        }
+        return [$stream, (int)$match[1], $responseHeaders];
     }
 
-    /**
-     * Print the numbered menu with [installed] markers, read stdin, return selection.
-     */
-    public static function showMenu(string $root = "."): string
+    private static function applyTimeout($stream, float $deadline): void
     {
-        $root = realpath($root) ?: $root;
-        $green = "\e[32m";
-        $reset = "\e[0m";
-
-        echo "\n  Tina4 AI Context Installer\n\n";
-        foreach (self::$AI_TOOLS as $i => $tool) {
-            $num = $i + 1;
-            $installed = self::isInstalled($root, $tool);
-            $marker = $installed ? "  {$green}[installed]{$reset}" : "";
-            echo sprintf("  %d. %-20s %s%s\n", $num, $tool['description'], $tool['context_file'], $marker);
+        $remaining = $deadline - microtime(true);
+        if ($remaining <= 0) {
+            throw new AITimeoutError('AI total request timeout expired');
         }
+        $seconds = (int)floor($remaining);
+        $micros = (int)(($remaining - $seconds) * 1_000_000);
+        stream_set_timeout($stream, $seconds, max(1, $micros));
+    }
 
-        // tina4-ai tools option
-        $tina4AiInstalled = self::commandExists("mdview");
-        $marker = $tina4AiInstalled ? "  {$green}[installed]{$reset}" : "";
-        echo "  8. Install tina4-ai tools  (requires Python){$marker}\n";
-        echo "\n";
-
-        echo "  Select (comma-separated, or 'all'): ";
-        $line = trim(fgets(STDIN));
+    private static function readLine($stream, float $deadline): string
+    {
+        self::applyTimeout($stream, $deadline);
+        $line = @fgets($stream);
+        if ($line === false) {
+            $meta = stream_get_meta_data($stream);
+            if ($meta['timed_out'] ?? false || microtime(true) >= $deadline) {
+                throw new AITimeoutError('AI total request timeout expired');
+            }
+            return '';
+        }
         return $line;
     }
 
-    /**
-     * Install context files for the selected tools.
-     *
-     * @param string $root Project root directory
-     * @param string $selection Comma-separated numbers like "1,2,3" or "all"
-     * @return string[] List of created/updated file paths
-     */
-    public static function installSelected(string $root, string $selection): array
+    /** @return \Generator<string> */
+    private static function bodyChunks($stream, array $headers, float $deadline): \Generator
     {
-        $rootPath = realpath($root) ?: $root;
-        $created = [];
-
-        if (strtolower($selection) === 'all') {
-            $indices = range(0, count(self::$AI_TOOLS) - 1);
-            $installTina4Ai = true;
-        } else {
-            $parts = array_filter(array_map('trim', explode(',', $selection)));
-            $indices = [];
-            $installTina4Ai = false;
-            foreach ($parts as $p) {
-                if (!is_numeric($p)) {
+        if (str_contains(strtolower($headers['transfer-encoding'] ?? ''), 'chunked')) {
+            while (true) {
+                $line = trim(self::readLine($stream, $deadline));
+                if ($line === '') {
                     continue;
                 }
-                $n = (int)$p;
-                if ($n === 8) {
-                    $installTina4Ai = true;
-                } elseif ($n >= 1 && $n <= count(self::$AI_TOOLS)) {
-                    $indices[] = $n - 1;
+                $size = hexdec(explode(';', $line, 2)[0]);
+                if ($size === 0) {
+                    return;
+                }
+                $chunk = '';
+                while (strlen($chunk) < $size) {
+                    self::applyTimeout($stream, $deadline);
+                    $part = fread($stream, $size - strlen($chunk));
+                    if ($part === false || $part === '') {
+                        throw new AIHTTPError('AI stream ended unexpectedly');
+                    }
+                    $chunk .= $part;
+                }
+                self::readLine($stream, $deadline);
+                yield $chunk;
+            }
+        }
+        $remaining = isset($headers['content-length']) ? (int)$headers['content-length'] : null;
+        while (!feof($stream) && ($remaining === null || $remaining > 0)) {
+            self::applyTimeout($stream, $deadline);
+            $length = $remaining === null ? 8192 : min(8192, $remaining);
+            $chunk = fread($stream, $length);
+            if ($chunk === false) {
+                throw new AIHTTPError('AI stream read failed');
+            }
+            if ($chunk === '') {
+                $meta = stream_get_meta_data($stream);
+                if ($meta['timed_out'] ?? false) {
+                    throw new AITimeoutError('AI total request timeout expired');
+                }
+                continue;
+            }
+            if ($remaining !== null) {
+                $remaining -= strlen($chunk);
+            }
+            yield $chunk;
+        }
+    }
+
+    private static function requestJson(array $config, array $headers, array $body): array
+    {
+        $deadline = microtime(true) + $config['total_timeout'];
+        for ($attempt = 0; $attempt <= $config['max_retries']; $attempt++) {
+            $stream = null;
+            try {
+                [$stream, $status, $responseHeaders] = self::open($config, $deadline, $headers, $body);
+                $raw = implode('', iterator_to_array(self::bodyChunks($stream, $responseHeaders, $deadline)));
+                fclose($stream);
+                $stream = null;
+                if ($status < 200 || $status >= 300) {
+                    $error = new AIHTTPError("AI provider returned HTTP {$status}", $status);
+                    if (($status === 429 || $status >= 500) && $attempt < $config['max_retries']) {
+                        self::retryDelay($responseHeaders, $deadline);
+                        continue;
+                    }
+                    throw $error;
+                }
+                try {
+                    $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    throw new AIParseError('AI provider returned malformed JSON');
+                }
+                if (!is_array($decoded)) {
+                    throw new AIParseError('AI provider returned a non-object JSON response');
+                }
+                return $decoded;
+            } catch (AITimeoutError|AIHTTPError $error) {
+                if ($stream !== null && is_resource($stream)) {
+                    fclose($stream);
+                }
+                if ($error instanceof AIHTTPError && $error->status !== null) {
+                    throw $error;
+                }
+                if ($attempt >= $config['max_retries']) {
+                    throw $error;
                 }
             }
         }
-
-        foreach ($indices as $idx) {
-            $tool = self::$AI_TOOLS[$idx];
-            $context = self::generateContext($tool['name']);
-            $files = self::installForTool($rootPath, $tool, $context);
-            $created = array_merge($created, $files);
-        }
-
-        if ($installTina4Ai) {
-            self::installTina4Ai();
-        }
-
-        return $created;
+        throw new AIHTTPError('AI request failed');
     }
 
-    /**
-     * Install context for all AI tools (non-interactive).
-     */
-    public static function installAll(string $root = "."): array
+    private static function retryDelay(array $headers, float $deadline): void
     {
-        return self::installSelected($root, "all");
+        $requested = is_numeric($headers['retry-after'] ?? null) ? max(0.0, (float)$headers['retry-after']) : 0.1;
+        $delay = min($requested, max(0.0, $deadline - microtime(true)));
+        if ($delay > 0) {
+            usleep((int)($delay * 1_000_000));
+        }
     }
 
-    /**
-     * Install context file for a single tool.
-     *
-     * @return string[] Files created (relative paths)
-     */
-    // ── v3.13.9: non-destructive context-file writer ───────────────────
-    //
-    // Pre-v3.13.9 the installer wrote a full developer guide to CLAUDE.md
-    // (and the other context files) on every run, clobbering whatever the
-    // user had put there. Now it writes only a marker-bracketed Tina4
-    // skill block — pointing the assistant at .claude/skills/tina4-*/SKILL.md
-    // — and leaves the rest of the file alone.
-
-    /** @return array{0:string,1:string} `[start, end]` markers for ``$contextFile``. */
-    private static function markersFor(string $contextFile): array
+    private static function normalizeChat(string $provider, array $raw): ChatResponse
     {
-        if (str_ends_with(strtolower($contextFile), '.md')) {
-            return ["<!-- tina4-skills:start -->", "<!-- tina4-skills:end -->"];
+        try {
+            if ($provider === 'anthropic') {
+                $parts = array_values(array_map(
+                    static fn (array $item): string => $item['text'],
+                    array_filter($raw['content'], static fn (array $item): bool => ($item['type'] ?? 'text') === 'text')
+                ));
+                if ($parts === []) {
+                    throw new \UnexpectedValueException();
+                }
+                $prompt = (int)($raw['usage']['input_tokens'] ?? 0);
+                $completion = (int)($raw['usage']['output_tokens'] ?? 0);
+                return new ChatResponse(
+                    implode('', $parts),
+                    (string)($raw['model'] ?? ''),
+                    ['prompt_tokens' => $prompt, 'completion_tokens' => $completion, 'total_tokens' => $prompt + $completion],
+                    isset($raw['stop_reason']) ? (string)$raw['stop_reason'] : null,
+                    $raw,
+                );
+            }
+            $choice = $raw['choices'][0] ?? null;
+            $text = is_array($choice) ? ($choice['message']['content'] ?? null) : null;
+            if (!is_string($text)) {
+                throw new \UnexpectedValueException();
+            }
+            $usage = $raw['usage'] ?? [];
+            return new ChatResponse(
+                $text,
+                (string)($raw['model'] ?? ''),
+                [
+                    'prompt_tokens' => (int)($usage['prompt_tokens'] ?? 0),
+                    'completion_tokens' => (int)($usage['completion_tokens'] ?? 0),
+                    'total_tokens' => (int)($usage['total_tokens'] ?? 0),
+                ],
+                isset($choice['finish_reason']) ? (string)$choice['finish_reason'] : null,
+                $raw,
+            );
+        } catch (\Throwable $error) {
+            if ($error instanceof AIError) {
+                throw $error;
+            }
+            throw new AIParseError('AI provider returned a malformed chat response');
         }
-        return ["# tina4-skills:start", "# tina4-skills:end"];
     }
 
-    /** Return the marker-bracketed Tina4 skill registration block. */
-    private static function skillBlock(string $contextFile): string
+    /** @return array{0:bool,1:?string} */
+    private static function streamDelta(string $provider, string $data): array
     {
-        [$start, $end] = self::markersFor($contextFile);
-        if (str_ends_with(strtolower($contextFile), '.md')) {
-            $body = "## Tina4 Skills\n\n"
-                . "When working on this Tina4 project, these skills give the assistant project-aware behaviour:\n\n"
-                . "- **" . self::DEV_SKILL . "** — Read `.claude/skills/" . self::DEV_SKILL . "/SKILL.md` before building features.\n"
-                . "- **tina4-js** — Read `.claude/skills/tina4-js/SKILL.md` for frontend work.\n"
-                . "- **tina4-maintainer** — Read `.claude/skills/tina4-maintainer/SKILL.md` for framework-level changes.\n\n"
-                . "If Tina4 behaves differently from what these skills describe, that is a bug in the skill. "
-                . "Tell the developer, then report it at https://tina4.com/report-a-skill "
-                . "(or open an issue on the matching tina4stack/* GitHub repo).\n\n"
-                . "See https://tina4.com for full docs.";
-        } else {
-            $body = "Tina4 Skills — read these files before working on this project:\n"
-                . "  .claude/skills/" . self::DEV_SKILL . "/SKILL.md   (feature development)\n"
-                . "  .claude/skills/tina4-js/SKILL.md          (frontend / tina4-js)\n"
-                . "  .claude/skills/tina4-maintainer/SKILL.md  (framework-level changes)\n"
-                . "Found a skill that disagrees with how Tina4 actually behaves? Tell the developer,\n"
-                . "then report it at https://tina4.com/report-a-skill\n"
-                . "Docs: https://tina4.com";
+        if ($data === '[DONE]') {
+            return [true, null];
         }
-        return "{$start}\n{$body}\n{$end}";
+        try {
+            $event = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
+            $text = $provider === 'anthropic'
+                ? (($event['type'] ?? null) === 'content_block_delta' ? ($event['delta']['text'] ?? null) : null)
+                : ($event['choices'][0]['delta']['content'] ?? null);
+        } catch (\Throwable) {
+            throw new AIParseError('AI provider returned malformed stream data');
+        }
+        if ($text !== null && !is_string($text)) {
+            throw new AIParseError('AI provider returned malformed stream data');
+        }
+        return [false, $text];
     }
 
-    /** True iff both start and end markers appear in order. */
-    private static function hasMarkers(string $existing, string $start, string $end): bool
+    /** @return \Generator<string> */
+    private static function streamData($stream, array $headers, float $deadline): \Generator
     {
-        $sIdx = strpos($existing, $start);
-        if ($sIdx === false) {
-            return false;
-        }
-        return strpos($existing, $end, $sIdx + strlen($start)) !== false;
-    }
-
-    /** Replace the bracketed block in ``$existing`` with ``$block``. */
-    private static function replaceMarkerBlock(string $existing, string $block, string $start, string $end): string
-    {
-        $sIdx = strpos($existing, $start);
-        if ($sIdx === false) {
-            return rtrim($existing) . "\n\n" . $block . "\n";
-        }
-        $eIdx = strpos($existing, $end, $sIdx + strlen($start));
-        if ($eIdx === false) {
-            return rtrim($existing) . "\n\n" . $block . "\n";
-        }
-        $before = rtrim(substr($existing, 0, $sIdx));
-        $after = ltrim(substr($existing, $eIdx + strlen($end)), "\n");
-        $glueBefore = $before !== '' ? "\n\n" : '';
-        $glueAfter = $after !== '' ? "\n" . $after : "\n";
-        return $before . $glueBefore . $block . $glueAfter;
-    }
-
-    /**
-     * True if the file starts with a header the pre-v3.13.9 installer
-     * wrote. Used to migrate one-time off the old clobber-style install.
-     */
-    private static function looksLikeOldFrameworkInstall(string $existing): bool
-    {
-        $head = substr(ltrim($existing), 0, 400);
-        $headers = [
-            "# Tina4 Python",
-            "# Tina4 PHP",
-            "# Tina4 Ruby",
-            "# CLAUDE.md — AI Developer Guide for tina4-nodejs",
-            "# CLAUDE.md - AI Developer Guide for tina4-nodejs",
-        ];
-        foreach ($headers as $h) {
-            if (str_starts_with($head, $h)) {
-                return true;
+        $buffer = '';
+        foreach (self::bodyChunks($stream, $headers, $deadline) as $chunk) {
+            $buffer .= $chunk;
+            while (($newline = strpos($buffer, "\n")) !== false) {
+                $line = trim(substr($buffer, 0, $newline));
+                $buffer = substr($buffer, $newline + 1);
+                if (str_starts_with($line, 'data:')) {
+                    yield trim(substr($line, 5));
+                }
             }
         }
-        return false;
     }
 
-    /**
-     * Write the context file non-destructively. Returns a human-readable
-     * action verb for the caller's log line.
-     *
-     * Four branches:
-     *   1. Doesn't exist  → write framework guide + skill block
-     *   2. Has markers    → refresh just the skill block (idempotent)
-     *   3. Old header     → migrate: replace old dump with new guide + block
-     *   4. User content   → append the skill block, preserve everything else
-     */
-    private static function writeOrMerge(string $contextPath, string $contextFile, string $frameworkGuide): string
+    private static function stream(array $config, array $headers, array $body): \Generator
     {
-        $block = self::skillBlock($contextFile);
-        [$start, $end] = self::markersFor($contextFile);
-
-        if (!file_exists($contextPath)) {
-            file_put_contents($contextPath, rtrim($frameworkGuide) . "\n\n" . $block . "\n");
-            return "Installed";
-        }
-
-        $existing = file_get_contents($contextPath);
-        if ($existing === false) {
-            $existing = '';
-        }
-
-        if (self::hasMarkers($existing, $start, $end)) {
-            $newContent = self::replaceMarkerBlock($existing, $block, $start, $end);
-            file_put_contents($contextPath, $newContent);
-            return "Refreshed skill block in";
-        }
-
-        if (self::looksLikeOldFrameworkInstall($existing)) {
-            $head = ltrim($existing);
-            $preamble = substr($existing, 0, strlen($existing) - strlen($head));
-            $newContent = (trim($preamble) !== '' ? rtrim($preamble) . "\n\n" : '')
-                . rtrim($frameworkGuide) . "\n\n" . $block . "\n";
-            file_put_contents($contextPath, $newContent);
-            return "Migrated (replaced old framework dump in)";
-        }
-
-        $newContent = rtrim($existing) . "\n\n" . $block . "\n";
-        file_put_contents($contextPath, $newContent);
-        return "Appended skill block to";
-    }
-
-    private static function installForTool(string $root, array $tool, string $context): array
-    {
-        $created = [];
-        $contextPath = $root . '/' . $tool['context_file'];
-
-        // Create config directory if needed
-        if (!empty($tool['config_dir'])) {
-            $configDir = $root . '/' . $tool['config_dir'];
-            if (!is_dir($configDir)) {
-                mkdir($configDir, 0755, true);
+        $deadline = microtime(true) + $config['total_timeout'];
+        for ($attempt = 0; $attempt <= $config['max_retries']; $attempt++) {
+            $stream = null;
+            $yielded = false;
+            try {
+                $headers['Accept'] = 'text/event-stream';
+                [$stream, $status, $responseHeaders] = self::open($config, $deadline, $headers, $body);
+                if ($status < 200 || $status >= 300) {
+                    iterator_to_array(self::bodyChunks($stream, $responseHeaders, $deadline));
+                    fclose($stream);
+                    $stream = null;
+                    if (($status === 429 || $status >= 500) && $attempt < $config['max_retries']) {
+                        self::retryDelay($responseHeaders, $deadline);
+                        continue;
+                    }
+                    throw new AIHTTPError("AI provider returned HTTP {$status}", $status);
+                }
+                foreach (self::streamData($stream, $responseHeaders, $deadline) as $data) {
+                    [$completed, $text] = self::streamDelta($config['provider'], $data);
+                    if ($completed) {
+                        fclose($stream);
+                        return;
+                    }
+                    if ($text !== null) {
+                        $yielded = true;
+                        yield $text;
+                    }
+                }
+                fclose($stream);
+                $stream = null;
+                throw new AIParseError('AI provider stream ended before [DONE]');
+            } catch (AITimeoutError|AIHTTPError|AIParseError $error) {
+                if ($stream !== null && is_resource($stream)) {
+                    fclose($stream);
+                }
+                if ($error instanceof AIParseError) {
+                    throw $error;
+                }
+                if ($yielded || $attempt >= $config['max_retries']) {
+                    throw $error;
+                }
             }
         }
-
-        // Ensure parent directory exists for the context file
-        $parentDir = dirname($contextPath);
-        if (!is_dir($parentDir)) {
-            mkdir($parentDir, 0755, true);
-        }
-
-        // v3.13.9: non-destructive write — see writeOrMerge below.
-        $action = self::writeOrMerge($contextPath, $tool['context_file'], $context);
-        $relative = ltrim(str_replace($root, '', $contextPath), '/');
-        $created[] = $relative;
-        echo "  \e[32m[OK]\e[0m {$action} {$relative}\n";
-
-        // Claude-specific extras
-        if ($tool['name'] === 'claude-code') {
-            $skills = self::installClaudeSkills($root);
-            $created = array_merge($created, $skills);
-        }
-
-        return $created;
-    }
-
-    /**
-     * Install tina4-ai package (provides mdview for markdown viewing).
-     */
-    private static function installTina4Ai(): void
-    {
-        echo "  Installing tina4-ai tools...\n";
-        foreach (['pip3', 'pip'] as $cmd) {
-            if (!self::commandExists($cmd)) {
-                continue;
-            }
-            $output = [];
-            $returnCode = 0;
-            exec("{$cmd} install --upgrade tina4-ai 2>&1", $output, $returnCode);
-            if ($returnCode === 0) {
-                echo "  \e[32m[OK]\e[0m Installed tina4-ai (mdview)\n";
-                return;
-            } else {
-                $error = implode(' ', array_slice($output, 0, 3));
-                echo "  \e[33m!\e[0m {$cmd} failed: " . substr($error, 0, 100) . "\n";
-            }
-        }
-        echo "  \e[33m!\e[0m Python/pip not available — skip tina4-ai\n";
-    }
-
-    /**
-     * Install Claude Code skill files — network-fetched from the release tag —
-     * into the project AND the user's global ~/.claude/skills.
-     *
-     * The previous implementation copied from the framework's own
-     * .claude/skills directory, which exists only in a dev/editable checkout —
-     * it is NOT shipped in the Composer package. So installed users got zero
-     * skill files, only a CLAUDE.md pointer to skills that weren't there.
-     * installSkills() fixes that by fetching the real skills over the network.
-     *
-     * @return string[] Skills installed (relative-style labels)
-     */
-    private static function installClaudeSkills(string $root): array
-    {
-        $created = [];
-        foreach (self::installSkills($root) as $skill) {
-            $created[] = ".claude/skills/{$skill}/";
-            echo "  \e[32m[OK]\e[0m Installed .claude/skills/{$skill}  (project + global)\n";
-        }
-        return $created;
-    }
-
-    /**
-     * Generate tool-specific Tina4 PHP context for an AI assistant.
-     */
-    public static function generateContext(string $toolName = 'claude-code'): string
-    {
-        $version = App::$VERSION;
-
-        switch ($toolName) {
-            case 'claude-code':
-                return self::generateClaudeCodeContext();
-
-            case 'cursor':
-                return self::generateCursorContext($version);
-
-            case 'copilot':
-                return self::generateCopilotContext($version);
-
-            case 'windsurf':
-                return self::generateWindsurfContext($version);
-
-            case 'aider':
-                return self::generateAiderContext($version);
-
-            case 'cline':
-                return self::generateClineContext($version);
-
-            case 'codex':
-                return self::generateCodexContext($version);
-
-            default:
-                return self::generateCursorContext($version);
-        }
-    }
-
-    /**
-     * Claude Code: return the existing CLAUDE.md from the framework root.
-     */
-    private static function generateClaudeCodeContext(): string
-    {
-        $frameworkRoot = dirname(__DIR__);
-        $claudeMdPath = $frameworkRoot . '/CLAUDE.md';
-        if (file_exists($claudeMdPath)) {
-            return file_get_contents($claudeMdPath);
-        }
-        // Fallback if CLAUDE.md is missing
-        return "# Tina4 PHP\n\nSee https://tina4.com for documentation.\n";
-    }
-
-    /**
-     * Cursor context (~45 lines): header, route + ORM examples, conventions, features, docs link.
-     */
-    private static function generateCursorContext(string $version): string
-    {
-        return <<<CONTEXT
-# Tina4 PHP v{$version}
-
-Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
-
-## Route Example
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-
-Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["created" => \$request->body["name"]], 201);
-})->noAuth();
-```
-
-## ORM Example
-
-```php
-class User extends \Tina4\ORM {
-    public \$tableName = "users";
-    public \$primaryKey = "id";
-}
-```
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-
-## Documentation
-
-https://tina4.com
-CONTEXT;
-    }
-
-    /**
-     * GitHub Copilot context (~30 lines): short header, route example, conventions, features.
-     */
-    private static function generateCopilotContext(string $version): string
-    {
-        return <<<CONTEXT
-# Tina4 PHP v{$version}
-
-Zero-dependency PHP web framework. Docs: https://tina4.com
-
-## Route Example
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-```
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-CONTEXT;
-    }
-
-    /**
-     * Windsurf context (~60 lines): like cursor but with project structure added.
-     */
-    private static function generateWindsurfContext(string $version): string
-    {
-        return <<<CONTEXT
-# Tina4 PHP v{$version}
-
-Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
-
-## Project Structure
-
-```
-src/routes/    — Route handlers (auto-discovered)
-src/orm/       — ORM models
-src/templates/ — Twig templates
-src/app/       — Service classes
-src/scss/      — SCSS (auto-compiled)
-src/public/    — Static assets
-src/seeds/     — Database seeders
-migrations/    — SQL migration files
-tests/         — PHPUnit tests
-```
-
-## Route Example
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-
-Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["created" => \$request->body["name"]], 201);
-})->noAuth();
-```
-
-## ORM Example
-
-```php
-class User extends \Tina4\ORM {
-    public \$tableName = "users";
-    public \$primaryKey = "id";
-}
-```
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-
-## Documentation
-
-https://tina4.com
-CONTEXT;
-    }
-
-    /**
-     * Aider context (~58 lines): conventions-focused with patterns and structure.
-     */
-    private static function generateAiderContext(string $version): string
-    {
-        return <<<CONTEXT
-# Tina4 PHP v{$version} — Conventions
-
-Zero-dependency PHP web framework. Docs: https://tina4.com
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-
-## Patterns
-
-### Route
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-
-Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["created" => \$request->body["name"]], 201);
-})->noAuth();
-```
-
-### ORM
-
-```php
-class User extends \Tina4\ORM {
-    public \$tableName = "users";
-    public \$primaryKey = "id";
-}
-```
-
-## Project Structure
-
-```
-src/routes/    — Route handlers (auto-discovered)
-src/orm/       — ORM models
-src/templates/ — Twig templates
-src/app/       — Service classes
-src/scss/      — SCSS (auto-compiled)
-src/public/    — Static assets
-src/seeds/     — Database seeders
-migrations/    — SQL migration files
-tests/         — PHPUnit tests
-```
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-CONTEXT;
-    }
-
-    /**
-     * Cline context (~42 lines): like cursor.
-     */
-    private static function generateClineContext(string $version): string
-    {
-        return <<<CONTEXT
-# Tina4 PHP v{$version}
-
-Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
-
-## Route Example
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-
-Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["created" => \$request->body["name"]], 201);
-})->noAuth();
-```
-
-## ORM Example
-
-```php
-class User extends \Tina4\ORM {
-    public \$tableName = "users";
-    public \$primaryKey = "id";
-}
-```
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-
-## Documentation
-
-https://tina4.com
-CONTEXT;
-    }
-
-    /**
-     * OpenAI Codex context (~70 lines): task-oriented with CLI commands and full structure.
-     */
-    private static function generateCodexContext(string $version): string
-    {
-        return <<<CONTEXT
-# Tina4 PHP v{$version}
-
-Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
-
-## CLI Commands
-
-```bash
-composer install              # Install dependencies
-bin/tina4php serve            # Start dev server on port 7145
-bin/tina4php migrate          # Run database migrations
-composer test                 # Run test suite
-bin/tina4php routes           # List all registered routes
-```
-
-## Project Structure
-
-```
-src/routes/    — Route handlers (auto-discovered)
-src/orm/       — ORM models
-src/templates/ — Twig templates
-src/app/       — Service classes
-src/scss/      — SCSS (auto-compiled)
-src/public/    — Static assets
-src/seeds/     — Database seeders
-migrations/    — SQL migration files
-tests/         — PHPUnit tests
-```
-
-## Route Example
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-
-Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["created" => \$request->body["name"]], 201);
-})->noAuth();
-```
-
-## ORM Example
-
-```php
-class User extends \Tina4\ORM {
-    public \$tableName = "users";
-    public \$primaryKey = "id";
-}
-```
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-
-## Documentation
-
-https://tina4.com
-CONTEXT;
-    }
-
-    /**
-     * Check if a command exists on the system.
-     */
-    private static function commandExists(string $command): bool
-    {
-        $check = PHP_OS_FAMILY === 'Windows' ? "where {$command} 2>NUL" : "which {$command} 2>/dev/null";
-        $output = [];
-        $returnCode = 0;
-        exec($check, $output, $returnCode);
-        return $returnCode === 0;
     }
 }

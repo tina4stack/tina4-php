@@ -6,6 +6,24 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.101
+
+### Breaking: metrics has one owner
+
+- Remove the framework `metrics` command and local quick census. Use the native `tina4 metrics` CLI.
+- Keep dev-admin metrics as a thin `/metrics/full` and `/metrics/file` JSON handoff to that CLI.
+
+### App-facing AI client
+
+- Add zero-dependency `AI::chat`, `AI::complete`, and `AI::embed`.
+- Rename the developer-tool installer class to `AITools`; the new application client owns
+  the case-insensitive `AI` class name.
+- Support local/OpenAI-compatible, OpenAI, and Anthropic chat providers.
+- Normalize chat responses, stream ordered deltas, and preserve embedding cardinality.
+- Fail closed on missing hosted-provider keys, verify TLS, redact sensitive failures, and
+  distinguish bounded connection and total-request timeouts.
+- Retry only transient connection, HTTP 429, and HTTP 5xx failures, never a partial stream.
+
 ## 3.13.100
 
 ### Breaking: Frond instance extensions stay local
