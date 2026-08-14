@@ -2,7 +2,7 @@
 name: tina4-js
 description: >
   Use whenever working with tina4-js — the lightweight reactive frontend framework.
-  Trigger on any mention of tina4-js, tina4 signals, persistent signals, persist(),
+  Trigger on any mention of tina4-js, tina4js, Tina4 JS, tina4 signals, persistent signals, persist(),
   Tina4Element, tina4 html tagged templates, tina4 routing, tina4 WebSocket client,
   tina4 API client, or persistent storage of UI preferences. Also trigger when the user
   is building a client-rendered frontend for a Tina4 backend, or when they're working

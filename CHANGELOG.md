@@ -18,6 +18,7 @@ inherit the extension.
 - Lock PHP's already-correct nested block behavior with the shared regression.
 - Bound template, fragment, and expression caches, with TTL sweeps for stale entries.
 - Retry transient AI skill-download failures.
+- Activate the tina4-js skill for `tina4js` and `Tina4 JS` spellings as well as `tina4-js`.
 - Keep the runtime version and AI-facing guide on one version.
 
 ## 3.13.99
