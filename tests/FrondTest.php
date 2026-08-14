@@ -2298,6 +2298,35 @@ TPL;
         $this->assertSame('MCHILDM', $this->engine->render('mln_child.html'));
     }
 
+    // Regression lock-in (3.13.100): PHP is the REFERENCE implementation for
+    // this case. Python/Node/Ruby's final block-substitution pass used a
+    // non-depth-aware regex, so a {% block %} the ROOT template nests INSIDE
+    // another {% block %} lost its wrapper AND its content -- pairing the
+    // outer block's open tag with the FIRST {% endblock %} found (the
+    // NESTED block's own close tag), which rendered "<section></section>"
+    // instead of "<section>LEAF</section>". PHP's AST-based
+    // resolveInheritance/replaceBlocks never had this bug: replaceBlocks
+    // walks the parsed tree (block nodes correctly nest their children at
+    // parse time, not via a flat regex re-scan), so an un-overridden outer
+    // block recurses into its OWN body to resolve a nested block placeholder
+    // regardless of which template in the chain declared the nesting. These
+    // two tests pin PHP's already-correct behaviour so it can never drift.
+    public function testRootNestedBlockSurvivesFinalSubstitution(): void
+    {
+        $this->writeTemplate('rnb_root.html', '{% block body %}<section>{% block inner %}{% endblock %}</section>{% endblock %}');
+        $this->writeTemplate('rnb_mid.html', '{% extends "rnb_root.html" %}{% block inner %}MID{% endblock %}');
+        $this->writeTemplate('rnb_leaf.html', '{% extends "rnb_mid.html" %}{% block inner %}LEAF{% endblock %}');
+        $this->assertSame('<section>LEAF</section>', $this->engine->render('rnb_leaf.html'));
+    }
+
+    public function testRootNestedBlockIntermediateOverrideSurvivesUntouchedLeaf(): void
+    {
+        $this->writeTemplate('rnbi_root.html', '{% block body %}<section>{% block inner %}{% endblock %}</section>{% endblock %}');
+        $this->writeTemplate('rnbi_mid.html', '{% extends "rnbi_root.html" %}{% block inner %}MID{% endblock %}');
+        $this->writeTemplate('rnbi_leaf.html', '{% extends "rnbi_mid.html" %}{% block unrelated %}unused{% endblock %}');
+        $this->assertSame('<section>MID</section>', $this->engine->render('rnbi_leaf.html'));
+    }
+
     public function testThreeLevelChildOnlyOverridesGrandparentBlock(): void
     {
         $this->writeTemplate('mlg_base.html', '{% block header %}H{% endblock %}|{% block body %}BODY{% endblock %}');
