@@ -33,6 +33,9 @@ Returns a `DocumentFragment` with real DOM nodes. Templates are cached by string
 | `null`/`undefined` | Empty |
 | `false` | The text "false" (NOT empty!) |
 
+Valid HTML comments are ignored when determining interpolation context. Quotes inside a comment
+do not turn a following content interpolation into an attribute binding.
+
 **Critical:** `${false}` renders as the literal text "false". For conditional show/hide, use:
 ```ts
 ${() => condition ? html`<p>Show</p>` : null}

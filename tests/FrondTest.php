@@ -928,6 +928,44 @@ class FrondTest extends TestCase
         $this->assertSame('Title: Default Title', $result);
     }
 
+    public function testExtendsSingleStillWorks(): void
+    {
+        // Positive lock-in: one {% extends %} tag renders exactly as before.
+        $this->writeTemplate('base_solo.html', '<h1>{% block title %}Default{% endblock %}</h1>');
+        $this->writeTemplate('child_solo.html', '{% extends "base_solo.html" %}{% block title %}Solo{% endblock %}');
+        $result = $this->engine->render('child_solo.html', []);
+        $this->assertSame('<h1>Solo</h1>', $result);
+    }
+
+    public function testExtendsTwiceThrows(): void
+    {
+        // 3.13.100: a SECOND {% extends %} tag throws instead of being
+        // silently discarded. Before the fix, resolveInheritance() broke on
+        // the FIRST 'extends' AST node it found and never looked further, so
+        // the second extends target -- and the rest of the child's non-block
+        // content -- vanished with no signal. Mirrors the unknown-tag-throws
+        // policy (3.13.89): fail loud instead of guessing.
+        $this->writeTemplate('base_a.html', 'A {% block content %}{% endblock %}');
+        $this->writeTemplate('base_b.html', 'B {% block content %}{% endblock %}');
+        $this->writeTemplate(
+            'double.html',
+            "{% extends \"base_a.html\" %}\n{% extends \"base_b.html\" %}\n{% block content %}X{% endblock %}"
+        );
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/2 "\{% extends %\}" tags/');
+        $this->engine->render('double.html', []);
+    }
+
+    public function testExtendsTwiceThrowsViaRenderString(): void
+    {
+        // The same double-extends guard applies on the renderString() path.
+        $this->writeTemplate('base_a2.html', 'A');
+        $this->writeTemplate('base_b2.html', 'B');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/2 "\{% extends %\}" tags/');
+        $this->engine->renderString('{% extends "base_a2.html" %}{% extends "base_b2.html" %}', []);
+    }
+
     public function testExtendsWithLeadingWhitespace(): void
     {
         $this->writeTemplate('base3.html', '<html><body>{% block content %}default{% endblock %}</body></html>');
@@ -2258,6 +2296,35 @@ TPL;
         $this->writeTemplate('mln_mid.html', '{% extends "mln_base.html" %}{% block wrapper %}M{% block slot %}MID{% endblock %}M{% endblock %}');
         $this->writeTemplate('mln_child.html', '{% extends "mln_mid.html" %}{% block slot %}CHILD{% endblock %}');
         $this->assertSame('MCHILDM', $this->engine->render('mln_child.html'));
+    }
+
+    // Regression lock-in (3.13.100): PHP is the REFERENCE implementation for
+    // this case. Python/Node/Ruby's final block-substitution pass used a
+    // non-depth-aware regex, so a {% block %} the ROOT template nests INSIDE
+    // another {% block %} lost its wrapper AND its content -- pairing the
+    // outer block's open tag with the FIRST {% endblock %} found (the
+    // NESTED block's own close tag), which rendered "<section></section>"
+    // instead of "<section>LEAF</section>". PHP's AST-based
+    // resolveInheritance/replaceBlocks never had this bug: replaceBlocks
+    // walks the parsed tree (block nodes correctly nest their children at
+    // parse time, not via a flat regex re-scan), so an un-overridden outer
+    // block recurses into its OWN body to resolve a nested block placeholder
+    // regardless of which template in the chain declared the nesting. These
+    // two tests pin PHP's already-correct behaviour so it can never drift.
+    public function testRootNestedBlockSurvivesFinalSubstitution(): void
+    {
+        $this->writeTemplate('rnb_root.html', '{% block body %}<section>{% block inner %}{% endblock %}</section>{% endblock %}');
+        $this->writeTemplate('rnb_mid.html', '{% extends "rnb_root.html" %}{% block inner %}MID{% endblock %}');
+        $this->writeTemplate('rnb_leaf.html', '{% extends "rnb_mid.html" %}{% block inner %}LEAF{% endblock %}');
+        $this->assertSame('<section>LEAF</section>', $this->engine->render('rnb_leaf.html'));
+    }
+
+    public function testRootNestedBlockIntermediateOverrideSurvivesUntouchedLeaf(): void
+    {
+        $this->writeTemplate('rnbi_root.html', '{% block body %}<section>{% block inner %}{% endblock %}</section>{% endblock %}');
+        $this->writeTemplate('rnbi_mid.html', '{% extends "rnbi_root.html" %}{% block inner %}MID{% endblock %}');
+        $this->writeTemplate('rnbi_leaf.html', '{% extends "rnbi_mid.html" %}{% block unrelated %}unused{% endblock %}');
+        $this->assertSame('<section>MID</section>', $this->engine->render('rnbi_leaf.html'));
     }
 
     public function testThreeLevelChildOnlyOverridesGrandparentBlock(): void

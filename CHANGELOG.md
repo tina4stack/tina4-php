@@ -1,3 +1,28 @@
+# Changelog
+
+Tina4 keeps ONE version across all four frameworks (Python, PHP, Ruby, Node.js), so a version
+number means the same thing everywhere.
+
+**The authoritative release notes for every shipped version live in the documentation:**
+https://tina4.com/php/36-releases
+
+## 3.13.100 (unreleased)
+
+### Breaking: Frond instance extensions stay local
+
+Calling `addFilter`, `addGlobal`, or `addTest` on a Frond instance now changes
+that renderer only. Register on `Frond` itself when every later instance must
+inherit the extension.
+
+- Reject a second `{% extends %}` tag instead of replacing the first parent without warning.
+- Lock PHP's already-correct nested block behavior with the shared regression.
+- Bound template, fragment, and expression caches, with TTL sweeps for stale entries.
+- Retry transient AI skill-download failures.
+- Activate the tina4-js skill for `tina4js` and `Tina4 JS` spellings as well as `tina4-js`.
+- Keep the runtime version and AI-facing guide on one version.
+
+## 3.13.99
+
 ### Breaking: `$request->params` is route-params-only
 
 Client input now lives only in `$request->query` and `$request->body`; `$request->params`

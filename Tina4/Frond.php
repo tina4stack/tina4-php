@@ -18,6 +18,12 @@ class Frond
     private array $globals = [];
     private array $filters = [];
     private array $tests = [];
+    /**
+     * @var array<string, array{content: string, time: int, ttl: int}>
+     *   Runtime store for {% cache %} fragments. Bounded at TEMPLATE_CACHE_MAX
+     *   (capMemoCache) and swept of TTL-expired entries on every access
+     *   (sweepExpiredCache) -- ADR-0004.
+     */
     private array $cache = [];
     private bool $sandboxed = false;
 
@@ -335,6 +341,39 @@ class Frond
     }
 
     /**
+     * Drop every TTL-expired entry from the {% cache %} fragment store ($cache).
+     *
+     * capMemoCache() bounds a cache by SIZE (insertion order, oldest first) but
+     * says nothing about STALENESS: a key that expired and is never read again
+     * would otherwise sit in the array, still counted against the cap, until
+     * something else finally evicts it. An app keying fragments on a dynamic
+     * value (a page id, a user id) can churn through many such keys, so
+     * staleness has to be swept on its own schedule, not just bounded by count.
+     *
+     * `elapsed >= ttl` also correctly sweeps a ttl<=0 entry (elapsed since
+     * insertion is always >= 0): renderCache() never treats ttl<=0 as a hit
+     * in the first place (see the "0 means NOT cached" comment there), so
+     * there is no reason to keep it in memory either.
+     *
+     * Called on every {% cache %} render (cheap: bounded by TEMPLATE_CACHE_MAX
+     * entries, so at most 256 comparisons) rather than only for the key being
+     * read, so an unrelated key's expiry is cleaned up as a side effect of ANY
+     * fragment-cache render, not just a future hit on that same key.
+     *
+     * @param array<string, array{content: string, time: int, ttl: int}> $cache
+     *   Fragment cache to sweep, by reference.
+     */
+    private function sweepExpiredCache(array &$cache): void
+    {
+        $now = time();
+        foreach ($cache as $key => $entry) {
+            if (($now - $entry['time']) >= $entry['ttl']) {
+                unset($cache[$key]);
+            }
+        }
+    }
+
+    /**
      * Get all registered filters (built-in + custom).
      *
      * @return array<string, callable>
@@ -379,30 +418,27 @@ class Frond
      * so we use ``__call`` (instance side) + ``__callStatic`` (class side)
      * to implement Python's ``_ClassOrInstanceMethod`` pattern:
      *
-     *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry only
-     *   ``$frond->addFilter("money", $fn)`` → ``__call``       → class registry AND
-     *                                                            instance's local map
+     *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry
+     *   ``$frond->addFilter("money", $fn)`` → ``__call``       → instance map only
      *
      * Future ``new Frond()`` instances drain the class registry in their
      * constructor, so filters/globals/tests registered statically at
-     * app-startup propagate to every later instance automatically.
+     * app-startup propagate to every later instance automatically. Instance
+     * calls remain local. tina4: ADR-0052.
      */
     public function __call(string $method, array $args): mixed
     {
         switch ($method) {
             case 'addFilter':
                 [$name, $fn] = $args;
-                self::$classFilters[$name] = $fn;
                 $this->filters[$name] = $fn;
                 return null;
             case 'addGlobal':
                 [$name, $value] = $args;
-                self::$classGlobals[$name] = $value;
                 $this->globals[$name] = $value;
                 return null;
             case 'addTest':
                 [$name, $fn] = $args;
-                self::$classTests[$name] = $fn;
                 $this->tests[$name] = $fn;
                 return null;
         }
@@ -1007,15 +1043,24 @@ class Frond
 
     private function resolveInheritance(array $ast, array &$data, ?string $templateName): array
     {
-        // Find extends node
-        $extendsNode = null;
-        foreach ($ast as $node) {
-            if ($node['type'] === 'extends') {
-                $extendsNode = $node;
-                break;
-            }
+        // Find extends node(s) -- a template may extend at most one parent.
+        // Before 3.13.100 a SECOND {% extends %} tag was silently invisible:
+        // this loop broke on the first match and never looked further, so the
+        // rest -- including the second extends target -- was discarded with
+        // no signal, almost always hiding a copy-paste or a bad merge. Raise
+        // clearly instead, the same policy 3.13.89 applied to an unknown tag.
+        $extendsNodes = array_values(array_filter(
+            $ast,
+            static fn(array $node): bool => $node['type'] === 'extends',
+        ));
+        if (count($extendsNodes) > 1) {
+            throw new \RuntimeException(
+                'Frond: template has ' . count($extendsNodes) . ' "{% extends %}" tags -- '
+                . 'a template can extend only one parent'
+            );
         }
 
+        $extendsNode = $extendsNodes[0] ?? null;
         if ($extendsNode === null) return $ast;
 
         // Collect child blocks
@@ -1532,6 +1577,7 @@ class Frond
 
     private function renderCache(array $node, array &$data): string
     {
+        $this->sweepExpiredCache($this->cache);
 
         $key = $node['key'];
         if (isset($this->cache[$key])) {
@@ -1545,6 +1591,7 @@ class Frond
         }
 
         $content = $this->execute($node['body'], $data);
+        $this->capMemoCache($this->cache, self::TEMPLATE_CACHE_MAX);
         $this->cache[$key] = [
             'content' => $content,
             'time' => time(),
