@@ -262,6 +262,25 @@ final class DatabaseConnectTimeoutTest extends TestCase
     // POSITIVE — a connect that would block forever is bounded
     // ─────────────────────────────────────────────────────────────────
 
+    public function testDriverTimeoutWordingWinsAtTheClockBoundary(): void
+    {
+        $translator = new class {
+            use \Tina4\Database\ConnectTimeoutTrait;
+
+            public function translate(string $cause): void
+            {
+                $this->connectTimeoutArmed = 2;
+                $this->connectStartedAt = microtime(true) - 1.999;
+                $this->throwIfConnectTimedOut('PostgresAdapter', '127.0.0.1:5432', $cause);
+            }
+        };
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('timed out after');
+        $this->expectExceptionMessage('the driver said: connection failed: timeout expired');
+        $translator->translate('connection failed: timeout expired');
+    }
+
     /**
      * The four drivers with a working bound, against a socket that accepts and
      * never replies. Run together so the suite pays one wait, not four.

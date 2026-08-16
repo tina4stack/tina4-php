@@ -95,9 +95,12 @@ trait ConnectTimeoutTrait
      * path, so a genuine driver error (bad password, no such database) still
      * reports its real cause and only a real expiry reports a timeout.
      *
-     * The deadline test needs no tolerance: a driver cannot report a timeout
-     * before its own deadline. MEASURED overshoot at a 3s bound — ext-pgsql
-     * 3.002781s, pdo_pgsql 3.003829s, mysqli 3.002987s, ext-mongodb 3.003139s.
+     * Prefer the driver's explicit timeout diagnosis at the deadline boundary.
+     * Its native clock can expire a fraction before PHP's next microtime()
+     * sample reaches the same integer duration. MEASURED usual overshoot at a
+     * 3s bound — ext-pgsql 3.002781s, pdo_pgsql 3.003829s, mysqli 3.002987s,
+     * ext-mongodb 3.003139s — but GitHub Actions observed ext-pgsql returning
+     * "timeout expired" just below the PHP-side comparison.
      *
      * This TRANSLATES the driver's failure rather than pre-empting it: the
      * driver's own timer is the only timer, so the operator's N means N (no
@@ -118,11 +121,13 @@ trait ConnectTimeoutTrait
         string|\Throwable|null $cause = null
     ): void {
         $elapsed = microtime(true) - $this->connectStartedAt;
-        if ($this->connectTimeoutArmed <= 0 || $elapsed < $this->connectTimeoutArmed) {
+        $driverSaid = $cause instanceof \Throwable ? $cause->getMessage() : (string) $cause;
+        $driverReportedTimeout = preg_match('/\b(?:timed\s+out|timeout(?:\s+expired)?)\b/i', $driverSaid) === 1;
+        if ($this->connectTimeoutArmed <= 0
+            || ($elapsed < $this->connectTimeoutArmed && !$driverReportedTimeout)) {
             return;
         }
 
-        $driverSaid = $cause instanceof \Throwable ? $cause->getMessage() : (string) $cause;
         $driverSaid = trim((string) preg_replace('/\s+/', ' ', $driverSaid));
 
         throw new \RuntimeException(
