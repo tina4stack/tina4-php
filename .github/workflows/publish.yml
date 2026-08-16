@@ -23,6 +23,16 @@ jobs:
         with:
           php-version: '8.2'
 
+      - name: Verify tag matches source version
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          SOURCE_VERSION="$(php -r "require 'Tina4/App.php'; echo \\Tina4\\App::\$VERSION;")"
+          test "$SOURCE_VERSION" = "$VERSION" || {
+            echo "::error::Tag $VERSION does not match Tina4/App.php $SOURCE_VERSION"
+            exit 1
+          }
+          echo "Publishing verified version $VERSION"
+
       - name: Extract release notes from commit body
         run: |
           # Pull the tagged commit body (sans Co-Authored-By trailers and
