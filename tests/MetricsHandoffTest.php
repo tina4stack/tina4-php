@@ -30,6 +30,8 @@ class MetricsHandoffTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $result['files_analyzed']);
         $this->assertArrayHasKey('file_metrics', $result);
         $this->assertArrayHasKey('dependency_graph', $result);
+        $this->assertArrayHasKey('has_referencing_test', $result['file_metrics'][0]);
+        $this->assertArrayNotHasKey('has_tests', $result['file_metrics'][0]);
     }
 
     public function testFileDetailComesFromNativeCli(): void

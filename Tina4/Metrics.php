@@ -11,7 +11,7 @@ class Metrics
 
     private const INSTALL_HINT = "update the native tina4 CLI: https://tina4.com/cli";
     private const SUMMARY_KEYS = ["files_analyzed", "total_functions", "avg_complexity", "avg_maintainability"];
-    private const FILE_KEYS = ["path", "loc", "avg_complexity", "maintainability", "has_tests"];
+    private const FILE_KEYS = ["path", "loc", "avg_complexity", "maintainability", "has_referencing_test"];
     private const FUNCTION_KEYS = ["name", "file", "line", "complexity", "loc"];
 
     /** @return array{0: string, 1: string} */
