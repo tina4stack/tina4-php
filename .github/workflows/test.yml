@@ -370,8 +370,8 @@ jobs:
         run: |
           cli_dir="$(mktemp -d)"
           trap 'rm -rf "$cli_dir"' EXIT
-          curl -fsSLo "$cli_dir/tina4-linux-amd64" https://github.com/tina4stack/tina4/releases/download/v3.8.71/tina4-linux-amd64
-          curl -fsSLo "$cli_dir/SHA256SUMS" https://github.com/tina4stack/tina4/releases/download/v3.8.71/SHA256SUMS
+          curl -fsSLo "$cli_dir/tina4-linux-amd64" https://github.com/tina4stack/tina4/releases/download/v3.8.76/tina4-linux-amd64
+          curl -fsSLo "$cli_dir/SHA256SUMS" https://github.com/tina4stack/tina4/releases/download/v3.8.76/SHA256SUMS
           (cd "$cli_dir" && grep ' tina4-linux-amd64$' SHA256SUMS | sha256sum -c -)
           sudo install -m 0755 "$cli_dir/tina4-linux-amd64" /usr/local/bin/tina4
           tina4 --version
