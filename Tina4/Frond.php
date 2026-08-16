@@ -1931,20 +1931,34 @@ class Frond
     {
         $scan = [];
 
-        // 1. Literals (strings, numbers, booleans, null). Wrapped in an array so
-        //    a literal `null`/`false` is still detectable with isset().
+        foreach ([$this->scanLiteralOrParen($expr), $this->scanConditional($expr)] as $match) {
+            if ($match !== null) return $match;
+        }
+        $match = $this->scanLogical($expr);
+        if ($match !== null) return $match;
+        $match = $this->scanComparison($expr, $scan);
+        if ($match !== null) return $match;
+        $match = $this->scanConcatOrFilter($expr, $scan);
+        if ($match !== null) return $match;
+        return $this->scanArithmetic($expr, $scan);
+    }
+
+    private function scanLiteralOrParen(string $expr): ?array
+    {
+
         $literal = $this->evaluateLiteral($expr);
         if ($literal !== self::NOT_MATCHED) {
             return ['lit' => [$literal]];
         }
-
-        // 2. Parenthesized sub-expression
         if (strlen($expr) >= 2 && $expr[0] === '(' && str_ends_with($expr, ')')
             && $this->matchedParens($expr)) {
             return ['paren' => substr($expr, 1, -1)];
         }
+        return null;
+    }
 
-        // 3a. C-style ternary: condition ? trueVal : falseVal
+    private function scanConditional(string $expr): ?array
+    {
         $ternaryPos = $this->findTernary($expr);
         if ($ternaryPos !== false) {
             $rest = substr($expr, $ternaryPos + 1);
@@ -1957,9 +1971,6 @@ class Frond
                 ]];
             }
         }
-
-        // 3b. Jinja2-style inline if: value if condition else other_value.
-        //     Reached even when a `?` was found but had no matching `:`.
         $ifPos = $this->findOutsideQuotes($expr, ' if ');
         if ($ifPos !== false) {
             $elsePos = $this->findOutsideQuotes($expr, ' else ');
@@ -1971,8 +1982,6 @@ class Frond
                 ]];
             }
         }
-
-        // 4. Null coalescing (??)
         $coalescePos = $this->findOutsideQuotes($expr, '??');
         if ($coalescePos !== false) {
             return ['coalesce' => [
@@ -1980,8 +1989,11 @@ class Frond
                 trim(substr($expr, $coalescePos + 2)),
             ]];
         }
+        return null;
+    }
 
-        // 5. Logical operators (or, and, not)
+    private function scanLogical(string $expr): ?array
+    {
         $orPos = $this->findLogicalOp($expr, ' or ');
         if ($orPos !== false) {
             return ['or' => [trim(substr($expr, 0, $orPos)), trim(substr($expr, $orPos + 4))]];
@@ -1993,8 +2005,11 @@ class Frond
         if (preg_match(self::RE_NOT_PREFIX, $expr, $matches)) {
             return ['not' => $matches[1]];
         }
+        return null;
+    }
 
-        // 6. Comparisons -- "not in" / "in" / "is not" / "is" / == != <= >= < >
+    private function scanComparison(string $expr, array &$scan): ?array
+    {
         $notInPos = $this->findLogicalOp($expr, ' not in ');
         if ($notInPos !== false) {
             return ['notIn' => [trim(substr($expr, 0, $notInPos)), trim(substr($expr, $notInPos + 8))]];
@@ -2023,17 +2038,15 @@ class Frond
                 return $scan;
             }
         }
+        return null;
+    }
 
-        // 7. String concatenation (~) -- before the filter pipe, because `~`
-        //    binds looser than `|` in Twig (issue #171).
+    private function scanConcatOrFilter(string $expr, array $scan): ?array
+    {
         if ($this->findOutsideQuotes($expr, '~') !== false) {
             $scan['concat'] = array_map('trim', $this->splitOutsideQuotes($expr, '~'));
             return $scan;
         }
-
-        // 8. Filter pipes. Each segment past the first is pre-split into its
-        //    filter call and optional property-access suffix (`first.groupSummary`,
-        //    `format(2).toUpperCase`) -- that split is structural too.
         $filterSplit = $this->splitFilters($expr);
         if (count($filterSplit) > 1) {
             $segments = [];
@@ -2047,8 +2060,11 @@ class Frond
             $scan['pipe'] = [$filterSplit[0], $segments];
             return $scan;
         }
+        return null;
+    }
 
-        // 9. Arithmetic (+, -, *, /, //, %, **) -- lowest precedence group first
+    private function scanArithmetic(string $expr, array $scan): array
+    {
         foreach ([['+', '-'], ['*', '//', '/', '%', '**']] as $operatorGroup) {
             foreach ($operatorGroup as $mathOperator) {
                 $operatorPos = $this->findMathOp($expr, $mathOperator);
@@ -2061,8 +2077,6 @@ class Frond
                 return $scan;
             }
         }
-        // Parenthesized fallback, checked only after the operators (see
-        // evaluateArithmetic's original tail).
         if (str_starts_with($expr, '(')
             && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
             $scan['arithmeticParen'] = substr($expr, 1, -1);
