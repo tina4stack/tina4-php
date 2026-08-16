@@ -6,7 +6,40 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
-## 3.13.101
+## 3.13.103
+
+### Metrics reports what it can prove
+
+- Require signed Tina4 client 3.8.76 for the native metrics handoff.
+- Expose `has_referencing_test` as a source-reference signal. It does not claim
+  that a test ran or that coverage exists.
+- Fail when the native client is stale instead of falling back to a second
+  framework-owned analyser.
+
+### Frond stays stable and gets smaller
+
+- Split expression parsing and evaluation into focused internal steps.
+- Preserve public APIs and the shared 84-case expression corpus across all four
+  languages.
+
+### One client starts every project
+
+- Lead framework skills with `tina4 init` and `tina4 serve`.
+- Keep scaffolding guidance visible and separate runtime dependencies from
+  language extensions.
+
+### PHP connection timeout diagnosis
+
+- Treat libpq's explicit `timeout expired` result as the configured connection
+  timeout at the clock boundary, while preserving instant refusal errors.
+
+### Release integrity
+
+- Align source, runtime, package, lockfile, and AI-facing guide versions.
+- Reject a release tag that does not match the source package version before
+  any registry publish begins.
+
++## 3.13.101
 
 ### Breaking: metrics has one owner
 
