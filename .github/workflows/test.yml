@@ -366,7 +366,7 @@ jobs:
           MQTT_REQUIRE_EMQX=false bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
           echo "TINA4_TEST_MQTT_CA_FILE=$RUNNER_TEMP/tina4-mqtt-infra/certs/ca.crt" >> "$GITHUB_ENV"
 
-      - name: Install native Tina4 CLI 3.8.71
+      - name: Install native Tina4 CLI 3.8.76
         run: |
           cli_dir="$(mktemp -d)"
           trap 'rm -rf "$cli_dir"' EXIT
