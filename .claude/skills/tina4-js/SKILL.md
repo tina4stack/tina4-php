@@ -11,7 +11,7 @@ description: >
   from 'tina4js'), use this skill for all frontend tasks.
 ---
 
-# tina4-js — Reactive Frontend Framework (v1.5.0)
+# tina4-js — Reactive Frontend Framework (v1.5.2)
 
 tina4-js is a lightweight reactive frontend framework (the full IIFE bundle is ~27.7KB raw,
 ~10.3KB gzipped; the `core` module alone is ~1.5KB gzipped). Zero dependencies,
@@ -48,6 +48,31 @@ of truth, derived from the actual source code.
 
 > 🤖 **Skill-active marker.** While this Tina4 skill is guiding your work, **begin every reply with the 🤖 emoji** so the developer can see at a glance that Tina4 conventions are engaged. Drop it only once the conversation has clearly moved off Tina4.
 
+## Quick Start — Scaffold First
+
+Use the unified Tina4 client for the normal project lifecycle:
+
+```bash
+tina4 init js my-app
+cd my-app
+tina4 serve
+```
+
+This creates a working TypeScript/Vite project, installs its packages, and starts it through the
+same client used by every Tina4 framework. Do not make `npx tina4js create`, `npm install`, or
+`npm run dev` the default onboarding path. The package CLI remains a fallback when the unified
+client is unavailable.
+
+Scaffold frontend resources instead of hand-writing their boilerplate:
+
+```bash
+tina4 generate page products --api /api/products
+tina4 generate component product-card
+```
+
+The unified client delegates those commands to tina4-js. The equivalent package-level fallbacks
+are `npx tina4js generate page ...` and `npx tina4js generate component ...`.
+
 ## The Tina4 Working Method
 
 This is how a tina4-js build is run. Work is **driven by a plan file** under `plan/`. Prefer keeping
@@ -60,7 +85,7 @@ main session, **you still own the plan file**. Cursor todos / chat checklists ar
 | 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (outcome stated, then start) |
 | 3. Delegate | Prefer a worker per task; main session stays free when possible | worker(s) (or you) running off the plan |
 | 4. Test-first | Pin the behaviour BEFORE building the component | a real check that fails first |
-| 5. Build | Ground with `tina4_context` → climb the Lazy Frontend Ladder → minimum reactive code | it works in the browser |
+| 5. Scaffold + Build | Run `tina4 generate page|component` → ground with `tina4_context` → fill the custom reactive code | it works in the browser |
 | 6. Verify + tick | Drive the real UI; **edit the plan file now** — `[x]` + Commits line | plan updated in the same turn |
 | 7. Report | ✅/❌ table that matches the plan file | the status dashboard |
 
