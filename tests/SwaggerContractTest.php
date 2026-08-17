@@ -189,7 +189,10 @@ final class SwaggerContractTest extends TestCase
 
         // POSITIVE — documented secured, and the runtime really 401s it.
         $securedOp = self::$defaultsDoc['paths']['/api/widgets']['post'];
-        $this->assertSame([['bearerAuth' => []]], $securedOp['security'] ?? null, 'the secure-by-default write must document bearerAuth');
+        $expectedSecurity = isset(self::$defaultsDoc['components']['securitySchemes']['ssoSession'])
+            ? [['bearerAuth' => []], ['ssoSession' => []]]
+            : [['bearerAuth' => []]];
+        $this->assertSame($expectedSecurity, $securedOp['security'] ?? null, 'the secure-by-default write must document every configured runtime gate');
         $this->assertArrayHasKey('401', $securedOp['responses'], 'a secured operation documents a 401 response');
         $this->assertSame(
             401,
@@ -513,7 +516,10 @@ final class SwaggerContractTest extends TestCase
         $paths = self::$defaultsDoc['paths'];
 
         $secured = $paths['/contract/shape-item']['post'];
-        $this->assertSame([['bearerAuth' => []]], $secured['security'] ?? null, 'a secured op documents bearerAuth');
+        $expectedSecurity = isset(self::$defaultsDoc['components']['securitySchemes']['ssoSession'])
+            ? [['bearerAuth' => []], ['ssoSession' => []]]
+            : [['bearerAuth' => []]];
+        $this->assertSame($expectedSecurity, $secured['security'] ?? null, 'a secured op documents every configured runtime gate');
         $this->assertSame(['description' => 'Unauthorized'], $secured['responses']['401'] ?? null, 'a secured op documents a 401');
         $this->assertSame('POST /contract/shape-item', $secured['summary'] ?? null, 'summary defaults to METHOD + path');
         $this->assertSame(['contract'], $secured['tags'] ?? null, 'tags default to the first path segment');
