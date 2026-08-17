@@ -361,7 +361,10 @@ class SwaggerTest extends TestCase
         $spec = Swagger::generate();
         $op = $spec['paths']['/admin/users']['get'];
         $this->assertArrayHasKey('security', $op);
-        $this->assertSame([['bearerAuth' => []]], $op['security']);
+        $expectedSecurity = isset($spec['components']['securitySchemes']['ssoSession'])
+            ? [['bearerAuth' => []], ['ssoSession' => []]]
+            : [['bearerAuth' => []]];
+        $this->assertSame($expectedSecurity, $op['security']);
     }
 
     public function testSecureRouteHas401Response(): void
