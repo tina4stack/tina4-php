@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "Feature 137 unified GIS Point contract (ADR-0057).",
+    "Every framework runner must read this file at runtime and use a real PostGIS database.",
+    "Cases remain proposed until all four runners and mutation witnesses pass."
+  ],
+  "version": 1,
+  "decided": "2026-08-17",
+  "adr": "ADR-0057",
+  "defaults": {"srid": 4326, "distance_unit": "metres", "coordinate_order": ["longitude", "latitude"], "postgres_type": "geography(Point,4326)", "index_method": "gist"},
+  "points": {
+    "cape_town": [18.4241, -33.9249],
+    "johannesburg": [28.0473, -26.2041],
+    "anti_east": [179.9, 0.0],
+    "anti_west": [-179.9, 0.0],
+    "north_pole_near": [0.0, 89.999],
+    "null_island": [0.0, 0.0]
+  },
+  "accepted_point_forms": [
+    {"name": "coordinate pair", "value": [18.4241, -33.9249], "expected": {"type": "Point", "coordinates": [18.4241, -33.9249]}},
+    {"name": "wkt", "value": "POINT(18.4241 -33.9249)", "expected": {"type": "Point", "coordinates": [18.4241, -33.9249]}},
+    {"name": "ewkt", "value": "SRID=4326;POINT(18.4241 -33.9249)", "expected": {"type": "Point", "coordinates": [18.4241, -33.9249]}},
+    {"name": "geojson point", "value": {"type": "Point", "coordinates": [18.4241, -33.9249]}, "expected": {"type": "Point", "coordinates": [18.4241, -33.9249]}},
+    {"name": "geojson feature", "value": {"type": "Feature", "geometry": {"type": "Point", "coordinates": [18.4241, -33.9249]}, "properties": {}}, "expected": {"type": "Point", "coordinates": [18.4241, -33.9249]}}
+  ],
+  "invalid_points": [
+    {"name": "latitude above range", "value": [18.0, 91.0]},
+    {"name": "latitude below range", "value": [18.0, -91.0]},
+    {"name": "longitude above range", "value": [181.0, -33.0]},
+    {"name": "longitude below range", "value": [-181.0, -33.0]},
+    {"name": "boolean coordinate", "value": [true, -33.0]},
+    {"name": "short coordinate pair", "value": [18.0]},
+    {"name": "malformed wkt", "value": "POINT(18.0)"},
+    {"name": "wrong geojson type", "value": {"type": "LineString", "coordinates": [[18.0, -33.0], [19.0, -34.0]]}},
+    {"name": "srid mismatch", "value": "SRID=3857;POINT(18.4241 -33.9249)"}
+  ],
+  "distance_cases": [
+    {"name": "cape town to johannesburg", "from": "cape_town", "to": "johannesburg", "minimum_metres": 1250000, "maximum_metres": 1275000},
+    {"name": "antimeridian short path", "from": "anti_east", "to": "anti_west", "minimum_metres": 21000, "maximum_metres": 23000}
+  ],
+  "bbox_cases": [
+    {"name": "cape town box", "bounds": [18.0, -34.2, 18.9, -33.5], "inside": ["cape_town"], "outside": ["johannesburg"]},
+    {"name": "inverted longitude", "bounds": [19.0, -34.0, 18.0, -33.0], "error": true},
+    {"name": "inverted latitude", "bounds": [18.0, -33.0, 19.0, -34.0], "error": true}
+  ],
+  "invariants": [
+    {"id": "point-inputs-have-one-longitude-first-meaning", "adr": "ADR-0057", "rule": "Every accepted point form hydrates to the same SRID-4326 longitude-first value at seven-decimal precision.", "cases": [], "proposed_cases": ["accepted point forms round trip", "seven decimal places survive storage", "longitude latitude swap changes the answer"]},
+    {"id": "invalid-points-fail-before-sql", "adr": "ADR-0057", "rule": "Malformed, non-finite, out-of-range and mismatched-SRID points fail before database execution.", "cases": [], "proposed_cases": ["invalid_points all raise", "coordinate text cannot inject SQL"]},
+    {"id": "null-is-not-null-island", "adr": "ADR-0057", "rule": "Native absence stores SQL NULL and remains distinct from the valid point zero zero.", "cases": [], "proposed_cases": ["null round trip", "zero zero round trip", "null excluded from radius query"]},
+    {"id": "postgis-ddl-and-index-are-real", "adr": "ADR-0057", "rule": "PointField creates geography Point DDL and an idempotent GiST index in real PostGIS.", "cases": [], "proposed_cases": ["column type introspection", "gist index introspection", "spatial_index false", "second create is idempotent"]},
+    {"id": "distance-is-spheroid-metres", "adr": "ADR-0057", "rule": "Radius, selected distance and distance order use PostGIS geography metres.", "cases": [], "proposed_cases": ["known city distance", "radius includes boundary", "negative radius raises"]},
+    {"id": "radius-is-a-circle-not-a-box", "adr": "ADR-0057", "rule": "within-distance uses ST_DWithin semantics and excludes a point inside the bounding box corner but outside the circle.", "cases": [], "proposed_cases": ["bbox corner excluded", "gist index appears in explain"]},
+    {"id": "earth-edge-cases-stay-correct", "adr": "ADR-0057", "rule": "Distance takes the short antimeridian path and remains finite near a pole.", "cases": [], "proposed_cases": ["antimeridian distance", "polar distance and radius"]},
+    {"id": "distance-order-is-stable", "adr": "ADR-0057", "rule": "Equidistant rows use a stable secondary key so pagination cannot skip or repeat them.", "cases": [], "proposed_cases": ["twelve tied rows remain primary-key ordered after updates"]},
+    {"id": "spatial-query-geometry-is-bound", "adr": "ADR-0057", "rule": "Intersection and bounding-box values are bound and preserve SRID and coordinate validation.", "cases": [], "proposed_cases": ["geojson polygon intersects", "wkt polygon intersects", "bbox cases", "injection geometry remains data"]},
+    {"id": "geojson-output-is-rfc7946-shaped", "adr": "ADR-0057", "rule": "Point, Feature and FeatureCollection output use longitude-first GeoJSON and preserve query order.", "cases": [], "proposed_cases": ["point geometry", "feature properties", "ordered feature collection", "null geometry"]},
+    {"id": "unsupported-engines-fail-loudly", "adr": "ADR-0057", "rule": "An engine without this spatial provider raises an actionable error instead of approximating or returning wrong rows.", "cases": [], "proposed_cases": ["sqlite point ddl raises", "sqlite spatial query raises"]},
+    {"id": "the-same-fixture-runs-in-all-four", "adr": "ADR-0057", "rule": "Python, PHP, Ruby and Node.js load these bytes and pass every case against real PostGIS.", "cases": [], "proposed_cases": ["four runner path witnesses", "four postgis version witnesses", "six mutation witnesses per framework"]}
+  ]
+}

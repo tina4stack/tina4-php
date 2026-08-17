@@ -13,6 +13,91 @@ namespace Tina4;
 
 class SQLTranslator
 {
+    private const SPATIAL_ENGINES = ['postgres', 'postgresql'];
+    private const SPATIAL_IDENTIFIER = '/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/';
+
+    public static function requireSpatial(string $engine, string $feature): string
+    {
+        $name = strtolower($engine ?: 'unknown');
+        if (!in_array($name, self::SPATIAL_ENGINES, true)) {
+            throw new SpatialNotSupportedException(
+                "{$feature} is not supported on the '{$name}' database engine. "
+                . 'Tina4 GIS support is PostGIS-first: use PostgreSQL with CREATE EXTENSION postgis. '
+                . 'Tina4 will not replace a spatial query with an approximate coordinate query. '
+                . 'Use separate float longitude/latitude properties only when no GIS behavior is required.'
+            );
+        }
+        return $name;
+    }
+
+    public static function spatialIdentifier(string $name, string $what = 'column'): string
+    {
+        if (!preg_match(self::SPATIAL_IDENTIFIER, $name)) {
+            throw new \InvalidArgumentException("Spatial {$what} is not a valid SQL identifier: {$name}");
+        }
+        return $name;
+    }
+
+    public static function pointColumnType(string $engine, int $srid = 4326): string
+    {
+        self::requireSpatial($engine, 'PointField');
+        return "geography(Point,{$srid})";
+    }
+
+    public static function spatialIndex(string $engine, string $table, string $column): string
+    {
+        self::requireSpatial($engine, 'spatial index creation');
+        $table = self::spatialIdentifier($table, 'table');
+        $column = self::spatialIdentifier($column);
+        $index = str_replace('.', '_', $table) . "_{$column}_gist";
+        return "CREATE INDEX IF NOT EXISTS {$index} ON {$table} USING GIST ({$column})";
+    }
+
+    public static function pointLiteral(string $engine, int $srid = 4326): string
+    {
+        self::requireSpatial($engine, 'spatial predicates');
+        return "ST_SetSRID(ST_MakePoint(?, ?), {$srid})::geography";
+    }
+
+    public static function withinDistance(string $engine, string $column, int $srid = 4326): string
+    {
+        $column = self::spatialIdentifier($column);
+        return "ST_DWithin({$column}, " . self::pointLiteral($engine, $srid) . ', ?)';
+    }
+
+    public static function distance(string $engine, string $column, int $srid = 4326): string
+    {
+        $column = self::spatialIdentifier($column);
+        return "ST_Distance({$column}, " . self::pointLiteral($engine, $srid) . ')';
+    }
+
+    public static function distanceAs(string $engine, string $column, string $alias, int $srid = 4326): string
+    {
+        return self::distance($engine, $column, $srid) . ' AS ' . self::spatialIdentifier($alias, 'result alias');
+    }
+
+    public static function geometryLiteral(string $engine, string $form = 'ewkt', int $srid = 4326): string
+    {
+        self::requireSpatial($engine, 'spatial predicates');
+        return match ($form) {
+            'ewkt' => 'ST_GeogFromText(?)',
+            'geojson' => "ST_SetSRID(ST_GeomFromGeoJSON(?), {$srid})::geography",
+            default => throw new \InvalidArgumentException("Unsupported spatial geometry form: {$form}"),
+        };
+    }
+
+    public static function intersects(string $engine, string $column, string $form = 'ewkt', int $srid = 4326): string
+    {
+        $column = self::spatialIdentifier($column);
+        return "ST_Intersects({$column}, " . self::geometryLiteral($engine, $form, $srid) . ')';
+    }
+
+    public static function bbox(string $engine, string $column, int $srid = 4326): string
+    {
+        self::requireSpatial($engine, 'bbox()');
+        $column = self::spatialIdentifier($column);
+        return "ST_Intersects({$column}, ST_MakeEnvelope(?, ?, ?, ?, {$srid})::geography)";
+    }
     /** @var array<string, array{value: mixed, expiresAt: float}> Query cache */
     private static array $cache = [];
 
@@ -482,11 +567,12 @@ class SQLTranslator
         }
 
         $reordered = [];
+        $didReplace = false;
         $out = preg_replace_callback(
             // Match a string literal, a line comment, or a block comment
             // first (preserved as-is); else match :name.
-            "/(?:'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"|--[^\n]*|\\/\\*.*?\\*\\/)|:([a-zA-Z_][a-zA-Z0-9_]*)/s",
-            function ($m) use ($params, &$reordered) {
+            "/(?:'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"|--[^\n]*|\\/\\*.*?\\*\\/)|(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)/s",
+            function ($m) use ($params, &$reordered, &$didReplace) {
                 if (!isset($m[1]) || $m[1] === '') {
                     return $m[0]; // string or comment, preserved
                 }
@@ -498,12 +584,16 @@ class SQLTranslator
                 } else {
                     return ':' . $name; // unknown — leave it for the driver to complain
                 }
+                $didReplace = true;
                 return '?';
             },
             $sql
         );
 
-        return [$out, $reordered];
+        // PostgreSQL casts (`value::geography`) contain a colon but are not
+        // named parameters. If no actual :name was replaced, retain ordinary
+        // positional values instead of silently dropping every binding.
+        return [$out, $didReplace ? $reordered : array_values($params)];
     }
 
     // ── RETURNING Clause Handling ────────────────────────────────────

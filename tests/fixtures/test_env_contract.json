@@ -51,6 +51,7 @@
 
   "services": {
     "PG": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "DB", "DB_2"],
+    "POSTGIS": ["URL"],
     "MYSQL": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "DB"],
     "MSSQL": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "DB"],
     "FIREBIRD": ["URL", "HOST", "PORT", "USERNAME", "PASSWORD", "PATH"],

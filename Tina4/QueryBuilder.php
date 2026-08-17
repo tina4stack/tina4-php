@@ -33,6 +33,7 @@ class QueryBuilder
     private string $table;
     private ?DatabaseAdapter $db;
     private array $columns = ['*'];
+    private array $selectParams = [];
     private array $wheres = [];
     private array $params = [];
     private array $joins = [];
@@ -40,16 +41,19 @@ class QueryBuilder
     private array $havings = [];
     private array $havingParams = [];
     private array $orderByCols = [];
+    private array $orderByParams = [];
+    private ?string $primaryKey = null;
     private ?int $limitVal = null;
     private ?int $offsetVal = null;
 
     /**
      * Private constructor — use static factory methods.
      */
-    private function __construct(string $table, ?DatabaseAdapter $db = null)
+    private function __construct(string $table, ?DatabaseAdapter $db = null, ?string $primaryKey = null)
     {
         $this->table = $table;
         $this->db = $db;
+        $this->primaryKey = $primaryKey;
     }
 
     /**
@@ -59,9 +63,9 @@ class QueryBuilder
      * @param DatabaseAdapter|null $db Database adapter (optional).
      * @return self
      */
-    public static function fromTable(string $table, ?DatabaseAdapter $db = null): self
+    public static function fromTable(string $table, ?DatabaseAdapter $db = null, ?string $primaryKey = null): self
     {
-        return new self($table, $db);
+        return new self($table, $db, $primaryKey);
     }
 
     /**
@@ -74,6 +78,7 @@ class QueryBuilder
     {
         if (!empty($columns)) {
             $this->columns = $columns;
+            $this->selectParams = [];
         }
         return $this;
     }
@@ -170,6 +175,76 @@ class QueryBuilder
         return $this;
     }
 
+    /** Restrict rows to points within a radius measured in metres. */
+    public function withinDistance(string $column, mixed $point, float $radiusMetres, int $srid = Point::DEFAULT_SRID): self
+    {
+        if (!is_finite($radiusMetres) || $radiusMetres < 0) {
+            throw new \InvalidArgumentException('Spatial radius must be a finite number greater than or equal to zero');
+        }
+        $point = Point::parse($point, $srid);
+        return $this->where(
+            SQLTranslator::withinDistance($this->engine(), $column, $point->srid),
+            [$point->lon, $point->lat, $radiusMetres]
+        );
+    }
+
+    /** Restrict rows to points intersecting a bound WKT/EWKT or GeoJSON geometry. */
+    public function intersects(string $column, mixed $geometry, int $srid = Point::DEFAULT_SRID): self
+    {
+        [$bound, $form] = Point::geometryBinding($geometry, $srid);
+        return $this->where(
+            SQLTranslator::intersects($this->engine(), $column, $form, $srid),
+            [$bound]
+        );
+    }
+
+    /** Restrict rows to a longitude/latitude bounding box. */
+    public function bbox(string $column, mixed $minLon, mixed $minLat, mixed $maxLon, mixed $maxLat, int $srid = Point::DEFAULT_SRID): self
+    {
+        $values = [$minLon, $minLat, $maxLon, $maxLat];
+        foreach ($values as $value) {
+            if (is_bool($value) || !is_numeric($value) || !is_finite((float) $value)) {
+                throw new \InvalidArgumentException('Bounding-box coordinates must be finite numbers');
+            }
+        }
+        [$west, $south, $east, $north] = array_map('floatval', $values);
+        new Point($west, $south, $srid);
+        new Point($east, $north, $srid);
+        if ($west > $east || $south > $north) {
+            throw new \InvalidArgumentException('Bounding box must be ordered west, south, east, north');
+        }
+        return $this->where(SQLTranslator::bbox($this->engine(), $column, $srid), [$west, $south, $east, $north]);
+    }
+
+    /** Add an exact PostGIS distance (metres) to the selected columns. */
+    public function selectDistance(string $column, mixed $point, string $alias = 'distance', int $srid = Point::DEFAULT_SRID): self
+    {
+        $point = Point::parse($point, $srid);
+        if ($this->columns === ['*']) {
+            $this->columns = ['*'];
+        }
+        $this->columns[] = SQLTranslator::distanceAs($this->engine(), $column, $alias, $point->srid);
+        $this->selectParams = array_merge($this->selectParams, [$point->lon, $point->lat]);
+        return $this;
+    }
+
+    /** Order by exact distance and then the model primary key for stable ties. */
+    public function orderByDistance(string $column, mixed $point, string $direction = 'ASC', int $srid = Point::DEFAULT_SRID): self
+    {
+        $direction = strtoupper($direction);
+        if (!in_array($direction, ['ASC', 'DESC'], true)) {
+            throw new \InvalidArgumentException('Distance order direction must be ASC or DESC');
+        }
+        if ($this->primaryKey === null || $this->primaryKey === '') {
+            throw new \LogicException('Stable spatial ordering needs a primary key; create the builder through ORM::query() or pass one to fromTable()');
+        }
+        $point = Point::parse($point, $srid);
+        $this->orderByCols[] = SQLTranslator::distance($this->engine(), $column, $point->srid) . " {$direction}";
+        $this->orderByParams = array_merge($this->orderByParams, [$point->lon, $point->lat]);
+        $this->orderByCols[] = SQLTranslator::spatialIdentifier($this->primaryKey, 'primary key') . ' ASC';
+        return $this;
+    }
+
     /**
      * Set LIMIT and optional OFFSET.
      *
@@ -234,7 +309,7 @@ class QueryBuilder
     {
         $this->ensureDb();
         $sql = $this->toSql();
-        $allParams = array_merge($this->params, $this->havingParams);
+        $allParams = array_merge($this->selectParams, $this->params, $this->havingParams, $this->orderByParams);
 
         return $this->db->fetch(
             $sql,
@@ -253,7 +328,7 @@ class QueryBuilder
     {
         $this->ensureDb();
         $sql = $this->toSql();
-        $allParams = array_merge($this->params, $this->havingParams);
+        $allParams = array_merge($this->selectParams, $this->params, $this->havingParams, $this->orderByParams);
 
         $result = $this->db->fetch(
             $sql,
@@ -278,9 +353,18 @@ class QueryBuilder
 
         // Build a count query by replacing columns with COUNT(*)
         $original = $this->columns;
+        $originalSelectParams = $this->selectParams;
+        $originalOrder = $this->orderByCols;
+        $originalOrderParams = $this->orderByParams;
         $this->columns = ['COUNT(*) as cnt'];
+        $this->selectParams = [];
+        $this->orderByCols = [];
+        $this->orderByParams = [];
         $sql = $this->toSql();
         $this->columns = $original;
+        $this->selectParams = $originalSelectParams;
+        $this->orderByCols = $originalOrder;
+        $this->orderByParams = $originalOrderParams;
 
         $allParams = array_merge($this->params, $this->havingParams);
 
@@ -543,5 +627,11 @@ class QueryBuilder
         if ($this->db === null) {
             throw new \RuntimeException('QueryBuilder: No database adapter provided.');
         }
+    }
+
+    private function engine(): string
+    {
+        $this->ensureDb();
+        return $this->db->getDatabaseType();
     }
 }
