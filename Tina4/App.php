@@ -34,7 +34,7 @@ class App
      *
      * @var string
      */
-    public static string $VERSION = '3.13.103';
+    public static string $VERSION = '3.13.104';
 
     /**
      * The health path that is registered no matter what TINA4_HEALTH_PATH says.
@@ -623,6 +623,10 @@ class App
                 Log::error("Route discovery failed: {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}");
             }
         }
+
+        // Configuration-first OIDC routes mount after application discovery so
+        // a canonical-path collision fails loudly rather than being replaced.
+        Sso::mountConfigured();
 
         // Auto-attach CSRF protection when TINA4_CSRF is truthy (true/1/yes/on).
         // OFF by default (unset → not attached); the env flag is the switch, and

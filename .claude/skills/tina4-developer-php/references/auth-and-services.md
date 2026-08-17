@@ -1,5 +1,33 @@
 # Authentication & Services (PHP)
 
+## OpenID Connect SSO
+
+Configure SSO in `.env`. The issuer drives discovery; do not build provider-specific adapters.
+
+```ini
+TINA4_SSO_ISSUER=https://identity.example.com/realms/my-app
+TINA4_SSO_CLIENT_ID=my-app
+TINA4_SSO_CLIENT_SECRET=replace-me
+TINA4_SSO_REDIRECT_URI=https://app.example.com/auth/callback
+TINA4_SSO_SCOPES=["openid", "profile", "email"]
+TINA4_SSO_VERIFY=introspection
+```
+
+When configured, Tina4 mounts `GET /auth/login`, `GET /auth/callback`, and
+`POST /auth/logout`. A route collision stops startup. Existing secured routes receive the
+normalized identity through `$request->user`; provider tokens stay inside reserved Session data.
+
+```php
+use Tina4\Sso;
+
+$sso = Sso::fromIssuer();
+$identity = $sso->identity($request->session);
+```
+
+Use a provider recipe only to find its standards-based issuer and client settings. The runtime API
+stays provider-neutral. In 3.13.104, introspection is the supported verification mode; `jwks` fails
+during configuration until the application supplies a cryptography capability.
+
 ## JWT Authentication
 
 ### Setup

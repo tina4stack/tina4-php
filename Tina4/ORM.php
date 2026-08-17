@@ -109,6 +109,21 @@ abstract class ORM
     public array $decimals = [];
 
     /**
+     * PostGIS Point field overlay, keyed by PHP property name.
+     *
+     *     public ?Point $location = null;
+     *     public array $pointFields = [
+     *         'location' => ['srid' => 4326, 'spatialIndex' => true],
+     *     ];
+     *
+     * A list form (`['location']`) uses SRID 4326 and creates a GiST index.
+     * Spatial fields fail loudly on non-PostGIS engines.
+     *
+     * @var array<int|string, string|array{srid?:int, spatialIndex?:bool}>
+     */
+    public array $pointFields = [];
+
+    /**
      * Per-field validation constraints, keyed by property name, read by
      * validate(). A constraint overlay on top of the typed properties — the
      * properties still declare the columns and their PHP types; this adds the
@@ -308,7 +323,8 @@ abstract class ORM
     public static function query(): QueryBuilder
     {
         $instance = new static();
-        return QueryBuilder::fromTable($instance->tableName, static::resolveDbFor($instance));
+        $primaryKey = $instance->resolveDbColumn($instance->getPrimaryKeys()[0]);
+        return QueryBuilder::fromTable($instance->tableName, static::resolveDbFor($instance), $primaryKey);
     }
 
     /**
@@ -634,6 +650,16 @@ abstract class ORM
         foreach ($data as $key => $value) {
             // Map DB column to PHP property if mapping exists
             $propName = $reverseMapping[$key] ?? $key;
+
+            $pointConfig = $this->pointFieldConfig($propName);
+            if ($pointConfig !== null && $value !== null) {
+                $value = Point::parse($value, $pointConfig['srid']);
+                if ($value->srid !== $pointConfig['srid']) {
+                    throw new \InvalidArgumentException(
+                        "Point field '{$propName}' expects SRID {$pointConfig['srid']}; received {$value->srid}"
+                    );
+                }
+            }
 
             // A JSON column comes back from the driver as a JSON string (SQLite
             // TEXT, MySQL JSON, PostgreSQL JSONB via the text protocol, MSSQL
@@ -1197,6 +1223,11 @@ abstract class ORM
     public function toDict(?array $include = null, string $case = 'snake'): array
     {
         $modelProps = $this->getModelProperties();
+        foreach ($modelProps as $key => $value) {
+            if ($value instanceof Point) {
+                $modelProps[$key] = $value->geoJson();
+            }
+        }
         if ($case === 'snake') {
             // Map camelCase keys back to snake_case DB column names
             $result = [];
@@ -1238,6 +1269,33 @@ abstract class ORM
         }
 
         return $result;
+    }
+
+    /** Render this model as an RFC 7946 GeoJSON Feature. */
+    public function toFeature(?string $geometryField = null, ?array $include = null): array
+    {
+        $geometryField ??= array_key_first($this->normalisedPointFields());
+        if ($geometryField === null || $this->pointFieldConfig($geometryField) === null) {
+            throw new \LogicException('toFeature() needs a declared point field');
+        }
+        $properties = $this->toDict($include, 'snake');
+        $geometryKey = $this->getDbColumn($geometryField);
+        $geometry = $properties[$geometryKey] ?? null;
+        unset($properties[$geometryKey]);
+        return ['type' => 'Feature', 'geometry' => $geometry, 'properties' => $properties];
+    }
+
+    /** @param iterable<ORM> $models */
+    public static function featureCollection(iterable $models, ?string $geometryField = null, ?array $include = null): array
+    {
+        $features = [];
+        foreach ($models as $model) {
+            if (!$model instanceof ORM) {
+                throw new \InvalidArgumentException('featureCollection() expects ORM model instances');
+            }
+            $features[] = $model->toFeature($geometryField, $include);
+        }
+        return ['type' => 'FeatureCollection', 'features' => $features];
     }
 
     /**
@@ -1930,7 +1988,7 @@ abstract class ORM
         $this->ensureDb();
 
         if ($this->_db->tableExists($this->tableName)) {
-            return true;
+            return $this->createSpatialIndexes();
         }
 
         $dialect = $this->detectDialect();
@@ -1985,6 +2043,7 @@ abstract class ORM
                 'bool'     => $boolSql,
                 'datetime' => $datetimeSql,
                 'json'     => $jsonSql,
+                'point'    => SQLTranslator::pointColumnType($dialect, (int) ($def['srid'] ?? Point::DEFAULT_SRID)),
                 default    => 'VARCHAR(255)',
             };
 
@@ -2089,8 +2148,7 @@ abstract class ORM
             Log::error("createTable failed for {$this->tableName}: " . ($this->_db->error() ?? 'unknown error'), ['sql' => $sql]);
             return false;
         }
-
-        return true;
+        return $this->createSpatialIndexes();
     }
 
     /**
@@ -2199,6 +2257,7 @@ abstract class ORM
             // it (which is how a model asks for a real DECIMAL(p, s) column, since
             // a PHP typed `float` property cannot carry a precision/scale).
             'decimals',
+            'pointFields',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
@@ -2228,8 +2287,9 @@ abstract class ORM
             // its logical type is 'decimal' and it carries the declared
             // precision/scale, which createTable() renders as DECIMAL(p, s).
             $isDecimal = isset($this->decimals[$name]);
+            $pointConfig = $this->pointFieldConfig($name);
             $columns[$name] = [
-                'type'       => $isDecimal ? 'decimal' : $this->logicalTypeFor($prop, $name),
+                'type'       => $pointConfig !== null ? 'point' : ($isDecimal ? 'decimal' : $this->logicalTypeFor($prop, $name)),
                 'hasDefault' => $prop->hasDefaultValue(),
                 'default'    => $prop->hasDefaultValue() ? $prop->getDefaultValue() : null,
                 // A declared non-nullable type (`string`, `int`) is NOT NULL; a
@@ -2237,6 +2297,8 @@ abstract class ORM
                 'nullable'   => $prop->getType()?->allowsNull() ?? true,
                 'precision'  => $isDecimal ? (int) ($this->decimals[$name][0] ?? 10) : null,
                 'scale'      => $isDecimal ? (int) ($this->decimals[$name][1] ?? 2) : null,
+                'srid'       => $pointConfig['srid'] ?? null,
+                'spatialIndex' => $pointConfig['spatialIndex'] ?? null,
             ];
         }
 
@@ -2731,6 +2793,16 @@ abstract class ORM
                     JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
                 );
             }
+            $pointConfig = $this->pointFieldConfig($name);
+            if ($pointConfig !== null && $value !== null) {
+                $point = Point::parse($value, $pointConfig['srid']);
+                if ($point->srid !== $pointConfig['srid']) {
+                    throw new \InvalidArgumentException(
+                        "Point field '{$name}' expects SRID {$pointConfig['srid']}; received {$point->srid}"
+                    );
+                }
+                $value = $point->ewkt();
+            }
             $column = $this->getDbColumn($name);
             $data[$column] = $value;
         }
@@ -2798,6 +2870,7 @@ abstract class ORM
             // it (which is how a model asks for a real DECIMAL(p, s) column, since
             // a PHP typed `float` property cannot carry a precision/scale).
             'decimals',
+            'pointFields',
             // $fields is a validation-constraint overlay, never a column —
             // exclude it even when a subclass redeclares it (which is how a
             // model attaches its rules: public array $fields = [...];).
@@ -2828,6 +2901,71 @@ abstract class ORM
         }
 
         return $props;
+    }
+
+    /** @return array<string, array{srid:int, spatialIndex:bool}> */
+    private function normalisedPointFields(): array
+    {
+        $normalised = [];
+        foreach ($this->pointFields as $key => $config) {
+            if (is_int($key)) {
+                if (!is_string($config) || $config === '') {
+                    throw new \InvalidArgumentException('Point field list entries must be property names');
+                }
+                $name = $config;
+                $config = [];
+            } else {
+                $name = $key;
+                if (!is_array($config)) {
+                    throw new \InvalidArgumentException("Point field '{$name}' configuration must be an array");
+                }
+            }
+            $srid = $config['srid'] ?? Point::DEFAULT_SRID;
+            if (is_bool($srid) || filter_var($srid, FILTER_VALIDATE_INT) === false || (int) $srid <= 0) {
+                throw new \InvalidArgumentException("Point field '{$name}' SRID must be a positive integer");
+            }
+            $normalised[$name] = [
+                'srid' => (int) $srid,
+                'spatialIndex' => (bool) ($config['spatialIndex'] ?? $config['spatial_index'] ?? true),
+            ];
+        }
+        return $normalised;
+    }
+
+    /** @return array{srid:int, spatialIndex:bool}|null */
+    private function pointFieldConfig(string $name): ?array
+    {
+        return $this->normalisedPointFields()[$name] ?? null;
+    }
+
+    private function createSpatialIndexes(): bool
+    {
+        $fields = $this->normalisedPointFields();
+        if ($fields === []) {
+            return true;
+        }
+        $this->ensureDb();
+        $dialect = $this->detectDialect();
+        try {
+            foreach ($fields as $property => $config) {
+                SQLTranslator::pointColumnType($dialect, $config['srid']);
+                if (!$config['spatialIndex']) {
+                    continue;
+                }
+                $this->_db->execute(SQLTranslator::spatialIndex(
+                    $dialect,
+                    $this->tableName,
+                    $this->resolveDbColumn($property)
+                ));
+            }
+            $this->_db->commit();
+            return true;
+        } catch (SpatialNotSupportedException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error("Spatial index creation failed for {$this->tableName}: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**

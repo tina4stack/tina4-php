@@ -285,7 +285,7 @@ class Session
 
         // Exclude flash data from all()
         foreach (array_keys($result) as $key) {
-            if (str_starts_with($key, '_flash_')) {
+            if (str_starts_with($key, '_flash_') || in_array($key, ['_tina4_sso', '_tina4_sso_pending'], true)) {
                 unset($result[$key]);
             }
         }

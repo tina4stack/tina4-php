@@ -3,7 +3,7 @@ name: tina4-developer-php
 description: >
   Use whenever a developer is building a PHP application with the Tina4 framework (tina4-php).
   Trigger when the user wants to create routes, define ORM models, write Frond templates, set up
-  authentication, use the queue system, configure databases, deploy with Docker, or any other app
+  JWT or OpenID Connect SSO, use GIS/PostGIS, use the queue system, configure databases, deploy with Docker, or any other app
   development task in a tina4-php project. Also trigger when a project's directory structure matches
   a Tina4 PHP app (index.php + src/routes/, src/orm/, src/templates/, Tina4/, vendor/) or the user
   mentions building something with tina4-php, even casually like "add a login page" or "create an
@@ -639,13 +639,13 @@ Read these when you need detailed patterns for a specific area:
   CORS, rate limiting. Read this for any HTTP/API work.
 
 - **`references/data-and-orm.md`** — ORM models, database connections, migrations, seeding,
-  queries, relationships, pagination, QueryBuilder. Read this for any data work.
+  queries, relationships, pagination, QueryBuilder, GIS and PostGIS. Read this for any data work.
 
 - **`references/templates-and-frontend.md`** — Frond templates, live blocks, frond.js helper,
   forms, CRUD tables, WebSocket. Read this for any UI/frontend work.
 
-- **`references/auth-and-services.md`** — JWT authentication, sessions, queue system, email,
-  GraphQL, events, caching, i18n. Read this for auth or background services.
+- **`references/auth-and-services.md`** — JWT authentication, provider-neutral OpenID Connect
+  SSO, sessions, queue system, email, GraphQL, events, caching, i18n. Read this for auth or background services.
 
 - **`references/realtime.md`** — Real-time collaboration: WebRTC signalling relay (mesh calls),
   secured chat channels (presence/typing/read-receipts + history), and file upload/download.

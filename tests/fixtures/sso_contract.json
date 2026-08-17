@@ -1,0 +1,112 @@
+{
+  "_comment": [
+    "Feature 136 configuration-first OIDC SSO contract (ADR-0056).",
+    "Every group is OWED until the same proposed cases run in all four named suites.",
+    "The core live flow is green in all four frameworks; the adversarial groups below remain OWED until every named case has a real witness.",
+    "Primary proof uses a real standards-compliant OIDC provider and real Tina4 Sessions; no mocks or fake OIDC server."
+  ],
+  "version": 1,
+  "decided": "2026-08-17",
+  "adr": "ADR-0056",
+  "invariants": [
+    {
+      "id": "configuration-and-discovery-are-issuer-driven",
+      "adr": "ADR-0056",
+      "rule": "Issuer configuration and discovery metadata drive the runtime; exact issuer and required endpoints fail closed.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "real provider issuer discovers every required endpoint", "given": "a configured disposable provider realm", "when": "SSO initializes", "then": "metadata supplies the flow without a provider adapter", "guards_against": "hard-coded provider endpoint construction"},
+        {"name": "mismatched discovery issuer fails before login", "given": "metadata with a different issuer", "when": "SSO initializes", "then": "configuration fails", "guards_against": "mix-up and prefix matching"}
+      ]
+    },
+    {
+      "id": "login-is-code-pkce-and-safe-return",
+      "adr": "ADR-0056",
+      "rule": "Login uses code plus PKCE S256 and one-use state/nonce stored in Session; return targets are local paths.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "login redirects to real provider with code and pkce s256", "given": "an anonymous Session", "when": "GET auth login", "then": "authorization request carries code state nonce and S256", "guards_against": "implicit flow or plaintext PKCE"},
+        {"name": "external return target falls back to slash", "given": "an absolute or protocol-relative external URL", "when": "login begins", "then": "Session stores slash", "guards_against": "open redirect", "mutation_witness": "remove return validation"}
+      ]
+    },
+    {
+      "id": "callback-regenerates-session-and-attaches-identity",
+      "adr": "ADR-0056",
+      "rule": "A verified callback consumes pending material, regenerates Session and atomically stores reserved SSO identity and credentials.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "valid callback rotates session and preserves deliberate state", "given": "real OIDC provider login plus pre-login cart data", "when": "callback completes", "then": "id changes old id dies cart remains identity exists", "guards_against": "fixation or destructive handoff", "mutation_witness": "disable Session regeneration"},
+        {"name": "sso internals never appear in session all", "given": "an authenticated SSO Session", "when": "session all is read", "then": "_tina4_sso identity and credentials are absent", "guards_against": "token disclosure", "mutation_witness": "stop reserved-key filtering"}
+      ]
+    },
+    {
+      "id": "session-resume-feeds-existing-secured-routes",
+      "adr": "ADR-0056",
+      "rule": "A later request with only the Tina4 Session cookie restores request.user before the existing Auth gate.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "session cookie authenticates an existing secured route", "given": "completed login and no Authorization header", "when": "request secured route", "then": "200 and normalized request.user", "guards_against": "parallel SSO-only authorization"},
+        {"name": "unknown session cannot restore sso identity", "given": "random Session id", "when": "request secured route", "then": "existing unauthenticated response", "guards_against": "trusting an unverified cookie"}
+      ]
+    },
+    {
+      "id": "identity-roles-and-groups-are-normalized",
+      "adr": "ADR-0056",
+      "rule": "Provider claims map to the same identity; provider realm/client roles and groups are unique sorted strings.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "realm and target client roles merge deterministically", "given": "overlapping roles and groups plus another clients roles", "when": "identity normalizes", "then": "expected unique sorted values exclude other client", "guards_against": "privilege leakage and ordering drift"},
+        {"name": "configured generic claim map produces the same identity", "given": "equivalent provider claim names", "when": "identity normalizes", "then": "canonical shape matches", "guards_against": "provider branches in runtime"}
+      ]
+    },
+    {
+      "id": "provider-verification-fails-closed",
+      "adr": "ADR-0056",
+      "rule": "Wrong issuer/audience, inactive/expired tokens, bad state and replay create no authenticated Session.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "wrong issuer audience and revoked token fail callback", "given": "real tokens from a second realm/client and a revoked token", "when": "verification runs", "then": "no identity is stored", "guards_against": "signature-only acceptance"},
+        {"name": "bad state and replayed callback fail", "given": "wrong state then consumed real callback", "when": "callback runs", "then": "both fail and pending data is gone", "guards_against": "login CSRF and replay", "mutation_witness": "skip state comparison"}
+      ]
+    },
+    {
+      "id": "refresh-rotates-credentials-atomically",
+      "adr": "ADR-0056",
+      "rule": "Expiry triggers one refresh; rotated credentials replace the old set atomically, while failure clears authentication.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "expired access token refreshes the same session", "given": "real short-lived provider credentials", "when": "secured request follows expiry", "then": "one refresh succeeds and rotated refresh token is retained", "guards_against": "avoidable logout and lost rotation", "mutation_witness": "retain old refresh token then refresh twice"},
+        {"name": "failed refresh clears sso authentication", "given": "revoked real OIDC provider Session", "when": "refresh is required", "then": "secured route denies and credentials are removed", "guards_against": "continued use after revocation"}
+      ]
+    },
+    {
+      "id": "logout-is-local-first",
+      "adr": "ADR-0056",
+      "rule": "Logout destroys local Session/cookie first and then provider Session when advertised; remote failure cannot preserve local auth.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "logout destroys local and provider sessions", "given": "authenticated user", "when": "POST logout and follow end-session", "then": "cookie expires old id fails and provider prompts again", "guards_against": "partial logout"},
+        {"name": "provider logout failure cannot preserve local session", "given": "unavailable provider logout", "when": "POST logout", "then": "old Session cannot access secured route", "guards_against": "remote availability controlling local revocation", "mutation_witness": "destroy local Session after remote call"}
+      ]
+    },
+    {
+      "id": "session-provider-is-substitutable",
+      "adr": "ADR-0056",
+      "rule": "Login, resume, refresh and logout use only Session's public contract and behave identically on file and non-file providers.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "sso handoff is identical on file and redis sessions", "given": "real OIDC provider and each real Session backend", "when": "login resume refresh logout", "then": "HTTP and request.user outcomes match", "guards_against": "one-provider persistence assumptions", "witness_must_resolve": [{"coordinate": "Redis connection and logical database", "strategy": "resolve", "evidence": ["TINA4_SESSION_REDIS"], "symptom_when_assumed": "probe reads a different Redis and reports a missing Session"}]}
+      ]
+    },
+    {
+      "id": "configuration-swagger-and-observability-stay-aligned",
+      "adr": "ADR-0056",
+      "rule": "Swagger uses the configured discovery URL while logs/errors/status/debug never reveal SSO secrets or credentials.",
+      "suites": {"python": "tests/test_sso_contract.py", "php": "tests/SsoContractTest.php", "ruby": "spec/sso_contract_spec.rb", "nodejs": "test/ssoContract.test.ts"},
+      "proposed_cases": [
+        {"name": "swagger openidconnect scheme uses configured issuer discovery", "given": "configured SSO", "when": "OpenAPI is generated", "then": "scheme and secured routes match runtime configuration", "guards_against": "documentation/runtime drift"},
+        {"name": "sso failures redact every credential marker", "given": "unique secret code verifier and token markers", "when": "callback refresh logout fail and output is inspected", "then": "no marker appears", "guards_against": "credential leakage", "mutation_witness": "log one raw provider response"}
+      ]
+    }
+  ]
+}

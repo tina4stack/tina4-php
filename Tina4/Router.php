@@ -1850,6 +1850,12 @@ class Router
         }
 
         if ($requiresAuth) {
+            $sso = $request->session?->get('_tina4_sso');
+            $ssoIdentity = is_array($sso) ? ($sso['identity'] ?? null) : null;
+            if (is_array($ssoIdentity) && !empty($ssoIdentity['issuer']) && !empty($ssoIdentity['subject'])) {
+                $request->user = $ssoIdentity;
+                return null;
+            }
             $token = null;
             $tokenSource = null;
 
