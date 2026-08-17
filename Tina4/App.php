@@ -624,6 +624,10 @@ class App
             }
         }
 
+        // Configuration-first OIDC routes mount after application discovery so
+        // a canonical-path collision fails loudly rather than being replaced.
+        Sso::mountConfigured();
+
         // Auto-attach CSRF protection when TINA4_CSRF is truthy (true/1/yes/on).
         // OFF by default (unset → not attached); the env flag is the switch, and
         // once attached TINA4_CSRF=false is the kill switch. Idempotent. Done

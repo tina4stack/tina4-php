@@ -144,6 +144,17 @@ class Swagger
             ];
         }
 
+        $ssoIssuer = rtrim((string)(DotEnv::getEnv('TINA4_SSO_ISSUER', '') ?? ''), '/');
+        if ($ssoIssuer !== '') {
+            $schemes['oidc'] = [
+                'type' => 'openIdConnect',
+                'openIdConnectUrl' => $ssoIssuer . '/.well-known/openid-configuration',
+            ];
+            $schemes['ssoSession'] = [
+                'type' => 'apiKey', 'in' => 'cookie', 'name' => 'tina4_session',
+            ];
+        }
+
         // Registered schemes win (let an app override bearerAuth or add oauth2).
         foreach (self::$registeredSchemes as $name => $def) {
             $schemes[$name] = $def;
@@ -708,8 +719,12 @@ class Swagger
                         ];
                     }
                 } elseif ($routeRequiresAuth) {
+                    $requirements = [[$defaultScheme => []]];
+                    if ($defaultScheme === 'bearerAuth' && isset($schemes['ssoSession'])) {
+                        $requirements[] = ['ssoSession' => []];
+                    }
                     $operation['security'] = self::sanitizeSecurity(
-                        [[$defaultScheme => []]],
+                        $requirements,
                         $schemes
                     );
                     $operation['responses']['401'] = [
