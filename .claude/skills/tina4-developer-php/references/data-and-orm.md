@@ -1,5 +1,28 @@
 # Data, ORM & Database (PHP)
 
+## GIS and PostGIS
+
+Use `Point` for geographic points. Coordinates are always `[longitude, latitude]`, while radius
+and returned distance use metres.
+
+```php
+use Tina4\Point;
+
+$site->location = new Point(18.4241, -33.9249);
+$site->save();
+
+$nearby = ChargePoint::query()
+    ->withinDistance('location', [18.42, -33.92], 5000)
+    ->selectDistance('location', [18.42, -33.92])
+    ->orderByDistance('location', [18.42, -33.92])
+    ->get();
+```
+
+Declare `public ?Point $location = null` and add `'location' => ['srid' => 4326,
+'spatialIndex' => true]` to `$pointFields`. PostGIS stores `geography(Point,4326)` and creates a
+GiST index. Unsupported engines fail instead of storing fake spatial text. `Point::parse()` accepts
+coordinate pairs, WKT/EWKT, GeoJSON, or WKB/EWKB; `toFeature()` returns map-ready GeoJSON.
+
 ## Defining Models
 
 Drop a model file in `src/orm/` and it's auto-registered. In v3, **declare public properties
