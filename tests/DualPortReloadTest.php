@@ -41,26 +41,51 @@ class DualPortReloadTest extends TestCase
         DevAdmin::$suppressReload = false;
     }
 
-    /** Main (hot-reload) port: the /__dev_reload reload script IS injected. */
+    /**
+     * Main (hot-reload) port: the reloader is enabled.
+     *
+     * Since the CSP-clean refactor the reloader script itself lives in the
+     * external `/__dev/toolbar.js` asset — the toolbar HTML no longer inlines
+     * it. Suppression is now signalled by a `data-reload` attribute on the
+     * toolbar root that the external JS reads to decide whether to connect.
+     * On the main port the attribute must be `"1"`. The `/__dev_reload` URL
+     * still has to exist SOMEWHERE for the reloader to work; it now lives in
+     * `DevAdmin::toolbarJs()`, so we also confirm that.
+     */
     public function testMainPortInjectsReloadScript(): void
     {
         DevAdmin::$suppressReload = false;
         $html = DevAdmin::renderToolbar('GET', '/', 'static', 'req-main', 5);
 
         $this->assertStringContainsString('tina4-dev-toolbar', $html, 'the dev toolbar shell should render');
-        $this->assertStringContainsString('/__dev_reload', $html, 'main port must inject the hot-reload script');
+        $this->assertStringContainsString('data-reload="1"', $html, 'main port must enable the reloader via data-reload="1"');
+        $this->assertStringContainsString('<script src="/__dev/toolbar.js"></script>', $html, 'the external toolbar script must be referenced');
+        // toolbarJs() is a private static helper (its output ships via the
+        // /__dev/toolbar.js route). Reflection reads what the route serves
+        // without widening the public API just for the test.
+        $js = (new \ReflectionMethod(DevAdmin::class, 'toolbarJs'))->invoke(null);
+        $this->assertStringContainsString('/__dev_reload', $js, 'the reload WS URL must live in the external toolbar JS');
     }
 
-    /** AI port (base+1000): the reload script is suppressed — no auto-refresh. */
+    /**
+     * AI port (base+1000): the reloader is suppressed — no auto-refresh.
+     *
+     * The suppression signal is `data-reload="0"` on the toolbar root. The old
+     * assertion (that `/__dev_reload` was NOT in the HTML) still passed with
+     * the CSP-clean shape, but ONLY VACUOUSLY: the URL is no longer in the
+     * HTML in either variant — it lives in the external `/__dev/toolbar.js`.
+     * Asserting on the actual suppression signal is what proves the gate.
+     */
     public function testAiPortSuppressesReloadScript(): void
     {
         DevAdmin::$suppressReload = true;
         $html = DevAdmin::renderToolbar('GET', '/', 'static', 'req-ai', 5);
 
-        $this->assertStringNotContainsString('/__dev_reload', $html, 'AI port must NOT inject the hot-reload script');
+        $this->assertStringContainsString('data-reload="0"', $html, 'AI port must suppress the reloader via data-reload="0"');
+        $this->assertStringNotContainsString('data-reload="1"', $html, 'the enabled signal must not be present on the AI port');
     }
 
-    /** The suppression is per-request: flipping the flag flips the output. */
+    /** The suppression is per-request: flipping the flag flips the data-reload attribute. */
     public function testSuppressionTogglesPerRequest(): void
     {
         DevAdmin::$suppressReload = false;
@@ -69,7 +94,7 @@ class DualPortReloadTest extends TestCase
         DevAdmin::$suppressReload = true;
         $ai = DevAdmin::renderToolbar('GET', '/', 'static', 'b', 1);
 
-        $this->assertStringContainsString('/__dev_reload', $main);
-        $this->assertStringNotContainsString('/__dev_reload', $ai);
+        $this->assertStringContainsString('data-reload="1"', $main);
+        $this->assertStringContainsString('data-reload="0"', $ai);
     }
 }

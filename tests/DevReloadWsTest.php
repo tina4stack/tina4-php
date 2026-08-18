@@ -265,6 +265,14 @@ class DevReloadWsTest extends TestCase
 
     // ── Injected client: WebSocket-primary, poll is fallback only ─────
 
+    /**
+     * The WS-primary reloader logic used to live inline in the injected HTML,
+     * so this test asserted every JS marker inside $html. Since the CSP-clean
+     * refactor those JS markers live in the external `/__dev/toolbar.js` asset
+     * (the HTML now only references it via `<script src>`), so the assertions
+     * split cleanly along that boundary: prove the HTML pulls the external
+     * asset in, and prove the WS-primary logic is present inside the asset.
+     */
     public function testInjectedClientIsWebSocketPrimary(): void
     {
         $oldSuppress = DevAdmin::$suppressReload;
@@ -274,28 +282,52 @@ class DevReloadWsTest extends TestCase
         } finally {
             DevAdmin::$suppressReload = $oldSuppress;
         }
+        // toolbarJs() is a private static helper (its output ships via the
+        // /__dev/toolbar.js route). Reflection reads what the route serves
+        // without widening the public API just for the test.
+        $js = (new \ReflectionMethod(DevAdmin::class, 'toolbarJs'))->invoke(null);
+
+        // The HTML pulls the external CSP-clean asset in and marks the
+        // reloader as enabled via data-reload; without either, the JS in the
+        // asset would either never load or refuse to connect.
+        $this->assertStringContainsString('<script src="/__dev/toolbar.js"></script>', $html);
+        $this->assertStringContainsString('data-reload="1"', $html);
 
         // Opens a WebSocket to /__dev_reload (ws/wss by page protocol).
-        $this->assertStringContainsString("'/__dev_reload'", $html);
-        $this->assertStringContainsString("location.protocol==='https:'?'wss':'ws'", $html);
+        $this->assertStringContainsString("/__dev_reload", $js);
+        $this->assertStringContainsString("location.protocol === 'https:' ? 'wss' : 'ws'", $js);
         // Stops the poll on socket open; (re)starts it on close.
-        $this->assertStringContainsString('_t4_stopPoll', $html);
-        $this->assertStringContainsString('_t4_startPoll', $html);
+        $this->assertMatchesRegularExpression('/\bstopPoll\b/', $js);
+        $this->assertMatchesRegularExpression('/\bstartPoll\b/', $js);
         // Reconnects after the socket drops (~2s).
-        $this->assertStringContainsString('setTimeout(_t4_connect,2000)', $html);
+        $this->assertStringContainsString('setTimeout(connect, 2000)', $js);
         // Poll uses a null sentinel and reloads when mtime DIFFERS (not just >),
         // so the first change after load is not swallowed.
-        $this->assertStringContainsString('_t4_mtime===null', $html);
-        $this->assertStringContainsString('d.mtime!==_t4_mtime', $html);
-        $this->assertStringNotContainsString('d.mtime>mt', $html);
+        $this->assertStringContainsString('mtime === null', $js);
+        $this->assertStringContainsString('d.mtime !== mtime', $js);
+        $this->assertStringNotContainsString('d.mtime > mt', $js);
+        $this->assertStringNotContainsString('d.mtime>mt', $js);
         // CSS swaps stylesheet hrefs; everything else does a full reload.
-        $this->assertStringContainsString('location.reload()', $html);
-        $this->assertStringContainsString("link[rel=\"stylesheet\"]", $html);
+        $this->assertStringContainsString('location.reload()', $js);
+        $this->assertStringContainsString('link[rel="stylesheet"]', $js);
+        // The reloader reads the toolbar's data-reload attribute to know
+        // whether to activate at all (suppression gate for the AI port).
+        $this->assertStringContainsString('data-reload', $js);
     }
 
+    /**
+     * The reload client must be gated OFF when suppressed (AI/stable port).
+     *
+     * Before the CSP-clean refactor this checked that `/__dev_reload` and the
+     * client script were absent from the injected HTML; after the refactor the
+     * URL lives in the external asset, so those old assertions passed
+     * VACUOUSLY regardless of what suppression did. Suppression is now
+     * signalled by `data-reload="0"` on the toolbar root, which the external
+     * JS reads and early-returns on. Asserting on that attribute is what
+     * catches a broken suppression check.
+     */
     public function testInjectedClientSuppressedOnAiPort(): void
     {
-        // The reload client must be omitted when suppressed (AI/stable port).
         $oldSuppress = DevAdmin::$suppressReload;
         DevAdmin::$suppressReload = true;
         try {
@@ -304,7 +336,7 @@ class DevReloadWsTest extends TestCase
             DevAdmin::$suppressReload = $oldSuppress;
         }
 
-        $this->assertStringNotContainsString('/__dev_reload', $html);
-        $this->assertStringNotContainsString('_t4_connect', $html);
+        $this->assertStringContainsString('data-reload="0"', $html);
+        $this->assertStringNotContainsString('data-reload="1"', $html);
     }
 }
