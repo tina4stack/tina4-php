@@ -1084,10 +1084,10 @@ class Migration
         // for a v2-upgraded Firebird table (migration_id is its PK; it has no
         // `id` column nor the GEN_TINA4_MIGRATION_ID generator).
         if ($this->isFirebird() && !$this->hasLegacyMigrationIdColumn()) {
-            $rows = $this->db->query(
+            $rows = $this->queryLower(
                 "SELECT GEN_ID(GEN_TINA4_MIGRATION_ID, 1) AS NEXT_ID FROM RDB\$DATABASE"
             );
-            $columns['id'] = (int)($rows[0]['NEXT_ID'] ?? 1);
+            $columns['id'] = (int)($rows[0]['next_id'] ?? 1);
         }
 
         $names        = array_keys($columns);
