@@ -1254,14 +1254,19 @@ DOCKERFILE;
     // ROUTES — List registered routes
     // ────────────────────────────────────────────
     case 'routes':
-        // Load the project
-        if (file_exists($cwd . '/index.php')) {
-            ob_start();
-            include_once $cwd . '/index.php';
-            ob_end_clean();
+        // Discover application code directly. Including index.php here used to
+        // execute `$app->run()`, turning this inspection command into a server.
+        // Models stay first because route files may reference them.
+        $modelsDir = $cwd . '/src/orm';
+        if (is_dir($modelsDir) && class_exists('\Tina4\ModelDiscovery')) {
+            \Tina4\ModelDiscovery::scan($modelsDir);
+        }
+        $routesDir = $cwd . '/src/routes';
+        if (is_dir($routesDir) && class_exists('\Tina4\RouteDiscovery')) {
+            \Tina4\RouteDiscovery::scan($routesDir);
         }
         if (class_exists('\Tina4\Router')) {
-            $routes = \Tina4\Router::list();
+            $routes = \Tina4\Router::getRoutes();
             echo str_pad('METHOD', 8) . str_pad('PATH', 40) . "FLAGS\n";
             echo str_repeat('-', 60) . "\n";
             foreach ($routes as $r) {
