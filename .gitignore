@@ -128,3 +128,11 @@ tests/logs/*.log
 # cwd-relative shadow directory was created, and on Linux sys_get_temp_dir()
 # is /tmp, so the first path segment it checks is exactly this directory.
 tmp/
+
+# A stray SQLite database literally named "sqlite::memory:" was committed at the
+# repo root: the in-memory DSN reached the SQLite adapter with its scheme still
+# attached, so resolveDatabasePath() treated it as a cwd-relative file and
+# SQLite created it. Its colon makes the repo impossible to clone on Windows.
+# Ignore it so it can never return; Database::create() already normalises the
+# documented "sqlite::memory:" URL to ":memory:" before the adapter sees it.
+/sqlite::memory:
