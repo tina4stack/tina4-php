@@ -261,13 +261,13 @@ my-app/
 ├── .env                 # Environment variables
 ├── index.php            # Entry point (see below)
 ├── composer.json        # Requires tina4stack/tina4php
+├── migrations/          # SQL migration files (PROJECT ROOT — NOT src/migrations/)
 ├── src/
 │   ├── routes/          # Drop route files here — auto-discovered
 │   ├── orm/             # Drop model files here — auto-registered
 │   ├── app/             # Helper / service classes (business logic)
 │   ├── templates/       # Frond templates (Twig-like); URL-exposed pages live in templates/pages/
 │   ├── public/          # Static files (served directly)
-│   ├── migrations/      # SQL migration files
 │   └── scss/            # SCSS compiled by the CLI
 └── tests/               # PHPUnit tests
 ```

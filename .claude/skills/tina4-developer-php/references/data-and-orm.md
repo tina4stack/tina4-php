@@ -628,7 +628,7 @@ code generator — write the code yourself from what it returns. Use it as a lad
 
 ## Batteries included — zero third-party dependencies
 
-`composer.json` `require` is just **`php >=8.2`, `ext-openssl`, `ext-json`** — Tina4-PHP's core
+`composer.json` `require` is just **`php >=8.2`, `ext-json`**; `ext-openssl` is `suggest`, not required (it powers opt-in RS256 JWT, `mqtts://`, and HTTPS via `Tina4\Api` — HMAC signing is dep-free). Tina4-PHP's core
 carries **no third-party Composer packages** (98 built-in features; the only optional package is
 `mongodb/mongodb`, a `suggest`/`require-dev` for the Mongo backends). DB drivers ride on PHP
 extensions you already have (`ext-sqlite3`, `ext-pdo`/`ext-pgsql`, …), not vendored code. Before
@@ -643,7 +643,7 @@ you `composer require` anything, check whether it's already in the box. **Need �
 | DB drivers (multi-engine) | `\Tina4\Database\Database::fromEnv()` — SQLite (`ext-sqlite3`) built in; Postgres/MySQL/MSSQL (`ext-pdo`/`ext-pgsql`); Firebird; MongoDB (`ext-mongodb` + `mongodb/mongodb`) |
 | Migrations | `tina4php migrate:create` / `tina4php migrate` CLI (or `\Tina4\Migration`) *(don't add Phinx)* |
 | Templating | `\Tina4\Frond` + `$response->render("page.twig", [...])`; templates in `src/templates/` *(don't add `twig/twig`)* |
-| SCSS → CSS | drop `.scss` in `src/scss/` — auto-compiled on `tina4php serve` (`\Tina4\ScssCompiler`) *(don't add `scssphp/scssphp`)* |
+| SCSS → CSS | drop `.scss` in `src/scss/` — auto-compiled by the external `tina4` Rust CLI (grass), **not** by `tina4php` and **not** by a framework class (there is no `\Tina4\ScssCompiler`) *(don't add `scssphp/scssphp`)* |
 | Input validation | `\Tina4\Validator` |
 | Response / JSON serialization | `$response->json(...)` — arrays → JSON; an ORM model/collection serialized via `toDict()`; also `$response(...)`, `$response->render(...)`, `$response->redirect(...)` |
 | Background queue | `\Tina4\Queue` — `(new Queue(topic: ...))->produce(...)` / `->consume(...)` *(don't add a broker client for simple jobs)* |
@@ -651,7 +651,7 @@ you `composer require` anything, check whether it's already in the box. **Need �
 | Email | `\Tina4\Messenger` — `(new Messenger())->send(to: …, subject: …, body: …, html: true)` *(don't add `phpmailer/phpmailer`)* |
 | Sessions | `$request->session->set/get/has/clear` (backends: file/redis/valkey/mongodb/database via `TINA4_SESSION_BACKEND`) |
 | Caching | `\Tina4\Cache` — `cacheGet/cacheSet/cacheDelete/cacheClear` + `{% cache "k" 60 %}` template blocks |
-| OpenAPI / Swagger docs | auto-generated at `/swagger` (`\Tina4\Docs`) — metadata only, never enforcement |
+| OpenAPI / Swagger docs | auto-generated at `/swagger` by `\Tina4\Swagger::generate()` / `::register()` (`Swagger.php`) — metadata only, never enforcement |
 | WebSockets | `\Tina4\Router::websocket("/ws/…", $handler)`; live regions via Frond `{% live %}` |
 | Real-time (WebRTC signalling, presence) | `\Tina4\Realtime\Realtime::mount(...)` (+ `/api/rtc/config`) |
 | GraphQL API from models | `(new \Tina4\GraphQL())->fromOrm(new User())->register("/graphql")` *(don't add `webonyx/graphql-php`)* |
