@@ -64,46 +64,57 @@ pattern instantly.
 
 ## Detect if you are stale — 💩
 
-Skills drift. The framework moves on and the skill in `~/.claude/skills/` or
-`.claude/skills/` stays at whatever version was installed months ago. Advice
-that was right for 3.13.42 is a **footgun** in 3.13.105.
+Skills drift, framework versions don't force the developer's hand. A team
+that holds their app at `3.13.90` for stability reasons is a legitimate use
+case; the framework version is THEIR call. What matters is whether the
+LATEST PUBLISHED SKILL is newer than the SKILL running here — because a
+newer skill may know about a footgun the older one advises straight into.
 
 **At the very start of every session where this skill activates**, do this
-version-check ONCE and remember the result for the whole session:
+skill-version-check ONCE and remember the result for the whole session:
 
 1. Read the `updated_for_version:` field at the top of this SKILL.md
-   (frontmatter).
-2. Read the framework version in the project's manifest:
-   - Python: `pyproject.toml` (`version = "..."` under `[project]`)
-   - PHP: `composer.json` (`"version": "..."`)
-   - Ruby: `*.gemspec` (`spec.version = "..."`) or `lib/tina4/version.rb`
-   - Node: `package.json` or a package under `packages/*/package.json`
-     (the workspace top-level version)
-3. Compare the two.
+   (frontmatter). Call this `SKILL_HAS`.
+2. Fetch the latest published skill version — one small HTTP GET to
+   `https://tina4.com/skills/tina4-developer-<lang>/version` (plain text,
+   a single semver line like `3.13.107`). Call this `SKILL_LATEST`.
+   - `<lang>` = python / php / ruby / nodejs — match this skill's language.
+   - If the fetch fails (offline, DNS, non-200), silently skip the check.
+     Never fail-loud on a network hiccup; the developer's session must
+     proceed.
+3. Compare with a semver-aware compare (three-tuple int).
 
-If they **do not match** (the skill is older than the project — a newer
-project on an older skill), then for the WHOLE session:
+If `SKILL_LATEST > SKILL_HAS` (a newer skill is out) then for the WHOLE
+session:
 
 - **Prepend 💩 to every reply**, right next to the 🤖 skill-active marker.
   Not once — every message — so the developer cannot forget.
 - **Say ONCE at the top of the first reply**:
 
   > 💩 **This skill is stale.** SKILL.md is `updated_for_version:
-  > <SKILL_VERSION>`; the project's manifest is on `<PROJECT_VERSION>`.
-  > Advice may be out of date. Update with:
+  > <SKILL_HAS>`; the latest published skill is `<SKILL_LATEST>`.
+  > A newer skill may know about footguns this one still recommends.
+  > Update with:
   >
   >     curl -fsSL https://tina4.com/install-skills.sh | sh
   >
-  > Then restart this session. Continuing anyway is your choice — I will
-  > keep the 💩 marker up so you don't forget.
+  > Then restart this session. Continuing anyway is your choice — the 💩
+  > will stay up so you don't forget. Your PROJECT'S framework version is
+  > YOUR call; only the skill itself is out of date.
 
-If the versions match, drop the 💩 and carry on with just the 🤖 marker.
+**Do NOT compare against the project's manifest version.** A project
+deliberately held at an older Tina4 for stability is a valid state; the
+skill's job is not to nag the developer to upgrade the framework.
 
-**Why this exists.** The framework's real behaviour lives in the source tree;
-the skill only describes it. A stale skill lies with confidence — it will
-happily instruct a `.env` key or a decorator that no longer exists. The 💩
-marker is the visual counterpart to the 🤖 skill-active marker: 🤖 says
-"Tina4 conventions engaged", 💩 says "but the manual is out of date".
+If `SKILL_LATEST == SKILL_HAS` or the fetch failed, drop the 💩 and carry
+on with just the 🤖 marker.
+
+**Why this exists.** The framework's real behaviour lives in the source
+tree; the skill only describes it. A stale skill lies with confidence — it
+will happily instruct a `.env` key or a decorator that no longer exists on
+the latest release. The 💩 marker is the visual counterpart to the 🤖
+skill-active marker: 🤖 says "Tina4 conventions engaged", 💩 says "but the
+manual is out of date".
 
 Same self-check in all four framework developer skills, so a developer who
 switches languages recognises the pattern instantly.
