@@ -305,9 +305,21 @@ class Queue
     }
 
     /**
-     * Get the number of jobs in the queue filtered by status.
+     * Count jobs by status.
      *
-     * @param string $status Job status to count ('pending', 'failed')
+     * ``"pending"`` counts jobs waiting to be popped — INCLUDES retryable-
+     * but-attempted ones, because they live in the pending queue under the
+     * auto-retry lifecycle (see failed()).
+     * ``"reserved"`` counts jobs a consumer has popped but not yet
+     * completed/failed (in-flight against the visibility timeout).
+     * ``"completed"`` counts jobs the consumer has finished successfully.
+     * ``"failed"``, ``"dead"``, ``"dead_letter"`` are ALIASES that all count
+     * the dead-letter store — jobs whose attempts >= maxRetries and that
+     * have given up. Use deadLetters() to list them. Retryable-but-attempted
+     * jobs are NOT counted by size("failed"); use failed() to list them or
+     * size("pending") to include them in a total.
+     *
+     * @param string $status Job status: 'pending', 'reserved', 'completed', 'failed', 'dead', 'dead_letter'
      * @return int
      */
     public function size(string $status = 'pending'): int
@@ -445,9 +457,15 @@ class Queue
     }
 
     /**
-     * Get all failed jobs from the queue topic.
+     * Get jobs that failed at least once but are still being retried
+     * (0 < attempts < maxRetries). These live in the pending queue under the
+     * auto-retry lifecycle (fail() re-queues them with an incremented attempts
+     * count and a retryBackoff delay) so pop() picks them up again. They are
+     * NOT counted by size("failed") — that alias counts the dead-letter store,
+     * matching deadLetters(). To include retryable-failed jobs in a total,
+     * use size("pending"). Terminal failures are returned by deadLetters().
      *
-     * @return array<int, array> List of failed job arrays
+     * @return array<int, array> List of failed-but-retryable job arrays
      */
     public function failed(): array
     {
@@ -460,9 +478,20 @@ class Queue
     /**
      * Retry a failed job by moving it back to the pending queue.
      *
-     * @param string $jobId        Job ID
-     * @param int    $delaySeconds Delay in seconds before the retried job becomes available
-     * @return bool True if job was found and re-queued
+     * With no id: revives EVERY dead letter. The loop materialises the retry
+     * over the full list before reducing — never a short-circuit that stops on
+     * the first success (PY-12-04 parity).
+     *
+     * With an id: revives just that dead letter. On backends that expose an
+     * atomic dead-letter revive (MongoBackend::retryJob — see
+     * MongoBackend::retryJob's docblock for the PHP fix, 3.13.105) the
+     * dead-letter record is DROPPED as part of the revive, so a follow-up
+     * deadLetters() doesn't see it again and a consumer never processes it
+     * twice. Brokers (Rabbit/Kafka) ignore requeue (they own redelivery).
+     *
+     * @param string|null $jobId        Job ID; null to revive every dead letter
+     * @param int         $delaySeconds Delay before the retried job becomes available
+     * @return bool True if at least one dead letter was found and re-queued
      */
     public function retry(?string $jobId = null, int $delaySeconds = 0): bool
     {
@@ -475,22 +504,44 @@ class Queue
                 $dead = array_values(array_filter($dead, fn ($j) => (string) ($j['id'] ?? '') === $jobId));
             }
             if (empty($dead)) return false;
+
+            // If the external backend has a first-class atomic dead-letter
+            // revive (MongoBackend::retryJob), prefer it — it drops the
+            // dead-letter doc + upserts the original as pending in ONE call,
+            // so a follow-up deadLetters() doesn't re-report the job. This is
+            // the PY-12-05 shape ported to PHP; Rabbit/Kafka don't implement
+            // it (broker owns redelivery), so they fall back to requeue().
+            if (method_exists($this->externalBackend, 'retryJob')) {
+                $results = [];
+                foreach ($dead as $job) {
+                    $results[] = $this->externalBackend->retryJob(
+                        $this->topic,
+                        (string)($job['id'] ?? ''),
+                        $delaySeconds
+                    );
+                }
+                // Materialise then reduce — every dead letter is attempted,
+                // never a short-circuit that leaves the rest in the store.
+                return in_array(true, $results, true);
+            }
+
             foreach ($dead as $job) {
                 $this->externalBackend->requeue($this->topic, $job);
             }
             return true;
         }
         if ($jobId === null) {
-            // Retry all dead-letter jobs
+            // Retry all dead-letter jobs. Materialise the loop BEFORE reducing
+            // — a plain foreach already iterates every job, but the parity
+            // contract PY-12-04 pins is that no future refactor may short-
+            // circuit on the first success (Python's any(generator) footgun).
             $dead = $this->deadLetters();
             if (empty($dead)) return false;
-            $retried = false;
+            $results = [];
             foreach ($dead as $job) {
-                if ($this->liteBackend->retry($job['id'], null, $delaySeconds)) {
-                    $retried = true;
-                }
+                $results[] = $this->liteBackend->retry($job['id'], null, $delaySeconds);
             }
-            return $retried;
+            return in_array(true, $results, true);
         }
         // Pass null so LiteBackend searches all topic subdirectories — the caller
         // doesn't know which topic the job lives in, only the ID.
@@ -498,9 +549,15 @@ class Queue
     }
 
     /**
-     * Get dead letter jobs — failed jobs that exceeded max retries.
+     * Get jobs that exceeded maxRetries — terminal failures.
      *
-     * @param int|null $maxRetries Override the queue's default max retries threshold
+     * Same set counted by size("failed") / size("dead") / size("dead_letter")
+     * (three aliases for the dead-letter store). To LIST retryable-but-
+     * attempted jobs (attempts > 0 AND attempts < maxRetries) that are still
+     * being auto-retried, use failed() — those live in the pending queue and
+     * are NOT dead letters.
+     *
+     * @param int|null $maxRetries Override the queue's default maxRetries threshold
      * @return array<int, array> List of dead letter job arrays
      */
     public function deadLetters(?int $maxRetries = null): array

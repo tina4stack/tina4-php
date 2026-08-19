@@ -392,7 +392,12 @@ class LiteBackend implements QueueBackend
      *
      * Always re-enqueues regardless of the retry limit — this is a manual
      * override, distinct from the automatic failJob() path. Increments
-     * attempts and clears the error.
+     * attempts and clears the error. Cleans up BOTH the reservation record
+     * and any dead-letter file for this id, so a caller who iterates
+     * deadLetters() and calls ->retry() on each doesn't leave the failed/
+     * directory carrying duplicates (PY-12-05, 3.13.105). Aligns with
+     * retry($jobId) which had always unlinked the dead-letter file — two
+     * spellings of the same intent that previously diverged.
      *
      * @param string $topic        The queue/topic name
      * @param array  $jobData      Job data
@@ -403,6 +408,16 @@ class LiteBackend implements QueueBackend
     {
         // Clear the reservation — the consumer acknowledged (with a manual retry).
         $this->clearReservation($topic, (string)($jobData['id'] ?? ''));
+
+        // Drop any dead-letter file for this id BEFORE the re-queue — if this
+        // job came from deadLetters() it lives in the failed/ dir and would
+        // otherwise stay on disk while a fresh pending file appears in the
+        // queue dir, so the next deadLetters() call reports the job again
+        // and a consumer processes it twice.
+        $jobId = (string)($jobData['id'] ?? '');
+        if ($jobId !== '') {
+            @unlink($this->queuePath($topic) . '/failed/' . $jobId . '.queue-data');
+        }
 
         $jobData['attempts'] = (int)($jobData['attempts'] ?? 0) + 1;
         $jobData['error'] = null;

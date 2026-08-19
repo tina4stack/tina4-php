@@ -89,9 +89,9 @@ $payload = \Tina4\Auth::validToken($token);                    // verify + decod
 | Method | Signature |
 |--------|-----------|
 | `getToken` | `getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string` |
-| `validToken` | `validToken(string $token, ?string $secret = null): ?array` |
+| `validToken` | `validToken(string $token, ?string $secret = null, ?string $algorithm = null): ?array` (algorithm resolves `TINA4_JWT_ALGORITHM`, then HS256) |
 | `getPayload` | `getPayload(string $token): ?array` |
-| `authenticateRequest` | `authenticateRequest(array $headers, ?string $secret = null, string $algorithm = 'HS256'): ?array` |
+| `authenticateRequest` | `authenticateRequest(array $headers, ?string $secret = null, ?string $algorithm = null): ?array` (`?string`, default `null` → env `TINA4_JWT_ALGORITHM`, then HS256) |
 | `refreshToken` | `refreshToken(string $token, int $expiresIn = 60): ?string` |
 | `hashPassword` | `hashPassword(string $password, ?string $salt = null, int $iterations = 260000): string` |
 | `checkPassword` | `checkPassword(string $password, string $hash): bool` |
@@ -282,7 +282,7 @@ Register a WebSocket route with `\Tina4\Router::websocket($path, $handler)`:
 
 ### Client (frond.js)
 ```javascript
-const ws = Frond.ws("/ws/chat", {
+const ws = frond.ws("/ws/chat", {   // lowercase — the browser global is `frond`, not `Frond`
     onMessage: (data) => {
         document.getElementById("messages").innerHTML += `<p>${data.text}</p>`;
     }

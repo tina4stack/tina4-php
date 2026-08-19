@@ -94,8 +94,9 @@ meta tag or a manual fetch? Use `{{ formTokenValue() }}` / `{{ form_token_value(
 
 ### Inline SQL Queries (Frond-unique)
 ```twig
-{% query "SELECT * FROM products WHERE active = ?" params=[true] as products %}
-{% for product in products.data %}
+{# Frond has no `{% query %}` tag. Fetch in the route and pass the rows to the template. #}
+{# Route: `$products = \Tina4\Database\Database::fromEnv()->fetch("SELECT * FROM products WHERE active = ?", [true]);` #}
+{% for product in products %}
     <div>{{ product.name }} — ${{ product.price | number_format(2) }}</div>
 {% endfor %}
 <p>{{ products.total }} products found</p>
@@ -104,8 +105,11 @@ meta tag or a manual fetch? Use `{{ formTokenValue() }}` / `{{ form_token_value(
 ### Live Blocks (server-rendered, self-refreshing)
 
 A live block renders on the server for first paint, then re-fetches its own HTML and swaps it in
-place. Pick a transport: `poll N` (every N seconds), `sse`, or `ws "path"`. frond.js (already
-loaded) wires the marker and morphs the result, so a focused input survives the swap.
+place. Pick a transport: **`poll N`** (every N seconds) or **`ws "path"`** for live updates.
+`sse` is parsed by Frond but the client only paints once and does not re-fetch — treat it as
+first-paint only for now (`src/public/js/frond.js` warns "sse transport is not wired yet (v1
+supports poll and ws)"; use `poll` or `ws` for a live experience). frond.js (already loaded)
+wires the marker and morphs the result, so a focused input survives the swap.
 
 ```twig
 {# Poll every 5 seconds #}
@@ -135,9 +139,8 @@ For a `ws` block, push a fresh render the instant data changes with
 ### Cache Blocks
 ```twig
 {% cache "sidebar" 300 %}
-    {# This block is cached for 300 seconds #}
-    {% query "SELECT * FROM popular_posts LIMIT 10" as posts %}
-    {% for post in posts.data %}
+    {# This block is cached for 300 seconds — fetch in the route, pass `posts` into the template. #}
+    {% for post in posts %}
         <a href="/posts/{{ post.id }}">{{ post.title }}</a>
     {% endfor %}
 {% endcache %}

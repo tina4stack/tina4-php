@@ -448,12 +448,106 @@ class MongoBackend implements QueueBackend
         return $result->getDeletedCount();
     }
 
-    /** {@inheritDoc} */
+    /**
+     * Delete every doc in this queue whose status matches.
+     *
+     * Dead-letter statuses ('dead', 'dead_letter', 'failed') route to the
+     * "<topic>.dead_letter" topic namespace where deadLetter() actually writes;
+     * every other status stays on the main topic scoped by that status. Returns
+     * deleted_count so a caller can log/assert what was purged. Pre-3.13.105
+     * this called deleteMany({topic, status}) unconditionally, so
+     * purge('dead')/purge('failed') never matched a real dead letter (which
+     * lives on the '.dead_letter' topic) and returned 0.
+     */
     public function purge(string $status, string $topic, ?int $maxRetries = null): int
     {
         $this->ensureConnected();
-        $result = $this->collection->deleteMany(['topic' => $topic, 'status' => $status]);
+        if (in_array($status, ['dead', 'dead_letter', 'failed'], true)) {
+            $result = $this->collection->deleteMany([
+                'topic' => $topic . '.dead_letter',
+            ]);
+        } else {
+            $result = $this->collection->deleteMany([
+                'topic' => $topic,
+                'status' => $status,
+            ]);
+        }
         return $result->getDeletedCount();
+    }
+
+    /**
+     * Revive a specific dead-letter job by ID back to the pending queue.
+     *
+     * Looks the doc up in the '<topic>.dead_letter' namespace by the original
+     * id (dead_letter() writes a fresh _id and preserves the original on
+     * message.id — mirrors Python's data.id shape), deletes the dead-letter
+     * record, and upserts the original back to pending on the main topic —
+     * upserting on the small chance the original doc has been purged, so a
+     * retry after a housekeeping run still works. Mirrors LiteBackend::retry()
+     * (id-based) and matches Queue::retry(id) callers' expectation that retry
+     * always revives if a dead letter exists for the id (PY / 3.13.105).
+     *
+     * Pre-3.13.105 the PHP Queue::retry() external branch fetched
+     * deadLetters() and called requeue() without dropping the dead-letter
+     * record, so a follow-up deadLetters() saw the same job again and a
+     * consumer processed it twice.
+     *
+     * @param string $topic        Queue/topic name
+     * @param string $jobId        Original job id (as returned by push())
+     * @param int    $delaySeconds Delay before the revived job becomes available
+     * @return bool True if a dead-letter was found and re-queued
+     */
+    public function retryJob(string $topic, string $jobId, int $delaySeconds = 0): bool
+    {
+        $this->ensureConnected();
+        $dlTopic = $topic . '.dead_letter';
+        $dlDoc = $this->collection->findOne([
+            'topic' => $dlTopic,
+            'message.id' => $jobId,
+        ]);
+        if ($dlDoc === null) {
+            return false;
+        }
+
+        // Drop the dead-letter doc first so an interrupted retry never leaves
+        // both a dead-letter and a fresh pending doc for the same id.
+        $this->collection->deleteOne(['_id' => $dlDoc['_id']]);
+
+        $available = $delaySeconds <= 0
+            ? new \MongoDB\BSON\UTCDateTime()
+            : $this->futureDate($delaySeconds);
+
+        // dead_letter() stored the ORIGINAL enqueue message inside the doc's
+        // 'message' field; retain its payload/priority so the revived pending
+        // doc looks like the original enqueue.
+        $message = $this->bsonToArray($dlDoc['message'] ?? []);
+        $priority = (int)($message['priority'] ?? ($dlDoc['priority'] ?? 0));
+        $attempts = (int)($message['attempts'] ?? 0) + 1;
+        $message['id'] = $jobId;
+        $message['attempts'] = $attempts;
+        $message['error'] = null;
+
+        // Upsert: reset the original doc if it still exists, otherwise
+        // re-create it from the dead-letter payload so a purged/gone original
+        // is not silently a retry-no-op.
+        $this->collection->updateOne(
+            ['_id' => $jobId, 'topic' => $topic],
+            [
+                '$set' => [
+                    'topic' => $topic,
+                    'status' => 'pending',
+                    'message' => $message,
+                    'attempts' => $attempts,
+                    'priority' => $priority,
+                    'available_at' => $available,
+                    'reserved_at' => null,
+                    'updated_at' => new \MongoDB\BSON\UTCDateTime(),
+                    'created_at' => new \MongoDB\BSON\UTCDateTime(),
+                ],
+            ],
+            ['upsert' => true]
+        );
+        return true;
     }
 
     /** {@inheritDoc} */

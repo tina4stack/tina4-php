@@ -1,6 +1,6 @@
 # Tina4 PHP
 
-Version 3.13.104 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.105 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -770,11 +770,21 @@ $queue->pop(): ?Job          // a Job, not an array - see the note below
 $queue->popBatch(int $count): array   // array<int, Job>
 $queue->popById(string $id): ?Job
 $queue->size(string $status = 'pending'): int
+    // 'pending' counts jobs waiting to be popped -- INCLUDES retryable-but-attempted
+    // ones (see failed()). 'reserved' counts jobs a consumer holds against the
+    // visibility timeout. 'completed' counts finished ones. 'failed', 'dead',
+    // 'dead_letter' are ALIASES that all count the dead-letter store == count(deadLetters()).
 $queue->clear(): int
 $queue->failed(): array
+    // Jobs that failed at least once but are still being retried
+    // (0 < attempts < maxRetries). They live in the PENDING queue under the auto-
+    // retry lifecycle, so size('pending') includes them; size('failed') does NOT.
 $queue->retry(?string $jobId = null, int $delaySeconds = 0): bool
 $queue->retryFailed(?int $maxRetries = null): int
 $queue->deadLetters(?int $maxRetries = null): array
+    // Terminal failures (attempts >= maxRetries). Same set counted by
+    // size('failed')/size('dead')/size('dead_letter'). Use failed() to LIST
+    // retryable-but-attempted jobs instead.
 $queue->purge(string $status, ?int $maxRetries = null): int
 $queue->produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0): string
 $queue->consume(string $topic = '', ?string $id = null, float $pollInterval = 1.0, int $iterations = 0, int $batchSize = 1): \Generator

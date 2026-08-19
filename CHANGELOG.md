@@ -6,6 +6,45 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.105
+
+Bug release. Route inspection stops touching the app; Firebird's migration
+ledger tolerates whatever case the driver hands back; PHP loses a colon-in-
+filename that broke Windows checkouts.
+
+### Route inspection scans, never boots
+
+- `tina4 routes` now walks canonical route files and never executes the
+  application entrypoint or starts the server. Feature 115 / ADR-0058.
+- Fixes the case where `tina4 routes --override` would boot the app on the
+  same port and kill whatever process was already holding it (tina4-python
+  issue #104).
+
+### Firebird migration ledger is case-agnostic
+
+- `tina4_migration` reads and writes work regardless of the case the
+  Firebird driver returns for the `migration_name` column.
+- Uses the atomic sequence table pattern already in place for other engines.
+
+### Dev toolbar works under the framework's own default CSP
+
+- The dev toolbar's CSS and JS now ship from two dedicated `/__dev/toolbar.css`
+  and `/__dev/toolbar.js` routes instead of inline `<style>` / `<script>`
+  blocks and inline event handlers.
+- The suppression signal for the AI port is a `data-reload="0"` attribute on
+  the toolbar root; the JS in the external asset reads it and early-returns.
+- Zero CSP change and no nonce -- the toolbar works under the strict
+  `default-src 'self'` policy that `SecurityHeadersMiddleware` sets by
+  default. tina4-php PR #195, credited to @justin-k-bruce.
+- Python and Node share the same inline-CSP-hostile pattern and receive the
+  same treatment in 3.13.106 (tina4-python#115).
+
+### Windows checkouts stop dying on a colon-in-filename
+
+- A stray `sqlite::memory:` file was tracked in the repository. Windows
+  disallows colons in filenames, so `git clone` failed the first time it
+  reached that entry. Removed. tina4-php PR #197.
+
 ## 3.13.103
 
 ### Metrics reports what it can prove

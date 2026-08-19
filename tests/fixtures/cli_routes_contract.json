@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "Feature 115: tina4 routes is a finite, network-free inspection command.",
+    "Every runner spawns its real framework CLI in a real project directory.",
+    "The application entrypoint writes a marker if executed; the marker must stay absent."
+  ],
+  "version": 1,
+  "decided": "2026-08-18",
+  "feature": "115 - CLI route inspection",
+  "invariants": [
+    {
+      "id": "canonical-route-is-listed",
+      "rule": "The command discovers a canonical source route, prints its path, and exits with status 0.",
+      "route_path": "/routes-safe-probe"
+    },
+    {
+      "id": "application-entrypoint-is-not-executed",
+      "rule": "The command does not execute app.py, index.php, app.rb, index.rb or app.ts and therefore cannot start, bind, or take over a web-server port.",
+      "marker_name": "app-was-executed"
+    }
+  ]
+}
+
