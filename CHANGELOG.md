@@ -45,6 +45,65 @@ filename that broke Windows checkouts.
   disallows colons in filenames, so `git clone` failed the first time it
   reached that entry. Removed. tina4-php PR #197.
 
+### Queue and ORM audit bugs closed
+
+- **`Model.clear_cache()` cascades to `db.cache_clear()`.** Under both
+  `TINA4_AUTO_CACHING=true` and `TINA4_DB_CACHE=true`, a manual `clear_cache()`
+  used to leave the DB-layer cache holding stale rows (PY-06-22).
+- **`Queue.retry()` revives every dead letter.** The no-arg form used a
+  generator inside `any(...)` and short-circuited after the first success.
+  Now materialised so all N dead letters revive (PY-12-04).
+- **`Job.retry()` unlinks the dead-letter file.** Iterating `dead_letters()`
+  and calling `.retry()` on each used to leave the failed directory carrying
+  every revived job, so the next `dead_letters()` call re-reported them
+  (PY-12-05).
+- **MongoDB `retry_job(id)` searches the dead-letter namespace by data.id,
+  deletes the DL doc, and upserts the original back to pending.** The old
+  filter `{_id, self._topic, "failed"}` could never match a dead letter.
+- **MongoDB `purge(status)` returns `deleted_count`, honours every status, and
+  routes dead/failed/dead_letter aliases to the `.dead_letter` namespace.**
+  Previously returned None and only handled `pending` — via `clear()`, which
+  nuked every doc under the topic regardless of status.
+
+### Test-harness fixes
+
+- **SIGTERM port probe checks both interfaces.** The graceful-shutdown test
+  probed only `0.0.0.0`; on macOS with the framework's default `127.0.0.1`
+  listener holding the port, that bind succeeded and the pre-assertion
+  concluded the port was free. Now probes both interfaces.
+- **MySQL connect-timeout assertion parses the reported elapsed via regex**
+  and checks it against the configured bound instead of the outer clock;
+  mysql-connector's post-abort cleanup adds ~0.7s that the two stopwatches
+  legitimately disagreed on.
+- **AI installer tests sandbox `HOME` per-test.** `install_context()` writes
+  the global skills bundle to `Path.home()/.claude/skills` by design; in the
+  test suite that raced other tests and hit stale root-owned files from prior
+  sudo runs. `monkeypatch.setenv("HOME", ...)` redirects the global install
+  to a throwaway dir.
+
+### Developer skills — announce and 💩
+
+- **Announce before you act.** All four framework developer skills now
+  instruct: say what you are about to do in one line before doing it —
+  Plan / Next / Done. Never write more than two files between announcements.
+  Never run a schema migration, install a dependency, or edit the boot file
+  without a preceding "About to:" line.
+- **💩 stale-skill detection.** All four framework developer skills gained
+  `updated_for_version: 3.13.105` in the frontmatter and a self-check that
+  compares this to the latest published skill version at
+  `https://tina4.com/skills/<name>/version` (never against the project's
+  framework version — the framework version is the developer's call). If a
+  newer skill is available, 💩 rides beside 🤖 on every reply plus a one-time
+  update instruction.
+
+### Doc parity
+
+- `Queue.size()`, `Queue.failed()` and `Queue.dead_letters()` gained matching
+  in-source docstrings across Python, PHP, Ruby and Node: `size("failed")` /
+  `size("dead")` / `size("dead_letter")` are aliases for the dead-letter
+  count (== length of `dead_letters()`); `failed()` lists retryable-but-
+  attempted jobs, counted under `size("pending")`, NOT `size("failed")`.
+
 ## 3.13.103
 
 ### Metrics reports what it can prove
