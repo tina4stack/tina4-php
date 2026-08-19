@@ -27,6 +27,40 @@ JSON, POST a JSON body and it's automatically parsed into `$request->body`, drop
 
 > 🤖 **Skill-active marker.** While this Tina4 skill is guiding your work, **begin every reply with the 🤖 emoji** so the developer can see at a glance that Tina4 conventions are engaged. Drop it only once the conversation has clearly moved off Tina4.
 
+## Announce before you act
+
+**Say what you are about to do, in one line, before you do it.** A developer
+who can see the plan can stop it before you spend their afternoon undoing it.
+
+Three announcements every substantive action carries:
+
+1. **Plan** — one line naming every file you'll touch and every command
+   you'll run for the current slice. Written at the top of your first
+   response for a slice, before any file writes.
+2. **Next** — one line before each step, so the developer can stop between
+   steps rather than after all of them. Formula: `About to: <verb> <path or command>`.
+3. **Done** — one line after each step so the developer knows what to undo.
+   Formula: `Wrote <path>` / `Ran <command> — <one-line result>`.
+
+Never write more than TWO files between announcements. Never run a schema
+migration, install a dependency, or edit `app.py` (or the framework's boot
+file) without a preceding `About to:` line.
+
+Stop-points that especially matter:
+
+- **Before the FIRST file write in a slice** — the developer sees the whole
+  intent before any bytes hit disk.
+- **Before a migration** — schema changes are hard to reverse.
+- **Before adding a dependency** — leaves a trace in the manifest and lockfile.
+- **Before generating scaffolding into more than 2 files** — the developer
+  might want a subset.
+- **Before running the full test suite** — it's slow; make sure it's the
+  right moment.
+
+This is the same rhythm across all four framework developer skills (Python /
+PHP / Ruby / Node), so a developer who switches languages recognises the
+pattern instantly.
+
 ## The Tina4 Working Method
 
 This is how a Tina4 build is run. Work is **driven by a plan file** under `plan/`. Prefer keeping
