@@ -1,5 +1,6 @@
 ---
 name: tina4-developer-php
+updated_for_version: 3.13.105
 description: >
   Use whenever a developer is building a PHP application with the Tina4 framework (tina4-php).
   Trigger when the user wants to create routes, define ORM models, write Frond templates, set up
@@ -60,6 +61,52 @@ Stop-points that especially matter:
 This is the same rhythm across all four framework developer skills (Python /
 PHP / Ruby / Node), so a developer who switches languages recognises the
 pattern instantly.
+
+## Detect if you are stale — 💩
+
+Skills drift. The framework moves on and the skill in `~/.claude/skills/` or
+`.claude/skills/` stays at whatever version was installed months ago. Advice
+that was right for 3.13.42 is a **footgun** in 3.13.105.
+
+**At the very start of every session where this skill activates**, do this
+version-check ONCE and remember the result for the whole session:
+
+1. Read the `updated_for_version:` field at the top of this SKILL.md
+   (frontmatter).
+2. Read the framework version in the project's manifest:
+   - Python: `pyproject.toml` (`version = "..."` under `[project]`)
+   - PHP: `composer.json` (`"version": "..."`)
+   - Ruby: `*.gemspec` (`spec.version = "..."`) or `lib/tina4/version.rb`
+   - Node: `package.json` or a package under `packages/*/package.json`
+     (the workspace top-level version)
+3. Compare the two.
+
+If they **do not match** (the skill is older than the project — a newer
+project on an older skill), then for the WHOLE session:
+
+- **Prepend 💩 to every reply**, right next to the 🤖 skill-active marker.
+  Not once — every message — so the developer cannot forget.
+- **Say ONCE at the top of the first reply**:
+
+  > 💩 **This skill is stale.** SKILL.md is `updated_for_version:
+  > <SKILL_VERSION>`; the project's manifest is on `<PROJECT_VERSION>`.
+  > Advice may be out of date. Update with:
+  >
+  >     curl -fsSL https://tina4.com/install-skills.sh | sh
+  >
+  > Then restart this session. Continuing anyway is your choice — I will
+  > keep the 💩 marker up so you don't forget.
+
+If the versions match, drop the 💩 and carry on with just the 🤖 marker.
+
+**Why this exists.** The framework's real behaviour lives in the source tree;
+the skill only describes it. A stale skill lies with confidence — it will
+happily instruct a `.env` key or a decorator that no longer exists. The 💩
+marker is the visual counterpart to the 🤖 skill-active marker: 🤖 says
+"Tina4 conventions engaged", 💩 says "but the manual is out of date".
+
+Same self-check in all four framework developer skills, so a developer who
+switches languages recognises the pattern instantly.
 
 ## The Tina4 Working Method
 
