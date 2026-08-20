@@ -226,6 +226,18 @@ commit, merge, or release:
   forever so the bug can never silently return. A bug closed without a regression test is not
   fixed, it is waiting to come back. Log it in the plan's Bugs section and tick it only when its
   test is green on a real (no-mock) run.
+- **Zero skips AND zero failures — a skip is not a pass.** "Green" means the runner reports
+  **0 failed AND 0 skipped**, never just 0 failed. A test that SKIPS (required service not
+  provisioned, a `TINA4_TEST_*` env var unset, a client/driver missing, a broker cert stale) is
+  UNVERIFIED coverage — the code path never ran, exactly as dangerous as a ghost test. Before you
+  call ANY suite green, or merge/release on it: READ THE SUMMARY LINE (passed / failed /
+  **skipped**), and if the skip count is not zero, treat the run as RED until every skip is
+  resolved — provision the service, set the exact env the test reads, install the client, fix the
+  broker — or prove the skip is an irreducible platform exclusion carrying a machine-readable
+  reason (`[needs:absent-ext=…]`, `[needs:no-dac-override]`) that a second pass supplies. Run under
+  `TINA4_REQUIRE_SERVICES=1` so an unprovisioned service FAILS the run instead of skipping silently.
+  We have a habit of missing skips: a suite reported "passing" while it quietly skipped work is a
+  false claim, and the skip count is the tell. 0 failed with N>0 skipped is NOT done.
 - **No mock testing: mocks are not acceptable in any circumstances.** A test double (mock, stub,
   fake, spy, monkeypatch, or any in-test object that stands in for a real collaborator: a
   `FakeMongoCollection`, a script-introspection assertion, a hand-rolled in-test backend) may NEVER
