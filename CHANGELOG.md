@@ -6,6 +6,15 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.107
+
+Feature: RBAC role and permission guards (parity across all four frameworks).
+`role(...)` / `can(...)` route guards read the cryptographically-verified JWT
+`roles` / `permissions` claims — OR within a guard, AND by stacking guards, with
+granted-side wildcards (`posts.*`, `*`) and a legacy singular `role` claim coerced
+to a list. A guarded route implies auth: no or invalid token → 401, authenticated
+but unauthorised → 403; the handler never runs on a miss. Feature 138 / ADR-0058.
+
 ## 3.13.105
 
 Bug release. Route inspection stops touching the app; Firebird's migration
