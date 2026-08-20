@@ -394,6 +394,39 @@ class Router
     }
 
     /**
+     * RBAC: require ONE of the named roles (OR). Reads the verified JWT `roles`
+     * claim. Stack ->role()/->can() for AND. Implies auth. Feature 138 / ADR-0058.
+     *
+     * @param string ...$names Roles; the caller passes if it holds any one.
+     * @return $this
+     */
+    public function role(string ...$names): self
+    {
+        if ($names !== [] && self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['roles'][] = $names;
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['secure'] = true;
+        }
+        return $this;
+    }
+
+    /**
+     * RBAC: require ONE of the named permissions (OR). Reads the verified JWT
+     * `permissions` claim; granted-side wildcards (`posts.*`, `*`) satisfy a
+     * concrete requirement. Stack for AND. Implies auth. Feature 138.
+     *
+     * @param string ...$permissions Permissions; the caller passes if it holds any one.
+     * @return $this
+     */
+    public function can(string ...$permissions): self
+    {
+        if ($permissions !== [] && self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['perms'][] = $permissions;
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['secure'] = true;
+        }
+        return $this;
+    }
+
+    /**
      * Match a request method and path to a registered route.
      *
      * @return array{route: array, params: array<string, string>}|null
@@ -1854,6 +1887,10 @@ class Router
             $ssoIdentity = is_array($sso) ? ($sso['identity'] ?? null) : null;
             if (is_array($ssoIdentity) && !empty($ssoIdentity['issuer']) && !empty($ssoIdentity['subject'])) {
                 $request->user = $ssoIdentity;
+                $deny = self::rbacForbidden($route, $request, $response);
+                if ($deny !== null) {
+                    return $deny;
+                }
                 return null;
             }
             $token = null;
@@ -1888,6 +1925,119 @@ class Router
             }
         }
 
+        // ── RBAC guards (Feature 138): authorization AFTER authentication ──
+        // Auth has passed (401 ruled out above) or the route is public. If the
+        // route carries role/permission guards, the verified $request->user must
+        // satisfy them, else 403 (authenticated but forbidden).
+        $deny = self::rbacForbidden($route, $request, $response);
+        if ($deny !== null) {
+            return $deny;
+        }
+        return null;
+    }
+
+    /**
+     * Read a claim as a list of strings from the VERIFIED payload; coerce a
+     * legacy singular string. Returns [] for a missing/non-array subject.
+     *
+     * @param array<string, mixed>|null $subject The verified JWT payload
+     * @param string $key The claim key (roles / permissions)
+     * @param string|null $legacy Optional legacy singular key to coerce
+     * @return array<int, string>
+     */
+    private static function rbacClaimList(?array $subject, string $key, ?string $legacy = null): array
+    {
+        if ($subject === null) {
+            return [];
+        }
+        $val = $subject[$key] ?? null;
+        $out = [];
+        if (is_string($val) && $val !== '') {
+            $out = [$val];
+        } elseif (is_array($val)) {
+            $out = array_values(array_filter(array_map('strval', $val), static fn ($x) => $x !== ''));
+        }
+        if ($out === [] && $legacy !== null) {
+            $lv = $subject[$legacy] ?? null;
+            if (is_string($lv) && $lv !== '') {
+                $out = [$lv];
+            } elseif (is_array($lv)) {
+                $out = array_values(array_filter(array_map('strval', $lv), static fn ($x) => $x !== ''));
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * True if any GRANTED permission satisfies the concrete REQUIRED permission.
+     * Wildcards live only on the granted side: `*` grants everything; `posts.*`
+     * grants `posts.<anything...>` on the dot boundary (never `users.delete`).
+     *
+     * @param array<int, string> $granted The subject's permissions
+     * @param string $required The concrete permission a route demands
+     * @return bool
+     */
+    private static function rbacPermGranted(array $granted, string $required): bool
+    {
+        foreach ($granted as $g) {
+            if ($g === '*' || $g === $required) {
+                return true;
+            }
+            if (str_ends_with($g, '.*') && str_starts_with($required, substr($g, 0, -1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Build a 403 when a route's RBAC guards are not satisfied, else null.
+     *
+     * AND across guard groups, OR within a group. Roles read the `roles` claim
+     * (legacy singular `role` coerced); permissions read `permissions` with
+     * granted-side wildcards. A missing subject satisfies no group.
+     *
+     * @param array<string, mixed> $route The matched route
+     * @param Request $request The request (verified payload on $request->user)
+     * @param Response $response The response to build a 403 from
+     * @return Response|null A 403 when forbidden, null when authorised
+     */
+    private static function rbacForbidden(array $route, Request $request, Response $response): ?Response
+    {
+        $requiredRoles = $route['roles'] ?? [];
+        $requiredPerms = $route['perms'] ?? [];
+        if ($requiredRoles === [] && $requiredPerms === []) {
+            return null;
+        }
+        $subject = is_array($request->user ?? null) ? $request->user : null;
+
+        $roles = self::rbacClaimList($subject, 'roles', 'role');
+        foreach ($requiredRoles as $group) {
+            $ok = false;
+            foreach ($group as $r) {
+                if (in_array($r, $roles, true)) {
+                    $ok = true;
+                    break;
+                }
+            }
+            if (!$ok) {
+                return $response->json(['error' => 'Forbidden'], 403);
+            }
+        }
+
+        $perms = self::rbacClaimList($subject, 'permissions');
+        foreach ($requiredPerms as $group) {
+            $ok = false;
+            foreach ($group as $req) {
+                if (self::rbacPermGranted($perms, $req)) {
+                    $ok = true;
+                    break;
+                }
+            }
+            if (!$ok) {
+                return $response->json(['error' => 'Forbidden'], 403);
+            }
+        }
         return null;
     }
 
