@@ -7,6 +7,7 @@
             "Tina4\\": "Tina4/",
             "Tina4\\Cache\\": "Tina4/Cache/",
             "Tina4\\Database\\": "Tina4/Database/",
+            "Tina4\\Graph\\": "Tina4/Graph/",
             "Tina4\\Middleware\\": "Tina4/Middleware/",
             "Tina4\\Queue\\": "Tina4/Queue/",
             "Tina4\\Session\\": "Tina4/Session/"
@@ -42,6 +43,7 @@
     ],
     "suggest": {
         "ext-openssl": "Enables the RS256 JWT algorithm, MQTT over TLS (mqtts://), and outbound HTTPS from Tina4\\Api (PHP's https:// stream wrapper is registered by this extension). JWT signing does NOT need it: HS256/HS384/HS512 use the built-in hash_hmac",
+        "tina4stack/ultipa": "Ultipa graph driver — loaded only for ultipa:// connections through the Tina4\\Graph layer (GraphDatabase::create). Needs ext-grpc",
         "ext-sqlite3": "Required for SQLite3 database support",
         "ext-pdo": "Required for MySQL/PostgreSQL/MSSQL database support",
         "ext-pgsql": "Required for PostgreSQL database support",
