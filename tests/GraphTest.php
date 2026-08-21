@@ -5,13 +5,19 @@
  * Copyright 2007 - current Tina4
  * License: MIT https://opensource.org/licenses/MIT
  *
- * Contract suite for the graph data layer (Feature 139) — against a REAL engine.
+ * Contract suite for the graph data layer (Feature 139) — against REAL engines.
  *
- * No mocks. Every live case runs a real connection and real round-trips against a
- * provisioned graph engine. Ultipa community edition is the first engine; the URL
- * comes from TINA4_TEST_ULTIPA_URL (the live cases skip when it is unset/
- * unreachable, exactly like the relational live-database tests). Case names match
- * fixtures/graph_contract.json and the Python master (tests/test_graph.py).
+ * No mocks. Every live case runs a real connection and real round-trips, and is
+ * PARAMETERISED over every provisioned engine (provider substitutability, exactly
+ * like the relational engine matrix): Ultipa, Neo4j, Memgraph, ArangoDB. Each
+ * engine's URL comes from its own TINA4_TEST_<ENGINE>_URL; an engine whose URL is
+ * unset/unreachable, or whose optional driver is not installed, is skipped. Case
+ * names match fixtures/graph_contract.json and the Python master
+ * (tina4-python/tests/test_graph.py).
+ *
+ * Only the raw-query dialect and the cleanup differ per engine (GQL/Cypher vs AQL)
+ * — the portable node/edge/traverse surface is identical everywhere, which is the
+ * whole point of the layer.
  *
  * Ultipa note: edge ids need EDGE_ID enabled on the graph
  * (`ALTER GRAPH <g> SET EDGE_ID ENABLED`) — a one-time per-graph setting the lab
@@ -20,6 +26,7 @@
 
 namespace Tina4;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\Graph\GraphAdapter;
 use Tina4\Graph\GraphConnectTimeout;
@@ -33,27 +40,79 @@ use Tina4\Graph\GraphUrl;
 class GraphTest extends TestCase
 {
     private const LABEL = 'T4GraphContractTestPhp';
-    private const DRIVER_CLASS = 'Tina4\\Ultipa\\Client';
+    private const ULTIPA_DRIVER_CLASS = 'Tina4\\Ultipa\\Client';
 
-    private ?string $url = null;
+    /** A Cypher/GQL read that finds a node by name, and its label cleanup. */
+    private const CYPHER_RAW = 'MATCH (n:`' . self::LABEL . '`) WHERE n.name = $nm RETURN n.name AS name';
+    private const CYPHER_CLEAN = 'MATCH (n:`' . self::LABEL . '`) DETACH DELETE n';
+
+    /** The AQL equivalents for Arango's document/collection model. */
+    private const AQL_RAW = 'FOR n IN tina4_nodes FILTER n.name == @nm RETURN {name: n.name}';
+    private const AQL_CLEAN = "FOR n IN tina4_nodes FILTER '" . self::LABEL . "' IN n._labels REMOVE n IN tina4_nodes";
+
     private ?GraphAdapter $graph = null;
+    private ?string $cleanStatement = null;
 
-    protected function setUp(): void
+    /**
+     * Per-engine wiring: the env var holding its URL, the optional driver class
+     * whose presence gates the live cases, and the native raw-read + cleanup
+     * statements (Cypher/GQL for ultipa/neo4j/memgraph, AQL for arango).
+     *
+     * @return array<string, array{env: string, driver: string, raw: string, clean: string}>
+     */
+    private static function engineConfig(): array
     {
-        $env = getenv('TINA4_TEST_ULTIPA_URL');
-        $this->url = ($env === false || $env === '') ? null : $env;
+        return [
+            'ultipa' => [
+                'env' => 'TINA4_TEST_ULTIPA_URL',
+                'driver' => self::ULTIPA_DRIVER_CLASS,
+                'raw' => self::CYPHER_RAW,
+                'clean' => self::CYPHER_CLEAN,
+            ],
+            'neo4j' => [
+                'env' => 'TINA4_TEST_NEO4J_URL',
+                'driver' => 'Laudis\\Neo4j\\ClientBuilder',
+                'raw' => self::CYPHER_RAW,
+                'clean' => self::CYPHER_CLEAN,
+            ],
+            'memgraph' => [
+                'env' => 'TINA4_TEST_MEMGRAPH_URL',
+                'driver' => 'Laudis\\Neo4j\\ClientBuilder',
+                'raw' => self::CYPHER_RAW,
+                'clean' => self::CYPHER_CLEAN,
+            ],
+            'arango' => [
+                'env' => 'TINA4_TEST_ARANGO_URL',
+                'driver' => 'ArangoDBClient\\Connection',
+                'raw' => self::AQL_RAW,
+                'clean' => self::AQL_CLEAN,
+            ],
+        ];
+    }
+
+    /**
+     * The engine names the live matrix runs over.
+     *
+     * @return array<int, array{0: string}>
+     */
+    public static function engines(): array
+    {
+        return array_map(static fn (string $name): array => [$name], array_keys(self::engineConfig()));
     }
 
     protected function tearDown(): void
     {
         if ($this->graph !== null) {
             try {
-                $this->graph->execute('MATCH (n:`' . self::LABEL . '`) DETACH DELETE n');
+                if ($this->cleanStatement !== null) {
+                    $this->graph->execute($this->cleanStatement);
+                }
             } catch (\Throwable) {
                 // best-effort cleanup
             }
             $this->graph->close();
             $this->graph = null;
+            $this->cleanStatement = null;
         }
     }
 
@@ -94,64 +153,74 @@ class GraphTest extends TestCase
 
     /**
      * graph-connect-by-url: the URL scheme picks the adapter; an unknown scheme is
-     * rejected.
+     * rejected. neo4j/memgraph/bolt all resolve to the single "bolt" engine.
      */
     public function testGraphConnectByUrlSelectsAdapter(): void
     {
         $this->assertSame('ultipa', (new GraphUrl('ultipa://h:60061/g'))->engine);
         $this->assertSame('bolt', (new GraphUrl('neo4j://h/db'))->engine);
+        $this->assertSame('bolt', (new GraphUrl('memgraph://h/db'))->engine);
+        $this->assertSame('bolt', (new GraphUrl('bolt://h/db'))->engine);
         $this->assertSame('arango', (new GraphUrl('arango://h/db'))->engine);
 
         $this->expectException(\InvalidArgumentException::class);
         new GraphUrl('mysql://h/db');
     }
 
-    // ── the portable core + raw pass-through, against LIVE Ultipa ─────────────
+    // ── the portable core + raw pass-through, per LIVE engine ────────────────
 
-    public function testGraphConnectByUrlLive(): void
+    #[DataProvider('engines')]
+    public function testGraphConnectByUrlLive(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
-        $this->assertSame('UltipaGraphAdapter', (new \ReflectionClass($graph))->getShortName());
+        $graph = $this->liveGraph($engine);
+        $this->assertInstanceOf(GraphAdapter::class, $graph);
     }
 
-    public function testGraphAddNode(): void
+    #[DataProvider('engines')]
+    public function testGraphAddNode(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $node = $graph->addNode(self::LABEL, ['name' => 'Ada', 'age' => 36]);
         $this->assertInstanceOf(GraphNode::class, $node);
-        $this->assertNotEmpty($node->id);
+        $this->assertNotNull($node->id);   // an integer 0 is a valid id (Neo4j/Memgraph)
         $this->assertContains(self::LABEL, $node->labels);
         $this->assertSame('Ada', $node->properties['name']);
+        $this->assertSame(36, $node->properties['age']);
     }
 
-    public function testGraphAddEdge(): void
+    #[DataProvider('engines')]
+    public function testGraphAddEdge(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $a = $graph->addNode(self::LABEL, ['name' => 'Ada']);
         $b = $graph->addNode(self::LABEL, ['name' => 'Bob']);
         $edge = $graph->addEdge($a->id, $b->id, 'KNOWS', ['since' => 2020]);
         $this->assertInstanceOf(GraphEdge::class, $edge);
-        $this->assertNotEmpty($edge->id);
+        $this->assertNotNull($edge->id);   // an integer 0 is a valid id (Neo4j/Memgraph)
         $this->assertSame('KNOWS', $edge->type);
         $this->assertSame($a->id, $edge->fromId);
         $this->assertSame($b->id, $edge->toId);
         $this->assertSame(2020, $edge->properties['since']);
     }
 
-    public function testGraphGetNodeRoundtripAndMiss(): void
+    #[DataProvider('engines')]
+    public function testGraphGetNodeRoundtripAndMiss(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $a = $graph->addNode(self::LABEL, ['name' => 'Ada', 'age' => 36]);
         $got = $graph->getNode($a->id);
         $this->assertSame('Ada', $got->properties['name']);
         $this->assertSame(36, $got->properties['age']);
-        // A miss is not an error.
-        $this->assertNull($graph->getNode('no-such-id'));
+        // A miss (a deleted id) is not an error.
+        $tmp = $graph->addNode(self::LABEL, ['x' => 1]);
+        $graph->deleteNode($tmp->id);
+        $this->assertNull($graph->getNode($tmp->id));
     }
 
-    public function testGraphUpdateDeleteNode(): void
+    #[DataProvider('engines')]
+    public function testGraphUpdateDeleteNode(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $a = $graph->addNode(self::LABEL, ['name' => 'Ada', 'age' => 36]);
         $graph->updateNode($a->id, ['name' => 'Ada Lovelace', 'city' => 'London']);
         $updated = $graph->getNode($a->id);
@@ -162,9 +231,10 @@ class GraphTest extends TestCase
         $this->assertNull($graph->getNode($a->id));
     }
 
-    public function testGraphNeighbors(): void
+    #[DataProvider('engines')]
+    public function testGraphNeighbors(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $a = $graph->addNode(self::LABEL, ['name' => 'Ada']);
         $b = $graph->addNode(self::LABEL, ['name' => 'Bob']);
         $graph->addEdge($a->id, $b->id, 'KNOWS', []);
@@ -175,9 +245,10 @@ class GraphTest extends TestCase
         $this->assertSame([], $graph->neighbors($a->id, 'both', 'NOPE'));
     }
 
-    public function testGraphTraverseDepth(): void
+    #[DataProvider('engines')]
+    public function testGraphTraverseDepth(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $a = $graph->addNode(self::LABEL, ['name' => 'A']);
         $b = $graph->addNode(self::LABEL, ['name' => 'B']);
         $c = $graph->addNode(self::LABEL, ['name' => 'C']);
@@ -188,24 +259,23 @@ class GraphTest extends TestCase
         $this->assertContains($c->id, $reached);
     }
 
-    public function testGraphRawQueryBoundParams(): void
+    #[DataProvider('engines')]
+    public function testGraphRawQueryBoundParams(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         $graph->addNode(self::LABEL, ['name' => 'Bob']);
-        $result = $graph->query(
-            'MATCH (n:`' . self::LABEL . '`) WHERE n.name = $nm RETURN n.name AS name',
-            ['nm' => 'Bob']
-        );
+        $result = $graph->query(self::engineConfig()[$engine]['raw'], ['nm' => 'Bob']);
         $this->assertInstanceOf(GraphResult::class, $result);
         $this->assertGreaterThanOrEqual(1, count($result));
         $this->assertSame('Bob', $result->records[0]['name']);
     }
 
-    public function testGraphWriteFailsLoud(): void
+    #[DataProvider('engines')]
+    public function testGraphWriteFailsLoud(string $engine): void
     {
-        $graph = $this->requireLiveGraph();
+        $graph = $this->liveGraph($engine);
         try {
-            $graph->execute('THIS IS NOT GQL');
+            $graph->execute('THIS IS NOT A VALID STATEMENT');
             $this->fail('a bad raw statement must raise GraphError, never return');
         } catch (GraphError) {
             $this->assertNotNull($graph->getError());
@@ -216,11 +286,11 @@ class GraphTest extends TestCase
      * graph-connect-timeout: an unreachable host throws GraphConnectTimeout within
      * the bound, naming host and port (mirrors the relational connect-timeout
      * contract). Uses a black-hole IP — no live server needed — but needs the
-     * driver + ext-grpc, so it skips when they are absent.
+     * Ultipa driver + ext-grpc, so it skips when they are absent.
      */
     public function testGraphConnectTimeout(): void
     {
-        if (!class_exists(self::DRIVER_CLASS)) {
+        if (!class_exists(self::ULTIPA_DRIVER_CLASS)) {
             $this->markTestSkipped('tina4stack/ultipa driver not installed');
         }
 
@@ -247,21 +317,28 @@ class GraphTest extends TestCase
     // ── helpers ──────────────────────────────────────────────────────────────
 
     /**
-     * A connected Ultipa adapter on a clean slate for the test label, or a skip
-     * when the live engine is not configured/reachable or the driver is absent.
+     * A connected adapter for the named engine on a clean slate for the test
+     * label, or a skip when its URL is unset/unreachable or its driver is absent.
+     *
+     * @param string $engine One of ultipa, neo4j, memgraph, arango
      */
-    private function requireLiveGraph(): GraphAdapter
+    private function liveGraph(string $engine): GraphAdapter
     {
-        if ($this->url === null || !$this->reachable($this->url)) {
-            $this->markTestSkipped('live Ultipa not configured/reachable (set TINA4_TEST_ULTIPA_URL)');
+        $cfg = self::engineConfig()[$engine];
+
+        $env = getenv($cfg['env']);
+        $url = ($env === false || $env === '') ? null : $env;
+        if ($url === null || !$this->reachable($url)) {
+            $this->markTestSkipped("live {$engine} not configured/reachable (set {$cfg['env']})");
         }
-        if (!class_exists(self::DRIVER_CLASS)) {
-            $this->markTestSkipped('tina4stack/ultipa driver not installed');
+        if (!class_exists($cfg['driver'])) {
+            $this->markTestSkipped("{$engine} driver not installed ({$cfg['driver']})");
         }
 
-        $graph = GraphDatabase::create($this->url);
-        $graph->execute('MATCH (n:`' . self::LABEL . '`) DETACH DELETE n');
+        $graph = GraphDatabase::create($url);
         $this->graph = $graph;
+        $this->cleanStatement = $cfg['clean'];
+        $graph->execute($cfg['clean']);   // start on a clean slate for this label
 
         return $graph;
     }
@@ -270,8 +347,8 @@ class GraphTest extends TestCase
     {
         $parts = parse_url($url);
         $host = $parts['host'] ?? null;
-        $port = $parts['port'] ?? 60061;
-        if ($host === null) {
+        $port = $parts['port'] ?? null;
+        if ($host === null || $port === null) {
             return false;
         }
         $socket = @fsockopen($host, (int) $port, $errno, $errstr, 2.0);

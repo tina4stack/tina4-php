@@ -21,9 +21,10 @@ class GraphDatabase
 {
     /**
      * The default engine => [adapter class, composer package, install command]
-     * registrations. `bolt` (Neo4j/Memgraph) and `arango` land later — GraphUrl
-     * already resolves their schemes, so create() gives a clear "no adapter yet"
-     * message rather than a scheme-not-supported error.
+     * registrations. `bolt` serves BOTH Neo4j and Memgraph (one Bolt/Cypher
+     * driver); `arango` serves ArangoDB. Each engine driver is an OPTIONAL
+     * community package, referenced only inside its adapter, so a missing driver
+     * surfaces as an actionable install error rather than a bare "class not found".
      *
      * @var array<string, array{0: string, 1: string, 2: string}>
      */
@@ -32,6 +33,16 @@ class GraphDatabase
             UltipaGraphAdapter::class,
             'tina4stack/ultipa',
             'composer require tina4stack/ultipa',
+        ],
+        'bolt' => [
+            BoltGraphAdapter::class,
+            'laudis/neo4j-php-client',
+            'composer require laudis/neo4j-php-client',
+        ],
+        'arango' => [
+            ArangoGraphAdapter::class,
+            'triagens/arangodb',
+            'composer require triagens/arangodb',
         ],
     ];
 
