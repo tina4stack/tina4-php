@@ -276,6 +276,42 @@ class DevAdminConformanceTest extends TestCase
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $body);
     }
 
+    // ── tina4stack #115: CSP-clean dev toolbar (external CSS/JS assets) ──
+
+    public function testInjectedToolbarHasNoInlineStyleOnclickOrInlineScript(): void
+    {
+        $this->env('TINA4_DEBUG', 'true');
+        DevAdmin::register();
+
+        // The toolbar rides EVERY text/html response (including this 404).
+        $resp = $this->dispatch('GET', '/some-html-page', ['accept' => 'text/html']);
+        $body = $resp->getBody();
+        $this->assertStringContainsString('tina4-dev-toolbar', $body, 'the dev toolbar was not injected');
+
+        // Isolate the injected toolbar fragment from its external-stylesheet link
+        // so the surrounding error page's own markup can't mask an inline
+        // attribute in the toolbar itself.
+        $marker = '<link rel="stylesheet" href="/__dev/toolbar.css">';
+        $pos = strpos($body, $marker);
+        $this->assertNotFalse($pos, 'toolbar did not link the external stylesheet');
+        $frag = substr($body, (int) $pos);
+
+        // Positive: the toolbar links the external CSS + JS assets.
+        $this->assertStringContainsString('id="tina4-dev-toolbar"', $frag);
+        $this->assertStringContainsString('<script src="/__dev/toolbar.js"></script>', $frag);
+
+        // Negative: no inline style=, no onclick=, and every <script> in the
+        // toolbar is an external src reference (no raw inline <script> block) - so
+        // it renders under the framework's default default-src 'self' CSP.
+        $this->assertStringNotContainsString('style="', $frag, 'inline style= in toolbar');
+        $this->assertStringNotContainsString("style='", $frag, 'inline style= in toolbar');
+        $this->assertStringNotContainsString('onclick=', $frag, 'inline onclick= in toolbar');
+        preg_match_all('/<script\b[^>]*>/', $frag, $m);
+        foreach ($m[0] as $tag) {
+            $this->assertStringContainsString(' src=', $tag, "inline <script> in toolbar: {$tag}");
+        }
+    }
+
     // ── DEVADMIN-DEC-05: mcp/call tool-execution gate ────────────
 
     public function testARemoteUnauthenticatedMcpCallIsRefusedAndTheToolDoesNotRun(): void
