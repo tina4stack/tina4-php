@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "echo Tina4 repo - invoke and follow the tina4-maintainer skill now. See CLAUDE.md OPERATING RULES for the always-on floor." } ] }
+    ]
+  }
+}
