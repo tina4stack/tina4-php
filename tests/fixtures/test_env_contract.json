@@ -65,7 +65,11 @@
     "RABBITMQ": ["URL", "HOST", "PORT"],
     "MQTT": ["URL", "AUTH_URL", "TLS_URL", "EMQX_URL", "USERNAME", "PASSWORD", "CA_FILE"],
     "SMTP": ["HOST", "PORT"],
-    "IMAP": ["HOST", "PORT"]
+    "IMAP": ["HOST", "PORT"],
+    "ULTIPA": ["URL"],
+    "NEO4J": ["URL"],
+    "MEMGRAPH": ["URL"],
+    "ARANGO": ["URL"]
   },
 
   "_fixtures_comment": [
