@@ -146,4 +146,118 @@ class ResponseCacheRfc9111Test extends TestCase
         $this->assertTrue($ran, 'Vary:* always fails to match, so it must never be stored');
         $this->assertStringContainsString('recomputed', $res->getBody());
     }
+
+    // -- Session-cookie isolation (#117, port of Python) ---------------------
+
+    public function testResponseSettingSetCookieIsNotReplayedToAnotherSession(): void
+    {
+        // Core security regression: a GET whose response installs a Set-Cookie
+        // is built for one caller, so it must NOT be replayed from cache.
+        $cache = new ResponseCache(['ttl' => 60]);
+        $installsSession = static function (Request $req, Response $res): Response {
+            $res->header('Set-Cookie', 'session=ALICE; Path=/; HttpOnly');
+            return $res->json(['v' => 'alice-secret']);
+        };
+
+        $alice = Request::create(method: 'GET', path: '/api/me');
+        $cache->handle($alice, new Response(testing: true), $installsSession);
+
+        // A second request must MISS — the handler runs, alice's body is not served.
+        $ran = false;
+        $bob = Request::create(method: 'GET', path: '/api/me');
+        $bobRes = $cache->handle($bob, new Response(testing: true), function (Request $q, Response $r) use (&$ran): Response {
+            $ran = true;
+            return $r->json(['v' => 'bob']);
+        });
+        $this->assertTrue($ran, 'a Set-Cookie response must not be served from the shared cache');
+        $this->assertStringNotContainsString('alice-secret', $bobRes->getBody());
+        $this->assertSame('MISS', $bobRes->getHeader('X-Cache'));
+    }
+
+    public function testCookieRequestWithoutSharedDirectiveIsNotCached(): void
+    {
+        // A request carrying a Cookie is as specific as an authenticated one.
+        // With no shared-cache directive on the response it must not be stored.
+        $cache = new ResponseCache(['ttl' => 60]);
+
+        $alice = Request::create(method: 'GET', path: '/api/dashboard', headers: ['cookie' => 'session=ALICE']);
+        $cache->handle($alice, new Response(testing: true), $this->handlerReturning('alice-dashboard'));
+
+        $ran = false;
+        $bob = Request::create(method: 'GET', path: '/api/dashboard', headers: ['cookie' => 'session=BOB']);
+        $bobRes = $cache->handle($bob, new Response(testing: true), function (Request $q, Response $r) use (&$ran): Response {
+            $ran = true;
+            return $r->json(['v' => 'bob-dashboard']);
+        });
+        $this->assertTrue($ran, 'a cookie-bearing request without a shared directive must miss');
+        $this->assertStringNotContainsString('alice-dashboard', $bobRes->getBody());
+        $this->assertSame('MISS', $bobRes->getHeader('X-Cache'));
+    }
+
+    public function testPrivateNoStoreNoCacheResponsesAreNotCached(): void
+    {
+        // Cache-Control: private / no-store / no-cache must all keep a response
+        // out of the shared cache, even for cookieless traffic.
+        foreach (['private', 'no-store', 'no-cache', 'no-cache="Set-Cookie"'] as $directive) {
+            $cache = new ResponseCache(['ttl' => 60]);
+            $refusing = static function (Request $req, Response $res) use ($directive): Response {
+                $res->header('Cache-Control', $directive);
+                return $res->json(['v' => 'do-not-store']);
+            };
+
+            $first = Request::create(method: 'GET', path: '/api/secret');
+            $cache->handle($first, new Response(testing: true), $refusing);
+
+            $ran = false;
+            $second = Request::create(method: 'GET', path: '/api/secret');
+            $res = $cache->handle($second, new Response(testing: true), function (Request $q, Response $r) use (&$ran): Response {
+                $ran = true;
+                return $r->json(['v' => 'recomputed']);
+            });
+            $this->assertTrue($ran, "Cache-Control: {$directive} must keep the response out of the cache");
+            $this->assertStringContainsString('recomputed', $res->getBody());
+        }
+    }
+
+    public function testCookieRequestMarkedPublicStillHits(): void
+    {
+        // Control: a cookie-bearing request whose response is explicitly public
+        // must still be served from cache (the fix is not "disable caching").
+        $cache = new ResponseCache(['ttl' => 60]);
+        $publicHandler = static function (Request $req, Response $res): Response {
+            $res->header('Cache-Control', 'public, max-age=60');
+            return $res->json(['v' => 'shared-products']);
+        };
+
+        $first = Request::create(method: 'GET', path: '/api/products', headers: ['cookie' => 'session=ALICE']);
+        $cache->handle($first, new Response(testing: true), $publicHandler);
+
+        $ran = false;
+        $second = Request::create(method: 'GET', path: '/api/products', headers: ['cookie' => 'session=BOB']);
+        $res = $cache->handle($second, new Response(testing: true), function (Request $q, Response $r) use (&$ran): Response {
+            $ran = true;
+            return $r->json(['v' => 'recomputed']);
+        });
+        $this->assertFalse($ran, 'a public response stays cacheable for cookie-bearing browsers');
+        $this->assertSame('HIT', $res->getHeader('X-Cache'));
+        $this->assertStringContainsString('shared-products', $res->getBody());
+    }
+
+    public function testCookielessPublicTrafficStillHits(): void
+    {
+        // Control: ordinary cookieless traffic must still HIT.
+        $cache = new ResponseCache(['ttl' => 60]);
+        $first = Request::create(method: 'GET', path: '/api/anon');
+        $cache->handle($first, new Response(testing: true), $this->handlerReturning('anon-body'));
+
+        $ran = false;
+        $second = Request::create(method: 'GET', path: '/api/anon');
+        $res = $cache->handle($second, new Response(testing: true), function (Request $q, Response $r) use (&$ran): Response {
+            $ran = true;
+            return $r->json(['v' => 'recomputed']);
+        });
+        $this->assertFalse($ran, 'cookieless public traffic must still be served from cache');
+        $this->assertSame('HIT', $res->getHeader('X-Cache'));
+        $this->assertStringContainsString('anon-body', $res->getBody());
+    }
 }

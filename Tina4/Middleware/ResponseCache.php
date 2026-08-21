@@ -688,6 +688,50 @@ class ResponseCache
     }
 
     /**
+     * The Cache-Control directive NAMES on a request or response, lowercased.
+     *
+     * Parsed as comma-separated tokens with any ="value" stripped, rather than
+     * by substring search, so no-cache="Set-Cookie" is recognised as no-cache
+     * and a directive name never matches as a fragment of a longer one.
+     *
+     * @param object $carrier Request or Response carrying a Cache-Control header
+     * @return string[] Lowercased directive names, empty when there is none
+     */
+    private function cacheControlTokens(object $carrier): array
+    {
+        $raw = (string)$this->headerValue($carrier, 'Cache-Control');
+        if (trim($raw) === '') {
+            return [];
+        }
+        $tokens = [];
+        foreach (explode(',', $raw) as $token) {
+            $name = strtolower(trim(explode('=', $token, 2)[0]));
+            if ($name !== '') {
+                $tokens[] = $name;
+            }
+        }
+        return $tokens;
+    }
+
+    /**
+     * Does the response carry a directive that lets a SHARED cache store it?
+     *
+     * RFC 9111 s3.5 — a response to an Authorization/Cookie-bearing request (or
+     * one installing a Set-Cookie) is storable by a shared cache only when it
+     * opts in with an explicit shared-cache directive (public / s-maxage / …).
+     *
+     * @param object $response The response being considered for storage
+     * @return bool True when a shared-cache directive is present
+     */
+    private function sharedCacheAllowed(object $response): bool
+    {
+        return array_intersect(
+            $this->cacheControlTokens($response),
+            self::SHARED_CACHE_DIRECTIVES
+        ) !== [];
+    }
+
+    /**
      * May a SHARED cache store this response? (RFC 9111 s3, s4.1)
      *
      * s3 — "if the cache is shared: the Authorization header field is not
@@ -695,6 +739,23 @@ class ResponseCache
      * explicitly allows shared caching". The key is method + URL only, so
      * without this one authenticated caller's body is replayed to every later
      * caller of the same URL.
+     *
+     * The same s3 reasoning covers two cases the Authorization check alone does
+     * not:
+     *
+     *   - no-store forbids storage in any cache and private forbids it in a
+     *     shared one; no-cache forbids reuse without revalidation. Honouring
+     *     them gives a handler a standard way to keep a response out of this
+     *     cache — setting the correct header used to do nothing.
+     *   - A caller identified by a session Cookie is as specific as one carrying
+     *     Authorization, and Tina4's own session mechanism IS a cookie. Because
+     *     the key is method + URL, storing such a response replays one signed-in
+     *     user's page to whoever asks for that URL next. A response installing a
+     *     session (Set-Cookie) is per-user by construction for the same reason.
+     *
+     * Both cookie cases stay cacheable when the response opts in explicitly with
+     * a shared-cache directive, so a genuinely public page served to
+     * cookie-bearing browsers keeps its hit rate.
      *
      * s4.1 — a stored response whose Vary contains "*" "always fails to
      * match", so storing one is pointless.
@@ -708,16 +769,19 @@ class ResponseCache
         if (in_array('*', $this->varyFields($response), true)) {
             return false;
         }
-        if ($this->headerValue($request, 'Authorization') === null) {
-            return true;
+        if (array_intersect($this->cacheControlTokens($response), ['no-store', 'private', 'no-cache']) !== []) {
+            return false;
         }
-        $cacheControl = strtolower((string)$this->headerValue($response, 'Cache-Control'));
-        foreach (self::SHARED_CACHE_DIRECTIVES as $directive) {
-            if (str_contains($cacheControl, $directive)) {
-                return true;
-            }
+        if ($this->headerValue($request, 'Authorization') !== null) {
+            return $this->sharedCacheAllowed($response);
         }
-        return false;
+        if ($this->headerValue($request, 'Cookie') !== null) {
+            return $this->sharedCacheAllowed($response);
+        }
+        if ($this->headerValue($response, 'Set-Cookie') !== null) {
+            return $this->sharedCacheAllowed($response);
+        }
+        return true;
     }
 
     /**
