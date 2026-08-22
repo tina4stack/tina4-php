@@ -15,10 +15,14 @@ final class AI
         bool $stream = false,
         ?float $timeout = null,
         ?string $provider = null,
+        ?array $tools = null,
+        string|array|null $toolChoice = null,
     ): ChatResponse|\Generator {
         self::validateMessages($messages);
+        self::validateTools($tools);
+        self::validateToolChoice($toolChoice);
         $config = self::config('chat', $model, $timeout, $provider);
-        $body = self::chatBody($config, $messages, $temperature, $maxTokens, $stream);
+        $body = self::chatBody($config, $messages, $temperature, $maxTokens, $stream, $tools, $toolChoice);
         if ($stream) {
             return self::stream($config, self::headers($config), $body);
         }
@@ -92,12 +96,44 @@ final class AI
             throw new AIConfigError('AI messages must be a non-empty list');
         }
         foreach ($messages as $message) {
-            if (!is_array($message)
-                || !in_array($message['role'] ?? null, ['system', 'user', 'assistant'], true)
-                || !array_key_exists('content', $message)) {
-                throw new AIConfigError('Each AI message needs a supported role and content');
+            if (!is_array($message) || !isset($message['role']) || !is_string($message['role'])) {
+                throw new AIConfigError('Each AI message needs a supported role');
+            }
+            $role = $message['role'];
+            if (!in_array($role, ['system', 'user', 'assistant', 'tool'], true)) {
+                throw new AIConfigError('Each AI message needs a supported role');
+            }
+            if ($role === 'tool') {
+                // OpenAI-style tool result: {role:'tool', tool_call_id, content}.
+                if (!isset($message['tool_call_id']) || !is_string($message['tool_call_id']) || $message['tool_call_id'] === '') {
+                    throw new AIConfigError('AI tool message needs a non-empty string tool_call_id');
+                }
+                if (!isset($message['content']) || !is_string($message['content'])) {
+                    throw new AIConfigError('AI tool message needs a string content');
+                }
+                continue;
+            }
+            // assistant messages carrying tool_calls (round-trip context) may omit content.
+            if ($role === 'assistant' && isset($message['tool_calls']) && !array_key_exists('content', $message)) {
+                self::validateAssistantToolCalls($message['tool_calls']);
+                continue;
+            }
+            if (!array_key_exists('content', $message)) {
+                throw new AIConfigError('Each AI message needs content');
             }
             $content = $message['content'];
+            if ($role === 'assistant' && isset($message['tool_calls'])) {
+                self::validateAssistantToolCalls($message['tool_calls']);
+                if ($content !== null && !is_string($content) && !is_array($content)) {
+                    throw new AIConfigError('AI assistant tool_calls message content must be null, string, or list');
+                }
+                if (is_array($content)) {
+                    foreach ($content as $part) {
+                        self::validateContentPart($part);
+                    }
+                }
+                continue;
+            }
             if (is_string($content)) {
                 continue;
             }
@@ -106,6 +142,25 @@ final class AI
             }
             foreach ($content as $part) {
                 self::validateContentPart($part);
+            }
+        }
+    }
+
+    /**
+     * @param mixed $toolCalls
+     */
+    private static function validateAssistantToolCalls(mixed $toolCalls): void
+    {
+        if (!is_array($toolCalls) || $toolCalls === []) {
+            throw new AIConfigError('AI assistant tool_calls must be a non-empty list');
+        }
+        foreach ($toolCalls as $call) {
+            if (!is_array($call)
+                || !isset($call['id']) || !is_string($call['id']) || $call['id'] === ''
+                || !isset($call['function']) || !is_array($call['function'])
+                || !isset($call['function']['name']) || !is_string($call['function']['name'])
+                || !isset($call['function']['arguments']) || !is_string($call['function']['arguments'])) {
+                throw new AIConfigError('AI assistant tool_call entries need id + function{name, arguments}');
             }
         }
     }
@@ -141,7 +196,66 @@ final class AI
             }
             return;
         }
+        if ($type === 'tool_result') {
+            // Anthropic-style tool result part inside a user turn.
+            if (!isset($part['tool_use_id']) || !is_string($part['tool_use_id']) || $part['tool_use_id'] === '') {
+                throw new AIConfigError('AI tool_result part needs a non-empty string tool_use_id');
+            }
+            if (!isset($part['content'])) {
+                throw new AIConfigError('AI tool_result part needs a content field');
+            }
+            $inner = $part['content'];
+            if (!is_string($inner) && !is_array($inner)) {
+                throw new AIConfigError('AI tool_result part content must be a string or list of parts');
+            }
+            return;
+        }
         throw new AIConfigError("Unknown AI content part type: {$type}");
+    }
+
+    /**
+     * Validate an outbound tools declaration (ADR-0061).
+     *
+     * Each tool is `{name: string, description: string, parameters: array}` where
+     * `parameters` is a JSON-Schema object (we do not schema-check it beyond
+     * requiring an array, which is what every provider accepts).
+     */
+    private static function validateTools(?array $tools): void
+    {
+        if ($tools === null) {
+            return;
+        }
+        if ($tools === []) {
+            throw new AIConfigError('AI tools must be a non-empty list when provided');
+        }
+        foreach ($tools as $tool) {
+            if (!is_array($tool)
+                || !isset($tool['name']) || !is_string($tool['name']) || $tool['name'] === ''
+                || !isset($tool['description']) || !is_string($tool['description'])
+                || !array_key_exists('parameters', $tool) || !is_array($tool['parameters'])) {
+                throw new AIConfigError('Each AI tool needs name, description, and parameters (JSON-Schema object)');
+            }
+        }
+    }
+
+    /**
+     * Validate the neutral tool_choice value (ADR-0061).
+     * Accepts 'auto'|'none'|'required' OR ['name' => 'x'].
+     */
+    private static function validateToolChoice(string|array|null $toolChoice): void
+    {
+        if ($toolChoice === null) {
+            return;
+        }
+        if (is_string($toolChoice)) {
+            if (!in_array($toolChoice, ['auto', 'none', 'required'], true)) {
+                throw new AIConfigError("AI tool_choice string must be 'auto', 'none', or 'required'");
+            }
+            return;
+        }
+        if (!isset($toolChoice['name']) || !is_string($toolChoice['name']) || $toolChoice['name'] === '') {
+            throw new AIConfigError("AI tool_choice array must be ['name' => '<tool-name>']");
+        }
     }
 
     private static function config(string $capability, ?string $model, ?float $timeout, ?string $provider): array
@@ -220,8 +334,22 @@ final class AI
         return $headers;
     }
 
-    private static function chatBody(array $config, array $messages, ?float $temperature, ?int $maxTokens, bool $stream): array
-    {
+    private static function chatBody(
+        array $config,
+        array $messages,
+        ?float $temperature,
+        ?int $maxTokens,
+        bool $stream,
+        ?array $tools = null,
+        string|array|null $toolChoice = null,
+    ): array {
+        // ADR-0061 pre-flatten: a user turn whose ONLY content is a list of
+        // Anthropic-shape tool_result parts becomes N OpenAI role:'tool'
+        // messages when the current provider is not Anthropic. This lets
+        // translateMessage do a straight per-message translation next.
+        if ($config['provider'] !== 'anthropic') {
+            $messages = self::flattenAnthropicToolResults($messages);
+        }
         $translated = array_map(
             static fn (array $m): array => self::translateMessage($config['provider'], $m),
             $messages,
@@ -252,7 +380,74 @@ final class AI
                 $body['system'] = implode("\n\n", $system);
             }
         }
+        // ADR-0061: outbound tools + tool_choice translation.
+        // For tool_choice='none' on Anthropic, we OMIT the tools entirely (no analog).
+        $includeTools = $tools !== null && !($config['provider'] === 'anthropic' && $toolChoice === 'none');
+        if ($includeTools) {
+            $body['tools'] = self::translateTools($config['provider'], $tools);
+        }
+        if ($toolChoice !== null) {
+            $translatedChoice = self::translateToolChoice($config['provider'], $toolChoice);
+            if ($translatedChoice !== null) {
+                $body['tool_choice'] = $translatedChoice;
+            }
+        }
         return $body;
+    }
+
+    /**
+     * Translate the neutral Tina4 tool list to a provider-native shape (ADR-0061).
+     *
+     * OpenAI/local: [{type:'function', function:{name, description, parameters}}]
+     * Anthropic:    [{name, description, input_schema: parameters}]
+     */
+    private static function translateTools(string $provider, array $tools): array
+    {
+        if ($provider === 'anthropic') {
+            return array_map(static fn (array $t): array => [
+                'name' => $t['name'],
+                'description' => $t['description'],
+                'input_schema' => $t['parameters'],
+            ], $tools);
+        }
+        return array_map(static fn (array $t): array => [
+            'type' => 'function',
+            'function' => [
+                'name' => $t['name'],
+                'description' => $t['description'],
+                'parameters' => $t['parameters'],
+            ],
+        ], $tools);
+    }
+
+    /**
+     * Translate the neutral tool_choice value to the provider-native shape (ADR-0061).
+     * Returns null when the value maps to "no field on the wire" (Anthropic 'none').
+     *
+     * @return string|array<string,mixed>|null
+     */
+    private static function translateToolChoice(string $provider, string|array $toolChoice): string|array|null
+    {
+        if ($provider === 'anthropic') {
+            if ($toolChoice === 'auto') {
+                return ['type' => 'auto'];
+            }
+            if ($toolChoice === 'required') {
+                return ['type' => 'any'];
+            }
+            if ($toolChoice === 'none') {
+                // Anthropic has no 'none' — the caller-facing effect is
+                // "don't offer tools", handled in chatBody by omitting tools.
+                return null;
+            }
+            // Named tool: ['name' => 'x'] -> {type:'tool', name:'x'}
+            return ['type' => 'tool', 'name' => $toolChoice['name']];
+        }
+        // OpenAI/local passthrough for the string modes.
+        if (is_string($toolChoice)) {
+            return $toolChoice;
+        }
+        return ['type' => 'function', 'function' => ['name' => $toolChoice['name']]];
     }
 
     /**
@@ -263,17 +458,51 @@ final class AI
      *   Anthropic:    [{type:'text',text},
      *                  {type:'image', source: {type:'base64',media_type,data}}]  (data: URIs)
      *                  [{type:'image', source: {type:'url', url}}]              (https:// URLs)
+     *
+     * ADR-0061: also normalises tool-result messages either way so the caller's
+     * agent loop is provider-neutral.
      */
     private static function translateMessage(string $provider, array $message): array
     {
-        $content = $message['content'];
-        if (is_string($content)) {
+        $role = $message['role'] ?? '';
+        // ADR-0061: OpenAI-style tool result -> Anthropic user turn with tool_result block.
+        if ($role === 'tool') {
+            if ($provider === 'anthropic') {
+                return [
+                    'role' => 'user',
+                    'content' => [[
+                        'type' => 'tool_result',
+                        'tool_use_id' => $message['tool_call_id'],
+                        'content' => $message['content'],
+                    ]],
+                ];
+            }
+            // OpenAI/local passthrough — only the whitelisted keys survive.
+            $out = ['role' => 'tool', 'tool_call_id' => $message['tool_call_id'], 'content' => $message['content']];
+            if (isset($message['name']) && is_string($message['name'])) {
+                $out['name'] = $message['name'];
+            }
+            return $out;
+        }
+        $content = $message['content'] ?? null;
+        if (is_string($content) || $content === null) {
             return $message;
         }
         $parts = [];
         foreach ($content as $part) {
-            if ($part['type'] === 'text') {
+            $ptype = $part['type'] ?? '';
+            if ($ptype === 'text') {
                 $parts[] = ['type' => 'text', 'text' => $part['text']];
+                continue;
+            }
+            if ($ptype === 'tool_result') {
+                // Anthropic-form part on the Anthropic provider — passthrough.
+                $inner = $part['content'];
+                $parts[] = [
+                    'type' => 'tool_result',
+                    'tool_use_id' => $part['tool_use_id'],
+                    'content' => is_string($inner) ? $inner : $inner,
+                ];
                 continue;
             }
             // image
@@ -307,6 +536,57 @@ final class AI
         }
         $message['content'] = $parts;
         return $message;
+    }
+
+    /** Flatten a tool_result inner content (Anthropic can carry a parts list). */
+    private static function joinToolResultContent(array $parts): string
+    {
+        $out = [];
+        foreach ($parts as $part) {
+            if (is_array($part) && ($part['type'] ?? '') === 'text' && isset($part['text']) && is_string($part['text'])) {
+                $out[] = $part['text'];
+            }
+        }
+        return implode('', $out);
+    }
+
+    /**
+     * Pre-flatten: a user turn whose content is ONLY tool_result parts becomes
+     * one `role:'tool'` message per part, so the OpenAI/local wire only sees
+     * OpenAI-shape tool messages regardless of which form the caller sent.
+     * Mixed content (text + tool_result in the same user turn) is left alone.
+     *
+     * @param array<int, array<string, mixed>> $messages
+     * @return array<int, array<string, mixed>>
+     */
+    private static function flattenAnthropicToolResults(array $messages): array
+    {
+        $out = [];
+        foreach ($messages as $message) {
+            if (($message['role'] ?? '') !== 'user' || !is_array($message['content'] ?? null)) {
+                $out[] = $message;
+                continue;
+            }
+            $onlyToolResults = $message['content'] !== [];
+            foreach ($message['content'] as $part) {
+                if (!is_array($part) || ($part['type'] ?? '') !== 'tool_result') {
+                    $onlyToolResults = false;
+                    break;
+                }
+            }
+            if (!$onlyToolResults) {
+                $out[] = $message;
+                continue;
+            }
+            foreach ($message['content'] as $part) {
+                $out[] = [
+                    'role' => 'tool',
+                    'tool_call_id' => $part['tool_use_id'],
+                    'content' => is_string($part['content']) ? $part['content'] : self::joinToolResultContent($part['content']),
+                ];
+            }
+        }
+        return $out;
     }
 
     /** Flatten a list-of-parts to a text-only concatenation (Anthropic system). */

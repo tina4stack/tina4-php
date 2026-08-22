@@ -94,6 +94,53 @@ if ($path === '/openai') {
         'choices' => [['message' => ['content' => 'ok'], 'finish_reason' => 'stop']],
         'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1, 'total_tokens' => 2],
     ]);
+} elseif ($path === '/anthropic-echo') {
+    // Echoes the received body but replies with Anthropic-shape success — tests
+    // use this to assert tool declaration + tool_choice + tool_result on wire
+    // for the Anthropic provider (ADR-0061).
+    $json(200, [
+        'model' => $body['model'] ?? 'echo',
+        'content' => [['type' => 'text', 'text' => 'ok']],
+        'stop_reason' => 'end_turn',
+        'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+    ]);
+} elseif ($path === '/agent-openai-turn') {
+    // Two-turn agent loop (ADR-0061 round-trip). First POST streams an OpenAI
+    // tool_call, second POST streams a text_delta then [DONE]. The state
+    // counter distinguishes them so the caller can prove send + receive
+    // compose without a raw SSE parser in the caller.
+    header('Content-Type: text/event-stream');
+    if ($state['counts'][$path] === 1) {
+        // Turn 1: emit a full tool_call (name + args in one fragment for brevity)
+        echo 'data: ' . json_encode(['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'id' => 'call_wx', 'type' => 'function', 'function' => ['name' => 'get_weather', 'arguments' => '{"city": "Cape Town"}']]]]]]]) . "\n\n";
+        echo 'data: ' . json_encode(['choices' => [['delta' => [], 'finish_reason' => 'tool_calls']]]) . "\n\n";
+        echo "data: [DONE]\n\n";
+    } else {
+        // Turn 2: model has "seen" the tool_result and now answers
+        echo 'data: ' . json_encode(['choices' => [['delta' => ['content' => 'It is 22C in Cape Town']]]]) . "\n\n";
+        echo 'data: ' . json_encode(['choices' => [['delta' => [], 'finish_reason' => 'stop']]]) . "\n\n";
+        echo "data: [DONE]\n\n";
+    }
+} elseif ($path === '/agent-anthropic-turn') {
+    // Two-turn Anthropic agent loop (ADR-0061 round-trip).
+    header('Content-Type: text/event-stream');
+    if ($state['counts'][$path] === 1) {
+        // Turn 1: tool_use block
+        echo 'data: ' . json_encode(['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 5, 'output_tokens' => 0]]]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'get_weather', 'input' => new stdClass()]]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'input_json_delta', 'partial_json' => '{"city": "Cape Town"}']]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'content_block_stop', 'index' => 0]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'message_delta', 'delta' => ['stop_reason' => 'tool_use'], 'usage' => ['input_tokens' => 5, 'output_tokens' => 6]]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'message_stop']) . "\n\n";
+    } else {
+        // Turn 2: model answers in text
+        echo 'data: ' . json_encode(['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 12, 'output_tokens' => 0]]]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'text', 'text' => '']]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'It is 22C in Cape Town']]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'content_block_stop', 'index' => 0]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['input_tokens' => 12, 'output_tokens' => 8]]) . "\n\n";
+        echo 'data: ' . json_encode(['type' => 'message_stop']) . "\n\n";
+    }
 } elseif ($path === '/retry' && $state['counts'][$path] === 1) {
     $json(429, ['error' => 'later'], ['Retry-After' => '0']);
 } elseif ($path === '/retry') {

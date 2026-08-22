@@ -6,6 +6,54 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.114
+
+The tool loop closes. `AI::chat` accepts an outbound `tools` list and a
+`toolChoice` mode, and it accepts a tool-result turn on the next call in
+either OpenAI form (`role:'tool'`) or Anthropic form (a user turn with a
+`tool_result` content block). The client translates whichever the caller
+sent to whichever shape the current provider wants, so an agent loop is
+provider-neutral. Feature 141 / ADR-0061.
+
+### AI::chat outbound tools + tool_choice
+
+- `AI::chat($messages, tools: [...], toolChoice: ...)` declares tools to
+  the model. Each tool is `['name' => string, 'description' => string,
+  'parameters' => <JSON-Schema object>]`.
+- `toolChoice` accepts `'auto' | 'none' | 'required' | ['name' => 'x']`.
+  On the wire: OpenAI/local get the string modes as-is and named as
+  `{type:'function', function:{name}}`; Anthropic gets `{type:'auto'}`,
+  `{type:'any'}`, `{type:'tool', name}`, and 'none' OMITS `tools`
+  entirely (Anthropic has no 'none').
+- `parameters` (the JSON-Schema object) passes through verbatim — nested
+  types, enums, `$defs`, `required`, `additionalProperties` all preserved.
+
+### AI::chat accepts tool-result messages
+
+- OpenAI form: `['role' => 'tool', 'tool_call_id' => id, 'content' => str]`.
+- Anthropic form: `['role' => 'user', 'content' => [['type' => 'tool_result',
+  'tool_use_id' => id, 'content' => str]]]`.
+- Either input works on either provider — the client normalises OpenAI
+  `role:'tool'` to an Anthropic user-turn with a `tool_result` block, and
+  a user turn whose ONLY parts are `tool_result` becomes N `role:'tool'`
+  messages when going to OpenAI/local.
+- Assistant messages carrying `tool_calls` are accepted (needed for the
+  agent-loop round-trip context).
+- Malformed tool-result parts (missing `tool_call_id` / `tool_use_id` /
+  `content`, unknown `toolChoice` string, bad tool declaration) raise
+  `AIConfigError` BEFORE any request is sent.
+
+### Fixture + tests
+
+- `tests/AIClientContractTest.php` grows 14 real-socket tests covering the
+  four new invariant groups (`ai-tool-declaration-outbound`,
+  `ai-tool-choice-mode-translation`, `ai-tool-result-message-shape`,
+  `ai-agent-loop-round-trip`), plus a config-error negative sweep. No mocks.
+- `tests/fixtures/ai_client_contract_server.php` adds an Anthropic-shape
+  echo endpoint and two stateful SSE endpoints that turn once for
+  tool_call, then again for text_delta — proving the send + receive
+  halves compose end to end for both providers.
+
 ## 3.13.113
 
 Breaking release. `Ai::chat(stream: true)` yields typed AiEvent-shaped
