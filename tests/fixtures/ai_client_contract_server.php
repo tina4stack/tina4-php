@@ -58,12 +58,42 @@ if ($path === '/openai') {
     echo "data: [DONE]\n\n";
 } elseif ($path === '/stream-anthropic') {
     header('Content-Type: text/event-stream');
-    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => 'hello ']]) . "\n\n";
-    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => 'world']]) . "\n\n";
-    echo "data: [DONE]\n\n";
+    echo 'data: ' . json_encode(['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 3, 'output_tokens' => 0]]]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'text', 'text' => '']]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'hello ']]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'world']]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_stop', 'index' => 0]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['input_tokens' => 3, 'output_tokens' => 2]]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'message_stop']) . "\n\n";
 } elseif ($path === '/stream-partial') {
     header('Content-Type: text/event-stream');
     echo 'data: ' . json_encode(['choices' => [['delta' => ['content' => 'first']]]]) . "\n\n";
+} elseif ($path === '/stream-openai-tool') {
+    header('Content-Type: text/event-stream');
+    // Fragmented OpenAI tool_call: name arrives first, then argument JSON in three fragments.
+    echo 'data: ' . json_encode(['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'id' => 'call_wx', 'type' => 'function', 'function' => ['name' => 'get_weather', 'arguments' => '']]]]]]]) . "\n\n";
+    echo 'data: ' . json_encode(['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => '{"loc']]]]]]]) . "\n\n";
+    echo 'data: ' . json_encode(['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => 'ation":']]]]]]]) . "\n\n";
+    echo 'data: ' . json_encode(['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => ' "Cape Town"}']]]]]]]) . "\n\n";
+    echo 'data: ' . json_encode(['choices' => [['delta' => [], 'finish_reason' => 'tool_calls']]]) . "\n\n";
+    echo "data: [DONE]\n\n";
+} elseif ($path === '/stream-anthropic-tool') {
+    header('Content-Type: text/event-stream');
+    echo 'data: ' . json_encode(['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 5, 'output_tokens' => 0]]]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'get_weather', 'input' => new stdClass()]]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'input_json_delta', 'partial_json' => '{"loc']]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'input_json_delta', 'partial_json' => 'ation":']]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'input_json_delta', 'partial_json' => ' "Cape Town"}']]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'content_block_stop', 'index' => 0]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'message_delta', 'delta' => ['stop_reason' => 'tool_use'], 'usage' => ['input_tokens' => 5, 'output_tokens' => 6]]) . "\n\n";
+    echo 'data: ' . json_encode(['type' => 'message_stop']) . "\n\n";
+} elseif ($path === '/multimodal-echo') {
+    // Echoes the received body so tests can assert body-shape translation per provider.
+    $json(200, [
+        'model' => $body['model'] ?? 'echo',
+        'choices' => [['message' => ['content' => 'ok'], 'finish_reason' => 'stop']],
+        'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1, 'total_tokens' => 2],
+    ]);
 } elseif ($path === '/retry' && $state['counts'][$path] === 1) {
     $json(429, ['error' => 'later'], ['Retry-After' => '0']);
 } elseif ($path === '/retry') {

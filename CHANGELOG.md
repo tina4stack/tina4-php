@@ -6,6 +6,72 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.113
+
+Breaking release. `Ai::chat(stream: true)` yields typed AiEvent-shaped
+arrays instead of raw text strings, message content accepts multimodal
+parts, and `Api` gains three new streaming primitives that the AI
+client and any other consumer can share. Feature 140 / ADR-0060.
+
+### Ai::chat streaming yields typed events (breaking)
+
+- `Ai::chat($messages, stream: true)` returns an iterator of associative
+  arrays shaped as one of `text_delta` / `tool_call` / `done` / `error`
+  (the AiEvent union). Text arrives per-chunk; tool_calls are aggregated
+  (OpenAI `tool_calls[i].function.arguments` fragments and Anthropic
+  `input_json_delta` fragments buffer until their JSON parses cleanly);
+  `done` fires exactly once after all deltas; `error` fires only for
+  mid-stream failures and replaces `done`. No retry occurs after the
+  first event is yielded.
+- Migration: `for ($chunk of $stream)` becomes
+  `foreach ($stream as $event) if ($event['type'] === 'text_delta') ...`
+  There is no shim; ADR-0053 pre-1.0 streaming is superseded by ADR-0060.
+- Malformed tool-call JSON raises `AIParseError` mid-stream.
+
+### Ai::chat accepts multimodal content parts
+
+- `message['content']` accepts a string OR a list of parts. Each part is
+  either `['type' => 'text', 'text' => string]` or
+  `['type' => 'image', 'source' => 'data:<mime>;base64,<payload>'|'https://...']`.
+- Malformed parts (missing keys, unknown type, wrong value type,
+  disallowed source scheme) raise `AIConfigError` BEFORE any request is
+  sent.
+- The client translates internally to each provider's shape: OpenAI /
+  local get `image_url`, Anthropic gets `content-block` with
+  `source.type = base64` (with `media_type`) for data URIs and
+  `source.type = url` for https URLs.
+
+### Api streaming primitives
+
+- `Api::streamBytes($path, $opts)` yields raw response body chunks in
+  the order the transport delivered them. Ends cleanly on EOF; raises
+  `Tina4\ApiStreamError` (or `ApiStreamTimeoutError` / `ApiStreamHttpError`)
+  on transport failure or non-2xx status.
+- `Api::streamLines($path, $opts)` yields one UTF-8 string per complete
+  line (LF or CRLF). Trailing line without a newline is yielded on EOF;
+  multibyte sequences buffer across chunk boundaries.
+- `Api::streamSse($path, $opts)` yields SSE event records
+  `['data' => string, 'event' => ?string, 'id' => ?string, 'retry' => ?int]`.
+  Blank line = event boundary; multi-line `data:` fields are concatenated
+  with `"\n"`; leading-colon lines are comments (ignored); `data: [DONE]`
+  is delivered verbatim as the last event and the iterator ends.
+- `Ai::chat` streaming is built on `Api::streamSse` - there is one SSE
+  framer, not two.
+- `$opts` recognises `method`, `body`, `headers`, `content_type`,
+  `timeout` (default `TINA4_API_TIMEOUT`) and `connect_timeout`
+  (default `TINA4_API_CONNECT_TIMEOUT`). Closing the iterator before EOF
+  closes the transport promptly.
+
+### Tests
+
+- `tests/AIClientContractTest.php` covers the six ADR-0060 stream cases
+  and the six multimodal cases, all against a real local HTTP fixture
+  server over real sockets.
+- `tests/ApiStreamContractTest.php` (new) covers every case in the
+  extended `api_stream_contract.json` fixture against a raw-socket
+  fixture server that owns its own listener (php -S buffers responses
+  whole and cannot exercise chunk-boundary or mid-stream-drop cases).
+
 ## 3.13.107
 
 Feature: RBAC role and permission guards (parity across all four frameworks).

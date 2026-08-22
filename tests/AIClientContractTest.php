@@ -100,24 +100,187 @@ final class AIClientContractTest extends TestCase
         $this->assertSame([[0.0, 0.25, 0.5], [1.0, 0.25, 0.5]], AI::embed(['one', 'two']));
     }
 
-    public function testAiStreamIsOrderedDeltas(): void
+    // ── ADR-0060: typed AiEvent streaming ────────────────────────────
+
+    public function testAiStreamTextDeltasOrder(): void
     {
         putenv('TINA4_AI_URL=' . $this->base('/stream-openai'));
-        $this->assertSame(['hello ', 'world'], iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true)));
-        putenv('TINA4_AI_PROVIDER=local');
-        putenv('TINA4_AI_KEY');
-        putenv('TINA4_AI_MAX_RETRIES=1');
-        putenv('TINA4_AI_URL=' . $this->base('/stream-partial'));
-        try {
-            iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true));
-            $this->fail('partial stream must fail');
-        } catch (AIParseError) {
-            $this->assertSame(1, $this->state()['counts']['/stream-partial']);
-        }
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true), false);
+        $this->assertSame('text_delta', $events[0]['type']);
+        $this->assertSame('hello ', $events[0]['text']);
+        $this->assertSame('text_delta', $events[1]['type']);
+        $this->assertSame('world', $events[1]['text']);
+        $this->assertSame('done', $events[2]['type']);
+        $this->assertSame('stop', $events[2]['finish_reason']);
+        $this->assertCount(3, $events);
+
         putenv('TINA4_AI_PROVIDER=anthropic');
         putenv('TINA4_AI_KEY=hosted-key');
         putenv('TINA4_AI_URL=' . $this->base('/stream-anthropic'));
-        $this->assertSame(['hello ', 'world'], iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true)));
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true), false);
+        $this->assertSame('text_delta', $events[0]['type']);
+        $this->assertSame('hello ', $events[0]['text']);
+        $this->assertSame('text_delta', $events[1]['type']);
+        $this->assertSame('world', $events[1]['text']);
+        $this->assertSame('done', $events[2]['type']);
+        $this->assertSame('end_turn', $events[2]['finish_reason']);
+        $this->assertSame(3, $events[2]['usage']['prompt_tokens']);
+        $this->assertSame(2, $events[2]['usage']['completion_tokens']);
+    }
+
+    public function testAiStreamToolCallAggregatedOpenai(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/stream-openai-tool'));
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'weather?']], stream: true), false);
+        $toolCalls = array_values(array_filter($events, static fn (array $e): bool => $e['type'] === 'tool_call'));
+        $this->assertCount(1, $toolCalls, 'fragments must aggregate into ONE tool_call event');
+        $this->assertSame('call_wx', $toolCalls[0]['id']);
+        $this->assertSame('get_weather', $toolCalls[0]['name']);
+        $this->assertSame(['location' => 'Cape Town'], $toolCalls[0]['args']);
+        // done still fires
+        $done = end($events);
+        $this->assertSame('done', $done['type']);
+        $this->assertSame('tool_calls', $done['finish_reason']);
+    }
+
+    public function testAiStreamToolCallAggregatedAnthropic(): void
+    {
+        putenv('TINA4_AI_PROVIDER=anthropic');
+        putenv('TINA4_AI_KEY=hosted-key');
+        putenv('TINA4_AI_URL=' . $this->base('/stream-anthropic-tool'));
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'weather?']], stream: true), false);
+        $toolCalls = array_values(array_filter($events, static fn (array $e): bool => $e['type'] === 'tool_call'));
+        $this->assertCount(1, $toolCalls);
+        $this->assertSame('toolu_1', $toolCalls[0]['id']);
+        $this->assertSame('get_weather', $toolCalls[0]['name']);
+        $this->assertSame(['location' => 'Cape Town'], $toolCalls[0]['args']);
+        $done = end($events);
+        $this->assertSame('done', $done['type']);
+        $this->assertSame('tool_use', $done['finish_reason']);
+    }
+
+    public function testAiStreamDoneFiresOnce(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/stream-openai'));
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true), false);
+        $dones = array_values(array_filter($events, static fn (array $e): bool => $e['type'] === 'done'));
+        $this->assertCount(1, $dones);
+        // done must be the LAST event
+        $this->assertSame('done', end($events)['type']);
+    }
+
+    public function testAiStreamErrorInsteadOfDoneOnMidstreamFailure(): void
+    {
+        putenv('TINA4_AI_MAX_RETRIES=1');
+        putenv('TINA4_AI_URL=' . $this->base('/stream-partial'));
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true), false);
+        $this->assertSame('text_delta', $events[0]['type']);
+        $this->assertSame('first', $events[0]['text']);
+        $last = end($events);
+        $this->assertSame('error', $last['type']);
+        // No done fired
+        $this->assertSame(0, count(array_filter($events, static fn (array $e): bool => $e['type'] === 'done')));
+    }
+
+    public function testAiStreamNoRetryAfterFirstEvent(): void
+    {
+        putenv('TINA4_AI_MAX_RETRIES=1');
+        putenv('TINA4_AI_URL=' . $this->base('/stream-partial'));
+        iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true), false);
+        $this->assertSame(1, $this->state()['counts']['/stream-partial'], 'no retry may happen after the first event was yielded');
+    }
+
+    // ── ADR-0060: multimodal content parts ────────────────────────────
+
+    public function testAiMultimodalTextPart(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/multimodal-echo'));
+        $result = AI::chat([['role' => 'user', 'content' => [['type' => 'text', 'text' => 'describe this']]]]);
+        $this->assertSame('ok', $result->text);
+        $body = $this->state()['requests'][0]['body'];
+        $this->assertSame([['type' => 'text', 'text' => 'describe this']], $body['messages'][0]['content']);
+    }
+
+    public function testAiMultimodalImageDataUri(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/multimodal-echo'));
+        $dataUri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        AI::chat([['role' => 'user', 'content' => [['type' => 'text', 'text' => 'look'], ['type' => 'image', 'source' => $dataUri]]]]);
+        $body = $this->state()['requests'][0]['body'];
+        $parts = $body['messages'][0]['content'];
+        $this->assertSame('text', $parts[0]['type']);
+        $this->assertSame('image_url', $parts[1]['type']);
+        $this->assertSame($dataUri, $parts[1]['image_url']['url']);
+    }
+
+    public function testAiMultimodalImageUrl(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/multimodal-echo'));
+        AI::chat([['role' => 'user', 'content' => [['type' => 'image', 'source' => 'https://example.com/pic.png']]]]);
+        $body = $this->state()['requests'][0]['body'];
+        $this->assertSame('image_url', $body['messages'][0]['content'][0]['type']);
+        $this->assertSame('https://example.com/pic.png', $body['messages'][0]['content'][0]['image_url']['url']);
+    }
+
+    public function testAiMultimodalMalformedPartFailsConfig(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/multimodal-echo'));
+        $bads = [
+            [['role' => 'user', 'content' => [['type' => 'image']]]],            // no source
+            [['role' => 'user', 'content' => [['type' => 'text']]]],             // no text
+            [['role' => 'user', 'content' => [['type' => 'audio', 'src' => 'x']]]], // unknown type
+            [['role' => 'user', 'content' => [['type' => 'image', 'source' => 'file:///etc/passwd']]]], // bad URL scheme
+            [['role' => 'user', 'content' => []]],                              // empty parts list
+            [['role' => 'user', 'content' => [['type' => 'text', 'text' => 123]]]], // non-string text
+        ];
+        foreach ($bads as $case) {
+            try {
+                AI::chat($case);
+                $this->fail('malformed part must raise AIConfigError: ' . json_encode($case));
+            } catch (AIConfigError) {
+                // pass
+            }
+        }
+        // No request may have been sent for any of them
+        $this->assertSame([], $this->state()['requests'] ?? []);
+    }
+
+    public function testAiMultimodalOpenaiBodyShape(): void
+    {
+        putenv('TINA4_AI_URL=' . $this->base('/multimodal-echo'));
+        $dataUri = 'data:image/jpeg;base64,AAAA';
+        AI::chat([['role' => 'user', 'content' => [['type' => 'text', 'text' => 'hi'], ['type' => 'image', 'source' => $dataUri]]]]);
+        $body = $this->state()['requests'][0]['body'];
+        $expected = [
+            ['type' => 'text', 'text' => 'hi'],
+            ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
+        ];
+        $this->assertSame($expected, $body['messages'][0]['content']);
+    }
+
+    public function testAiMultimodalAnthropicBodyShape(): void
+    {
+        putenv('TINA4_AI_PROVIDER=anthropic');
+        putenv('TINA4_AI_KEY=hosted-key');
+        putenv('TINA4_AI_URL=' . $this->base('/anthropic'));
+        $dataUri = 'data:image/png;base64,iVBORw0KGgo=';
+        AI::chat([['role' => 'user', 'content' => [['type' => 'text', 'text' => 'read'], ['type' => 'image', 'source' => $dataUri]]]]);
+        $body = $this->state()['requests'][0]['body'];
+        $content = $body['messages'][0]['content'];
+        $this->assertSame('text', $content[0]['type']);
+        $this->assertSame('read', $content[0]['text']);
+        $this->assertSame('image', $content[1]['type']);
+        $this->assertSame('base64', $content[1]['source']['type']);
+        $this->assertSame('image/png', $content[1]['source']['media_type']);
+        $this->assertSame('iVBORw0KGgo=', $content[1]['source']['data']);
+
+        // https URL variant uses source.type = 'url'
+        file_put_contents(self::$stateFile, json_encode(['requests' => [], 'counts' => []]));
+        AI::chat([['role' => 'user', 'content' => [['type' => 'image', 'source' => 'https://example.com/x.png']]]]);
+        $content = $this->state()['requests'][0]['body']['messages'][0]['content'];
+        $this->assertSame('image', $content[0]['type']);
+        $this->assertSame('url', $content[0]['source']['type']);
+        $this->assertSame('https://example.com/x.png', $content[0]['source']['url']);
     }
 
     public function testAiConfigurationPrecedence(): void

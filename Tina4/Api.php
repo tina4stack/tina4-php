@@ -88,6 +88,13 @@ class Api
     private array $cookies = [];
 
     /**
+     * Buffer size used by the streaming primitives when reading from a
+     * plain (non-chunked) response body. 8 KB matches PHP's default
+     * fread() sweet spot without holding a full megabyte in memory.
+     */
+    private const STREAM_READ_CHUNK = 8192;
+
+    /**
      * @param string        $baseUrl      Base URL for all requests
      * @param string        $authHeader   Authorization header value (e.g. "Bearer token")
      * @param int           $timeout      Request timeout in seconds
@@ -902,6 +909,444 @@ class Api
             return $this->baseUrl;
         }
         return $this->baseUrl . '/' . ltrim($path, '/');
+    }
+
+    // ── streaming primitives (ADR-0060) ───────────────────────────────────
+
+    /**
+     * Yield raw response body chunks in the order the transport delivered
+     * them. The primitive that streamLines and streamSse build on. No
+     * decoding, no framing, no line-splitting - a caller downloading a
+     * large file or a binary event feed gets the same bytes the server
+     * wrote in the same order it wrote them.
+     *
+     * $opts recognises:
+     *   method          HTTP method (default GET)
+     *   body            request body (array/object auto-serialised when
+     *                   content_type is application/json)
+     *   headers         additional request headers (merged onto baseHeaders)
+     *   content_type    body content-type (default application/json)
+     *   timeout         total streaming deadline in seconds
+     *                   (default TINA4_API_TIMEOUT, then $this->timeout)
+     *   connect_timeout connection establishment deadline in seconds
+     *                   (default TINA4_API_CONNECT_TIMEOUT, then 10)
+     *
+     * Iteration ends cleanly on EOF. A connection failure, HTTP timeout,
+     * mid-stream drop, or non-2xx response raises {@see ApiStreamError}
+     * (or one of its subclasses); the underlying socket is closed by the
+     * finally block so an early break out of the loop cannot leak.
+     *
+     * @return \Generator<string>
+     */
+    public function streamBytes(string $path = '', array $opts = []): \Generator
+    {
+        $method = strtoupper($opts['method'] ?? 'GET');
+        $body = $opts['body'] ?? null;
+        $extraHeaders = $opts['headers'] ?? [];
+        $contentType = $opts['content_type'] ?? 'application/json';
+        $totalTimeout = (float)($opts['timeout'] ?? self::envFloat('TINA4_API_TIMEOUT', (float)$this->timeout));
+        $connectTimeout = (float)($opts['connect_timeout'] ?? self::envFloat('TINA4_API_CONNECT_TIMEOUT', 10.0));
+        if ($totalTimeout <= 0) {
+            throw new ApiStreamError('Api stream timeout must be greater than zero');
+        }
+
+        $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
+        $requestHeaders = $this->baseHeaders();
+        foreach ($extraHeaders as $name => $value) {
+            $requestHeaders[$name] = $value;
+        }
+        $content = $this->prepareBody($body, $contentType, $requestHeaders);
+
+        $deadline = microtime(true) + $totalTimeout;
+        [$stream, $status, $responseHeaders] = $this->openStreamSocket($url, $method, $requestHeaders, $content, $deadline, $connectTimeout);
+
+        try {
+            if ($status < 200 || $status >= 300) {
+                foreach ($this->readStreamBodyChunks($stream, $responseHeaders, $deadline) as $ignored) {
+                    // drain body so the server can close cleanly
+                }
+                throw new ApiStreamHttpError("Api stream received HTTP {$status}", $status);
+            }
+            foreach ($this->readStreamBodyChunks($stream, $responseHeaders, $deadline) as $chunk) {
+                yield $chunk;
+            }
+        } finally {
+            if (is_resource($stream)) {
+                @fclose($stream);
+            }
+        }
+    }
+
+    /**
+     * Yield one string per complete line (LF or CRLF delimited),
+     * buffered across chunk boundaries. A trailing line without a
+     * terminating newline is yielded on EOF. UTF-8 is preserved
+     * verbatim because bytes are only ever concatenated, never
+     * decoded per chunk.
+     *
+     * NDJSON feeds, log tails, and line-delimited protocols read the
+     * same way regardless of whatever byte chunking the transport
+     * happened to pick.
+     *
+     * @return \Generator<string>
+     */
+    public function streamLines(string $path = '', array $opts = []): \Generator
+    {
+        $buffer = '';
+        foreach ($this->streamBytes($path, $opts) as $chunk) {
+            $buffer .= $chunk;
+            while (($lfPos = strpos($buffer, "\n")) !== false) {
+                $line = substr($buffer, 0, $lfPos);
+                $buffer = substr($buffer, $lfPos + 1);
+                if ($line !== '' && $line[strlen($line) - 1] === "\r") {
+                    $line = substr($line, 0, -1);
+                }
+                yield $line;
+            }
+        }
+        if ($buffer !== '') {
+            if ($buffer[strlen($buffer) - 1] === "\r") {
+                $buffer = substr($buffer, 0, -1);
+            }
+            yield $buffer;
+        }
+    }
+
+    /**
+     * Yield Server-Sent-Event records built on streamLines. Each yielded
+     * value is an associative array with keys:
+     *   data   concatenated data lines joined with "\n"
+     *   event  ?string named event (event: field) or null
+     *   id     ?string last-event-id (id: field) or null
+     *   retry  ?int    reconnection delay in ms (retry: field) or null
+     *
+     * SSE framing rules (per WHATWG):
+     *   - Blank line = event boundary; buffered fields dispatch here.
+     *   - `:` prefix = comment (ignored, per spec).
+     *   - `data:` field values are concatenated with "\n" per event.
+     *   - `event:` / `id:` fields are captured (last-write-wins per event).
+     *   - `retry:` field is captured only when its value is all digits.
+     *   - A leading space after the colon is stripped ("data: foo" -> "foo").
+     *   - The OpenAI `data: [DONE]` sentinel is delivered as an ORDINARY
+     *     SseEvent (data === "[DONE]"); the iterator does NOT stop on it,
+     *     it stops on transport EOF. The caller decides how to treat the
+     *     sentinel (AI::stream terminates its typed event stream on it;
+     *     a raw consumer may ignore it or keep reading trailing bytes).
+     *   - A trailing event on EOF (no final blank line) is dispatched.
+     *
+     * @return \Generator<array{data:string, event:?string, id:?string, retry:?int}>
+     */
+    public function streamSse(string $path = '', array $opts = []): \Generator
+    {
+        $headers = $opts['headers'] ?? [];
+        if (!self::hasHeader($headers, 'Accept')) {
+            $headers['Accept'] = 'text/event-stream';
+        }
+        $opts['headers'] = $headers;
+
+        $dataLines = [];
+        $eventName = null;
+        $eventId = null;
+        $retry = null;
+        $sawFieldForCurrentEvent = false;
+
+        foreach ($this->streamLines($path, $opts) as $line) {
+            if ($line === '') {
+                if ($sawFieldForCurrentEvent) {
+                    $data = implode("\n", $dataLines);
+                    yield ['data' => $data, 'event' => $eventName, 'id' => $eventId, 'retry' => $retry];
+                    $dataLines = [];
+                    $eventName = null;
+                    $retry = null;
+                    $sawFieldForCurrentEvent = false;
+                }
+                continue;
+            }
+            if ($line[0] === ':') {
+                continue;
+            }
+            $colon = strpos($line, ':');
+            if ($colon === false) {
+                $field = $line;
+                $value = '';
+            } else {
+                $field = substr($line, 0, $colon);
+                $value = substr($line, $colon + 1);
+                if ($value !== '' && $value[0] === ' ') {
+                    $value = substr($value, 1);
+                }
+            }
+            if ($field === 'data') {
+                $dataLines[] = $value;
+                $sawFieldForCurrentEvent = true;
+            } elseif ($field === 'event') {
+                $eventName = $value;
+                $sawFieldForCurrentEvent = true;
+            } elseif ($field === 'id') {
+                $eventId = $value;
+                $sawFieldForCurrentEvent = true;
+            } elseif ($field === 'retry') {
+                if ($value !== '' && ctype_digit($value)) {
+                    $retry = (int)$value;
+                }
+                $sawFieldForCurrentEvent = true;
+            }
+        }
+        if ($sawFieldForCurrentEvent) {
+            $data = implode("\n", $dataLines);
+            yield ['data' => $data, 'event' => $eventName, 'id' => $eventId, 'retry' => $retry];
+        }
+    }
+
+    /**
+     * Open a raw TCP/TLS socket, write an HTTP/1.1 request, read status +
+     * response headers, and return the still-open socket positioned at the
+     * body. This is the streaming primitive's transport - it uses
+     * stream_socket_client rather than the fopen("http://") wrapper so the
+     * caller sees bytes in the chunking the server produced (the wrapper
+     * pre-reads the whole response, defeating streaming).
+     *
+     * @param array<string,string> $headers
+     * @return array{0: resource, 1: int, 2: array<string,string>}
+     * @throws ApiStreamError|ApiStreamTimeoutError
+     */
+    private function openStreamSocket(string $url, string $method, array $headers, ?string $content, float $deadline, float $connectTimeout): array
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            throw new ApiStreamError('Api stream: invalid URL');
+        }
+        $scheme = strtolower($parts['scheme'] ?? 'http');
+        $host = $parts['host'];
+        $port = $parts['port'] ?? ($scheme === 'https' ? 443 : 80);
+
+        if ($scheme === 'https' && !self::httpsAvailable()) {
+            throw new ApiStreamError(self::HTTPS_UNAVAILABLE . " (requested {$url})");
+        }
+
+        $contextOptions = [];
+        if ($scheme === 'https') {
+            $contextOptions['ssl'] = [
+                'verify_peer' => !$this->ignoreSSL,
+                'verify_peer_name' => !$this->ignoreSSL,
+                'peer_name' => $host,
+                'allow_self_signed' => $this->ignoreSSL,
+            ];
+        }
+        $context = stream_context_create($contextOptions);
+        $address = ($scheme === 'https' ? 'tls' : 'tcp') . "://{$host}:{$port}";
+
+        $connectStarted = microtime(true);
+        $remaining = $deadline - $connectStarted;
+        if ($remaining <= 0) {
+            throw new ApiStreamTimeoutError('Api stream total timeout expired');
+        }
+        $connectLimit = min($connectTimeout, $remaining);
+        $errno = 0;
+        $errstr = '';
+        $stream = @stream_socket_client(
+            $address,
+            $errno,
+            $errstr,
+            $connectLimit,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+        if ($stream === false) {
+            $elapsed = microtime(true) - $connectStarted;
+            if (microtime(true) >= $deadline
+                || $elapsed >= $connectLimit * 0.8
+                || stripos($errstr, 'timed out') !== false) {
+                throw new ApiStreamTimeoutError('Api stream connection timeout expired');
+            }
+            throw new ApiStreamError("Api stream connect failed: {$errstr}");
+        }
+        $this->applyStreamSocketTimeout($stream, $deadline);
+
+        $requestPath = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        $hostHeader = $host . (isset($parts['port']) ? ':' . $parts['port'] : '');
+        $lines = [
+            "{$method} {$requestPath} HTTP/1.1",
+            "Host: {$hostHeader}",
+            'Connection: close',
+            'Accept-Encoding: identity',
+        ];
+        if ($content !== null && $content !== '') {
+            $lines[] = 'Content-Length: ' . strlen($content);
+        }
+        $skip = ['host' => true, 'connection' => true, 'content-length' => true, 'accept-encoding' => true];
+        foreach ($headers as $name => $value) {
+            if (isset($skip[strtolower((string)$name)])) {
+                continue;
+            }
+            $lines[] = "{$name}: {$value}";
+        }
+        $request = implode("\r\n", $lines) . "\r\n\r\n";
+        if ($content !== null && $content !== '') {
+            $request .= $content;
+        }
+
+        $offset = 0;
+        $length = strlen($request);
+        while ($offset < $length) {
+            $this->applyStreamSocketTimeout($stream, $deadline);
+            $written = @fwrite($stream, substr($request, $offset));
+            if ($written === false || $written === 0) {
+                @fclose($stream);
+                throw new ApiStreamError('Api stream: request write failed');
+            }
+            $offset += $written;
+        }
+
+        $statusLine = $this->readStreamSocketLine($stream, $deadline);
+        if (!preg_match('#^HTTP/\S+\s+(\d{3})#', $statusLine, $match)) {
+            @fclose($stream);
+            throw new ApiStreamError('Api stream: invalid HTTP response line');
+        }
+        $status = (int)$match[1];
+        $responseHeaders = [];
+        while (true) {
+            $line = $this->readStreamSocketLine($stream, $deadline);
+            $trimmed = rtrim($line, "\r\n");
+            if ($trimmed === '') {
+                break;
+            }
+            if (str_contains($trimmed, ':')) {
+                [$name, $value] = explode(':', $trimmed, 2);
+                $responseHeaders[strtolower(trim($name))] = trim($value);
+            }
+        }
+        return [$stream, $status, $responseHeaders];
+    }
+
+    /**
+     * Apply the remaining-deadline as the stream_set_timeout on the socket
+     * so any subsequent read fails fast when the total streaming budget is
+     * exhausted rather than blocking the request forever.
+     */
+    private function applyStreamSocketTimeout($stream, float $deadline): void
+    {
+        $remaining = $deadline - microtime(true);
+        if ($remaining <= 0) {
+            throw new ApiStreamTimeoutError('Api stream total timeout expired');
+        }
+        $seconds = (int)floor($remaining);
+        $micros = (int)(($remaining - $seconds) * 1_000_000);
+        stream_set_timeout($stream, $seconds, max(1, $micros));
+    }
+
+    /**
+     * Read a single "\n"-terminated line off the streaming socket. On a
+     * transport timeout raises ApiStreamTimeoutError; on EOF returns "".
+     */
+    private function readStreamSocketLine($stream, float $deadline): string
+    {
+        $this->applyStreamSocketTimeout($stream, $deadline);
+        $line = @fgets($stream);
+        if ($line === false) {
+            $meta = stream_get_meta_data($stream);
+            if ($meta['timed_out'] ?? false || microtime(true) >= $deadline) {
+                throw new ApiStreamTimeoutError('Api stream total timeout expired');
+            }
+            return '';
+        }
+        return $line;
+    }
+
+    /**
+     * Yield successive response body chunks off the streaming socket,
+     * honouring the response's Transfer-Encoding: chunked framing when
+     * present and otherwise reading Content-Length bytes (or until EOF
+     * when neither is set).
+     *
+     * @param array<string,string> $headers response headers (lower-cased names)
+     * @return \Generator<string>
+     */
+    private function readStreamBodyChunks($stream, array $headers, float $deadline): \Generator
+    {
+        $transferEncoding = strtolower($headers['transfer-encoding'] ?? '');
+        if (str_contains($transferEncoding, 'chunked')) {
+            while (true) {
+                $sizeLine = trim($this->readStreamSocketLine($stream, $deadline));
+                if ($sizeLine === '') {
+                    continue;
+                }
+                $size = hexdec(explode(';', $sizeLine, 2)[0]);
+                if ($size === 0) {
+                    // Trailer line (empty)
+                    $this->readStreamSocketLine($stream, $deadline);
+                    return;
+                }
+                $chunk = '';
+                while (strlen($chunk) < $size) {
+                    $this->applyStreamSocketTimeout($stream, $deadline);
+                    $part = @fread($stream, $size - strlen($chunk));
+                    if ($part === false || $part === '') {
+                        $meta = stream_get_meta_data($stream);
+                        if ($meta['timed_out'] ?? false) {
+                            throw new ApiStreamTimeoutError('Api stream total timeout expired');
+                        }
+                        throw new ApiStreamError('Api stream ended unexpectedly');
+                    }
+                    $chunk .= $part;
+                }
+                $this->readStreamSocketLine($stream, $deadline);
+                yield $chunk;
+            }
+        }
+
+        $remaining = isset($headers['content-length']) ? (int)$headers['content-length'] : null;
+        while (!feof($stream) && ($remaining === null || $remaining > 0)) {
+            $this->applyStreamSocketTimeout($stream, $deadline);
+            $length = $remaining === null ? self::STREAM_READ_CHUNK : min(self::STREAM_READ_CHUNK, $remaining);
+            $chunk = @fread($stream, $length);
+            if ($chunk === false) {
+                throw new ApiStreamError('Api stream read failed');
+            }
+            if ($chunk === '') {
+                $meta = stream_get_meta_data($stream);
+                if ($meta['timed_out'] ?? false) {
+                    throw new ApiStreamTimeoutError('Api stream total timeout expired');
+                }
+                if (feof($stream)) {
+                    break;
+                }
+                continue;
+            }
+            if ($remaining !== null) {
+                $remaining -= strlen($chunk);
+                if ($remaining > 0 && feof($stream)) {
+                    throw new ApiStreamError('Api stream ended before Content-Length bytes were received');
+                }
+            }
+            yield $chunk;
+        }
+        if ($remaining !== null && $remaining > 0) {
+            throw new ApiStreamError('Api stream ended before Content-Length bytes were received');
+        }
+    }
+
+    /** Env-driven float with a default; supports an unset/blank value. */
+    private static function envFloat(string $name, float $default): float
+    {
+        $raw = getenv($name);
+        if ($raw === false || $raw === '') {
+            return $default;
+        }
+        $value = filter_var($raw, FILTER_VALIDATE_FLOAT);
+        return $value === false ? $default : (float)$value;
+    }
+
+    /** Case-insensitive header presence check for the streaming opts. */
+    private static function hasHeader(array $headers, string $name): bool
+    {
+        $lower = strtolower($name);
+        foreach ($headers as $key => $_) {
+            if (strtolower((string)$key) === $lower) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── cookie jar (opt-in, in-memory, per-client) ─────────────────────────
