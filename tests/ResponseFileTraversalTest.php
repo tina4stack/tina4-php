@@ -86,11 +86,22 @@ class ResponseFileTraversalTest extends TestCase
      * No '..' at all - containment, not the '..' check, has to catch this.
      * Containment applies ONLY when the caller declared a root, so the root
      * is what makes this 403.
+     *
+     * The target is a REAL file outside the root: a missing absolute path
+     * 404s (realpath fails) before containment runs, so it would pass on a
+     * vulnerable build too. A temp file beside the root keeps this a true
+     * discriminator on every OS.
      */
     public function testFileRefusesAbsolutePathOutsideADeclaredRoot(): void
     {
-        $response = $this->serve('/etc/passwd', $this->root);
-        $this->assertSame(403, $response->getStatusCode());
+        $outside = sys_get_temp_dir() . '/tina4-outside-' . bin2hex(random_bytes(6)) . '.txt';
+        file_put_contents($outside, "OUTSIDE\n");
+        try {
+            $response = $this->serve($outside, $this->root);
+            $this->assertSame(403, $response->getStatusCode());
+        } finally {
+            @unlink($outside);
+        }
     }
 
     /**
