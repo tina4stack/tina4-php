@@ -210,6 +210,29 @@ class ServiceRunner
         $names = $name !== null ? [$name] : array_keys(self::$services);
 
         foreach ($names as $serviceName) {
+            // Cooperative shutdown for class-based Service subclasses.
+            // registerService() stashes the instance under
+            // self::$services[$name]['instance']; call its stop() so the
+            // run() loop guarded by shouldStop() actually exits. Without
+            // this the in-process (no-fork) path loops forever and the
+            // outer signal / stop-file logic below only reaches the
+            // forked-child and plain-callable modes. Parity with
+            // tina4-python #118 (7a3608b9).
+            if (isset(self::$services[$serviceName]['instance'])
+                && self::$services[$serviceName]['instance'] instanceof Service) {
+                try {
+                    self::$services[$serviceName]['instance']->stop();
+                } catch (\Throwable $e) {
+                    // A misbehaving user-override of Service::stop() must
+                    // never block the outer signal / file-based shutdown
+                    // path from running.
+                    Log::error('Service instance stop() threw', [
+                        'name'  => $serviceName,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             $pidFile = self::pidFilePath($serviceName);
 
             if (file_exists($pidFile)) {
