@@ -186,6 +186,22 @@ feature plan owns the detail:
 | Checkout flow      | [checkout.md](checkout.md)              | 🟡 In Progress |
 ```
 
+**Nested plans are allowed and encouraged when a feature is itself large.** You can go
+one more level deep — a big feature earns its OWN dashboard + sub-plans:
+
+```
+plan/MASTER.md                    # top dashboard
+plan/auth.md                      # simple feature
+plan/products/MASTER.md           # sub-dashboard for a large feature
+plan/products/search.md           # sub-feature detail
+plan/products/checkout-flow.md    # sub-feature detail
+```
+
+The top `plan/MASTER.md` always stays the entry point; the depth of the tree
+matches the shape of the work. A tiny single-file demo may put the whole plan
+directly in `MASTER.md`. A multi-page app with a backend + frontend + workers:
+split by feature. A big feature inside a split project: split again.
+
 A feature plan has four parts — a Scope checklist, the Tests, a Bugs section, and a Commit log:
 
 ```markdown
@@ -884,6 +900,15 @@ The app includes a health check at `/health` that Kubernetes probes can use.
 those headings are obsolete and cause agents to ignore half the plan.
 
 Every feature starts with `plan/<feature-name>.md` (and a row in `plan/MASTER.md`). No exceptions.
+
+**Plan-first is a HARD rule, not a convention.** Coding-agent shells that host
+this skill (e.g. `tina4-simple-agent`) enforce it at the tool layer: any
+`write_file` whose path is not `plan/**.md` is REFUSED until `plan/MASTER.md`
+exists on disk. That's deliberate — no code lands before the plan exists. If an
+attempt is refused, WRITE THE PLAN FIRST, then retry the code write. The rule
+holds under every mode (quick / efficient / meticulous) and applies to sub-plans
+too (any `.md` under `plan/**` counts, so `plan/products/MASTER.md` unlocks
+code just as `plan/MASTER.md` does).
 This is how you avoid building the wrong thing and how the developer tracks progress.
 
 ### From sweeping asks to small shippable chunks
