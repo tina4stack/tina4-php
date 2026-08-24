@@ -137,6 +137,43 @@ class VersionContractTest extends TestCase
         }
     }
 
+    // ── parser regression: stdout pollution must not swallow the version ─
+
+    public function testParseCommandsManifestSurvivesLeadingStdoutNoise(): void
+    {
+        // The failure mode this hardens against: a busted CLI php.ini with
+        // display_errors=stdout printed a "PHP Warning: Cannot load module 'grpc'"
+        // line to stdout BEFORE the JSON payload, so a naive json_decode
+        // returned null and testEveryReportingSurfaceAgrees blew up with the
+        // useless message "null is identical to '3.13.115'".
+        $polluted = "PHP Warning:  PHP Startup: Unable to load dynamic library 'grpc.so'\nPHP Warning:  Something else\n"
+                  . '{"framework":"php","version":"3.13.115","commands":[]}';
+
+        // parseCommandsManifest is private; PHP 8.1+ allows reflection to invoke
+        // it without setAccessible(), and setAccessible() is a deprecated no-op in 8.5.
+        $ref = new \ReflectionMethod(self::class, 'parseCommandsManifest');
+        $manifest = $ref->invoke(null, $polluted, 'test-fixture');
+
+        $this->assertSame('3.13.115', $manifest['version'], 'parser must skip leading noise and extract version');
+        $this->assertSame('php', $manifest['framework']);
+
+        // And a clean payload still works (regression against over-aggressive stripping).
+        $clean = '{"framework":"php","version":"3.13.115","commands":[]}';
+        $m2 = $ref->invoke(null, $clean, 'clean-fixture');
+        $this->assertSame('3.13.115', $m2['version']);
+    }
+
+    public function testParseCommandsManifestFailsLoudlyWhenNoJsonPresent(): void
+    {
+        // parseCommandsManifest is private; PHP 8.1+ allows reflection to invoke
+        // it without setAccessible(), and setAccessible() is a deprecated no-op in 8.5.
+        $ref = new \ReflectionMethod(self::class, 'parseCommandsManifest');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/no.*json|manifest/i');
+        $ref->invoke(null, "PHP Fatal error:  something exploded, no JSON\n", 'test-negative');
+    }
+
     // ── the_outbound_http_client_sends_a_tina4_version_user_agent ───────
 
     public function testTheOutboundHttpClientSendsATina4VersionUserAgent(): void
@@ -296,7 +333,14 @@ class VersionContractTest extends TestCase
     /** Run the REAL CLI entrypoint as a subprocess and return the manifest's version. */
     private function cliManifestVersion(): ?string
     {
-        $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(self::$bin) . ' commands --json';
+        // -d display_errors=stderr keeps a startup warning (e.g. the CLI php.ini
+        // references a missing extension like grpc.so) off stdout, so it can
+        // never pollute the JSON payload we're about to parse. Belt-and-braces
+        // -d error_reporting=E_ALL routes every level to the same stderr sink.
+        $cmd = escapeshellarg(PHP_BINARY)
+             . ' -d display_errors=stderr'
+             . ' -d error_reporting=E_ALL'
+             . ' ' . escapeshellarg(self::$bin) . ' commands --json';
         $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $process = proc_open($cmd, $descriptors, $pipes, dirname(__DIR__), getenv() ?: []);
         $this->assertIsResource($process, 'failed to start bin/tina4php');
@@ -306,8 +350,56 @@ class VersionContractTest extends TestCase
         fclose($pipes[2]);
         $exit = proc_close($process);
         $this->assertSame(0, $exit, "commands --json exited non-zero; stderr:\n{$stderr}");
-        $manifest = json_decode($stdout, true);
+        $manifest = self::parseCommandsManifest($stdout, 'cliManifestVersion');
         return $manifest['version'] ?? null;
+    }
+
+    /**
+     * Parse a `commands --json` manifest, tolerating leading stdout noise
+     * (e.g. PHP startup warnings that a busted php.ini prints BEFORE the JSON).
+     *
+     * The bare `json_decode($stdout, true)` this replaced silently returned
+     * `null`, which produced the useless failure `null is identical to 'X.Y.Z'`
+     * when a warning polluted stdout. This helper finds the first `{` — the
+     * `commands --json` payload is always an object — decodes from that offset
+     * with JSON_THROW_ON_ERROR, and throws a diagnostic RuntimeException
+     * (including a 400-char stdout slice) on failure.
+     *
+     * @throws \RuntimeException when no JSON object is present, or the payload
+     *                           will not parse.
+     */
+    private static function parseCommandsManifest(string $stdout, string $context = ''): array
+    {
+        $offset = strpos($stdout, '{');
+        if ($offset === false) {
+            $slice = substr($stdout, 0, 400);
+            throw new \RuntimeException(
+                "parseCommandsManifest ({$context}): no JSON object present in stdout. "
+                . "First 400 chars of stdout:\n{$slice}"
+            );
+        }
+
+        try {
+            $decoded = json_decode(substr($stdout, $offset), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            $slice = substr($stdout, 0, 400);
+            throw new \RuntimeException(
+                "parseCommandsManifest ({$context}): failed to decode manifest JSON: "
+                . $e->getMessage() . ". First 400 chars of stdout:\n{$slice}",
+                0,
+                $e
+            );
+        }
+
+        if (!is_array($decoded)) {
+            $slice = substr($stdout, 0, 400);
+            throw new \RuntimeException(
+                "parseCommandsManifest ({$context}): decoded manifest was not an object. "
+                . "First 400 chars of stdout:\n{$slice}"
+            );
+        }
+
+        return $decoded;
     }
 
     // ── DEC-03: real local TCP capture server ────────────────────────────
