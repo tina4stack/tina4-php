@@ -145,22 +145,22 @@ class VersionContractTest extends TestCase
         // display_errors=stdout printed a "PHP Warning: Cannot load module 'grpc'"
         // line to stdout BEFORE the JSON payload, so a naive json_decode
         // returned null and testEveryReportingSurfaceAgrees blew up with the
-        // useless message "null is identical to '3.13.115'".
+        // useless message "null is identical to '3.13.116'".
         $polluted = "PHP Warning:  PHP Startup: Unable to load dynamic library 'grpc.so'\nPHP Warning:  Something else\n"
-                  . '{"framework":"php","version":"3.13.115","commands":[]}';
+                  . '{"framework":"php","version":"3.13.116","commands":[]}';
 
         // parseCommandsManifest is private; PHP 8.1+ allows reflection to invoke
         // it without setAccessible(), and setAccessible() is a deprecated no-op in 8.5.
         $ref = new \ReflectionMethod(self::class, 'parseCommandsManifest');
         $manifest = $ref->invoke(null, $polluted, 'test-fixture');
 
-        $this->assertSame('3.13.115', $manifest['version'], 'parser must skip leading noise and extract version');
+        $this->assertSame('3.13.116', $manifest['version'], 'parser must skip leading noise and extract version');
         $this->assertSame('php', $manifest['framework']);
 
         // And a clean payload still works (regression against over-aggressive stripping).
-        $clean = '{"framework":"php","version":"3.13.115","commands":[]}';
+        $clean = '{"framework":"php","version":"3.13.116","commands":[]}';
         $m2 = $ref->invoke(null, $clean, 'clean-fixture');
-        $this->assertSame('3.13.115', $m2['version']);
+        $this->assertSame('3.13.116', $m2['version']);
     }
 
     public function testParseCommandsManifestFailsLoudlyWhenNoJsonPresent(): void
