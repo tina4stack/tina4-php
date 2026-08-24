@@ -6,6 +6,20 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.115
+
+Parity version bump. No framework code changes in PHP for this
+release — PHP already carried the 3.13.114 tool-loop and typed-
+streaming features. The bundled `tina4-developer-php` skill gains
+a "Project layout" section that codifies the full-stack paradigm
+(never pollute the root with source; split into `backend/` and
+`frontend/` with per-side `plan/` folders; ask the backend framework
+before scaffolding). See tina4-php#203.
+
+Companion release: tina4-nodejs 3.13.115 fixes issue #56 (bundler-
+renamed handler args mapped to the wrong object; every POST body
+read as empty under a bundler); Node-only fix, no PHP impact.
+
 ## 3.13.114
 
 The tool loop closes. `AI::chat` accepts an outbound `tools` list and a
