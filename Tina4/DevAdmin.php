@@ -252,8 +252,14 @@ class DevAdmin
         // the dev toolbar into the script body and desyncs Content-Length
         // against the gzipped transport, making Chrome hang waiting for
         // bytes that never arrive (SPA boot stalls, page stays blank).
+        //
+        // Path is built with dirname(__DIR__), not __DIR__ . '/..':
+        // Response::file() rejects any path containing a '..' segment
+        // (the guard that blocks `file('downloads/' . $name)` traversal,
+        // applied before realpath()), so the caller must hand it a
+        // normalised path.
         Router::get('/__dev/js/tina4-dev-admin.min.js', function (Request $request, Response $response) {
-            $jsPath = __DIR__ . '/../src/public/js/tina4-dev-admin.min.js';
+            $jsPath = dirname(__DIR__) . '/src/public/js/tina4-dev-admin.min.js';
             if (!is_file($jsPath)) {
                 return $response->text('tina4-dev-admin.min.js not found', 404);
             }
@@ -279,7 +285,7 @@ class DevAdmin
         // loops. Also emit anti-cache headers on the shell HTML so a
         // bad shell can't get pinned.
         $bundleStem = '/__dev/js/tina4-dev-admin.min.js';
-        $bundlePath = __DIR__ . '/../src/public/js/tina4-dev-admin.min.js';
+        $bundlePath = dirname(__DIR__) . '/src/public/js/tina4-dev-admin.min.js';
         $bundleTag = is_file($bundlePath) ? (string) filemtime($bundlePath) : (string) time();
         // SPA shell — bundle now derives its WS URL from `location.host`
         // directly (tina4-dev-admin PR removing the :7200 hardcode), so
