@@ -57,6 +57,11 @@ class CLIScaffoldingTest extends TestCase
         $functionNames = [
             'tableNameFromClass', 'snakeSlug', 'parseFields', 'fieldsOrDefault', 'parseFlags',
             'aiFill', 'extendMarker', 'everyToCron',
+            // Reserved-word / pluralize helpers (3.13.117 — Python parity).
+            // generateModel / generateMigration route the table name through
+            // toTableNameWithTransform, so this harness must extract it too
+            // or the direct-call tests fatal with "undefined function".
+            'pluralizeTable', 'toTableNameWithTransform',
             'generateModel', 'generateRoute', 'generateMigration',
             'generateMiddleware', 'generateTest', 'generateForm',
             'generateView', 'generateCrud', 'generateAuth',
@@ -77,6 +82,14 @@ class CLIScaffoldingTest extends TestCase
         // literal here, so this harness can never drift from bin/tina4php.
         if (!defined('DEFAULT_FIELDS') && preg_match('/^const DEFAULT_FIELDS\s*=\s*(.+);$/m', $source, $dfMatch)) {
             eval('define(\'DEFAULT_FIELDS\', ' . $dfMatch[1] . ');');
+        }
+        // Same trick for SQL_RESERVED_TABLE_NAMES — the reserved-word list is a
+        // top-level `const` that toTableNameWithTransform() reads. Lift its
+        // literal (the entire array up to the trailing `];`) via a multiline
+        // regex so the harness never restates it.
+        if (!defined('SQL_RESERVED_TABLE_NAMES')
+            && preg_match('/^const SQL_RESERVED_TABLE_NAMES\s*=\s*(\[[\s\S]*?\]);\s*$/m', $source, $rwMatch)) {
+            eval('define(\'SQL_RESERVED_TABLE_NAMES\', ' . $rwMatch[1] . ');');
         }
 
         $count = count($tokens);

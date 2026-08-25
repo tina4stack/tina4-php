@@ -54,3 +54,10 @@ const TEXT_HTML = "text/html; charset=utf-8";
 const TEXT_PLAIN = "text/plain; charset=utf-8";
 const TEXT_CSV = "text/csv";
 const TEXT_XML = "text/xml";
+
+// Import-hint fallback — a last-resort autoloader that catches a missing
+// Tina4\ class and throws \Error with a "did you mean X?" hint naming the
+// closest real Tina4 class. Registered AFTER composer's PSR-4 loader, so it
+// only sees classes nobody else could resolve. Scoped to the Tina4\
+// namespace, so a legitimate PSR-4 miss elsewhere is NOT masked.
+\Tina4\ImportHelper::install();

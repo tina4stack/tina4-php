@@ -114,6 +114,75 @@ function tableNameFromClass(string $name): string
 }
 
 /**
+ * Table names that collide with SQL reserved words. `CREATE TABLE order (...)`
+ * is a syntax error on every engine, and the ORM interpolates table names into
+ * SQL unquoted (and hands the raw name to driver insert/update/delete), so the
+ * safe fix is to never GENERATE one. The plural form is not reserved and reads
+ * naturally as a table name.
+ *
+ * Mirrors tina4_python/cli/__init__.py::SQL_RESERVED_TABLE_NAMES. PHP had no
+ * equivalent guard before 3.13.117 — `generate model Order` produced a table
+ * named `order` and the first CREATE TABLE at migrate-time failed with a
+ * confusing syntax error. Now that name is auto-pluralised to `orders` and
+ * the transformation is surfaced in the resolution envelope.
+ */
+const SQL_RESERVED_TABLE_NAMES = [
+    'order', 'group', 'user', 'table', 'select', 'from', 'where', 'index',
+    'key', 'values', 'column', 'constraint', 'check', 'default', 'primary',
+    'foreign', 'references', 'unique', 'join', 'union', 'having', 'limit',
+    'offset', 'desc', 'asc', 'case', 'when', 'then', 'else', 'end', 'and',
+    'or', 'not', 'null', 'insert', 'update', 'delete', 'create', 'drop',
+    'alter', 'grant', 'revoke', 'commit', 'rollback', 'view', 'trigger',
+    'procedure', 'function', 'database', 'schema', 'session', 'set', 'into',
+    'as', 'on', 'by', 'inner', 'outer', 'left', 'right', 'full', 'natural',
+    'using', 'with', 'distinct', 'between', 'exists', 'like', 'in', 'is',
+    'all', 'any', 'cross', 'add', 'row', 'rows', 'range', 'current', 'to',
+];
+
+/**
+ * Simple English plural, used to escape a reserved table name.
+ * Order -> orders, index -> indexes, key -> keys.
+ */
+function pluralizeTable(string $name): string
+{
+    if (preg_match('/[^aeiouy]y$/i', $name)) {
+        return substr($name, 0, -1) . 'ies';
+    }
+    if (preg_match('/(s|x|z|ch|sh)$/i', $name)) {
+        return $name . 'es';
+    }
+    return $name . 's';
+}
+
+/**
+ * Class name -> singular table name (Product -> product), UNLESS the singular
+ * collides with a SQL reserved word — then the pluralised form is used
+ * (Order -> orders) and the caller can see what happened.
+ *
+ * Returns [tableName, ?transformation] — the second element is null when the
+ * name passed through unchanged, or an assoc array describing the swap. The
+ * transformation feeds the `resolution.transformations` block of the
+ * generate JSON envelope AND the human resolution block on STDERR.
+ *
+ * @return array{0: string, 1: ?array<string,string>}
+ */
+function toTableNameWithTransform(string $name): array
+{
+    $base = tableNameFromClass($name);
+    if (in_array($base, SQL_RESERVED_TABLE_NAMES, true)) {
+        $plural = pluralizeTable($base);
+        return [$plural, [
+            'kind'     => 'reserved_word_pluralize',
+            'from'     => $base,
+            'to'       => $plural,
+            'reason'   => "SQL reserved word '{$base}' would break CREATE TABLE",
+            'override' => "--table {$base} --quote (requires quoted-identifier mode, not yet implemented)",
+        ]];
+    }
+    return [$base, null];
+}
+
+/**
  * snake_case slug from an arbitrary label (topic / event / path fragment).
  * "order-emails" -> "order_emails" · "user.created" -> "user_created"
  */
@@ -261,13 +330,258 @@ function fieldsOrDefault(string $fieldsStr): array
 }
 
 /**
+ * The generate resolution contract version.
+ *
+ * Envelope keys and `transformations[].kind` values are stable within one
+ * version — a bump is a WIRE break and gets a migration note in the
+ * changelog. Kept in one place so the CLI switch, the commands manifest and
+ * the tests read the same string.
+ */
+const GENERATE_RESOLUTION_CONTRACT_VERSION = '1';
+const GENERATE_RESOLUTION_ENVELOPE = 'generate_v1';
+
+/**
+ * Build the resolution envelope for one of model/route/migration/middleware.
+ *
+ * Reports the class name, table name, target file paths, applied
+ * transformations (reserved-word pluralize, etc.) and — for model + route —
+ * the CRUD route shape (`/<table>`, `/<table>/{id}`). Called BEFORE the
+ * writers run so the JSON envelope stays deterministic regardless of what
+ * the writer prints.
+ *
+ * @param array<string, mixed> $flags
+ * @return array<string, mixed>
+ */
+function resolveGeneration(string $what, string $name, array $flags): array
+{
+    $transformations = [];
+
+    switch ($what) {
+        case 'model':
+            [$table, $transform] = toTableNameWithTransform($name);
+            if ($transform !== null) {
+                $transformations[] = $transform;
+            }
+            $timestamp = (new DateTime())->format('YmdHis');
+            $migrationFilename = "{$timestamp}_create_{$table}.sql";
+            return [
+                'class_name'      => $name,
+                'table_name'      => $table,
+                'file_path'       => "src/orm/{$name}.php",
+                'migration_path'  => "migrations/{$migrationFilename}",
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$name}Test.php"],
+            ];
+
+        case 'route':
+            $routePath = ltrim($name, '/');
+            $singular = rtrim($routePath, 's');
+            if ($singular === $routePath) {
+                $singular = $routePath;
+            }
+            $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $routePath)));
+            return [
+                'class_name'      => null,
+                'table_name'      => null,
+                'file_path'       => "src/routes/{$routePath}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => ["/{$routePath}", "/{$routePath}/{id}"],
+                'test_paths'      => ["tests/{$className}Test.php"],
+            ];
+
+        case 'migration':
+            $stripped = $name;
+            foreach (['create_', 'add_', 'drop_'] as $prefix) {
+                if (str_starts_with($stripped, $prefix)) {
+                    $stripped = substr($stripped, strlen($prefix));
+                    break;
+                }
+            }
+            [$table, $transform] = toTableNameWithTransform($stripped);
+            if ($transform !== null && str_starts_with($name, 'create_')) {
+                $transformations[] = $transform;
+            }
+            $timestamp = (new DateTime())->format('YmdHis');
+            $filename = "{$timestamp}_{$name}.sql";
+            $downFilename = "{$timestamp}_{$name}.down.sql";
+            $isCreate = str_starts_with($name, 'create_');
+            $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $name)));
+            return [
+                'class_name'      => null,
+                'table_name'      => $isCreate ? $table : null,
+                'file_path'       => "migrations/{$filename}",
+                'migration_path'  => "migrations/{$downFilename}",
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => $isCreate ? ["tests/{$className}Test.php"] : [],
+            ];
+
+        case 'middleware':
+            return [
+                'class_name'      => $name,
+                'table_name'      => null,
+                'file_path'       => "src/middleware/{$name}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$name}MiddlewareTest.php"],
+            ];
+    }
+
+    // Unknown $what — should not happen (gated by $resolvable in the caller).
+    return [
+        'class_name'      => null,
+        'table_name'      => null,
+        'file_path'       => null,
+        'migration_path'  => null,
+        'transformations' => $transformations,
+        'routes'          => [],
+        'test_paths'      => [],
+    ];
+}
+
+/**
+ * The subset of $flags that belongs in the envelope's `input` block.
+ *
+ * Keep it small and stable — the envelope is a contract, so we do NOT dump
+ * every flag verbatim. Only inputs that shaped the resolution appear.
+ *
+ * @param array<string, mixed> $flags
+ * @return array<string, mixed>
+ */
+function resolutionInput(string $what, string $name, array $flags): array
+{
+    $input = [
+        'name'   => $name,
+        'fields' => array_key_exists('fields', $flags) ? (string)$flags['fields'] : null,
+    ];
+    if ($what === 'route' && array_key_exists('model', $flags)) {
+        $input['model'] = (string)$flags['model'];
+    }
+    if (in_array($what, ['route', 'crud'], true)) {
+        $input['public'] = !empty($flags['public']);
+    }
+    return $input;
+}
+
+/**
+ * The list of files (relative paths, cwd-anchored) the resolution actually
+ * left on disk. Post-write inspection — a planned path that is missing is
+ * dropped, so `actions_taken` reflects reality, not intent.
+ *
+ * @param array<string, mixed> $resolution
+ * @return list<string>
+ */
+function filesTouched(array $resolution): array
+{
+    $planned = [];
+    foreach (['file_path', 'migration_path'] as $key) {
+        if (!empty($resolution[$key])) {
+            $planned[] = "wrote {$resolution[$key]}";
+        }
+    }
+    foreach ($resolution['test_paths'] ?? [] as $testPath) {
+        $planned[] = "wrote {$testPath}";
+    }
+    return array_values(array_filter($planned, static function (string $entry): bool {
+        $path = substr($entry, strlen('wrote '));
+        return file_exists($path);
+    }));
+}
+
+/**
+ * Planned writes list (path-only, no verb) — used before any I/O to know
+ * which files the writer intends to create.
+ *
+ * @param array<string, mixed> $resolution
+ * @return list<string>
+ */
+function listPlannedWrites(array $resolution): array
+{
+    $planned = [];
+    foreach (['file_path', 'migration_path'] as $key) {
+        if (!empty($resolution[$key])) {
+            $planned[] = $resolution[$key];
+        }
+    }
+    foreach ($resolution['test_paths'] ?? [] as $testPath) {
+        $planned[] = $testPath;
+    }
+    return $planned;
+}
+
+/**
+ * The human resolution block printed to STDERR before the writer runs (or
+ * standalone under --dry-run without --json).
+ *
+ * Kept as terse as the Python master's equivalent — the operator sees the
+ * mapping without having to parse JSON. Reads:
+ *
+ *   Generated model Order
+ *     class      Order  (in src/orm/Order.php)
+ *     table      orders  (auto-pluralized: 'order' is a SQL reserved word)
+ *     routes     /orders, /orders/{id}
+ *     migration  migrations/....sql
+ *
+ * @param array<string, mixed> $resolution
+ */
+function renderHumanResolution(string $what, array $resolution, bool $dryRun): string
+{
+    $verb = $dryRun ? 'Would generate' : 'Generated';
+    $lines = ["{$verb} {$what} " . ($resolution['class_name'] ?? '')];
+
+    if (!empty($resolution['class_name']) && !empty($resolution['file_path'])) {
+        $lines[] = "  class      {$resolution['class_name']}  (in {$resolution['file_path']})";
+    } elseif (!empty($resolution['file_path'])) {
+        $lines[] = "  file       {$resolution['file_path']}";
+    }
+
+    if (!empty($resolution['table_name'])) {
+        $note = '';
+        foreach ($resolution['transformations'] ?? [] as $transform) {
+            if (($transform['kind'] ?? '') === 'reserved_word_pluralize') {
+                $note = "  (auto-pluralized: '{$transform['from']}' is a SQL reserved word)";
+                break;
+            }
+        }
+        $lines[] = "  table      {$resolution['table_name']}{$note}";
+    }
+
+    if (!empty($resolution['routes'])) {
+        $lines[] = '  routes     ' . implode(', ', $resolution['routes']);
+    }
+
+    if (!empty($resolution['migration_path'])) {
+        $label = $what === 'migration' ? 'rollback ' : 'migration';
+        $lines[] = "  {$label}  {$resolution['migration_path']}";
+    }
+
+    // Escape hatch — surface the override so an operator who WANTS the raw
+    // reserved name knows how to opt out (even though quoted-identifier mode
+    // is not yet implemented — the message says so).
+    foreach ($resolution['transformations'] ?? [] as $transform) {
+        if (($transform['kind'] ?? '') === 'reserved_word_pluralize') {
+            $lines[] = '';
+            $lines[] = "  To keep the raw name '{$transform['from']}' as the table:";
+            $lines[] = "    tina4php generate {$what} " . ($resolution['class_name'] ?? '')
+                . '  ' . $transform['override'];
+            break;
+        }
+    }
+
+    return implode("\n", $lines) . "\n";
+}
+
+/**
  * Parse --key value and --flag from args. Returns [flags, positional].
  */
 function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
     $booleanFlags = ['no-browser', 'no-reload', 'no-kill', 'production', 'managed', 'all', 'clear',
-                     'json', 'public', 'no-migration', 'once'];
+                     'json', 'public', 'no-migration', 'once', 'dry-run'];
 
     $flags = [];
     $positional = [];
@@ -595,7 +909,18 @@ function tina4CommandsManifest(array $commands, string $version, array $delegate
         }
         $list[] = $entry;
     }
-    return ['framework' => 'php', 'version' => $version, 'commands' => $list];
+    return [
+        'framework' => 'php',
+        'version'   => $version,
+        'commands'  => $list,
+        // Resolution transparency contract advertised to any tool discovering
+        // this CLI (the tina4 client, an AI agent, external tooling). Version
+        // is a wire contract — a bump ships a migration note in CHANGELOG.
+        'resolution_contract' => [
+            'version'  => GENERATE_RESOLUTION_CONTRACT_VERSION,
+            'envelope' => GENERATE_RESOLUTION_ENVELOPE,
+        ],
+    ];
 }
 
 /**
@@ -1374,6 +1699,8 @@ DOCKERFILE;
             echo "  Options:    --fields \"name:string,price:float\"  --model ModelName\n";
             echo "              --public                  open a route's writes (default: secure)\n";
             echo "              --every 5m | --cron \"...\"   service schedule (cron only in PHP)\n";
+            echo "              --json                    emit a resolution envelope on STDOUT (no other output)\n";
+            echo "              --dry-run                 compute the resolution; write nothing\n";
             exit(1);
         }
 
@@ -1387,56 +1714,115 @@ DOCKERFILE;
         $genName = $args[1] ?? '';
         [$genFlags, ] = parseFlags(array_slice($args, 2));
 
-        switch ($what) {
-            case 'model':
-                generateModel($genName, $genFlags, $FIELD_TYPE_MAP);
-                break;
-            case 'route':
-                generateRoute($genName, $genFlags);
-                break;
-            case 'crud':
-                generateCrud($genName, $genFlags, $FIELD_TYPE_MAP);
-                break;
-            case 'migration':
-                generateMigration($genName, $genFlags, $FIELD_TYPE_MAP);
-                break;
-            case 'middleware':
-                generateMiddleware($genName, $genFlags);
-                break;
-            case 'test':
-                generateTest($genName, $genFlags);
-                break;
-            case 'form':
-                generateForm($genName, $genFlags);
-                break;
-            case 'view':
-                generateView($genName, $genFlags);
-                break;
-            case 'auth':
-                generateAuth($genName, $genFlags, $FIELD_TYPE_MAP);
-                break;
-            case 'service':
-                generateService($genName, $genFlags);
-                break;
-            case 'queue':
-                generateQueue($genName, $genFlags);
-                break;
-            case 'validator':
-                generateValidator($genName, $genFlags);
-                break;
-            case 'seeder':
-                generateSeeder($genName, $genFlags);
-                break;
-            case 'websocket':
-                generateWebsocket($genName, $genFlags);
-                break;
-            case 'listener':
-                generateListener($genName, $genFlags);
-                break;
-            default:
-                echo "Unknown generator: {$what}\n";
-                echo "  Available: {$allGenerators}\n";
-                exit(1);
+        // Resolution transparency (--json / --dry-run / STDERR hint on bare
+        // form). Only the four scaffolders in the resolution-contract feature
+        // brief participate; the rest go through their generator directly.
+        $resolvable = ['model', 'route', 'migration', 'middleware'];
+        $wantsJson = !empty($genFlags['json']);
+        $dryRun = !empty($genFlags['dry-run']);
+        $resolution = null;
+        if (in_array($what, $resolvable, true)) {
+            $resolution = resolveGeneration($what, $genName, $genFlags);
+            // Bare form (no --json): print a human resolution block to STDERR
+            // BEFORE the writes, so the operator sees the mapping even when
+            // stdout is being piped elsewhere. Dry-run + non-JSON prints and
+            // exits without touching disk.
+            if (!$wantsJson) {
+                fwrite(STDERR, renderHumanResolution($what, $resolution, $dryRun));
+                if ($dryRun) {
+                    exit(0);
+                }
+            } else {
+                // --json: buffer any writes-time chatter from the generator
+                // so STDOUT stays ONE clean envelope. Captured output goes
+                // to STDERR after — the operator still sees it, parsers get
+                // valid JSON. Dry-run skips writes entirely below.
+                if (!$dryRun) {
+                    ob_start();
+                }
+            }
+        } elseif ($wantsJson || $dryRun) {
+            fwrite(STDERR, "  --json / --dry-run supported for: " . implode(', ', $resolvable) . "\n");
+            exit(1);
+        }
+
+        $skipWrites = $wantsJson && $dryRun;
+
+        if (!$skipWrites) {
+            switch ($what) {
+                case 'model':
+                    generateModel($genName, $genFlags, $FIELD_TYPE_MAP);
+                    break;
+                case 'route':
+                    generateRoute($genName, $genFlags);
+                    break;
+                case 'crud':
+                    generateCrud($genName, $genFlags, $FIELD_TYPE_MAP);
+                    break;
+                case 'migration':
+                    generateMigration($genName, $genFlags, $FIELD_TYPE_MAP);
+                    break;
+                case 'middleware':
+                    generateMiddleware($genName, $genFlags);
+                    break;
+                case 'test':
+                    generateTest($genName, $genFlags);
+                    break;
+                case 'form':
+                    generateForm($genName, $genFlags);
+                    break;
+                case 'view':
+                    generateView($genName, $genFlags);
+                    break;
+                case 'auth':
+                    generateAuth($genName, $genFlags, $FIELD_TYPE_MAP);
+                    break;
+                case 'service':
+                    generateService($genName, $genFlags);
+                    break;
+                case 'queue':
+                    generateQueue($genName, $genFlags);
+                    break;
+                case 'validator':
+                    generateValidator($genName, $genFlags);
+                    break;
+                case 'seeder':
+                    generateSeeder($genName, $genFlags);
+                    break;
+                case 'websocket':
+                    generateWebsocket($genName, $genFlags);
+                    break;
+                case 'listener':
+                    generateListener($genName, $genFlags);
+                    break;
+                default:
+                    echo "Unknown generator: {$what}\n";
+                    echo "  Available: {$allGenerators}\n";
+                    exit(1);
+            }
+        }
+
+        // JSON envelope on STDOUT — the ONE and ONLY thing on stdout when
+        // --json is set. actions_taken reflects what actually landed on
+        // disk (which planned writes we can now see); dry-run leaves it [].
+        if ($wantsJson) {
+            $captured = $skipWrites ? '' : (string)ob_get_clean();
+            $actions = $skipWrites ? [] : filesTouched($resolution);
+            $envelope = [
+                'command'       => 'generate',
+                'target'        => $what,
+                'input'         => resolutionInput($what, $genName, $genFlags),
+                'resolution'    => $resolution,
+                'actions_taken' => $actions,
+                'dry_run'       => $dryRun,
+            ];
+            echo json_encode(
+                $envelope,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            ) . "\n";
+            if ($captured !== '') {
+                fwrite(STDERR, $captured);
+            }
         }
         break;
 
@@ -1551,7 +1937,10 @@ DOCKERFILE;
 function generateModel(string $name, array $flags, array $fieldTypeMap, bool $skipMigration = false, bool $emitTest = true): void
 {
     $fields = fieldsOrDefault($flags['fields'] ?? '');
-    $table = tableNameFromClass($name);
+    // Reserved-word guard: Order -> orders (a raw `order` table breaks CREATE
+    // TABLE on every engine). toTableNameWithTransform() reports the swap
+    // for the resolution envelope; here we only need the safe name.
+    [$table, ] = toTableNameWithTransform($name);
 
     // Build typed property lines
     $propLines = ["    public ?int \$id = null;"];
@@ -1943,7 +2332,8 @@ function generateMigration(
                 break;
             }
         }
-        $table = tableNameFromClass($stripped);
+        // Reserved-word guard mirrors generateModel: create_order -> orders.
+        [$table, ] = toTableNameWithTransform($stripped);
     }
 
     // Build SQL columns from fields
