@@ -6,6 +6,53 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.117
+
+Agent-experience release. Two paired features (import-hint fallback +
+generate-resolution transparency) attack the same defect class: the
+framework silently transforming input, then failing downstream with a
+message that never names the transformation. See ADR-0062.
+
+### Import-hint fallback (Tina4\Route -> Tina4\Router)
+
+- New `Tina4/ImportHelper.php`: a last-resort `spl_autoload_register`
+  callback throwing `\Error` with a Levenshtein-picked suggestion
+  drawn from the real `Tina4/` directory walk (cached). Installed
+  eagerly from `Tina4/Bootstrap/Constants.php` (already in Composer's
+  `files` autoload map, so no composer.json change).
+- Fires only when Composer's PSR-4 loader already failed. Never masks
+  a real `Class 'X' not found` where the class DOES exist but its
+  body threw.
+- 5 real-subprocess tests: positive-happy, negative-hint
+  (`new Tina4\\Route()` names `Tina4\\Router`), negative-no-match
+  (browsable list of real classes), masking-gate, idempotence.
+
+### Generate-command resolution transparency
+
+- `tina4php generate model|route|migration|middleware --json` emits
+  a versioned envelope on stdout, matching the `generate_v1`
+  contract advertised in `commands --json`.
+- `--dry-run` computes resolution WITHOUT writing files. Composable
+  with `--json`.
+- Bare invocation prints a human-readable resolution block to stderr
+  naming every transformation, path and warning; files are written
+  as before.
+- PHP had no reserved-word table before this release. Introduced
+  `SQL_RESERVED_TABLE_NAMES` mirroring the Python master, plus
+  `pluralizeTable()` and `toTableNameWithTransform()`. `generate
+  model Order` now surfaces the "auto-pluralized" transformation
+  and names the `--table X --quote` override flag (parsed but the
+  quoted-identifier ORM mode it opts into is tracked at
+  tina4-python#123 for a follow-up).
+- `commands --json` gains `"resolution_contract": {"version": "1",
+  "envelope": "generate_v1"}`.
+- 5 real-subprocess tests covering json+dry_run, reserved-word
+  transformation, bare stderr, reserved-name stderr, manifest
+  advertisement.
+
+Parity: tina4-python, tina4-ruby, tina4-nodejs ship the same two
+features in 3.13.117 through their language-native mechanisms.
+
 ## 3.13.116
 
 Cooperative service-runner shutdown + version-contract test hardening.
