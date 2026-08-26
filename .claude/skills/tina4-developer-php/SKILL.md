@@ -44,7 +44,7 @@ Three announcements every substantive action carries:
    Formula: `Wrote <path>` / `Ran <command> — <one-line result>`.
 
 Never write more than TWO files between announcements. Never run a schema
-migration, install a dependency, or edit `app.py` (or the framework's boot
+migration, install a dependency, or edit `index.php` (or the framework's boot
 file) without a preceding `About to:` line.
 
 Stop-points that especially matter:

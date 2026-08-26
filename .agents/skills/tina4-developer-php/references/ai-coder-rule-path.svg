@@ -1,0 +1,53 @@
+<svg viewBox="0 0 640 560" xmlns="http://www.w3.org/2000/svg" role="img" font-family="system-ui, -apple-system, sans-serif">
+<title>The Tina4 AI coder rule path</title>
+<desc>Eight steps: ground, scaffold, write (model) then validate, repair, retry-grounded, verify, remember (deterministic layer). A retry loop runs from step 6 back to step 4.</desc>
+<style>
+  .t{font-size:15px;font-weight:500;fill:#1b1b1a}
+  .ts{font-size:12.5px;fill:#5f5e5a}
+  .hd{font-size:18px;font-weight:600;fill:#1b1b1a}
+  .blue{fill:#E6F1FB;stroke:#378ADD;stroke-width:1.4}
+  .amber{fill:#FBF1DB;stroke:#C88A1A;stroke-width:1.4}
+  .sw-blue{fill:#378ADD}.sw-amber{fill:#C88A1A}
+  .con{stroke:#B4B2A9;stroke-width:1.5;fill:none}
+  .loop{stroke:#C88A1A;stroke-width:1.5;fill:none}
+  @media (prefers-color-scheme:dark){
+    .t{fill:#eeede8}.ts{fill:#b4b2a9}.hd{fill:#f5f4ef}
+    .blue{fill:#0C447C;stroke:#85B7EB}.amber{fill:#5c3d0c;stroke:#E4B44E}
+    .con{stroke:#5f5e5a}
+  }
+</style>
+<text class="hd" x="320" y="28" text-anchor="middle">The Tina4 AI coder rule path</text>
+<text class="ts" x="320" y="47" text-anchor="middle">never ship a symbol you haven't verified is real</text>
+
+<rect class="blue" x="160" y="64" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="83">1 · Ground</text><text class="ts" x="180" y="99">retrieve the real idiom (tina4_context)</text>
+<rect class="blue" x="160" y="118" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="137">2 · Scaffold</text><text class="ts" x="180" y="153">tina4 generate the boilerplate</text>
+<rect class="blue" x="160" y="172" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="191">3 · Write</text><text class="ts" x="180" y="207">custom logic only, against the idiom</text>
+
+<rect class="amber" x="160" y="236" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="255">4 · Validate</text><text class="ts" x="180" y="271">every symbol vs the known vocabulary</text>
+<rect class="amber" x="160" y="290" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="309">5 · Repair</text><text class="ts" x="180" y="325">fix module paths, inject imports</text>
+<rect class="amber" x="160" y="344" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="363">6 · Retry, grounded</text><text class="ts" x="180" y="379">re-retrieve, inject, regenerate</text>
+<rect class="amber" x="160" y="398" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="417">7 · Verify</text><text class="ts" x="180" y="433">boot it — does-it-run</text>
+<rect class="amber" x="160" y="452" width="320" height="42" rx="8"/>
+<text class="t" x="180" y="471">8 · Ship + remember</text><text class="ts" x="180" y="487">index the verified result</text>
+
+<path class="con" d="M320,106 V118"/><path class="con" d="M320,160 V172"/>
+<path class="con" d="M320,214 V236"/><path class="con" d="M320,278 V290"/>
+<path class="con" d="M320,332 V344"/><path class="con" d="M320,386 V398"/>
+<path class="con" d="M320,440 V452"/>
+<path class="loop" d="M480,365 H536 V257 H480"/>
+<text class="ts" x="544" y="314" transform="rotate(90 544 314)" text-anchor="middle">retry, else canonical</text>
+<text class="ts" x="150" y="360" text-anchor="end">invalid /</text>
+<text class="ts" x="150" y="375" text-anchor="end">incomplete</text>
+
+<rect class="sw-blue" x="150" y="520" width="13" height="13" rx="3"/>
+<text class="ts" x="170" y="530">model produces (the coin)</text>
+<rect class="sw-amber" x="360" y="520" width="13" height="13" rx="3"/>
+<text class="ts" x="380" y="530">deterministic layer (forces heads)</text>
+</svg>

@@ -81,11 +81,15 @@ Fully native RFC 6455 implementation (~300-400 lines per language). No third-par
 
 ### Route-Based Registration (Python)
 
-`websocket` is NOT a top-level export — `from tina4_python import websocket` imports the
-`tina4_python.websocket` **module**, not the decorator. Import it from the router:
+`from tina4_python import websocket` is callable: the `tina4_python.websocket`
+subpackage is a callable module that forwards to `core.router.websocket`. Both
+spellings work. `from tina4_python.websocket import WebSocketServer` still
+imports the RFC 6455 types. The router import is the form static type checkers
+accept (`Module not callable` otherwise):
 
 ```python
-from tina4_python.core.router import websocket
+from tina4_python import websocket
+# or: from tina4_python.core.router import websocket
 
 # The handler is event-based: (connection, event, data). `event` is "open",
 # "message", or "close"; `data` is the payload (str for "message", None otherwise).
