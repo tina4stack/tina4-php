@@ -276,24 +276,13 @@ class Messenger
             $this->readResponse($socket, 220);
 
             // EHLO
-            $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
+            $ehlo = $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
 
-            // STARTTLS for port 587
-            if ($this->useTls && $this->port === 587) {
-                $this->sendCommand($socket, 'STARTTLS', 220);
-
-                $crypto = stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-                if ($crypto !== true) {
-                    fclose($socket);
-                    return ['success' => false, 'message' => 'STARTTLS handshake failed', 'id' => null];
-                }
-
-                // Re-EHLO after TLS
-                $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
-            }
+            // STARTTLS where the server offers it, not where the port suggests it
+            $ehlo = $this->startTls($socket, $ehlo);
 
             // AUTH LOGIN
-            if ($this->username !== null && $this->password !== null) {
+            if ($this->hasCredentials()) {
                 $this->sendCommand($socket, 'AUTH LOGIN', 334);
                 $this->sendCommand($socket, base64_encode($this->username), 334);
                 $this->sendCommand($socket, base64_encode($this->password), 235);
@@ -406,29 +395,33 @@ class Messenger
      */
     public function testConnection(): array
     {
-        if ($this->host === null || $this->port === null) {
-            return ['success' => false, 'message' => 'SMTP host and port are required'];
+        // The same never-null guard as the other two: $host is `private string`
+        // defaulting to 'localhost' and $port an `int` defaulting to 587, so
+        // this read `if (false || false)` and a Messenger with NO host
+        // configured went ahead and probed localhost:587.
+        //
+        // On a machine with nothing listening there that failed, which looked
+        // like the intended answer. On a machine running an MTA it connected to
+        // it, and the only reason testConnection() still reported failure was
+        // the empty AUTH LOGIN being rejected -- the bug above propping up the
+        // bug here. Fixing AUTH alone turned that into a reported success for a
+        // host the caller never named.
+        //
+        // smtpConfigured is the flag shouldCapture() already uses for exactly
+        // this question, and it is set from the constructor's resolved host.
+        if (!$this->smtpConfigured) {
+            return ['success' => false, 'message' => 'SMTP host is not configured'];
         }
 
         try {
             $socket = $this->connect();
             $response = $this->readResponse($socket, 220);
 
-            $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
+            $ehlo = $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
 
-            if ($this->useTls && $this->port === 587) {
-                $this->sendCommand($socket, 'STARTTLS', 220);
+            $this->startTls($socket, $ehlo);
 
-                $crypto = stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-                if ($crypto !== true) {
-                    fclose($socket);
-                    return ['success' => false, 'message' => 'STARTTLS handshake failed'];
-                }
-
-                $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
-            }
-
-            if ($this->username !== null && $this->password !== null) {
+            if ($this->hasCredentials()) {
                 $this->sendCommand($socket, 'AUTH LOGIN', 334);
                 $this->sendCommand($socket, base64_encode($this->username), 334);
                 $this->sendCommand($socket, base64_encode($this->password), 235);
@@ -889,6 +882,104 @@ class Messenger
      * @return resource
      * @throws \RuntimeException On connection failure
      */
+    /**
+     * Does the server advertise this ESMTP capability?
+     *
+     * Reads the EHLO response, whose lines look like "250-STARTTLS" for every
+     * line but the last and "250 STARTTLS" for that one. The word boundary
+     * matters: "AUTH" must not match "AUTH=PLAIN LOGIN" as a different
+     * capability, and a bare prefix match would say a server offering
+     * "STARTTLSX" supports STARTTLS.
+     */
+    private function serverSupports(string $ehloResponse, string $capability): bool
+    {
+        foreach (preg_split('/\R/', $ehloResponse) ?: [] as $line) {
+            if (preg_match('/^250[ -]' . preg_quote($capability, '/') . '\b/i', trim($line))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Upgrade the connection with STARTTLS, and return the EHLO response that
+     * is valid from here on.
+     *
+     * The capability list is re-read after a successful upgrade because a
+     * server may advertise different capabilities once the channel is
+     * encrypted -- AUTH in particular is commonly withheld until then.
+     *
+     * This USED TO BE gated on `$this->port === 587`. A caller who asked for
+     * encryption on any other port silently got none: the connection was made
+     * in clear, the credentials went out in clear, and send() still returned
+     * success. Submission on 25 and 2525 is ordinary, so that was not a corner
+     * case, and nothing in the result told the caller their mail had been sent
+     * unencrypted. Whether the channel can be encrypted is a property of the
+     * server, not of the port number, so ask the server.
+     *
+     * The two encryption modes are deliberately not equivalent:
+     *   'starttls'  the caller demanded encryption -- fail loudly if it is not
+     *               on offer, rather than quietly downgrading them
+     *   'tls'       the default, and opportunistic -- upgrade where possible,
+     *               warn where not. Failing here would break every app already
+     *               pointed at a plain local MTA, which is the setup this
+     *               change is meant to enable.
+     * 'ssl' and 'none' never reach this: 465 is already wrapped by connect().
+     */
+    private function startTls($socket, string $ehloResponse): string
+    {
+        if (!$this->useTls) {
+            return $ehloResponse;
+        }
+
+        if (!$this->serverSupports($ehloResponse, 'STARTTLS')) {
+            if ($this->encryption === 'starttls') {
+                fclose($socket);
+                throw new \RuntimeException(
+                    "STARTTLS was requested but {$this->host}:{$this->port} does not offer it"
+                );
+            }
+
+            Debug::message(
+                "SMTP server {$this->host}:{$this->port} does not offer STARTTLS, continuing unencrypted",
+                Debug::LEVEL_WARNING
+            );
+
+            return $ehloResponse;
+        }
+
+        $this->sendCommand($socket, 'STARTTLS', 220);
+
+        if (stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT) !== true) {
+            fclose($socket);
+            throw new \RuntimeException('STARTTLS handshake failed');
+        }
+
+        return $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
+    }
+
+    /**
+     * Are there credentials to authenticate with?
+     *
+     * The guard here was `$this->username !== null && $this->password !== null`
+     * on properties typed `private string` that default to ''. Neither is ever
+     * null, so the branch ALWAYS ran: a Messenger with no credentials
+     * configured still sent AUTH LOGIN with two empty base64 strings, and the
+     * server rejected the handshake before the message was ever offered.
+     *
+     * The practical consequence was that Messenger could not talk to a local
+     * MTA at all -- the case where you want no credentials, because the relay
+     * trusts loopback and does the queueing and retrying for you.
+     *
+     * The username alone decides, matching Messaging\Messenger, which has
+     * always used `!empty($this->settings->smtpUsername)`.
+     */
+    private function hasCredentials(): bool
+    {
+        return $this->username !== '';
+    }
+
     private function connect()
     {
         $address = $this->host . ':' . $this->port;
