@@ -15,7 +15,7 @@ The full discipline lives in `.claude/skills/tina4-maintainer/SKILL.md`; this bl
 
 # Tina4 PHP
 
-Version 3.13.118 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.119 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 

@@ -6,6 +6,87 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.119
+
+Three real fixes ship in this release.
+
+### ImportHelper: autoload callback must not throw (fix by me)
+
+Regression from 3.13.117. The last-resort `spl_autoload_register`
+callback in `Tina4\ImportHelper` threw `\Error` on any unknown
+Tina4\* class. That broke `class_exists('X', true)` -- which is
+supposed to return false when the class cannot be loaded -- and any
+snippet that expected a "class not found" would fatal instead. Three
+tests failed on v3 at 3.13.118: `GraphTest::testGraphConnectTimeout`
+(references optional Tina4\Ultipa\Client),
+`SQLTranslatorTest::testPreRenameClassNameNoLongerExists`
+(intentionally names an old class to prove the rename), and
+`LazyFeatureLoadingTest::testReferencingAnEagerFilesNameDoesNotFatal`
+(a snippet uses the bare-name typo `Tina4\Constants` -- the real
+class is at `Tina4\Bootstrap\Constants`).
+
+Fix: replace the `throw new \Error(...)` at both throw sites in
+`ImportHelper::handle()` with `error_log('[Tina4] ...')`. The hint
+is still visible (greppable by `[Tina4]` in logs and phpunit
+output) and the autoloader now behaves per PHP's own contract:
+silently return when the class isn't ours. PHP's own "Class 'X'
+not found" fatal fires cleanly afterwards IF the caller genuinely
+tried to `new X` or `extends X`.
+
+New test `tests/ImportHelperDoesNotThrowFromAutoloadTest.php` pins
+the invariant against regression, mutation-proven.
+
+### Skill repair across three trees (@MichaelC8E, #205)
+
+Three defects fixed across `.claude/skills/`, `.agents/skills/`,
+`.cursor/skills/`:
+
+- Codex and Cursor copies of `tina4-maintainer` were UTF-8-with-BOM
+  with both em dashes replaced by the cp1252 round-trip
+  `c3 a2 e2 82 ac e2 80 9d`. Corruption sat inside the `description`
+  frontmatter (the text that decides when a skill triggers), and
+  the BOM sat in front of the opening `---` (which some frontmatter
+  parsers reject outright). All eight tracked copies across the
+  language ports were byte-identical, so every diff-based check
+  reported them clean.
+- Two shared files had gone stale against canonical in tina4-python.
+- Codex and Cursor copies of `tina4-developer-php` were around 60
+  lines behind `.claude`, and shipped none of the seven `references/`
+  files their own SKILL.md cites.
+
+### Messenger AUTH LOGIN + STARTTLS negotiation (@cwvermaak-codeinfinity, #204)
+
+Three real bugs found while migrating an application off a third-
+party relay onto a local Postfix that queued and retried. Messenger
+could not talk to the local MTA at all.
+
+- `if ($this->username !== null && $this->password !== null)`
+  against `private string` properties defaulting to `''` -- the
+  properties are never null, so AUTH LOGIN was ALWAYS sent. A
+  Messenger with no credentials configured sent two empty base64
+  strings and the far end rejected the handshake with
+  `454 4.7.0 Temporary authentication failure`, which reads like
+  a credential problem.
+- STARTTLS was gated on hardcoded `$this->port === 587`. Encryption
+  asked for on any other port was silently not applied -- the
+  connection was made in clear, the credentials went out in clear,
+  and `send()` still returned success. Submission on 25 and 2525
+  is ordinary.
+- `testConnection()` had the same shape in its own guard, so a
+  Messenger with no host configured probed localhost:587 and only
+  reported failure because the empty AUTH was rejected. Fix 1 turned
+  that into a false success, so `testConnection` now routes through
+  the `smtpConfigured` flag `shouldCapture()` uses.
+
+The whether-a-channel-can-be-encrypted decision now reads the EHLO
+capability list rather than the port number. New test file
+`tests/MessengerSmtpNegotiationTest.php` + real fixture
+`tests/fixtures/smtp_negotiation_server.php`.
+
+Parity: tina4-python 3.13.119 and tina4-nodejs 3.13.119 are
+version-parity bumps. tina4-ruby 3.13.119 ships @MichaelC8E's
+tina4-ruby#44 skill repair + a small CLAUDE.md footer bump.
+
 ## 3.13.118
 
 Version-parity bump. No framework code changes in PHP for this
