@@ -1,0 +1,50 @@
+{
+  "skill_name": "tina4-js",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Build me a todo list in tina4-js with an input field, an add button that's disabled when the input is empty, a list that shows all todos with delete buttons, and a count showing how many items are in the list. The list should update reactively when items are added or removed.",
+      "expected_output": "Should use signal for items array, computed for count, ?disabled for button, function wrapper for reactive list rendering, new array references (spread) for add/remove, @input for value tracking, .value for input binding.",
+      "files": [],
+      "expectations": [
+        "Uses signal() for the items array and input value",
+        "Uses ?disabled prefix (not disabled=) for the button disable binding",
+        "Uses function wrapper ${() => items.value.map(...)} for reactive list rendering, not static ${items.value.map(...)}",
+        "Creates new array references with spread ([...items.value, newItem]) instead of push()",
+        "Uses @input event handler to track input value",
+        "Uses .value property binding on the input element",
+        "Shows reactive item count that updates when list changes"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need a tina4-js login form that posts to /api/login, shows an error message if login fails, disables the submit button while loading and when the form is invalid (email must contain @ and password must be 8+ chars), and redirects to /dashboard on success using tina4's router.",
+      "expected_output": "Should use api.post (not fetch), handle thrown ApiResponse errors correctly, use ?disabled with computed, use navigate() for redirect, use signal for loading/error state, conditional rendering with function wrappers.",
+      "files": [],
+      "expectations": [
+        "Uses api.post() from tina4js/api, not raw fetch()",
+        "Catches errors as ApiResponse objects (err.data, err.status) not Error objects",
+        "Uses ?disabled prefix for button disable binding",
+        "Uses computed() for form validity (email contains @, password length >= 8)",
+        "Uses navigate() from tina4js/router for redirect, not window.location",
+        "Uses ${() => error.value ? html`...` : null} pattern for conditional error display, not ${error.value && html`...`}",
+        "Uses signal() for loading and error state"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Build a real-time chat component using tina4-js WebSocket support. It should connect to /ws/chat, show connection status, display incoming messages in a list, and have an input to send messages. Use tina4's built-in WebSocket pipe to manage message state.",
+      "expected_output": "Should use ws.connect with proper options, socket.pipe() for state management, socket.status and socket.connected signals for UI binding, ?hidden for conditional display, @keydown for send-on-enter.",
+      "files": [],
+      "expectations": [
+        "Uses ws.connect() from tina4js/ws, not new WebSocket()",
+        "Uses socket.pipe() to feed messages into a signal, not manual onmessage handlers",
+        "Binds socket.status signal directly in template for connection status display",
+        "Uses ?hidden or conditional function wrapper with socket.connected for online/offline UI",
+        "Uses signal() for the messages array",
+        "Creates new array reference in pipe reducer ([...current, msg]) not push",
+        "Uses @keydown with Enter key check for sending messages"
+      ]
+    }
+  ]
+}
