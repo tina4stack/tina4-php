@@ -51,6 +51,16 @@ class LazyFeatureLoadingTest extends \PHPUnit\Framework\TestCase
     /**
      * Run a snippet in a fresh PHP process with only the composer autoloader
      * bootstrapped, and return its trimmed stdout.
+     *
+     * stdout and stderr are captured SEPARATELY (not `2>&1`-merged): the
+     * boolean-shaped assertions in test methods below need a clean stdout
+     * that is not polluted by diagnostic side-channels — the last-resort
+     * ImportHelper writes a hint to error_log() (which lands on stderr in
+     * CLI) on any unresolved Tina4\ miss, and PHP startup warnings (e.g.
+     * a missing pecl extension on a dev Mac) do the same. Both are correct
+     * behaviour and must not fail a test that asks whether class_exists
+     * returned a clean 'true'/'false'. On a non-zero exit, the failure
+     * message includes stderr so a real fatal is still diagnosable.
      */
     private function inFreshPhp(string $code): string
     {
@@ -61,15 +71,40 @@ class LazyFeatureLoadingTest extends \PHPUnit\Framework\TestCase
             "<?php\nrequire " . var_export($autoload, true) . ";\n" . $code . "\n"
         );
 
-        $output = [];
-        $status = 0;
-        exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' 2>&1', $output, $status);
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        // display_errors=stderr keeps warnings off stdout so the caller can
+        // assert a clean 'true'/'false'; display_startup_errors=0 silences
+        // host-level startup warnings (e.g. a missing pecl extension on a
+        // dev Mac) that otherwise land on stdout under some SAPI configs.
+        $cmd = [
+            PHP_BINARY,
+            '-d', 'display_errors=stderr',
+            '-d', 'display_startup_errors=0',
+            $script,
+        ];
+        $process = proc_open($cmd, $descriptors, $pipes);
+        $this->assertIsResource($process, 'failed to start php subprocess');
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($process);
         unlink($script);
 
-        $text = trim(implode("\n", $output));
-        $this->assertSame(0, $status, "snippet failed: {$text}");
+        $stdoutText = trim((string) $stdout);
+        $stderrText = trim((string) $stderr);
+        $this->assertSame(
+            0,
+            $status,
+            "snippet failed (exit={$status})\nstdout:\n{$stdoutText}\nstderr:\n{$stderrText}"
+        );
 
-        return $text;
+        return $stdoutText;
     }
 
     public function testAutoloadingDoesNotDeclareOptionalSubsystems(): void

@@ -12,13 +12,15 @@
  *
  * Registered AFTER Composer's PSR-4 loader (append, never prepend), so it fires
  * only when every earlier autoloader has already declined the class. It then
- * throws \Error with a helpful "Did you mean X?" message naming the real Tina4
- * class the missing short name most resembles (levenshtein-ranked).
+ * emits a helpful "Did you mean X?" hint to error_log() naming the real Tina4
+ * class the missing short name most resembles (levenshtein-ranked), and
+ * returns SILENTLY — PHP autoloaders MUST NOT throw (see handle() docblock).
  *
- *   Class 'Tina4\Route' not found. Did you mean 'Tina4\Router'?
+ *   [Tina4] Class 'Tina4\Route' not found. Did you mean 'Tina4\Router'?
  *
- *   Class 'Tina4\Zzz' not found. No close match in the Tina4 namespace;
- *   real classes include: Tina4\Router, Tina4\ServiceRunner, Tina4\Auth, ...
+ *   [Tina4] Class 'Tina4\Zzz' not found. No close match in the Tina4
+ *   namespace; real classes include: Tina4\Router, Tina4\ServiceRunner,
+ *   Tina4\Auth, ...
  *
  * SCOPED to the `Tina4\` namespace. A class in any other namespace falls
  * through untouched — a legitimate PSR-4 miss elsewhere (e.g. a `use
@@ -137,13 +139,19 @@ class ImportHelper
     }
 
     /**
-     * The last-resort miss handler — throws \Error with a helpful hint.
+     * The last-resort miss handler — emits a helpful hint to error_log().
      *
      * Bounded to the `Tina4\` namespace so a non-Tina4 miss (e.g. a `use
      * NonExistent\NotAClass` inside a Tina4 class) is NOT intercepted —
      * PHP's native "Class 'X' not found" fatal wins, unmasked.
      *
-     * @throws \Error always, for a Tina4\ class this autoloader was reached for.
+     * PHP autoloaders MUST NOT throw. A throw from inside
+     * spl_autoload_register breaks `class_exists('X', true)` (that call is
+     * supposed to return false when nobody can load the class) and any
+     * snippet that catches "class not found". Instead we write the hint to
+     * error_log (visible in server logs and in phpunit output) and return
+     * silently. If the caller genuinely needed the class (new X, extends X),
+     * PHP's own "Class 'X' not found" fatal fires cleanly afterwards.
      */
     private static function handle(string $className): void
     {
@@ -161,10 +169,12 @@ class ImportHelper
         // file, etc. Say so plainly rather than pretending the class is
         // missing.
         if (in_array($className, $known, true)) {
-            throw new \Error(sprintf(
-                "Class '%s' exists on disk at Tina4/ but could not be autoloaded — check the namespace declaration inside the file and the composer PSR-4 map.",
+            // PHP autoloaders MUST NOT throw — see the docblock above.
+            error_log(sprintf(
+                "[Tina4] Class '%s' exists on disk at Tina4/ but could not be autoloaded — check the namespace declaration inside the file and the composer PSR-4 map.",
                 $className
             ));
+            return;
         }
 
         $suggestions = self::closestByShortName($shortName, $known);
@@ -195,7 +205,12 @@ class ImportHelper
             );
         }
 
-        throw new \Error($message);
+        // PHP autoloaders MUST NOT throw — throwing here breaks class_exists()
+        // checks and any script that catches "class not found". Emit the hint
+        // to error_log (visible in logs and in phpunit output) and return
+        // silently. If the caller genuinely needed the class (new X, extends X),
+        // PHP's own "Class 'X' not found" fatal fires cleanly afterward.
+        error_log('[Tina4] ' . $message);
     }
 
     /**
