@@ -6,6 +6,33 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.118
+
+Version-parity bump. No framework code changes in PHP for this
+release; the version aligns with tina4-python 3.13.118 which
+carries an urgent regression fix (@MichaelC8E's #124 fixed a
+3.13.117 pre-import defect in `_import_helper.py`).
+
+In flight for 3.13.119:
+
+- @MichaelC8E's #205 - skill repairs across three skill trees:
+  Codex and Cursor copies of `tina4-maintainer` had UTF-8-with-BOM
+  + cp1252 mojibake in the `description` frontmatter (byte-identical
+  across copies, invisible to diff-based checks). Codex and Cursor
+  copies of `tina4-developer-php` were around 60 lines behind
+  `.claude`, missing seven `references/` files. Two shared files
+  had gone stale against canonical in tina4-python.
+- @cwvermaak-codeinfinity's #204 - Messenger AUTH LOGIN and STARTTLS
+  negotiation fixes. Three guards were testing `!== null` against
+  properties that could never be null (`private string` defaulting
+  to ''), so AUTH LOGIN was ALWAYS sent (even with no credentials
+  configured, breaking local MTAs with a confusing 454), and STARTTLS
+  was gated on hardcoded `port === 587` instead of reading the EHLO
+  capability list.
+
+Both PRs are approved and queued in the tina4stack Actions runner
+backlog. They ship in 3.13.119 the moment CI clears.
+
 ## 3.13.117
 
 Agent-experience release. Two paired features (import-hint fallback +
