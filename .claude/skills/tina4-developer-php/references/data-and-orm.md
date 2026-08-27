@@ -343,18 +343,27 @@ tina4php migrate:create "create users table"   # creates a versioned SQL file in
 tina4php migrate                                # runs pending migrations
 ```
 
-> **Two CLI paths, one migration file (ADR-0063, 3.13.121).** Both
-> `tina4php migrate:create <desc>` and `tina4php generate migration <name>` write
-> the SAME `{timestamp}_{name}.sql` + `{timestamp}_{name}.down.sql` pair with the
-> SAME `tina4:edit` markers and emit the SAME `generate_v1_1` envelope (same
-> `edit_hints[]`, same `next[]`) — both `--json` and `--dry-run` are honoured on
-> both. `migrate:create` is the shorter form; `generate migration` composes with
-> `--fields "name:string,price:float"` for schema-aware CREATE TABLE emission when
-> the description begins with `create_X`. The one deliberate semantic difference:
-> `migrate:create` never co-emits a `tests/*MigrationTest.php` (its historical
-> "just a migration, no test" contract), while `generate migration` under the
-> default `emitTest=true` DOES co-emit one for a `create_X` name. Neither CLI path
-> is deprecated.
+> **Three surfaces, one migration file (ADR-0063, 3.13.121).** The two CLI paths
+> `tina4php migrate:create <desc>` and `tina4php generate migration <name>` AND
+> the MCP tool `migration_create` all write the SAME `{timestamp}_{name}.sql` +
+> `{timestamp}_{name}.down.sql` pair with the SAME `tina4:edit` markers and emit
+> the SAME `generate_v1_1` envelope (same `edit_hints[]`, same `next[]`). Both
+> `--json` and `--dry-run` are honoured on the two CLI paths. `migrate:create` is
+> the shorter form; `generate migration` composes with
+> `--fields "name:string,price:float"` for schema-aware `CREATE TABLE` emission
+> when the description begins with `create_X`. The MCP `migration_create` tool
+> delegates to `migrate:create --json` under the hood — one source of truth, no
+> drift — and returns `{ok, created, resolution}` with the same envelope shape
+> the CLI JSON emits, plus a duplicate-slug guard that points a repeat call at
+> the existing file instead of spawning a second migration for the same schema
+> change. The one deliberate semantic difference across all three:
+> `migrate:create` and MCP `migration_create` never co-emit a
+> `tests/*MigrationTest.php` (their historical "just a migration, no test"
+> contract), while `generate migration` under the default `emitTest=true` DOES
+> co-emit one for a `create_X` name. Filenames are ALWAYS `YYYYMMDDHHMMSS_x.sql`
+> — the pre-3.13.121 MCP tool used a sequential `000001_x.sql` prefix that did
+> not sort with the CLI's timestamps; both surfaces now use the same convention.
+> Neither CLI path is deprecated.
 
 > Migrations live in **`migrations/`** at the project root — **not** `src/migrations/`. That is
 > the folder the CLI scaffolds (`bin/tina4php` `migrate` / `migrate:create` / `migrate:rollback`

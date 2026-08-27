@@ -1596,20 +1596,43 @@ class McpDevTools
         // the ctor needs a DatabaseAdapter) was dead and has been removed.
 
         $server->registerTool('migration_create', function (string $description) {
-            // The tool writes the file itself (glob + file_put_contents); it does
-            // NOT construct a Migration (its ctor needs a DatabaseAdapter and would
-            // throw). Mirrors the Python master's create_migration(description),
-            // including its duplicate-slug guard: if a migration for the same
-            // description slug already exists, point the agent at that file so it
-            // edits the existing migration instead of spawning a second one for the
-            // same schema change.
+            // Delegates to the SAME resolution-aware handler the CLI uses so
+            // the MCP tool and `tina4php migrate:create` produce byte-for-byte
+            // identical output (filename shape + ADR-0063 generate_v1_1
+            // envelope with edit_hints[]/next[]). Before 3.13.121 this tool
+            // wrote the file inline with a sequential prefix (000001_x.sql,
+            // NOT the CLI's YYYYMMDDHHMMSS_x.sql) and returned a bare
+            // {created: filename} with no envelope — two scaffolding
+            // conventions in the same project, and no edit hints for the
+            // operator. Delegating to bin/tina4php via a subprocess is the
+            // "thin core" choice: zero code duplication, one source of truth
+            // for scaffolding (the CLI), and identical output by construction
+            // rather than by careful parallel maintenance.
+            //
+            // Duplicate-slug guard is preserved and runs BEFORE the delegation.
+            // Mirrors the Python master's create_migration(description): if a
+            // migration for the same description slug already exists, point
+            // the agent at that file so it edits the existing migration
+            // instead of spawning a second one for the same schema change.
             try {
                 $migrationPath = 'migrations';
                 $slug = trim((string) preg_replace('/[^a-z0-9]+/', '_', strtolower($description)), '_');
-                if (is_dir($migrationPath) && $slug !== '') {
+                if ($slug === '') {
+                    return [
+                        'ok' => false,
+                        'error' => 'Migration description cannot be empty.',
+                    ];
+                }
+                if (is_dir($migrationPath)) {
                     $existingDup = [];
                     foreach (glob($migrationPath . '/*.sql') ?: [] as $path) {
                         $name = basename($path);
+                        // Skip the sibling *.down.sql — the primary .sql
+                        // already matched (or will), and dup-listing both
+                        // pairs of the same migration would be noise.
+                        if (str_ends_with($name, '.down.sql')) {
+                            continue;
+                        }
                         // Strip a leading numeric/timestamp prefix (NNNNNN_ or
                         // YYYYMMDDHHMMSS_) and the .sql / .down.sql suffix, then
                         // compare slugs (treat "x" and "x_table" as equivalent).
@@ -1631,17 +1654,63 @@ class McpDevTools
                         ];
                     }
                 }
-                if (!is_dir($migrationPath)) {
-                    mkdir($migrationPath, 0755, true);
+
+                // Delegate to `tina4php migrate:create <slug> --json`. Same
+                // envelope as the CLI (`command: generate`, `target: migration`,
+                // `resolution.edit_hints`, `resolution.next`, timestamp
+                // filename); no test file co-emitted (migrate:create's
+                // emitMigrationTest=false semantic, preserved from the old MCP
+                // "just a migration, no test" contract).
+                $bin = realpath(__DIR__ . '/../../bin/tina4php');
+                if ($bin === false || !is_file($bin)) {
+                    return [
+                        'ok' => false,
+                        'error' => 'bin/tina4php not found — cannot delegate to CLI.',
+                    ];
                 }
-                $existing = glob($migrationPath . '/*.sql') ?: [];
-                $nextId = str_pad((string) (count($existing) + 1), 6, '0', STR_PAD_LEFT);
-                $safeName = $slug !== '' ? $slug : 'migration';
-                $filename = "{$nextId}_{$safeName}.sql";
-                file_put_contents($migrationPath . '/' . $filename, "-- $description\n");
-                return ['created' => $filename];
+                $cmd = [
+                    PHP_BINARY,
+                    '-d', 'display_errors=0',
+                    '-d', 'display_startup_errors=0',
+                    $bin, 'migrate:create', $slug, '--json',
+                ];
+                $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+                $proc = proc_open($cmd, $descriptors, $pipes, getcwd());
+                if (!is_resource($proc)) {
+                    return [
+                        'ok' => false,
+                        'error' => 'proc_open failed to launch tina4php migrate:create',
+                    ];
+                }
+                $stdout = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $exit = proc_close($proc);
+                if ($exit !== 0) {
+                    return [
+                        'ok' => false,
+                        'error' => 'migrate:create failed (exit ' . $exit . '): ' . trim((string) $stderr),
+                    ];
+                }
+                $envelope = json_decode((string) $stdout, true);
+                if (!is_array($envelope) || !isset($envelope['resolution']['file_path'])) {
+                    return [
+                        'ok' => false,
+                        'error' => 'migrate:create returned malformed envelope: '
+                            . substr((string) $stdout, 0, 200),
+                    ];
+                }
+                return [
+                    'ok' => true,
+                    // Preserve the historical {created: filename} contract so
+                    // an existing caller that only reads $result['created']
+                    // keeps working.
+                    'created' => basename((string) $envelope['resolution']['file_path']),
+                    'resolution' => $envelope['resolution'],
+                ];
             } catch (\Throwable $e) {
-                return ['error' => $e->getMessage()];
+                return ['ok' => false, 'error' => $e->getMessage()];
             }
         }, 'Create a new migration file');
 
