@@ -336,9 +336,260 @@ function fieldsOrDefault(string $fieldsStr): array
  * version — a bump is a WIRE break and gets a migration note in the
  * changelog. Kept in one place so the CLI switch, the commands manifest and
  * the tests read the same string.
+ *
+ * 1.1 (ADR-0063): additive over v1 — `resolution.edit_hints[]` (list of
+ * `{file, line, label}` per `// tina4:edit …` marker in a rendered file)
+ * plus `resolution.next[]` (curated actionable next steps). `test_paths[]`
+ * remains as in v1 and is now surfaced in the human block. Every v1 key is
+ * preserved; a v1 consumer can still parse a v1.1 envelope.
  */
-const GENERATE_RESOLUTION_CONTRACT_VERSION = '1';
-const GENERATE_RESOLUTION_ENVELOPE = 'generate_v1';
+const GENERATE_RESOLUTION_CONTRACT_VERSION = '1.1';
+const GENERATE_RESOLUTION_ENVELOPE = 'generate_v1_1';
+
+/**
+ * Curated next-steps per generator (ADR-0063).
+ *
+ * Surfaced in the envelope's `resolution.next[]` array and printed under
+ * "Next:" in the human STDERR block. Each line is short and actionable —
+ * a command the operator can copy, or a specific file to edit. Cap: 5 lines
+ * per verb (the human block prints them all). Placeholders resolved by
+ * `nextStepsForVerb`: {Name} → class name, {name} → snake_case, {table}
+ * → table name, {route} → route path.
+ */
+const NEXT_STEPS = [
+    'model' => [
+        'Edit src/orm/{Name}.php to add fields beyond the default "name"',
+        'Apply the migration:  tina4php migrate',
+        'Try it:               tina4php serve -> curl http://localhost:7145/{table}',
+        'Add CRUD scaffolding: tina4php generate crud {Name} --skip-model',
+    ],
+    'route' => [
+        'Fill the AI-FILL / EXTEND markers in src/routes/{route}.php',
+        'Run the co-emitted test: ./vendor/bin/phpunit tests/{Class}Test.php',
+        'Try it:                  tina4php serve -> curl http://localhost:7145/{route}',
+    ],
+    'crud' => [
+        'Apply the migration:  tina4php migrate',
+        'Try it:               tina4php serve -> curl http://localhost:7145/{route}',
+        'Visit /swagger to see the API docs',
+        'Extend routes in src/routes/{route}.php (EXTEND markers)',
+    ],
+    'migration' => [
+        'Apply it:      tina4php migrate',
+        'Roll it back:  tina4php migrate:rollback',
+        'Check status:  tina4php migrate:status',
+    ],
+    'middleware' => [
+        'Attach to a route: ->middleware([\'{Name}::before{Name}\'])',
+        'Run the co-emitted test: ./vendor/bin/phpunit tests/{Name}MiddlewareTest.php',
+    ],
+    'test' => [
+        'Run it: ./vendor/bin/phpunit tests/{Class}Test.php',
+    ],
+    'form' => [
+        'Extend the form fields in src/templates/forms/{table}.twig',
+        'Render it in a route: return $response->render("forms/{table}.twig", ["item" => $item]);',
+    ],
+    'view' => [
+        'Edit list + detail templates under src/templates/pages/',
+        'Wire routes to render them: return $response->render("pages/{route}.twig", ["items" => $items]);',
+    ],
+    'auth' => [
+        'Apply the migration:  tina4php migrate',
+        'POST /api/auth/register  create an account',
+        'POST /api/auth/login     get a JWT token',
+        'GET  /api/auth/me        get the profile (Bearer token required)',
+        'Run the co-emitted test: ./vendor/bin/phpunit tests/AuthTest.php',
+    ],
+    'service' => [
+        'Fill the task body in src/services/{name}.php (AI-FILL marker)',
+        'Runs on schedule via ServiceRunner; start with: \\Tina4\\ServiceRunner::start();',
+        'Run the co-emitted test: ./vendor/bin/phpunit tests/{Class}ServiceTest.php',
+    ],
+    'queue' => [
+        'Fill handle_{name} in src/services/{name}_consumer.php (AI-FILL marker)',
+        'Run the worker: tina4php queue work {name}',
+        'Check queue stats: tina4php queue stats {name}',
+    ],
+    'validator' => [
+        'Adjust the rules in src/validators/{name}.php',
+        'Use it in a route: $v = (require ...)((array)$request->body); if (!$v->isValid()) ...',
+        'Run the co-emitted test: ./vendor/bin/phpunit tests/{Class}ValidatorTest.php',
+    ],
+    'seeder' => [
+        'Override fields in src/seeds/{table}_seeder.php as needed',
+        'Run it: tina4php seed',
+    ],
+    'websocket' => [
+        'Fill the message branch in src/routes/ws_{name}.php (AI-FILL marker)',
+        'Connect from the browser: new WebSocket("ws://localhost:7145{route}")',
+    ],
+    'listener' => [
+        'Fill the listener body in src/listeners/{name}.php (AI-FILL marker)',
+        'Emit the event from anywhere: \\Tina4\\Events::emit(\'{event}\', $data);',
+    ],
+];
+
+/**
+ * Curated next-steps for the given verb, with placeholders resolved from the
+ * resolution + flags. Returns a list of strings (may be empty). Empty is a
+ * legal envelope value — Test 5 in GenerateEnvelopeV11Test.php.
+ *
+ * @param array<string, mixed> $resolution
+ * @param array<string, mixed> $flags
+ * @return list<string>
+ */
+function nextStepsForVerb(string $what, string $name, array $resolution, array $flags): array
+{
+    $steps = NEXT_STEPS[$what] ?? [];
+    if ($steps === []) {
+        return [];
+    }
+    $className = $resolution['class_name'] ?? $name;
+    $tableName = $resolution['table_name'] ?? tableNameFromClass($name);
+    // For a route/crud the "route" placeholder is the URL path; for others
+    // it's the snake/kebab name.
+    $routePath = '';
+    if (in_array($what, ['route', 'crud'], true)) {
+        $routes = $resolution['routes'] ?? [];
+        $routePath = ltrim((string)($routes[0] ?? ''), '/');
+    }
+    if ($routePath === '') {
+        $routePath = tableNameFromClass($name);
+    }
+    $snakeName = snakeSlug($name);
+    // Event name for listener template.
+    $eventName = ($what === 'listener') ? trim($name) : $name;
+    $classPascal = pascalCase($snakeName ?: $name);
+
+    $replace = [
+        '{Name}'  => $className,
+        '{Class}' => $classPascal,
+        '{name}'  => $snakeName,
+        '{table}' => $tableName,
+        '{route}' => $routePath,
+        '{event}' => $eventName,
+    ];
+    $out = [];
+    foreach ($steps as $line) {
+        $out[] = strtr($line, $replace);
+    }
+    return $out;
+}
+
+/**
+ * Emit an editable-spot marker for a generator template (ADR-0063).
+ *
+ * A `// tina4:edit <label>` line the operator (or AI agent) can grep for
+ * to jump to a genuine first-edit spot in the generated code. Kept short:
+ * no period, no question mark — the label reads as an actionable hint.
+ *
+ * Renderers (Frond / Twig) use `{# tina4:edit … #}`; SQL migrations use
+ * `-- tina4:edit …`. See `sqlEditHintMarker` / `twigEditHintMarker`.
+ */
+function editHintMarker(string $label, string $indent = ''): string
+{
+    return "{$indent}// tina4:edit  {$label}\n";
+}
+
+/**
+ * SQL comment variant of editHintMarker (for migrations).
+ */
+function sqlEditHintMarker(string $label): string
+{
+    return "-- tina4:edit  {$label}\n";
+}
+
+/**
+ * Twig comment variant of editHintMarker (for forms + views).
+ */
+function twigEditHintMarker(string $label): string
+{
+    return "{# tina4:edit  {$label} #}\n";
+}
+
+/**
+ * Extract `// tina4:edit …` (or `-- tina4:edit …` / `{# tina4:edit … #}`)
+ * markers from a rendered file's content.
+ *
+ * Returns a list of `{file, line, label}` records — the shape the envelope
+ * carries under `resolution.edit_hints[]`. Line numbers are 1-based (the
+ * shape a human/editor understands). $file is stamped verbatim on each hit.
+ *
+ * @return list<array{file:string, line:int, label:string}>
+ */
+function collectEditHintsFromContent(string $content, string $file): array
+{
+    $lines = explode("\n", $content);
+    $hints = [];
+    // Match any of: // tina4:edit LABEL, -- tina4:edit LABEL, {# tina4:edit LABEL #}
+    // Delimiter is '~' so the # in {# stays literal without escaping the delimiter.
+    $pattern = '~(?://|--|\{#)\s*tina4:edit\s+(.+?)(?:\s*#\})?\s*$~';
+    foreach ($lines as $i => $line) {
+        if (preg_match($pattern, $line, $m)) {
+            $hints[] = [
+                'file'  => $file,
+                'line'  => $i + 1,
+                'label' => trim($m[1]),
+            ];
+        }
+    }
+    return $hints;
+}
+
+/**
+ * Same as collectEditHintsFromContent but reads from disk. Returns [] when
+ * the file is absent (a planned write that never landed).
+ *
+ * @return list<array{file:string, line:int, label:string}>
+ */
+function collectEditHintsFromFile(string $path): array
+{
+    if (!is_file($path)) {
+        return [];
+    }
+    return collectEditHintsFromContent((string)file_get_contents($path), $path);
+}
+
+/**
+ * Walk a directory and collect edit hints from every regular file under it.
+ * Used by the dry-run capture path — after running a generator into a temp
+ * cwd, walk the tree once to build the aggregate hints list.
+ *
+ * $baseDir is stripped from each recorded `file` so the envelope carries
+ * repo-relative paths (matches what the write-mode path emits).
+ *
+ * @return list<array{file:string, line:int, label:string}>
+ */
+function collectEditHintsFromDir(string $baseDir): array
+{
+    if (!is_dir($baseDir)) {
+        return [];
+    }
+    $out = [];
+    $base = rtrim($baseDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    $baseLen = strlen($base);
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($baseDir, FilesystemIterator::SKIP_DOTS)
+    );
+    /** @var SplFileInfo $entry */
+    foreach ($iterator as $entry) {
+        if (!$entry->isFile()) {
+            continue;
+        }
+        $path = $entry->getPathname();
+        $rel  = strncmp($path, $base, $baseLen) === 0 ? substr($path, $baseLen) : $path;
+        $hits = collectEditHintsFromContent((string)file_get_contents($path), $rel);
+        if ($hits !== []) {
+            array_push($out, ...$hits);
+        }
+    }
+    // Stable order: by file, then by line.
+    usort($out, static function (array $a, array $b): int {
+        return $a['file'] === $b['file'] ? ($a['line'] <=> $b['line']) : strcmp($a['file'], $b['file']);
+    });
+    return $out;
+}
 
 /**
  * Build the resolution envelope for one of model/route/migration/middleware.
@@ -371,7 +622,9 @@ function resolveGeneration(string $what, string $name, array $flags): array
                 'migration_path'  => "migrations/{$migrationFilename}",
                 'transformations' => $transformations,
                 'routes'          => [],
-                'test_paths'      => ["tests/{$name}Test.php"],
+                'test_paths'      => ["tests/{$name}ModelTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
             ];
 
         case 'route':
@@ -381,6 +634,13 @@ function resolveGeneration(string $what, string $name, array $flags): array
                 $singular = $routePath;
             }
             $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $routePath)));
+            // route --model co-emits a CRUD gate test named {Class}Test.php,
+            // while a bare route emits {ClassPascal}Test.php via emitRouteStubTest.
+            // Both live under tests/, so paths converge.
+            $model = $flags['model'] ?? '';
+            $testPath = $model
+                ? "tests/{$className}Test.php"
+                : "tests/" . pascalCase($routePath) . 'Test.php';
             return [
                 'class_name'      => null,
                 'table_name'      => null,
@@ -388,7 +648,9 @@ function resolveGeneration(string $what, string $name, array $flags): array
                 'migration_path'  => null,
                 'transformations' => $transformations,
                 'routes'          => ["/{$routePath}", "/{$routePath}/{id}"],
-                'test_paths'      => ["tests/{$className}Test.php"],
+                'test_paths'      => [$testPath],
+                'edit_hints'      => [],
+                'next'            => [],
             ];
 
         case 'migration':
@@ -407,7 +669,7 @@ function resolveGeneration(string $what, string $name, array $flags): array
             $filename = "{$timestamp}_{$name}.sql";
             $downFilename = "{$timestamp}_{$name}.down.sql";
             $isCreate = str_starts_with($name, 'create_');
-            $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $name)));
+            $className = pascalCase($table);
             return [
                 'class_name'      => null,
                 'table_name'      => $isCreate ? $table : null,
@@ -415,7 +677,9 @@ function resolveGeneration(string $what, string $name, array $flags): array
                 'migration_path'  => "migrations/{$downFilename}",
                 'transformations' => $transformations,
                 'routes'          => [],
-                'test_paths'      => $isCreate ? ["tests/{$className}Test.php"] : [],
+                'test_paths'      => $isCreate ? ["tests/{$className}MigrationTest.php"] : [],
+                'edit_hints'      => [],
+                'next'            => [],
             ];
 
         case 'middleware':
@@ -427,6 +691,180 @@ function resolveGeneration(string $what, string $name, array $flags): array
                 'transformations' => $transformations,
                 'routes'          => [],
                 'test_paths'      => ["tests/{$name}MiddlewareTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'crud':
+            // Composite: model + route(model) + form + view + secure-gate test.
+            [$table, $transform] = toTableNameWithTransform($name);
+            if ($transform !== null) {
+                $transformations[] = $transform;
+            }
+            $routeName = "{$table}s";
+            $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $routeName)));
+            return [
+                'class_name'      => $name,
+                'table_name'      => $table,
+                'file_path'       => "src/orm/{$name}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => ["/{$routeName}", "/{$routeName}/{id}"],
+                'test_paths'      => ["tests/{$className}Test.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'test':
+            $snake = tableNameFromClass($name);
+            $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $snake)));
+            return [
+                'class_name'      => null,
+                'table_name'      => null,
+                'file_path'       => "tests/{$className}Test.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$className}Test.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'form':
+            [$table, ] = toTableNameWithTransform($name);
+            return [
+                'class_name'      => $name,
+                'table_name'      => $table,
+                'file_path'       => "src/templates/forms/{$table}.twig",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => [],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'view':
+            [$table, ] = toTableNameWithTransform($name);
+            $routeName = "{$table}s";
+            return [
+                'class_name'      => $name,
+                'table_name'      => $table,
+                'file_path'       => "src/templates/pages/{$routeName}.twig",
+                'migration_path'  => "src/templates/pages/{$table}.twig",
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => [],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'auth':
+            return [
+                'class_name'      => 'User',
+                'table_name'      => 'users',
+                'file_path'       => 'src/routes/auth.php',
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => ['/api/auth/register', '/api/auth/login', '/api/auth/me'],
+                'test_paths'      => ['tests/AuthTest.php'],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'service':
+            $snake = tableNameFromClass($name);
+            $classPascal = pascalCase($snake);
+            return [
+                'class_name'      => $name,
+                'table_name'      => null,
+                'file_path'       => "src/services/{$snake}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$classPascal}ServiceTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'queue':
+            $topic = ltrim($name, '/');
+            $slug = snakeSlug($topic);
+            $classPascal = pascalCase($slug);
+            return [
+                'class_name'      => null,
+                'table_name'      => null,
+                'file_path'       => "src/services/{$slug}_consumer.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$classPascal}QueueTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'validator':
+            $snake = tableNameFromClass($name);
+            $classPascal = pascalCase($snake);
+            return [
+                'class_name'      => $name,
+                'table_name'      => null,
+                'file_path'       => "src/validators/{$snake}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$classPascal}ValidatorTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'seeder':
+            [$table, ] = toTableNameWithTransform($name);
+            return [
+                'class_name'      => $name,
+                'table_name'      => $table,
+                'file_path'       => "src/seeds/{$table}_seeder.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$name}SeederTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'websocket':
+            $raw = trim($name);
+            $wsPath = str_starts_with($raw, '/') ? $raw : '/ws/' . ltrim($raw, '/');
+            $slug = snakeSlug(trim($raw, '/'));
+            $base = str_starts_with($slug, 'ws_') ? substr($slug, 3) : $slug;
+            $base = $base ?: 'ws';
+            $classPascal = pascalCase("ws_{$base}");
+            return [
+                'class_name'      => null,
+                'table_name'      => null,
+                'file_path'       => "src/routes/ws_{$base}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [$wsPath],
+                'test_paths'      => ["tests/{$classPascal}Test.php"],
+                'edit_hints'      => [],
+                'next'            => [],
+            ];
+
+        case 'listener':
+            $event = trim($name);
+            $slug = snakeSlug($event);
+            $classPascal = pascalCase($slug);
+            return [
+                'class_name'      => null,
+                'table_name'      => null,
+                'file_path'       => "src/listeners/{$slug}.php",
+                'migration_path'  => null,
+                'transformations' => $transformations,
+                'routes'          => [],
+                'test_paths'      => ["tests/{$classPascal}ListenerTest.php"],
+                'edit_hints'      => [],
+                'next'            => [],
             ];
     }
 
@@ -439,6 +877,8 @@ function resolveGeneration(string $what, string $name, array $flags): array
         'transformations' => $transformations,
         'routes'          => [],
         'test_paths'      => [],
+        'edit_hints'      => [],
+        'next'            => [],
     ];
 }
 
@@ -464,6 +904,159 @@ function resolutionInput(string $what, string $name, array $flags): array
         $input['public'] = !empty($flags['public']);
     }
     return $input;
+}
+
+/**
+ * Dispatch one of the 15 generators by verb name. Used by both the CLI
+ * write path AND the dry-run capture path (which runs it against a temp
+ * cwd purely to extract tina4:edit markers from the rendered files).
+ * Centralises the switch so a new verb only lands in one place.
+ *
+ * @param array<string, mixed> $flags
+ * @param array<string, array<string, mixed>> $fieldTypeMap
+ */
+function dispatchGeneratorByName(string $what, string $name, array $flags, array $fieldTypeMap): void
+{
+    switch ($what) {
+        case 'model':
+            generateModel($name, $flags, $fieldTypeMap);
+            break;
+        case 'route':
+            generateRoute($name, $flags);
+            break;
+        case 'crud':
+            generateCrud($name, $flags, $fieldTypeMap);
+            break;
+        case 'migration':
+            generateMigration($name, $flags, $fieldTypeMap);
+            break;
+        case 'middleware':
+            generateMiddleware($name, $flags);
+            break;
+        case 'test':
+            generateTest($name, $flags);
+            break;
+        case 'form':
+            generateForm($name, $flags);
+            break;
+        case 'view':
+            generateView($name, $flags);
+            break;
+        case 'auth':
+            generateAuth($name, $flags, $fieldTypeMap);
+            break;
+        case 'service':
+            generateService($name, $flags);
+            break;
+        case 'queue':
+            generateQueue($name, $flags);
+            break;
+        case 'validator':
+            generateValidator($name, $flags);
+            break;
+        case 'seeder':
+            generateSeeder($name, $flags);
+            break;
+        case 'websocket':
+            generateWebsocket($name, $flags);
+            break;
+        case 'listener':
+            generateListener($name, $flags);
+            break;
+    }
+}
+
+/**
+ * Render the generator INTO a fresh temp cwd, walk the tree, extract every
+ * `tina4:edit` marker, then reap the temp dir. Used by the --json --dry-run
+ * path so `resolution.edit_hints[]` is populated WITHOUT touching the real
+ * project cwd. Reuses the ONE real generator dispatch — no template
+ * duplication — so the hints reflect exactly what a bare `generate` would
+ * write.
+ *
+ * @param array<string, mixed> $flags
+ * @param array<string, array<string, mixed>> $fieldTypeMap
+ * @return list<array{file:string, line:int, label:string}>
+ */
+function captureEditHintsInDryRun(string $what, string $name, array $flags, array $fieldTypeMap): array
+{
+    $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'tina4-genhints-' . bin2hex(random_bytes(6));
+    if (!@mkdir($tempDir, 0700, true)) {
+        return [];
+    }
+    $prevCwd = getcwd();
+    // Suppress the generator's echo lines — they belong to write-mode UX,
+    // not to dry-run JSON. The captured buffer is discarded.
+    ob_start();
+    try {
+        @chdir($tempDir);
+        try {
+            dispatchGeneratorByName($what, $name, $flags, $fieldTypeMap);
+        } catch (\Throwable) {
+            // A generator throw during capture must never sink the CLI.
+            // The envelope stays consistent; edit_hints degrades to [].
+        }
+    } finally {
+        @chdir($prevCwd !== false ? $prevCwd : sys_get_temp_dir());
+        ob_end_clean();
+    }
+    $hints = collectEditHintsFromDir($tempDir);
+    tina4ReapDir($tempDir);
+    return $hints;
+}
+
+/**
+ * Recursively delete a directory. Used by the dry-run capture path — the
+ * temp cwd we ran the generator into is disposable. Best-effort: a leftover
+ * file/dir under sys_get_temp_dir() is not a fatal for the CLI.
+ */
+function tina4ReapDir(string $dir): void
+{
+    if (!is_dir($dir)) {
+        return;
+    }
+    $items = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($items as $item) {
+        if ($item->isDir() && !$item->isLink()) {
+            @rmdir($item->getPathname());
+        } else {
+            @unlink($item->getPathname());
+        }
+    }
+    @rmdir($dir);
+}
+
+/**
+ * After the writer runs, collect edit hints from every file it actually
+ * left on disk (the `file_path`, `migration_path`, and `test_paths[]`).
+ * A planned write that never landed contributes nothing.
+ *
+ * @param array<string, mixed> $resolution
+ * @return list<array{file:string, line:int, label:string}>
+ */
+function collectEditHintsFromWrittenFiles(array $resolution): array
+{
+    $paths = [];
+    foreach (['file_path', 'migration_path'] as $key) {
+        if (!empty($resolution[$key])) {
+            $paths[] = (string)$resolution[$key];
+        }
+    }
+    foreach ($resolution['test_paths'] ?? [] as $path) {
+        $paths[] = (string)$path;
+    }
+    $hints = [];
+    foreach ($paths as $path) {
+        $hints = array_merge($hints, collectEditHintsFromFile($path));
+    }
+    // Stable order: by file, then by line.
+    usort($hints, static function (array $a, array $b): int {
+        return $a['file'] === $b['file'] ? ($a['line'] <=> $b['line']) : strcmp($a['file'], $b['file']);
+    });
+    return $hints;
 }
 
 /**
@@ -558,6 +1151,13 @@ function renderHumanResolution(string $what, array $resolution, bool $dryRun): s
         $lines[] = "  {$label}  {$resolution['migration_path']}";
     }
 
+    // v1.1 (ADR-0063): test paths were tracked in v1 but never surfaced in
+    // the human block. Show them so the operator sees the co-emitted test
+    // right next to the source file it covers.
+    if (!empty($resolution['test_paths'])) {
+        $lines[] = '  tests      ' . implode(', ', $resolution['test_paths']);
+    }
+
     // Escape hatch — surface the override so an operator who WANTS the raw
     // reserved name knows how to opt out (even though quoted-identifier mode
     // is not yet implemented — the message says so).
@@ -568,6 +1168,39 @@ function renderHumanResolution(string $what, array $resolution, bool $dryRun): s
             $lines[] = "    tina4php generate {$what} " . ($resolution['class_name'] ?? '')
                 . '  ' . $transform['override'];
             break;
+        }
+    }
+
+    // v1.1 (ADR-0063): the "Edit these lines:" block — each tina4:edit
+    // marker the generator baked into a rendered file, as {path}:{line} +
+    // its label. An operator glances at this and knows exactly where to
+    // start typing. Empty for a generator that emits no markers.
+    if (!empty($resolution['edit_hints'])) {
+        $lines[] = '';
+        $lines[] = 'Edit these lines:';
+        $maxLen = 0;
+        foreach ($resolution['edit_hints'] as $hint) {
+            $ref = ($hint['file'] ?? '') . ':' . (int)($hint['line'] ?? 0);
+            $maxLen = max($maxLen, strlen($ref));
+        }
+        $pad = min(46, $maxLen);
+        foreach ($resolution['edit_hints'] as $hint) {
+            $ref = ($hint['file'] ?? '') . ':' . (int)($hint['line'] ?? 0);
+            $gap = strlen($ref) <= $pad ? $pad : strlen($ref);
+            $lines[] = '  ' . str_pad($ref, $gap) . '   ' . ($hint['label'] ?? '');
+        }
+    }
+
+    // v1.1 (ADR-0063): the "Next:" block — curated actionable next steps
+    // per verb (see NEXT_STEPS + nextStepsForVerb). Numbered so the operator
+    // can act on them in order. Empty for a verb with no curated steps.
+    if (!empty($resolution['next'])) {
+        $lines[] = '';
+        $lines[] = 'Next:';
+        $i = 1;
+        foreach ($resolution['next'] as $step) {
+            $lines[] = '  ' . $i . '. ' . $step;
+            $i++;
         }
     }
 
@@ -1715,19 +2348,50 @@ DOCKERFILE;
         [$genFlags, ] = parseFlags(array_slice($args, 2));
 
         // Resolution transparency (--json / --dry-run / STDERR hint on bare
-        // form). Only the four scaffolders in the resolution-contract feature
-        // brief participate; the rest go through their generator directly.
-        $resolvable = ['model', 'route', 'migration', 'middleware'];
+        // form). v1.1 (ADR-0063) extends the resolvable set from the original
+        // 4 scaffolders to all 15 generators, so every verb speaks the same
+        // envelope contract (edit_hints[], next[], test_paths[]).
+        $resolvable = [
+            'model', 'route', 'crud', 'migration', 'middleware', 'test',
+            'form', 'view', 'auth', 'service', 'queue', 'validator',
+            'seeder', 'websocket', 'listener',
+        ];
         $wantsJson = !empty($genFlags['json']);
         $dryRun = !empty($genFlags['dry-run']);
         $resolution = null;
         if (in_array($what, $resolvable, true)) {
             $resolution = resolveGeneration($what, $genName, $genFlags);
+            // Populate the curated Next steps immediately (deterministic from
+            // the resolution + flags; no I/O). Same for both dry-run and write
+            // mode. Edit hints populate below — dry-run captures via temp cwd,
+            // write mode reads from the just-written files.
+            $resolution['next'] = nextStepsForVerb($what, $genName, $resolution, $genFlags);
+            $skipWrites = $wantsJson && $dryRun;
+            if ($skipWrites) {
+                // --json --dry-run: run the generator against a fresh temp
+                // cwd to render the same content a bare `generate` would
+                // write, then extract every tina4:edit marker. The real cwd
+                // is never touched.
+                $resolution['edit_hints'] = captureEditHintsInDryRun(
+                    $what,
+                    $genName,
+                    $genFlags,
+                    $FIELD_TYPE_MAP
+                );
+            }
             // Bare form (no --json): print a human resolution block to STDERR
             // BEFORE the writes, so the operator sees the mapping even when
-            // stdout is being piped elsewhere. Dry-run + non-JSON prints and
-            // exits without touching disk.
+            // stdout is being piped elsewhere. v1.1: populate edit_hints via
+            // a temp-cwd render FIRST so the "Edit these lines:" block shows
+            // up in both dry-run and write mode. Dry-run + non-JSON prints
+            // and exits without touching the real disk.
             if (!$wantsJson) {
+                $resolution['edit_hints'] = captureEditHintsInDryRun(
+                    $what,
+                    $genName,
+                    $genFlags,
+                    $FIELD_TYPE_MAP
+                );
                 fwrite(STDERR, renderHumanResolution($what, $resolution, $dryRun));
                 if ($dryRun) {
                     exit(0);
@@ -1805,9 +2469,15 @@ DOCKERFILE;
         // JSON envelope on STDOUT — the ONE and ONLY thing on stdout when
         // --json is set. actions_taken reflects what actually landed on
         // disk (which planned writes we can now see); dry-run leaves it [].
+        // v1.1 (ADR-0063): populate edit_hints from the actual written files
+        // in write mode (dry-run already captured them via the temp cwd
+        // above).
         if ($wantsJson) {
             $captured = $skipWrites ? '' : (string)ob_get_clean();
             $actions = $skipWrites ? [] : filesTouched($resolution);
+            if (!$skipWrites) {
+                $resolution['edit_hints'] = collectEditHintsFromWrittenFiles($resolution);
+            }
             $envelope = [
                 'command'       => 'generate',
                 'target'        => $what,
@@ -1942,14 +2612,20 @@ function generateModel(string $name, array $flags, array $fieldTypeMap, bool $sk
     // for the resolution envelope; here we only need the safe name.
     [$table, ] = toTableNameWithTransform($name);
 
-    // Build typed property lines
-    $propLines = ["    public ?int \$id = null;"];
+    // Build typed property lines. `tina4:edit` markers bracket the fields
+    // block (ADR-0063) so the human "Edit these lines:" block, and every
+    // AI agent grepping for markers, jump straight to the extension spots.
+    $propLines = [];
+    $propLines[] = '    // tina4:edit  add fields here';
+    $propLines[] = "    public ?int \$id = null;";
     foreach ($fields as [$fname, $ftype]) {
         $info = $fieldTypeMap[$ftype] ?? $fieldTypeMap['string'];
         $nullable = $info['nullable'] ? '?' : '';
         $propLines[] = "    public {$nullable}{$info['php']} \${$fname} = {$info['default']};";
     }
     $propLines[] = "    public ?string \$createdAt = null;";
+    $propLines[] = '';
+    $propLines[] = '    // tina4:edit  add relationships here (hasMany, belongsTo, foreignKeys)';
 
     // Write model file
     $dir = 'src/orm';
@@ -2059,6 +2735,7 @@ function generateRoute(string $name, array $flags, bool $emitTest = true): void
         \$offset = (int)(\$request->query['offset'] ?? (\$page > 1 ? (\$page - 1) * \$limit : 0));
         \$model = new {$model}();
         \$records = array_map(fn(\\Tina4\\ORM \$m) => \$m->toDict(), \$model->all(\$limit, \$offset));
+        // tina4:edit  customise the list response (filter / sort / projection)
         return \$response->json([
             "records" => \$records,
             "count" => \$model->count(),
@@ -2096,7 +2773,8 @@ function generateRoute(string $name, array $flags, bool $emitTest = true): void
  */
 \\Tina4\\Router::post("/{$routePath}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
     try {
-{$extCreate}        \$data = is_array(\$request->body) ? \$request->body : (array)\$request->body;
+{$extCreate}        // tina4:edit  validate / transform the request body before persist
+        \$data = is_array(\$request->body) ? \$request->body : (array)\$request->body;
         \$item = new {$model}(\$data);
         if (!\$item->save()) {
             return \$response->json(["error" => "Failed to create {$singular}"], 500);
@@ -2205,6 +2883,8 @@ PHP;
         );
         $content = <<<PHP
 <?php
+
+// tina4:edit  fill the five AI-FILL stubs below and remove the throw() lines
 
 /**
  * @description List all {$routePath}
@@ -2355,11 +3035,15 @@ function generateMigration(
         }
         $colLines[] = "    created_at DATETIME DEFAULT CURRENT_TIMESTAMP";
 
-        $upSql = "CREATE TABLE IF NOT EXISTS {$table} (\n" . implode(",\n", $colLines) . "\n);";
+        // ADR-0063 tina4:edit marker: a top-level SQL comment ABOVE the
+        // CREATE so the parenthesised column list stays a clean valid DDL
+        // (a marker inside the column list would trail an invalid comma).
+        $upSql = "-- tina4:edit  add columns beyond id + created_at\n"
+               . "CREATE TABLE IF NOT EXISTS {$table} (\n" . implode(",\n", $colLines) . "\n);";
         $downSql = "DROP TABLE IF EXISTS {$table};";
     } else {
-        $upSql = "-- Write your UP migration SQL here\n-- Example: ALTER TABLE {$table} ADD COLUMN new_col VARCHAR(255) DEFAULT '';";
-        $downSql = "-- Write your DOWN rollback SQL here\n-- Example: ALTER TABLE {$table} DROP COLUMN new_col;";
+        $upSql = "-- tina4:edit  write your UP migration SQL here\n-- Example: ALTER TABLE {$table} ADD COLUMN new_col VARCHAR(255) DEFAULT '';";
+        $downSql = "-- tina4:edit  write your DOWN rollback SQL here\n-- Example: ALTER TABLE {$table} DROP COLUMN new_col;";
     }
 
     $dateStr = $now->format('Y-m-d H:i:s');
@@ -2439,6 +3123,7 @@ class {$name}
      */
     public static function before{$name}(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?array
     {
+        // tina4:edit  guard the request here (auth / rate limit / role check)
         \$auth = \$request->header("Authorization");
         if (empty(\$auth)) {
             return [\$request, \$response(["error" => "Unauthorized"], 401)];
@@ -2451,6 +3136,7 @@ class {$name}
      */
     public static function after{$name}(\\Tina4\\Request \$request, \\Tina4\\Response \$response): ?array
     {
+        // tina4:edit  post-process the response (headers / audit log / metrics)
         return [\$request, \$response];
     }
 }
@@ -2603,7 +3289,7 @@ class {$className}Test extends TestCase
 {
     protected function setUp(): void
     {
-        // Set up test fixtures
+        // tina4:edit  set up real fixtures (bind SQLite, seed rows, register routes)
     }
 
     protected function tearDown(): void
@@ -2613,7 +3299,7 @@ class {$className}Test extends TestCase
 
     public function testList{$className}(): void
     {
-        // TODO: implement
+        // tina4:edit  replace with a real assertion (no mocks)
         \$this->assertTrue(true);
     }
 
@@ -2656,7 +3342,7 @@ class {$className}Test extends TestCase
 {
     protected function setUp(): void
     {
-        // Set up test fixtures
+        // tina4:edit  set up real fixtures (no mocks)
     }
 
     protected function tearDown(): void
@@ -2666,7 +3352,7 @@ class {$className}Test extends TestCase
 
     public function testExample(): void
     {
-        // TODO: replace with real tests
+        // tina4:edit  replace with a real assertion (no mocks)
         \$this->assertTrue(true);
     }
 }
@@ -2743,6 +3429,7 @@ TWIG;
 {% block content %}
 <div class="container mt-4">
     <h1>{% if item.id %}Edit {$name}{% else %}Create {$name}{% endif %}</h1>
+    {# tina4:edit  add validation attributes / help text / grouping #}
     <form method="post" action="/api/{$routeName}{% if item.id %}/{{ item.id }}{% endif %}">
         {{ form_token() }}
 {$fieldHtml}    <button type="submit" class="btn btn-primary">
@@ -2792,6 +3479,7 @@ function generateView(string $name, array $flags): void
         <h1>{$name}s</h1>
         <a href="/{$routeName}/create" class="btn btn-primary">Add {$name}</a>
     </div>
+    {# tina4:edit  customise column layout / add filters / paginate #}
     <table class="table">
         <thead>
             <tr>
@@ -2841,6 +3529,7 @@ TWIG;
             <a href="/{$routeName}" class="btn btn-outline-secondary">Back</a>
         </div>
     </div>
+    {# tina4:edit  format the detail view (nested data / related records / actions) #}
 {$detailFields}
 </div>
 {% endblock %}
@@ -2898,6 +3587,7 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
         $user->email = $email;
         $user->password = \Tina4\Auth::hashPassword($password);
         $user->role = 'user';
+        // tina4:edit  add profile fields on register (name, avatar, org, tos_accepted, ...)
         $user->save();
 
         return $response(["message" => "Registered", "id" => $user->id], 201);
@@ -2930,6 +3620,7 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
         // secure-by-default gate on /api/auth/me validates with. Passing a
         // different secret (e.g. getenv('SECRET')) would make the gate reject a
         // valid token -> me always 401s. Let Auth resolve TINA4_SECRET itself.
+        // tina4:edit  extend the JWT payload (org_id, permissions, ...) — verified by /me
         $token = \Tina4\Auth::getToken(
             ["user_id" => $user->id, "email" => $user->email, "role" => $user->role]
         );
@@ -2965,6 +3656,7 @@ function generateAuth(string $name, array $flags, array $fieldTypeMap): void
             return $response(["error" => "User not found"], 404);
         }
 
+        // tina4:edit  extend the profile response (name, avatar, permissions, ...)
         return $response(["id" => $user->id, "email" => $user->email, "role" => $user->role], 200);
     } catch (\Throwable $e) {
         \Tina4\Debug::message($e->getMessage(), TINA4_LOG_ERROR);
@@ -3835,6 +4527,7 @@ function generateService(string $name, array $flags): void
  */
 
 // Schedule: {$note}
+// tina4:edit  do the scheduled work here (fill the AI-FILL body below)
 \$task = function (\$context = null): void {
 {$body}};
 
@@ -3895,6 +4588,7 @@ function generateQueue(string $name, array $flags): void
  * it (auto retry -> dead-letter).
  */
 
+// tina4:edit  process the job payload here (fill the AI-FILL body below)
 \$handle = function (array \$data): void {
 {$body}};
 
@@ -3967,6 +4661,7 @@ function generateValidator(string $name, array $flags): void
 
 return function (array \$data): \\Tina4\\Validator {
     \$validator = new \\Tina4\\Validator(\$data);
+    // tina4:edit  add validation rules for your {$name} payload
 {$body}    return \$validator;
 };
 
@@ -4023,6 +4718,7 @@ require_once __DIR__ . '/../orm/{$model}.php';
 
 return function (int \$count = 20): \\Tina4\\SeedSummary {
     // field_overrides: only fields needing a specific shape; seedOrm fills the rest.
+    // tina4:edit  add field overrides for {$name} that need a specific shape
     \$overrides = static function (\\Tina4\\FakeData \$fake): array {
 {$body}    };
 
@@ -4086,6 +4782,7 @@ function generateWebsocket(string $name, array $flags): void
  * (connection, event, data). Pass secure: true to require a JWT on the upgrade.
  */
 
+// tina4:edit  handle inbound WebSocket frames (open / message / close)
 \$handler = function (\$connection, ?string \$data, string \$event): void {
     if (\$event === 'open') {
         \$connection->send('{"type":"welcome"}');
@@ -4149,6 +4846,7 @@ function generateListener(string $name, array $flags): void
  * re-raises instead (Events.php:125). Require this file at boot to register it.
  */
 
+// tina4:edit  react to the '{$event}' event (fill the AI-FILL body below)
 \$listener = function (\$data = null): void {
 {$body}};
 

@@ -203,6 +203,9 @@ class GenerateResolutionTest extends TestCase
      * 5. Manifest — `commands --json` advertises the wire contract, so a
      *    tool that discovers this CLI knows the envelope shape it will
      *    parse. Version bump is a breaking change, gated by this test.
+     *
+     * Bumped to v1.1 (ADR-0063): envelope carries `edit_hints[]` + `next[]`
+     * additively over v1. A v1 consumer can still parse a v1.1 envelope.
      */
     public function testCommandsManifestAdvertisesResolutionContract(): void
     {
@@ -213,7 +216,7 @@ class GenerateResolutionTest extends TestCase
         $manifest = json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR);
 
         $this->assertArrayHasKey('resolution_contract', $manifest, 'manifest must advertise resolution_contract');
-        $this->assertSame('1', $manifest['resolution_contract']['version']);
-        $this->assertSame('generate_v1', $manifest['resolution_contract']['envelope']);
+        $this->assertSame('1.1', $manifest['resolution_contract']['version']);
+        $this->assertSame('generate_v1_1', $manifest['resolution_contract']['envelope']);
     }
 }
