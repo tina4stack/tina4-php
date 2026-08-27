@@ -912,10 +912,19 @@ function resolutionInput(string $what, string $name, array $flags): array
  * cwd purely to extract tina4:edit markers from the rendered files).
  * Centralises the switch so a new verb only lands in one place.
  *
+ * $extras carries per-verb overrides the shared flow needs to forward
+ * without polluting the $flags parser namespace. Currently just:
+ *   - emitMigrationTest (bool, migration only) — pass false to skip the
+ *     co-emitted apply-UP / rollback-DOWN test file. Used by `migrate:create`,
+ *     which delegates here to share the ADR-0063 envelope path with
+ *     `generate migration` but keeps its historical "just a migration,
+ *     no test" semantic.
+ *
  * @param array<string, mixed> $flags
  * @param array<string, array<string, mixed>> $fieldTypeMap
+ * @param array<string, mixed> $extras
  */
-function dispatchGeneratorByName(string $what, string $name, array $flags, array $fieldTypeMap): void
+function dispatchGeneratorByName(string $what, string $name, array $flags, array $fieldTypeMap, array $extras = []): void
 {
     switch ($what) {
         case 'model':
@@ -928,7 +937,8 @@ function dispatchGeneratorByName(string $what, string $name, array $flags, array
             generateCrud($name, $flags, $fieldTypeMap);
             break;
         case 'migration':
-            generateMigration($name, $flags, $fieldTypeMap);
+            $emitTest = (bool)($extras['emitMigrationTest'] ?? true);
+            generateMigration($name, $flags, $fieldTypeMap, null, null, $emitTest);
             break;
         case 'middleware':
             generateMiddleware($name, $flags);
@@ -974,11 +984,16 @@ function dispatchGeneratorByName(string $what, string $name, array $flags, array
  * duplication — so the hints reflect exactly what a bare `generate` would
  * write.
  *
+ * $extras is forwarded to the dispatcher so per-verb overrides (e.g.
+ * migration's emitMigrationTest=false path used by `migrate:create`)
+ * render the SAME file tree in dry-run as in write mode.
+ *
  * @param array<string, mixed> $flags
  * @param array<string, array<string, mixed>> $fieldTypeMap
+ * @param array<string, mixed> $extras
  * @return list<array{file:string, line:int, label:string}>
  */
-function captureEditHintsInDryRun(string $what, string $name, array $flags, array $fieldTypeMap): array
+function captureEditHintsInDryRun(string $what, string $name, array $flags, array $fieldTypeMap, array $extras = []): array
 {
     $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'tina4-genhints-' . bin2hex(random_bytes(6));
     if (!@mkdir($tempDir, 0700, true)) {
@@ -991,7 +1006,7 @@ function captureEditHintsInDryRun(string $what, string $name, array $flags, arra
     try {
         @chdir($tempDir);
         try {
-            dispatchGeneratorByName($what, $name, $flags, $fieldTypeMap);
+            dispatchGeneratorByName($what, $name, $flags, $fieldTypeMap, $extras);
         } catch (\Throwable) {
             // A generator throw during capture must never sink the CLI.
             // The envelope stays consistent; edit_hints degrades to [].
@@ -1103,6 +1118,145 @@ function listPlannedWrites(array $resolution): array
         $planned[] = $testPath;
     }
     return $planned;
+}
+
+/**
+ * Full resolvable-generator flow — resolution, edit_hints capture, human
+ * block, generator dispatch, and the `--json` envelope emission. Extracted
+ * so BOTH the `generate` verb AND the shorter `migrate:create` alias run
+ * the identical ADR-0063 path instead of drifting. `--json` and `--dry-run`
+ * on the flags are honoured for both callers; every write goes through the
+ * one dispatcher.
+ *
+ * Non-resolvable verbs (a caller that isn't in the whitelist) go straight
+ * to dispatch. --json / --dry-run on a non-resolvable verb prints a
+ * one-line hint to STDERR and exits non-zero, matching the pre-extraction
+ * behaviour of `case 'generate':`.
+ *
+ * $extras is forwarded to the dispatcher and the edit-hint capture, so a
+ * caller can steer a per-verb knob (e.g. `emitMigrationTest=false` for
+ * `migrate:create`) without polluting the flags namespace. The value is
+ * ALSO honoured in the resolution itself: for migration with
+ * `emitMigrationTest=false`, `test_paths` is zeroed out so the envelope
+ * accurately reports "no test co-emitted".
+ *
+ * May `exit()` on invalid flag combinations or a bare dry-run — matches the
+ * pre-extraction behaviour.
+ *
+ * @param array<string, mixed> $genFlags
+ * @param array<string, array<string, mixed>> $fieldTypeMap
+ * @param array<string, mixed> $extras
+ */
+function runResolvedGenerator(
+    string $what,
+    string $genName,
+    array $genFlags,
+    array $fieldTypeMap,
+    array $extras = []
+): void {
+    // v1.1 (ADR-0063): the resolvable set covers all 15 scaffolders, so
+    // every verb speaks the same envelope contract.
+    $resolvable = [
+        'model', 'route', 'crud', 'migration', 'middleware', 'test',
+        'form', 'view', 'auth', 'service', 'queue', 'validator',
+        'seeder', 'websocket', 'listener',
+    ];
+    $wantsJson = !empty($genFlags['json']);
+    $dryRun = !empty($genFlags['dry-run']);
+    $resolution = null;
+
+    if (in_array($what, $resolvable, true)) {
+        $resolution = resolveGeneration($what, $genName, $genFlags);
+        // Reflect the caller's per-verb overrides in the resolution itself
+        // so the envelope's `test_paths` matches what the writer will do.
+        if ($what === 'migration' && ($extras['emitMigrationTest'] ?? true) === false) {
+            $resolution['test_paths'] = [];
+        }
+        // Populate the curated Next steps immediately (deterministic from
+        // the resolution + flags; no I/O). Same for both dry-run and write
+        // mode. Edit hints populate below — dry-run captures via temp cwd,
+        // write mode reads from the just-written files.
+        $resolution['next'] = nextStepsForVerb($what, $genName, $resolution, $genFlags);
+        $skipWrites = $wantsJson && $dryRun;
+        if ($skipWrites) {
+            // --json --dry-run: run the generator against a fresh temp
+            // cwd to render the same content a bare `generate` would
+            // write, then extract every tina4:edit marker. The real cwd
+            // is never touched.
+            $resolution['edit_hints'] = captureEditHintsInDryRun(
+                $what,
+                $genName,
+                $genFlags,
+                $fieldTypeMap,
+                $extras
+            );
+        }
+        // Bare form (no --json): print a human resolution block to STDERR
+        // BEFORE the writes, so the operator sees the mapping even when
+        // stdout is being piped elsewhere. v1.1: populate edit_hints via
+        // a temp-cwd render FIRST so the "Edit these lines:" block shows
+        // up in both dry-run and write mode. Dry-run + non-JSON prints
+        // and exits without touching the real disk.
+        if (!$wantsJson) {
+            $resolution['edit_hints'] = captureEditHintsInDryRun(
+                $what,
+                $genName,
+                $genFlags,
+                $fieldTypeMap,
+                $extras
+            );
+            fwrite(STDERR, renderHumanResolution($what, $resolution, $dryRun));
+            if ($dryRun) {
+                exit(0);
+            }
+        } else {
+            // --json: buffer any writes-time chatter from the generator
+            // so STDOUT stays ONE clean envelope. Captured output goes
+            // to STDERR after — the operator still sees it, parsers get
+            // valid JSON. Dry-run skips writes entirely below.
+            if (!$dryRun) {
+                ob_start();
+            }
+        }
+    } elseif ($wantsJson || $dryRun) {
+        fwrite(STDERR, "  --json / --dry-run supported for: " . implode(', ', $resolvable) . "\n");
+        exit(1);
+    }
+
+    $skipWrites = $wantsJson && $dryRun;
+
+    if (!$skipWrites) {
+        dispatchGeneratorByName($what, $genName, $genFlags, $fieldTypeMap, $extras);
+    }
+
+    // JSON envelope on STDOUT — the ONE and ONLY thing on stdout when
+    // --json is set. actions_taken reflects what actually landed on
+    // disk (which planned writes we can now see); dry-run leaves it [].
+    // v1.1 (ADR-0063): populate edit_hints from the actual written files
+    // in write mode (dry-run already captured them via the temp cwd
+    // above).
+    if ($wantsJson && $resolution !== null) {
+        $captured = $skipWrites ? '' : (string)ob_get_clean();
+        $actions = $skipWrites ? [] : filesTouched($resolution);
+        if (!$skipWrites) {
+            $resolution['edit_hints'] = collectEditHintsFromWrittenFiles($resolution);
+        }
+        $envelope = [
+            'command'       => 'generate',
+            'target'        => $what,
+            'input'         => resolutionInput($what, $genName, $genFlags),
+            'resolution'    => $resolution,
+            'actions_taken' => $actions,
+            'dry_run'       => $dryRun,
+        ];
+        echo json_encode(
+            $envelope,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        ) . "\n";
+        if ($captured !== '') {
+            fwrite(STDERR, $captured);
+        }
+    }
 }
 
 /**
@@ -2089,18 +2243,33 @@ DOCKERFILE;
         break;
 
     case 'migrate:create':
-        $name = implode(' ', $args) ?: 'unnamed_migration';
-        $migrationsDir = $cwd . '/migrations';
-        if (!is_dir($migrationsDir)) {
-            mkdir($migrationsDir, 0755, true);
+        // migrate:create is the shorter alias for `generate migration`.
+        // Both CLI paths delegate to the SAME runResolvedGenerator() flow
+        // so they emit the identical ADR-0063 envelope (edit_hints[],
+        // next[], human resolution block, --json / --dry-run). The one
+        // semantic difference: migrate:create never co-emits a test file
+        // (its historical "just a migration, no test" contract), signalled
+        // via the emitMigrationTest=false extra threaded through the
+        // dispatcher to generateMigration()'s 6th argument.
+        [$mcFlags, $mcDescTokens] = parseFlags($args);
+        $rawDesc = trim(implode(' ', $mcDescTokens));
+        if ($rawDesc === '') {
+            echo "Usage: tina4php migrate:create <desc>\n";
+            exit(1);
         }
-        // Create migration file — no database needed
-        $timestamp = date('YmdHis');
-        $safeName = preg_replace('/[^a-z0-9_]+/', '_', strtolower(trim($name)));
-        $fileName = "{$timestamp}_{$safeName}.sql";
-        $filePath = $migrationsDir . '/' . $fileName;
-        file_put_contents($filePath, "-- Migration: {$name}\n-- Created: " . date('Y-m-d H:i:s') . "\n\n");
-        echo "Created: migrations/{$fileName}\n";
+        // Slug the description down to a safe migration name — same shape
+        // `generate migration` expects for its filename. Preserves the
+        // historical migrate:create behaviour (quoted multi-word desc
+        // becomes underscore-joined).
+        $mcName = preg_replace('/[^a-z0-9_]+/', '_', strtolower($rawDesc));
+        $mcName = trim($mcName, '_') ?: 'unnamed_migration';
+        runResolvedGenerator(
+            'migration',
+            $mcName,
+            $mcFlags,
+            $FIELD_TYPE_MAP,
+            ['emitMigrationTest' => false]
+        );
         break;
 
     case 'migrate:rollback':
@@ -2347,153 +2516,26 @@ DOCKERFILE;
         $genName = $args[1] ?? '';
         [$genFlags, ] = parseFlags(array_slice($args, 2));
 
-        // Resolution transparency (--json / --dry-run / STDERR hint on bare
-        // form). v1.1 (ADR-0063) extends the resolvable set from the original
-        // 4 scaffolders to all 15 generators, so every verb speaks the same
-        // envelope contract (edit_hints[], next[], test_paths[]).
+        // A non-resolvable, unknown verb is a hard error (matches the
+        // pre-refactor behaviour). The helper handles resolvable verbs +
+        // reports --json/--dry-run misuse on non-resolvable ones; unknown
+        // verbs get the explicit "Unknown generator" message here.
         $resolvable = [
             'model', 'route', 'crud', 'migration', 'middleware', 'test',
             'form', 'view', 'auth', 'service', 'queue', 'validator',
             'seeder', 'websocket', 'listener',
         ];
-        $wantsJson = !empty($genFlags['json']);
-        $dryRun = !empty($genFlags['dry-run']);
-        $resolution = null;
-        if (in_array($what, $resolvable, true)) {
-            $resolution = resolveGeneration($what, $genName, $genFlags);
-            // Populate the curated Next steps immediately (deterministic from
-            // the resolution + flags; no I/O). Same for both dry-run and write
-            // mode. Edit hints populate below — dry-run captures via temp cwd,
-            // write mode reads from the just-written files.
-            $resolution['next'] = nextStepsForVerb($what, $genName, $resolution, $genFlags);
-            $skipWrites = $wantsJson && $dryRun;
-            if ($skipWrites) {
-                // --json --dry-run: run the generator against a fresh temp
-                // cwd to render the same content a bare `generate` would
-                // write, then extract every tina4:edit marker. The real cwd
-                // is never touched.
-                $resolution['edit_hints'] = captureEditHintsInDryRun(
-                    $what,
-                    $genName,
-                    $genFlags,
-                    $FIELD_TYPE_MAP
-                );
-            }
-            // Bare form (no --json): print a human resolution block to STDERR
-            // BEFORE the writes, so the operator sees the mapping even when
-            // stdout is being piped elsewhere. v1.1: populate edit_hints via
-            // a temp-cwd render FIRST so the "Edit these lines:" block shows
-            // up in both dry-run and write mode. Dry-run + non-JSON prints
-            // and exits without touching the real disk.
-            if (!$wantsJson) {
-                $resolution['edit_hints'] = captureEditHintsInDryRun(
-                    $what,
-                    $genName,
-                    $genFlags,
-                    $FIELD_TYPE_MAP
-                );
-                fwrite(STDERR, renderHumanResolution($what, $resolution, $dryRun));
-                if ($dryRun) {
-                    exit(0);
-                }
-            } else {
-                // --json: buffer any writes-time chatter from the generator
-                // so STDOUT stays ONE clean envelope. Captured output goes
-                // to STDERR after — the operator still sees it, parsers get
-                // valid JSON. Dry-run skips writes entirely below.
-                if (!$dryRun) {
-                    ob_start();
-                }
-            }
-        } elseif ($wantsJson || $dryRun) {
-            fwrite(STDERR, "  --json / --dry-run supported for: " . implode(', ', $resolvable) . "\n");
+        if (!in_array($what, $resolvable, true)) {
+            echo "Unknown generator: {$what}\n";
+            echo "  Available: {$allGenerators}\n";
             exit(1);
         }
 
-        $skipWrites = $wantsJson && $dryRun;
-
-        if (!$skipWrites) {
-            switch ($what) {
-                case 'model':
-                    generateModel($genName, $genFlags, $FIELD_TYPE_MAP);
-                    break;
-                case 'route':
-                    generateRoute($genName, $genFlags);
-                    break;
-                case 'crud':
-                    generateCrud($genName, $genFlags, $FIELD_TYPE_MAP);
-                    break;
-                case 'migration':
-                    generateMigration($genName, $genFlags, $FIELD_TYPE_MAP);
-                    break;
-                case 'middleware':
-                    generateMiddleware($genName, $genFlags);
-                    break;
-                case 'test':
-                    generateTest($genName, $genFlags);
-                    break;
-                case 'form':
-                    generateForm($genName, $genFlags);
-                    break;
-                case 'view':
-                    generateView($genName, $genFlags);
-                    break;
-                case 'auth':
-                    generateAuth($genName, $genFlags, $FIELD_TYPE_MAP);
-                    break;
-                case 'service':
-                    generateService($genName, $genFlags);
-                    break;
-                case 'queue':
-                    generateQueue($genName, $genFlags);
-                    break;
-                case 'validator':
-                    generateValidator($genName, $genFlags);
-                    break;
-                case 'seeder':
-                    generateSeeder($genName, $genFlags);
-                    break;
-                case 'websocket':
-                    generateWebsocket($genName, $genFlags);
-                    break;
-                case 'listener':
-                    generateListener($genName, $genFlags);
-                    break;
-                default:
-                    echo "Unknown generator: {$what}\n";
-                    echo "  Available: {$allGenerators}\n";
-                    exit(1);
-            }
-        }
-
-        // JSON envelope on STDOUT — the ONE and ONLY thing on stdout when
-        // --json is set. actions_taken reflects what actually landed on
-        // disk (which planned writes we can now see); dry-run leaves it [].
-        // v1.1 (ADR-0063): populate edit_hints from the actual written files
-        // in write mode (dry-run already captured them via the temp cwd
-        // above).
-        if ($wantsJson) {
-            $captured = $skipWrites ? '' : (string)ob_get_clean();
-            $actions = $skipWrites ? [] : filesTouched($resolution);
-            if (!$skipWrites) {
-                $resolution['edit_hints'] = collectEditHintsFromWrittenFiles($resolution);
-            }
-            $envelope = [
-                'command'       => 'generate',
-                'target'        => $what,
-                'input'         => resolutionInput($what, $genName, $genFlags),
-                'resolution'    => $resolution,
-                'actions_taken' => $actions,
-                'dry_run'       => $dryRun,
-            ];
-            echo json_encode(
-                $envelope,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-            ) . "\n";
-            if ($captured !== '') {
-                fwrite(STDERR, $captured);
-            }
-        }
+        // Delegate to the shared resolvable-generator flow — resolution,
+        // edit_hints capture, human block, dispatch, and the --json envelope
+        // emission. `migrate:create` also delegates here (with
+        // emitMigrationTest=false) so the two CLI paths cannot drift.
+        runResolvedGenerator($what, $genName, $genFlags, $FIELD_TYPE_MAP);
         break;
 
     // ────────────────────────────────────────────

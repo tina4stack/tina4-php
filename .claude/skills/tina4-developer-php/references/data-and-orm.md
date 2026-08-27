@@ -343,6 +343,19 @@ tina4php migrate:create "create users table"   # creates a versioned SQL file in
 tina4php migrate                                # runs pending migrations
 ```
 
+> **Two CLI paths, one migration file (ADR-0063, 3.13.121).** Both
+> `tina4php migrate:create <desc>` and `tina4php generate migration <name>` write
+> the SAME `{timestamp}_{name}.sql` + `{timestamp}_{name}.down.sql` pair with the
+> SAME `tina4:edit` markers and emit the SAME `generate_v1_1` envelope (same
+> `edit_hints[]`, same `next[]`) — both `--json` and `--dry-run` are honoured on
+> both. `migrate:create` is the shorter form; `generate migration` composes with
+> `--fields "name:string,price:float"` for schema-aware CREATE TABLE emission when
+> the description begins with `create_X`. The one deliberate semantic difference:
+> `migrate:create` never co-emits a `tests/*MigrationTest.php` (its historical
+> "just a migration, no test" contract), while `generate migration` under the
+> default `emitTest=true` DOES co-emit one for a `create_X` name. Neither CLI path
+> is deprecated.
+
 > Migrations live in **`migrations/`** at the project root — **not** `src/migrations/`. That is
 > the folder the CLI scaffolds (`bin/tina4php` `migrate` / `migrate:create` / `migrate:rollback`
 > all use `<cwd>/migrations`) and the folder the server's startup auto-migrate reads
