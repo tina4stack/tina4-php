@@ -156,6 +156,42 @@ class GenerateEnvelopeV11Test extends TestCase
     }
 
     /**
+     * 1b. A LOGIC-shaped generator is wired too: `generate queue` carries the
+     *     fill point (the consumer's baked marker) + curated next[]. Before the
+     *     logic-shaped generators joined the envelope, `generate queue` printed
+     *     a bare "Created" with no fill points - the scaffolding-efficiency gap.
+     */
+    public function testDryRunEnvelopeCarriesEditHintsAndNextForQueue(): void
+    {
+        $cwd = $this->freshProjectDir();
+        $result = $this->runCli(['generate', 'queue', 'order-emails', '--json', '--dry-run'], $cwd);
+
+        $this->assertSame(0, $result['exit'], "stderr:\n{$result['stderr']}");
+        $envelope = json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame('queue', $envelope['target']);
+        $this->assertTrue($envelope['dry_run']);
+        $this->assertSame([], $envelope['actions_taken']);
+        $this->assertSame('src/services/order_emails_consumer.php', $envelope['resolution']['file_path']);
+
+        // THE fix: the consumer's baked marker surfaces as an edit hint.
+        $this->assertNotEmpty($envelope['resolution']['edit_hints'], 'queue envelope must carry the fill point');
+        foreach ($envelope['resolution']['edit_hints'] as $hint) {
+            $this->assertArrayHasKey('file', $hint);
+            $this->assertArrayHasKey('line', $hint);
+            $this->assertArrayHasKey('label', $hint);
+            $this->assertIsInt($hint['line']);
+            $this->assertGreaterThan(0, $hint['line']);
+        }
+
+        $this->assertNotEmpty($envelope['resolution']['next']);
+        $joined = implode("\n", $envelope['resolution']['next']);
+        $this->assertStringContainsString('src/services/order_emails_consumer.php', $joined);
+
+        $this->assertFalse(is_dir("{$cwd}/src"), 'dry-run must not create src/');
+    }
+
+    /**
      * 2. Manifest: commands --json advertises the v1.1 contract, so a
      *    downstream tool that discovers this CLI can key off the version.
      */
