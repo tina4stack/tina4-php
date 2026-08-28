@@ -76,6 +76,9 @@ class SecurityHeadersMiddleware
             );
         }
 
+        if (DotEnv::getEnv('TINA4_CSP', null) === null) {
+            self::warnCspDefaultOnce();
+        }
         $response->header(
             'Content-Security-Policy',
             DotEnv::getEnv('TINA4_CSP', "default-src 'self'")
@@ -95,4 +98,41 @@ class SecurityHeadersMiddleware
 
         return [$request, $response];
     }
+
+    /**
+     * Warn once per process that the default CSP is in force (TINA4_CSP unset).
+     *
+     * Secure-by-default keeps `default-src 'self'` (SECHDR-DEC-01), but that
+     * default is invisible: it blocks runtime-injected inline styles, cross-origin
+     * fonts/scripts/CDNs, `data:` URIs, and cross-origin WebSocket/XHR (a separate
+     * API or LiveKit host) — and the failure surfaces only in the browser at
+     * runtime, long after a deploy has gone green. So the framework says so once,
+     * naming the escape hatch. It NEVER fails the boot or a request — logging a
+     * heads-up must not be the reason the server or a request dies. Fires only when
+     * TINA4_CSP is ABSENT; setting it (even to empty) is an explicit opt-in.
+     *
+     * @return void
+     */
+    private static function warnCspDefaultOnce(): void
+    {
+        if (self::$cspDefaultWarned) {
+            return;
+        }
+        self::$cspDefaultWarned = true;
+        $message = "TINA4_CSP is not set, so Tina4 is serving the default Content-Security-Policy "
+            . "\"default-src 'self'\" on every response. That default blocks runtime-injected "
+            . "inline styles, cross-origin fonts/scripts/CDNs, data: URIs, and cross-origin "
+            . "WebSocket/XHR (e.g. a separate API or LiveKit host). If your app uses any of "
+            . "these, set TINA4_CSP to a policy that allows them (see https://tina4.com); to "
+            . "silence this notice without changing behaviour, set TINA4_CSP=\"default-src 'self'\".";
+        try {
+            \Tina4\Log::warning($message);
+        } catch (\Throwable $e) {
+            // Logging must never break a request.
+            error_log($message);
+        }
+    }
+
+    /** @var bool Warn-once ledger for the default-CSP heads-up (per process). */
+    private static bool $cspDefaultWarned = false;
 }
