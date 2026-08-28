@@ -1045,6 +1045,16 @@ line stays releasable and an urgent patch can be cut without waiting on unrelate
      share a default: the four framework repos live on **`v3`**, but `tina4` (CLI), `tina4-documentation`,
      and `tina4-book` default to **`main`**. A commit on a stale checkout lands on the wrong branch and
      pushes as a brand-new branch instead of the one you meant.
+6. **Solo / local work skips the ceremony - merge and push directly.** The feature-branch-per-release
+   flow above exists to keep a SHARED release line releasable while several people or workers have work
+   in flight. When you are the only engineer on the change and working locally, that ceremony buys
+   nothing: commit straight to the active release line (`v3`), or - if you did open a PR or cut a
+   short-lived feature branch - just **merge it and push**. No review gate, no waiting on a PR, no
+   feature branch required. The non-negotiables still hold every time: the full suite green at HEAD
+   before you push (*Independent Verification*), parity across all four frameworks, and **branch hygiene -
+   delete the branch the moment it merges** (rule 5, for a plain feature branch exactly as for a merged
+   PR). Reach for a feature branch only when the work must be parked off the release line, or when a
+   reviewer will actually read the PR - not as a reflex for every change.
 
 **Current reality (important):** the active release line for the v3 series is the **`v3`** branch —
 every 3.13.x release is tagged there; `main` is the stale v2-era default (480+ commits behind v3).
