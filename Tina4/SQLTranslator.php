@@ -352,6 +352,62 @@ class SQLTranslator
         }
     }
 
+    // ── DDL Type Translation ────────────────────────────────────────
+
+    /**
+     * Translate SQLite-canonical DDL column TYPES + CREATE-TABLE options to the
+     * target engine.
+     *
+     * ONLY acts on `CREATE TABLE` / `ALTER TABLE` statements, so a query or
+     * INSERT that happens to contain the word `TEXT` (a column name, a string
+     * literal) is never rewritten. Complements {@see autoIncrementSyntax()}
+     * (which maps the id keyword) so ONE portable migration — and every
+     * `ORM::createTable()` DDL, which is also SQLite-canonical — applies on
+     * every engine instead of failing on Firebird/MSSQL.
+     *
+     * - Firebird has no `TEXT` (-607), no `REAL`, and no
+     *   `CREATE TABLE IF NOT EXISTS`.
+     * - MSSQL has no `CREATE TABLE IF NOT EXISTS` and its `TIMESTAMP` is a
+     *   rowversion, not a datetime — a `created_at TIMESTAMP` there is wrong.
+     * - MySQL's `TIMESTAMP` carries auto-update / 2038 surprises, so a datetime
+     *   column maps to `DATETIME` (matching ORM::createTable()).
+     *
+     * @param string $sql    The DDL statement (or any statement — non-DDL is returned unchanged)
+     * @param string $engine One of: firebird, mssql, mysql (others pass through)
+     */
+    public static function ddlTypes(string $sql, string $engine): string
+    {
+        // Gate to DDL only, tolerating leading `-- ...` comment lines / blank
+        // lines that a migration file carries before its CREATE TABLE. A SELECT
+        // or INSERT that merely mentions a type keyword is never rewritten.
+        $head = preg_replace('/^(?:\s*--[^\n]*\n)+/', '', $sql);
+        if (!preg_match('/^\s*(CREATE\s+TABLE|ALTER\s+TABLE)\b/i', $head)) {
+            return $sql;
+        }
+
+        switch (strtolower($engine)) {
+            case 'firebird':
+                $sql = preg_replace('/\bIF\s+NOT\s+EXISTS\b/i', '', $sql);
+                // Map bare TEXT -> BLOB SUB_TYPE TEXT, but leave an existing
+                // "BLOB SUB_TYPE TEXT" intact (it already contains the word TEXT).
+                $sql = preg_replace('/\bBLOB\s+SUB_TYPE\s+TEXT\b/i', "\x00FBTEXT\x00", $sql);
+                $sql = preg_replace('/\bTEXT\b/i', 'BLOB SUB_TYPE TEXT', $sql);
+                $sql = str_replace("\x00FBTEXT\x00", 'BLOB SUB_TYPE TEXT', $sql);
+                $sql = preg_replace('/\bREAL\b/i', 'DOUBLE PRECISION', $sql);
+                return $sql;
+
+            case 'mssql':
+                $sql = preg_replace('/\bIF\s+NOT\s+EXISTS\b/i', '', $sql);
+                return preg_replace('/\bTIMESTAMP\b/i', 'DATETIME2', $sql);
+
+            case 'mysql':
+                return preg_replace('/\bTIMESTAMP\b/i', 'DATETIME', $sql);
+
+            default:
+                return $sql;
+        }
+    }
+
     // ── Placeholder Translation ─────────────────────────────────────
 
     /**
@@ -788,16 +844,19 @@ class SQLTranslator
                 $sql = self::booleanToInt($sql);
                 $sql = self::ilikeToLike($sql);
                 $sql = self::autoIncrementSyntax($sql, 'firebird');
+                $sql = self::ddlTypes($sql, 'firebird');
                 break;
 
             case 'mssql':
                 $sql = self::limitToTop($sql);
                 $sql = self::autoIncrementSyntax($sql, 'mssql');
+                $sql = self::ddlTypes($sql, 'mssql');
                 $sql = self::concatPipesToFunc($sql);
                 break;
 
             case 'mysql':
                 $sql = self::autoIncrementSyntax($sql, 'mysql');
+                $sql = self::ddlTypes($sql, 'mysql');
                 break;
 
             case 'postgresql':

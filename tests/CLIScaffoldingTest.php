@@ -35,7 +35,7 @@ class CLIScaffoldingTest extends TestCase
         'bool'     => ['php' => 'bool',    'default' => 'false', 'sql' => 'TINYINT(1)',   'nullable' => false],
         'boolean'  => ['php' => 'bool',    'default' => 'false', 'sql' => 'TINYINT(1)',   'nullable' => false],
         'text'     => ['php' => 'string',  'default' => "''",    'sql' => 'TEXT',         'nullable' => false],
-        'datetime' => ['php' => 'string',  'default' => 'null',  'sql' => 'DATETIME',    'nullable' => true],
+        'datetime' => ['php' => 'string',  'default' => 'null',  'sql' => 'TIMESTAMP',   'nullable' => true],
         'blob'     => ['php' => 'string',  'default' => 'null',  'sql' => 'BLOB',        'nullable' => true],
     ];
 

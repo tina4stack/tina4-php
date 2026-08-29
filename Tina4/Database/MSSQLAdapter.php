@@ -332,6 +332,15 @@ class MSSQLAdapter implements DatabaseAdapter
         $this->ensureOpen();
         $this->lastError = null;
 
+        // Portable SQLite-canonical DDL -> MSSQL dialect on the way in, so a
+        // generated migration OR an ORM::createTable() statement applies here:
+        // AUTOINCREMENT -> IDENTITY(1,1), strip IF NOT EXISTS (MSSQL has none),
+        // and TIMESTAMP -> DATETIME2 (MSSQL's TIMESTAMP is a rowversion, not a
+        // datetime). DDL-only, so DML/queries are untouched. Mirrors the Python
+        // master's mssql.py _translate_sql.
+        $sql = \Tina4\SQLTranslator::autoIncrementSyntax($sql, 'mssql');
+        $sql = \Tina4\SQLTranslator::ddlTypes($sql, 'mssql');
+
         try {
             if (!empty($params)) {
                 // sqlsrv only speaks ? — translate :named from the ORM/QueryBuilder.

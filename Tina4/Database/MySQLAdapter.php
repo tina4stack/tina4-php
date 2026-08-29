@@ -494,11 +494,20 @@ class MySQLAdapter implements DatabaseAdapter
      * as logical OR and has no ILIKE, so portable canonical SQL must be rewritten
      * before it reaches the driver. A statement with neither token is returned
      * unchanged (the transforms short-circuit), so ordinary queries are untouched.
+     *
+     * For DDL it also completes the portable-migration translation (mirrors the
+     * Python master's mysql.py _translate_sql): AUTOINCREMENT -> AUTO_INCREMENT
+     * and TIMESTAMP -> DATETIME (MySQL's TIMESTAMP carries auto-update / 2038
+     * surprises). Both are DDL-only — ddlTypes is gated to CREATE/ALTER TABLE and
+     * autoIncrementSyntax only touches the AUTOINCREMENT keyword — so a SELECT or
+     * DML statement is untouched.
      */
     private static function translateDialect(string $sql): string
     {
         $sql = \Tina4\SQLTranslator::concatPipesToFunc($sql);
         $sql = \Tina4\SQLTranslator::ilikeToLike($sql);
+        $sql = \Tina4\SQLTranslator::autoIncrementSyntax($sql, 'mysql');
+        $sql = \Tina4\SQLTranslator::ddlTypes($sql, 'mysql');
         return $sql;
     }
 

@@ -136,6 +136,21 @@ class PdoFirebirdAdapter implements DatabaseAdapter
         return self::normalizeBoolParams($params, nativeBoolean: false);
     }
 
+    /**
+     * Translate SQLite-canonical DDL to Firebird dialect on the way into
+     * execute(), so a generated migration OR an ORM::createTable() statement
+     * applies instead of failing: strip AUTOINCREMENT (Firebird uses
+     * generators), strip IF NOT EXISTS, and map TEXT -> BLOB SUB_TYPE TEXT /
+     * REAL -> DOUBLE PRECISION. Both transforms are DDL-only, so a DML statement
+     * is untouched. Mirrors the native FirebirdAdapter::execute() wiring and the
+     * Python master's firebird.py _translate_sql.
+     */
+    protected function translateDdl(string $sql): string
+    {
+        $sql = \Tina4\SQLTranslator::autoIncrementSyntax($sql, 'firebird');
+        return \Tina4\SQLTranslator::ddlTypes($sql, 'firebird');
+    }
+
     /** ROWS pagination on a NEW LINE — inline it lands inside a trailing `--` comment. */
     protected function paginate(string $sql, int $limit, int $offset): string
     {

@@ -256,13 +256,31 @@ trait PdoAdapterTrait
         return $rows[0] ?? null;
     }
 
+    /**
+     * Per-engine DDL translation applied to a write statement before it reaches
+     * the driver. Default: identity — SQLite and PostgreSQL accept the
+     * SQLite-canonical DDL the generator / ORM::createTable() emit.
+     * {@see PdoFirebirdAdapter::translateDdl()} overrides this to strip
+     * AUTOINCREMENT, strip IF NOT EXISTS, and map TEXT -> BLOB SUB_TYPE TEXT /
+     * REAL -> DOUBLE PRECISION. DDL-only by construction (ddlTypes is gated to
+     * CREATE/ALTER TABLE, autoIncrementSyntax only touches the AUTOINCREMENT
+     * keyword), so an ordinary DML statement is returned unchanged.
+     */
+    protected function translateDdl(string $sql): string
+    {
+        return $sql;
+    }
+
     public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         $this->ensureOpen();
         $this->lastError = null;
 
         try {
-            $execSql = $sql;
+            // Per-engine DDL translation on the way in (identity by default;
+            // PdoFirebirdAdapter maps SQLite-canonical DDL to Firebird dialect)
+            // so a generated migration or ORM::createTable() statement applies.
+            $execSql = $this->translateDdl($sql);
             if (!empty($params)) {
                 [$execSql, $params] = \Tina4\SQLTranslator::namedToPositional($execSql, $params);
             }

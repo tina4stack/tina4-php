@@ -80,7 +80,7 @@ $FIELD_TYPE_MAP = [
     'bool'     => ['php' => 'bool',    'default' => 'false', 'sql' => 'TINYINT(1)',   'nullable' => false],
     'boolean'  => ['php' => 'bool',    'default' => 'false', 'sql' => 'TINYINT(1)',   'nullable' => false],
     'text'     => ['php' => 'string',  'default' => "''",    'sql' => 'TEXT',         'nullable' => false],
-    'datetime' => ['php' => 'string',  'default' => 'null',  'sql' => 'DATETIME',    'nullable' => true],
+    'datetime' => ['php' => 'string',  'default' => 'null',  'sql' => 'TIMESTAMP',    'nullable' => true],
     'blob'     => ['php' => 'string',  'default' => 'null',  'sql' => 'BLOB',        'nullable' => true],
 ];
 
@@ -3075,7 +3075,7 @@ function generateMigration(
             }
             $colLines[] = "    {$fname} {$info['sql']}{$sqlDefault}";
         }
-        $colLines[] = "    created_at DATETIME DEFAULT CURRENT_TIMESTAMP";
+        $colLines[] = "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
 
         // ADR-0063 tina4:edit marker: a top-level SQL comment ABOVE the
         // CREATE so the parenthesised column list stays a clean valid DDL

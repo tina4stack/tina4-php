@@ -452,6 +452,17 @@ class FirebirdAdapter implements DatabaseAdapter
         $this->ensureOpen();
         $this->lastError = null;
 
+        // Portable SQLite-canonical DDL -> Firebird dialect on the way in, so a
+        // generated migration OR an ORM::createTable() statement applies here
+        // instead of failing: strip AUTOINCREMENT (Firebird uses generators),
+        // strip IF NOT EXISTS, and map TEXT -> BLOB SUB_TYPE TEXT / REAL ->
+        // DOUBLE PRECISION. Both transforms are DDL-only (ddlTypes is gated to
+        // CREATE/ALTER TABLE; autoIncrementSyntax only touches the AUTOINCREMENT
+        // keyword), so a SELECT/INSERT/UPDATE/DELETE is untouched. Mirrors the
+        // Python master's firebird.py _translate_sql.
+        $sql = \Tina4\SQLTranslator::autoIncrementSyntax($sql, 'firebird');
+        $sql = \Tina4\SQLTranslator::ddlTypes($sql, 'firebird');
+
         try {
             $result = $this->executeInternal($sql, $params);
             if ($result === false) {
