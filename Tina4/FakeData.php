@@ -40,7 +40,10 @@ class FakeData
 {
     // ── Word banks ──────────────────────────────────────────────
 
-    private const FIRST_NAMES = [
+    // Public so a seeded test can assert which generator ran: a person name's
+    // first word is always one of these, a product name's first word is always
+    // a PRODUCT_ADJECTIVES entry, and the two banks are disjoint.
+    public const FIRST_NAMES = [
         'Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry',
         'Ivy', 'Jack', 'Kate', 'Leo', 'Mia', 'Noah', 'Olivia', 'Pete',
         'Quinn', 'Rose', 'Sam', 'Tina', 'Uma', 'Vince', 'Wendy', 'Xander',
@@ -108,6 +111,32 @@ class FakeData
     private const CURRENCIES = [
         'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY',
         'SEK', 'NZD', 'ZAR', 'BRL', 'INR', 'KRW', 'MXN',
+    ];
+
+    // Product-name vocabulary (adjective + noun). Seeds a generic `name` column
+    // on a product-ish table with "Wireless Keyboard" instead of a person name.
+    // The adjective bank is DISJOINT from FIRST_NAMES so the first word of a
+    // generated value tells which generator ran. Public so tests can assert it.
+    public const PRODUCT_ADJECTIVES = [
+        'Wireless', 'Organic', 'Premium', 'Classic', 'Eco', 'Smart', 'Portable',
+        'Deluxe', 'Compact', 'Rustic', 'Handcrafted', 'Vintage', 'Modern',
+        'Ergonomic', 'Stainless', 'Bamboo', 'Recycled', 'Artisan', 'Professional',
+        'Ultra', 'Insulated', 'Lightweight', 'Adjustable', 'Foldable',
+    ];
+
+    public const PRODUCT_NOUNS = [
+        'Keyboard', 'Coffee Beans', 'Backpack', 'Water Bottle', 'Desk Lamp',
+        'Headphones', 'Notebook', 'Sneakers', 'Sunglasses', 'Wallet', 'Mug',
+        'Chair', 'Blender', 'Speaker', 'Charger', 'Umbrella', 'Toothbrush',
+        'Jacket', 'Watch', 'Kettle', 'Picture Frame', 'Planter', 'Cutlery Set',
+        'Yoga Mat', 'Phone Case',
+    ];
+
+    // A table/model whose name contains any of these gets product names on its
+    // generic `name`/`full_name` column instead of a person name.
+    public const PRODUCT_TABLE_HINTS = [
+        'product', 'item', 'catalog', 'inventory', 'goods', 'merchandise',
+        'sku', 'listing', 'stock', 'ware',
     ];
 
     // ── Instance state ────────────────────────────────────────────
@@ -340,6 +369,36 @@ class FakeData
     }
 
     /**
+     * A plausible product name, e.g. "Wireless Keyboard" or "Organic Coffee
+     * Beans". Deterministic under a seed like every other generator (it draws
+     * from the same per-instance PRNG). Mirrors Python's FakeData.product().
+     */
+    public function product(): string
+    {
+        return $this->pick(self::PRODUCT_ADJECTIVES) . ' ' . $this->pick(self::PRODUCT_NOUNS);
+    }
+
+    /**
+     * True when the table/model name looks like a product catalogue, so a
+     * generic `name`/`full_name` column should seed a product name, not a
+     * person name. With no table context (null or empty) this is false, so the
+     * person-name default is kept (back-compat). Mirrors Python's
+     * _is_product_table().
+     *
+     * @param string|null $table Table or model name to classify.
+     */
+    public static function isProductTable(?string $table): bool
+    {
+        $lower = strtolower((string) $table);
+        foreach (self::PRODUCT_TABLE_HINTS as $hint) {
+            if (str_contains($lower, $hint)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns multi-paragraph text.
      *
      * @param int $paragraphs Number of paragraphs to generate
@@ -562,12 +621,15 @@ class FakeData
      *
      * Mirrors Python's FakeData.for_field().
      *
-     * @param array  $fieldDef   Field definition with keys: type, primary_key, auto_increment, max_length, min, max
-     * @param string $columnName Optional column name for heuristic matching
+     * @param array       $fieldDef   Field definition with keys: type, primary_key, auto_increment, max_length, min, max
+     * @param string      $columnName Optional column name for heuristic matching
+     * @param string|null $table      Optional table/model name; a generic `name`
+     *                                column on a product-ish table seeds a
+     *                                product name instead of a person name.
      *
      * @return mixed Generated value, or null if the field is an auto-increment primary key
      */
-    public function forField(array $fieldDef, string $columnName = ''): mixed
+    public function forField(array $fieldDef, string $columnName = '', ?string $table = null): mixed
     {
         if (!empty($fieldDef['primary_key']) && !empty($fieldDef['auto_increment'])) {
             return null;
@@ -585,7 +647,7 @@ class FakeData
                 return $this->phone();
             }
             if (in_array($col, ['full_name', 'fullname', 'name'], true)) {
-                return $this->name();
+                return self::isProductTable($table) ? $this->product() : $this->name();
             }
             if (str_contains($col, 'first_name') || (str_contains($col, 'first') && str_contains($col, 'name'))) {
                 return $this->firstName();
@@ -703,7 +765,15 @@ class FakeData
                     } elseif (!empty($fkPools[$name])) {
                         $attrs[$name] = $fake->choice($fkPools[$name]);
                     } else {
-                        $attrs[$name] = self::generateForField($fake, $fieldDef, $name);
+                        // Thread the model class name so a generic `name` column
+                        // on a product-ish model seeds a product name (parity
+                        // with Python's table=orm_class.__name__).
+                        $attrs[$name] = self::generateForField(
+                            $fake,
+                            $fieldDef,
+                            $name,
+                            self::shortClassName($ormClass)
+                        );
                     }
                 }
 
@@ -995,8 +1065,15 @@ class FakeData
      * Generate a fake value for an ORM field definition + property name.
      * Mirrors Python's _generate_for_field(). Maps the logical type
      * (int|float|bool|datetime|string) plus name heuristics to a generator.
+     *
+     * @param FakeData    $fake     Seeded generator instance.
+     * @param array       $fieldDef Normalised field definition.
+     * @param string      $col      Property/column name driving the heuristic.
+     * @param string|null $table    Optional model/table name; a generic `name`
+     *                              column on a product-ish model seeds a product
+     *                              name instead of a person name.
      */
-    private static function generateForField(self $fake, array $fieldDef, string $col): mixed
+    private static function generateForField(self $fake, array $fieldDef, string $col, ?string $table = null): mixed
     {
         $colLower = strtolower(self::camelToSnakeCol($col));
         $type = $fieldDef['type'] ?? 'string';
@@ -1028,7 +1105,7 @@ class FakeData
             return $fake->email();
         }
         if (in_array($colLower, ['name', 'full_name', 'fullname'], true)) {
-            return $fake->name();
+            return self::isProductTable($table) ? $fake->product() : $fake->name();
         }
         if (str_contains($colLower, 'first') && str_contains($colLower, 'name')) {
             return $fake->firstName();

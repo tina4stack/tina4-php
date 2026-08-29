@@ -1872,7 +1872,9 @@ class McpDevTools
                     return ['error' => "Table '{$table}' not found or has no columns"];
                 }
                 class_exists(\Tina4\DevAdmin::class);
-                $fieldMap = \Tina4\DevAdmin::buildSeedFieldMapFromColumns($columns, new FakeData());
+                // Thread the table name so a generic `name` column on a
+                // product-ish table seeds product names, not person names.
+                $fieldMap = \Tina4\DevAdmin::buildSeedFieldMapFromColumns($columns, new FakeData(), $table);
                 $summary = FakeData::seedTable($db, $table, $count, $fieldMap);
                 return ['table' => $table, 'inserted' => (int) $summary['seeded'], 'failed' => (int) $summary['failed']];
             } catch (\Throwable $e) {

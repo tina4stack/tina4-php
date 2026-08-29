@@ -693,7 +693,9 @@ class DevAdmin
                 $fake = new \Tina4\FakeData($seed);
 
                 // Build a field_map skipping auto-increment / id PKs, then delegate.
-                $fieldMap = self::buildSeedFieldMapFromColumns($columns, $fake);
+                // Thread the table name so a generic `name` column on a
+                // product-ish table seeds product names, not person names.
+                $fieldMap = self::buildSeedFieldMapFromColumns($columns, $fake, $table);
 
                 // SEED-TABLE-SEED-INERT: seedTable no longer takes $seed —
                 // reproducibility already comes from the seeded $fake built
@@ -2663,9 +2665,13 @@ class DevAdmin
      * the exact same way. Returns an empty map when every column is skipped.
      *
      * @param array<int, array<string, mixed>> $columns getColumns() output
+     * @param \Tina4\FakeData $fake  Seeded generator closed over by the callables.
+     * @param string|null     $table Optional table name; a generic `name` column
+     *                               on a product-ish table seeds a product name
+     *                               instead of a person name.
      * @return array<string, callable>
      */
-    public static function buildSeedFieldMapFromColumns(array $columns, \Tina4\FakeData $fake): array
+    public static function buildSeedFieldMapFromColumns(array $columns, \Tina4\FakeData $fake, ?string $table = null): array
     {
         $fieldMap = [];
         foreach ($columns as $col) {
@@ -2678,7 +2684,7 @@ class DevAdmin
             if ($isPk && (str_contains($colType, 'AUTO') || str_contains($colType, 'SERIAL') || strtolower($name) === 'id')) {
                 continue;
             }
-            $fieldMap[$name] = self::seedGeneratorForColumn($fake, $name, $colType);
+            $fieldMap[$name] = self::seedGeneratorForColumn($fake, $name, $colType, $table);
         }
         return $fieldMap;
     }
@@ -2686,11 +2692,17 @@ class DevAdmin
     /**
      * Pick a FakeData generator (callable) for one column from its name + SQL
      * type — used by the dev-admin seed endpoint (P4b). Mirrors Python's
-     * dev_admin _gen_for_column.
+     * _generator_for_column.
      *
+     * @param \Tina4\FakeData $fake    Seeded generator closed over by the callable.
+     * @param string          $name    Column name driving the heuristic.
+     * @param string          $colType Upper-cased SQL type for the fallback.
+     * @param string|null     $table   Optional table name; a generic `name`
+     *                                 column on a product-ish table returns the
+     *                                 product() generator instead of name().
      * @return callable A no-arg closure returning one generated value.
      */
-    private static function seedGeneratorForColumn(\Tina4\FakeData $fake, string $name, string $colType): callable
+    private static function seedGeneratorForColumn(\Tina4\FakeData $fake, string $name, string $colType, ?string $table = null): callable
     {
         $nameLower = strtolower($name);
         $type = strtoupper($colType);
@@ -2708,7 +2720,9 @@ class DevAdmin
             return fn() => $fake->lastName();
         }
         if (str_contains($nameLower, 'name')) {
-            return fn() => $fake->name();
+            return \Tina4\FakeData::isProductTable($table)
+                ? fn() => $fake->product()
+                : fn() => $fake->name();
         }
         if (str_contains($nameLower, 'phone') || str_contains($nameLower, 'tel')) {
             return fn() => $fake->phone();
