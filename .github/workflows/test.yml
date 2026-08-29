@@ -520,7 +520,8 @@ jobs:
             tests/FirebirdWriteVisibilityTest.php tests/MigrationV3Test.php \
             tests/DatabaseDriversTest.php tests/BooleanParamBindingTest.php \
             tests/SchemaQualifiedTest.php tests/PdoFirebirdAdapterTest.php \
-            tests/PdoFallbackFactoryTest.php tests/PdoFallbackParityTest.php"
+            tests/PdoFallbackFactoryTest.php tests/PdoFallbackParityTest.php \
+            tests/SessionDatabaseFirebirdTest.php"
           failed=""
           for f in $files; do
             echo "::group::$f"

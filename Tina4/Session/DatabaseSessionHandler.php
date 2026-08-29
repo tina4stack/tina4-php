@@ -112,11 +112,13 @@ class DatabaseSessionHandler
         // which read() would not understand. The cost is a session payload
         // ceiling of 8191 characters on this engine alone.
         //
-        // VERIFIED AT THE SQL LEVEL against the live lab Firebird 5.0.4: this
-        // block creates the table (confirmed out of band in RDB$RELATIONS) and
-        // is idempotent on a second run. NOT YET VERIFIED THROUGH THE PHP
-        // FIREBIRD DRIVER end to end - see the note on ensureTable(). Its
-        // idempotence is also NOT a race guard (check-then-act inside one
+        // VERIFIED END TO END THROUGH THE PHP FIREBIRD DRIVER against the live lab
+        // Firebird 5.0.4 (pdo_firebird): a nested session payload written by one
+        // handler and read back by a FRESH one round-trips intact through this
+        // VARCHAR column, the row is present out of band in RDB$RELATION_FIELDS,
+        // and the table is created idempotently on a second run
+        // (tests/SessionDatabaseFirebirdTest.php). Its idempotence is NOT a race
+        // guard (check-then-act inside one
         // block): a bare CREATE with the table present gives SQLSTATE 42S01
         // "Table TINA4_SESSION already exists", so the catch is load-bearing
         // here exactly as it is on SQL Server.
