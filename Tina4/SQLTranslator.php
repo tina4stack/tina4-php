@@ -850,6 +850,10 @@ class SQLTranslator
             case 'mssql':
                 $sql = self::limitToTop($sql);
                 $sql = self::autoIncrementSyntax($sql, 'mssql');
+                // MSSQL has BIT, not a boolean type, so bare TRUE/FALSE must
+                // become 1/0 (a TRUE/FALSE inside a string literal is left
+                // untouched). Mirrors the Python master's mssql.py.
+                $sql = self::booleanToInt($sql);
                 $sql = self::ddlTypes($sql, 'mssql');
                 $sql = self::concatPipesToFunc($sql);
                 break;
