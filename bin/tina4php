@@ -14,6 +14,7 @@
  *   tina4php seed                   Run seeders from src/seeds/
  *   tina4php routes                 List all registered routes
  *   tina4php test                   Run test suite
+ *   tina4php lint [--fix] [--no-install]  Lint src/ + index.php (phpcs, installed dev-only on demand; else php -l)
  *   tina4php queue <work|stats|retry|clear> [topic]  Run queue workers and manage jobs
  *   tina4php build [--tag N] [--file P]  Build the deployable Docker image
  *   tina4php generate <what> <name>  Generate scaffolding
@@ -1368,7 +1369,7 @@ function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
     $booleanFlags = ['no-browser', 'no-reload', 'no-kill', 'production', 'managed', 'all', 'clear',
-                     'json', 'public', 'no-migration', 'once', 'dry-run'];
+                     'json', 'public', 'no-migration', 'once', 'dry-run', 'fix', 'no-install'];
 
     $flags = [];
     $positional = [];
@@ -1829,6 +1830,7 @@ $TINA4_COMMANDS = [
     'seed'             => [                                                          'summary' => 'Run seeders from src/seeds/'],
     'routes'           => [                                                          'summary' => 'List all registered routes'],
     'test'             => [                                                          'summary' => 'Run test suite'],
+    'lint'             => ['usage' => '[--fix] [--no-install]',                      'summary' => 'Lint src/ + index.php (phpcs, installed dev-only on demand; else php -l syntax check)'],
     'queue'            => ['usage' => '<work|stats|retry|clear> [topic]', 'subcommands' => $TINA4_QUEUE_SUBCOMMANDS, 'summary' => 'Run queue workers and manage jobs'],
     'build'            => ['usage' => '[--tag NAME] [--file PATH]',                   'summary' => 'Build the deployable Docker image'],
     'generate'         => ['usage' => '<what> <name> [options]', 'subcommands' => array_keys($TINA4_GENERATORS), 'summary' => 'Generate scaffolding (see Generators below)'],
@@ -2445,6 +2447,17 @@ DOCKERFILE;
         }
 
         exit(($inlineFailed || $testExit) ? 1 : 0);
+
+    // ────────────────────────────────────────────
+    // LINT — Lint the project's PHP source (src/ + index.php). Detects the
+    // project's own phpcs and INSTALLS it as a dev-only dependency on demand
+    // (running the command is the consent), with a zero-dependency `php -l`
+    // syntax baseline as the fallback. tina4Lint() always exits with the CI-gate
+    // code (0 clean / non-zero findings). Parity with the Python `_lint` master.
+    // ────────────────────────────────────────────
+    case 'lint':
+        tina4Lint($args);
+        break;
 
     // ────────────────────────────────────────────
     // SEED — Run seeders
@@ -5255,4 +5268,243 @@ function tina4Build(array $args): void
     }
     echo "  ✓ Built image {$tag}\n";
     echo "  Run: docker run -p 7145:7145 {$tag}\n";
+}
+
+/**
+ * Lint the project's PHP source — the framework ships NO linter (so a Tina4 app
+ * stays zero-dependency), and `tina4 lint` uses the project's own phpcs, INSTALLING
+ * it as a DEV dependency on demand when it is absent. Layers (parity with the Python
+ * `_lint` master, tina4_python/cli/__init__.py):
+ *
+ *   * **phpcs present** (vendor/bin/phpcs): run it against PSR12. `--fix` runs
+ *     phpcbf (phpcs's autofixer). phpcs reports syntax too, so it is the whole
+ *     pass when present.
+ *   * **phpcs absent:** silently `composer require --dev squizlabs/php_codesniffer`
+ *     -- running `tina4 lint` is the consent to add it -- then run it. It lands in
+ *     require-dev only, never the app's runtime dependencies. `--no-install` skips
+ *     this. composer missing / install fails -> a one-line notice, then the baseline.
+ *   * **Baseline (zero dependency):** `php -l` (ships with PHP) over each project
+ *     .php file -- no install, nothing added to composer.json. Used with
+ *     `--no-install` or when the install cannot run (no composer, offline).
+ *
+ * Contract (identical across all four frameworks): exit 0 = clean, non-zero =
+ * findings; the summary names the tool that ran (`[phpcs]`, `[phpcbf]`, `[php -l]`).
+ * Scope is the user's app -- src/ (recursive) + the entrypoint index.php (and
+ * public/index.php when present) -- mirroring how `tina4php test` runs the project's
+ * OWN tests, not the framework's Tina4/ code.
+ *
+ *     tina4php lint             # phpcs (installed dev-only on demand), else baseline
+ *     tina4php lint --fix       # phpcbf autofix when phpcs is present
+ *     tina4php lint --no-install # phpcs if already present, else the php -l baseline
+ *
+ * Always exits; never returns.
+ *
+ * @param list<string> $args
+ * @return never
+ */
+function tina4Lint(array $args): void
+{
+    [$flags, ] = parseFlags($args);
+    $fix = !empty($flags['fix']);
+    $noInstall = !empty($flags['no-install']);
+    $root = getcwd() ?: '.';
+
+    $phpFiles = tina4LintCollectFiles($root);
+    if ($phpFiles === []) {
+        echo "  lint: nothing to lint (no src/ or index.php).\n";
+        exit(0);
+    }
+
+    $phpcs = tina4LintResolvePhpcs($root);
+
+    // Silent on-demand install: running `tina4 lint` is the consent to add phpcs
+    // as a DEV dependency of the project. --no-install opts out (CI / offline) and
+    // falls through to the zero-dependency `php -l` baseline. Needs composer on PATH.
+    if ($phpcs === null && !$noInstall) {
+        $composer = tina4LintFindComposer();
+        if ($composer === null) {
+            echo "  · composer not found -- using the zero-dependency php -l syntax baseline.\n";
+        } else {
+            echo "  · phpcs not found -- adding it as a dev dependency (composer require --dev squizlabs/php_codesniffer)...\n";
+            $installExit = 0;
+            $installCmd = escapeshellarg($composer)
+                . ' require --dev --no-interaction --working-dir=' . escapeshellarg($root)
+                . ' squizlabs/php_codesniffer';
+            passthru($installCmd, $installExit);
+            if ($installExit === 0) {
+                $phpcs = tina4LintResolvePhpcs($root);
+            }
+            if ($phpcs === null) {
+                echo "  · could not install phpcs -- using the zero-dependency php -l syntax baseline.\n";
+            }
+        }
+    }
+
+    if ($phpcs !== null) {
+        tina4LintRunPhpcs($phpcs, $phpFiles, $fix); // exits
+    }
+
+    // Zero-dependency baseline: `php -l`. No install, nothing added to composer.json.
+    // Hermetic via `-n` (no php.ini) so a broken local extension can never pollute
+    // the verdict -- syntax parsing is ini-independent.
+    if ($fix) {
+        echo "  · php -l syntax baseline has no autofix (--no-install, or phpcs unavailable).\n";
+    }
+    $syntaxErrors = 0;
+    foreach ($phpFiles as $file) {
+        [$ok, $line, $message] = tina4LintPhpSyntaxCheck($file);
+        if (!$ok) {
+            $rel = tina4LintRelativePath($file, $root);
+            echo $line > 0 ? "  ✗ {$rel}:{$line}: {$message}\n" : "  ✗ {$rel}: {$message}\n";
+            $syntaxErrors++;
+        }
+    }
+
+    $count = count($phpFiles);
+    if ($syntaxErrors > 0) {
+        echo "  ✗ lint failed -- {$syntaxErrors} syntax error(s) in {$count} file(s) [php -l]\n";
+        exit(1);
+    }
+    echo "  ✓ lint clean -- {$count} file(s) [php -l]\n";
+    exit(0);
+}
+
+/**
+ * Collect the .php files that make up the user's app: every file under src/
+ * (recursively, sorted) plus the entrypoint index.php and public/index.php when
+ * present. Mirrors the Python master's `src.rglob("*.py") + app.py`.
+ *
+ * @return list<string> absolute paths
+ */
+function tina4LintCollectFiles(string $root): array
+{
+    $files = [];
+    $srcDir = $root . DIRECTORY_SEPARATOR . 'src';
+    if (is_dir($srcDir)) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+        );
+        /** @var SplFileInfo $entry */
+        foreach ($iterator as $entry) {
+            if ($entry->isFile() && strtolower($entry->getExtension()) === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+        sort($files); // deterministic order regardless of filesystem iteration order
+    }
+    foreach (['index.php', 'public' . DIRECTORY_SEPARATOR . 'index.php'] as $entry) {
+        $path = $root . DIRECTORY_SEPARATOR . $entry;
+        if (is_file($path)) {
+            $files[] = $path;
+        }
+    }
+    return $files;
+}
+
+/**
+ * Resolve the project's phpcs binary (vendor/bin/phpcs), or null when it is not
+ * installed. This is the composer-written extensionless proxy, present on every
+ * platform, so it resolves on Windows too. Detection is project-local by
+ * design: phpcs is a composer dev dependency, and `tina4 lint` installs it
+ * exactly here -- so a fresh project deterministically has none until it does.
+ */
+function tina4LintResolvePhpcs(string $root): ?string
+{
+    $bin = $root . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bin'
+         . DIRECTORY_SEPARATOR . 'phpcs';
+    return is_file($bin) ? $bin : null;
+}
+
+/**
+ * Locate the composer binary on PATH (composer, then composer.phar), or null.
+ * Used only for the on-demand phpcs install; null means the baseline runs.
+ */
+function tina4LintFindComposer(): ?string
+{
+    return tina4Which('composer') ?? tina4Which('composer.phar');
+}
+
+/**
+ * Run the project's phpcs over the collected files against PSR12 -- a thin
+ * passthrough, the same shape as how `test` shells out to phpunit. Exits 0 when
+ * clean, 1 on findings, naming the tool that ran. `--fix` runs phpcbf (phpcs's
+ * autofixer, shipped alongside phpcs; falls back to phpcs if somehow absent).
+ *
+ * Invoked via PHP_BINARY (composer's vendor/bin proxies are PHP scripts) so
+ * execution is cross-platform without depending on a shebang or a .bat wrapper.
+ *
+ * @param list<string> $files
+ * @return never
+ */
+function tina4LintRunPhpcs(string $phpcs, array $files, bool $fix): void
+{
+    $php = escapeshellarg(PHP_BINARY);
+    $pathArgs = implode(' ', array_map('escapeshellarg', $files));
+
+    if ($fix) {
+        $phpcbf = dirname($phpcs) . DIRECTORY_SEPARATOR . 'phpcbf';
+        $runner = is_file($phpcbf) ? $phpcbf : $phpcs;
+        $command = $php . ' ' . escapeshellarg($runner) . ' --standard=PSR12 ' . $pathArgs;
+        $label = is_file($phpcbf) ? 'phpcbf' : 'phpcs';
+    } else {
+        $command = $php . ' ' . escapeshellarg($phpcs) . ' --standard=PSR12 ' . $pathArgs;
+        $label = 'phpcs';
+    }
+
+    $exit = 0;
+    passthru($command, $exit);
+    $count = count($files);
+    if ($exit !== 0) {
+        echo "  ✗ lint failed -- {$count} file(s) [{$label}]\n";
+        exit(1);
+    }
+    echo "  ✓ lint clean -- {$count} file(s) [{$label}]\n";
+    exit(0);
+}
+
+/**
+ * The path relative to $root (cwd-anchored), for a readable finding line.
+ * Falls back to the absolute path if it does not sit under $root.
+ */
+function tina4LintRelativePath(string $path, string $root): string
+{
+    $prefix = rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    return str_starts_with($path, $prefix) ? substr($path, strlen($prefix)) : $path;
+}
+
+/**
+ * Syntax-check ONE file with `php -l`. Returns [ok(bool), line(int), message(string)].
+ *
+ * Runs `PHP_BINARY -n -l <file>` as a subprocess: `-n` skips php.ini so ini-load
+ * noise (a broken local extension) never pollutes the output, and the pass/fail
+ * decision is the child EXIT CODE -- never fragile output parsing. On failure the
+ * parse-error line ("<msg> in <file> on line <N>") is mined for a Python-parity
+ * `{file}:{line}: {msg}` report; a message that can't be parsed still fails the
+ * file with a generic reason.
+ *
+ * @return array{0: bool, 1: int, 2: string}
+ */
+function tina4LintPhpSyntaxCheck(string $file): array
+{
+    $command = escapeshellarg(PHP_BINARY) . ' -n -l ' . escapeshellarg($file);
+    $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+    $process = proc_open($command, $descriptors, $pipes);
+    if (!is_resource($process)) {
+        return [false, 0, 'could not run php -l'];
+    }
+    $stdout = (string)stream_get_contents($pipes[1]);
+    $stderr = (string)stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exit = proc_close($process);
+
+    if ($exit === 0) {
+        return [true, 0, ''];
+    }
+    // Mine the parse/fatal error line from either stream for a helpful report.
+    $combined = $stdout . "\n" . $stderr;
+    if (preg_match('/(?:Parse|Fatal) error: *(.+?) in .+ on line (\d+)/', $combined, $m)) {
+        return [false, (int)$m[2], trim($m[1])];
+    }
+    return [false, 0, 'syntax error'];
 }

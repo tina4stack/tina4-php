@@ -48,10 +48,16 @@ Version 3.13.127 - Full Tina4 PHP framework and application scaffold. See https:
 - PSR-4 autoloading — core classes live in `Tina4/` (not `src/Tina4/`)
 - Namespace `Tina4\` for core, `Tina4\Database\` for adapters, `Tina4\Middleware\` for middleware, `Tina4\Queue\` for queue backends, `Tina4\Session\` for session handlers
 - Namespace `\` for src/app/orm/routes
-- Linting: `composer lint` runs `vendor/bin/phplint`, but phplint is NOT in
-  `require-dev` (only `phpunit/phpunit` and `mongodb/mongodb` are), so on a fresh
-  `composer install` it fails with "No such file or directory". The
-  zero-dependency check that does work today is `php -l` over the changed files
+- Linting: `composer lint` and `bin/tina4php lint` both run the `lint` command,
+  which lints the user's app source (`src/` recursively + `index.php`). The
+  framework ships NO linter, so the command detects the project's own
+  `vendor/bin/phpcs` and, when it is absent, silently installs it as a DEV
+  dependency on demand (`composer require --dev squizlabs/php_codesniffer` --
+  running the command is the consent) then runs it against PSR12; `--fix` runs
+  phpcbf. With `--no-install` (or when composer/network is unavailable) it falls
+  back to the zero-dependency `php -l` syntax baseline. Exit 0 = clean, non-zero =
+  findings; the summary names the tool that ran. NOTHING is added to the
+  framework's own `require-dev` -- phpcs lands only in the USER's project
 
 ### Firebird-Specific Rules
 

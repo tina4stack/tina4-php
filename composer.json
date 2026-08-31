@@ -28,7 +28,7 @@
         "serve": "@php bin/tina4php serve",
         "start": "@php bin/tina4php serve",
         "test": "./vendor/bin/phpunit tests --color",
-        "lint": "vendor/bin/phplint --exclude=vendor"
+        "lint": "@php bin/tina4php lint"
     },
     "config": {
         "process-timeout": 0
