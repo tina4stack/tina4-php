@@ -177,7 +177,7 @@ function toTableNameWithTransform(string $name): array
             'from'     => $base,
             'to'       => $plural,
             'reason'   => "SQL reserved word '{$base}' would break CREATE TABLE",
-            'override' => "--table {$base} --quote (requires quoted-identifier mode, not yet implemented)",
+            'override' => "--table-name <name> (table names interpolate unquoted; forcing a reserved name is yours to quote in raw SQL)",
         ]];
     }
     return [$base, null];
@@ -1372,15 +1372,17 @@ function renderHumanResolution(string $what, array $resolution, bool $dryRun): s
         $lines[] = '  tests      ' . implode(', ', $resolution['test_paths']);
     }
 
-    // Escape hatch — surface the override so an operator who WANTS the raw
-    // reserved name knows how to opt out (even though quoted-identifier mode
-    // is not yet implemented — the message says so).
+    // Escape hatch — surface the --table-name override so an operator who wants a
+    // specific table name knows how to set it. Tina4 never quotes identifiers, so
+    // a forced reserved name is theirs to quote in raw SQL (#123).
     foreach ($resolution['transformations'] ?? [] as $transform) {
         if (($transform['kind'] ?? '') === 'reserved_word_pluralize') {
             $lines[] = '';
-            $lines[] = "  To keep the raw name '{$transform['from']}' as the table:";
+            $lines[] = '  To set the table name yourself:';
             $lines[] = "    tina4php generate {$what} " . ($resolution['class_name'] ?? '')
-                . '  ' . $transform['override'];
+                . ' --table-name <name>';
+            $lines[] = "  Tina4 interpolates table names unquoted; if you force the "
+                . "reserved '{$transform['from']}', you own the quoting in raw SQL.";
             break;
         }
     }

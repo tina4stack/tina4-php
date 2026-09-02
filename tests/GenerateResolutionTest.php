@@ -155,6 +155,11 @@ class GenerateResolutionTest extends TestCase
         $this->assertSame('order', $transform['from']);
         $this->assertSame('orders', $transform['to']);
         $this->assertStringContainsString('SQL reserved word', $transform['reason']);
+        // #123: the override points at --table-name, never a quoting flag. Tina4
+        // never quotes identifiers, so the agent-facing contract must not advertise
+        // a --quote path it will never ship.
+        $this->assertStringContainsString('--table-name', $transform['override']);
+        $this->assertStringNotContainsString('--quote', $transform['override']);
     }
 
     /**
