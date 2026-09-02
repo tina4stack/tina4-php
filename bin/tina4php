@@ -23,7 +23,7 @@
  *   tina4php help                   Show this help
  *
  * Generators:
- *   generate model <Name> [--fields "name:string,price:float"]
+ *   generate model <Name> [--fields "name:string,price:float"] [--table-name <name>]
  *   generate route <name> [--model Name] [--public]   Secure by default; --public opens writes
  *   generate crud <Name> [--fields "..."] [--public]   Model + migration + routes + form + view + test
  *   generate migration <description>
@@ -181,6 +181,59 @@ function toTableNameWithTransform(string $name): array
         ]];
     }
     return [$base, null];
+}
+
+/**
+ * The table name a generator uses, honouring `--table-name` and speaking up
+ * instead of renaming silently. Mirrors
+ * tina4_python/cli/__init__.py::_resolve_table (issue #123).
+ *
+ * `$announce` prints the note/warning; it is TRUE only for generateModel (where
+ * the table is BORN). Composite generators (crud) let the model sub-call
+ * announce, and generators that target an EXISTING table (seeder/form/view)
+ * still honour `--table-name` but stay quiet so the note is not repeated. Every
+ * generator routes its table derivation through here so `--table-name` is
+ * honoured consistently and the note prints exactly once (in generateModel).
+ *
+ * - `--table-name <name>` wins verbatim. If that name is ITSELF a reserved word
+ *   AND announcing, warn LOUDLY: Tina4 interpolates table names UNQUOTED, so the
+ *   ORM's generated SQL will fail on it — quoting it in raw SQL and migrations is
+ *   now the developer's job. We do NOT silently quote: identifier quoting is a
+ *   global storage invariant, not a local fix (it flips per-engine case-folding,
+ *   and quoting DML but not the introspection catalog lookup silently returns no
+ *   primary key, so a keyed write matches every row).
+ * - Otherwise fall back to the snake+pluralise (toTableNameWithTransform). When
+ *   that auto-pluralises a reserved-word class name (Order -> orders), print a
+ *   one-line NOTE (only when announcing) naming the rename and the `--table-name`
+ *   escape hatch, so the developer is informed rather than surprised.
+ *
+ * @param array<string, mixed> $flags
+ */
+function resolveTable(string $name, array $flags = [], bool $announce = false): string
+{
+    // parseFlags() yields a STRING for `--table-name x` and boolean TRUE for a
+    // bare `--table-name` (no value) — only a real string is an override, so a
+    // bare flag falls through to the snake+pluralise (matches the Python master).
+    $override = $flags['table-name'] ?? null;
+    if (is_string($override) && $override !== '') {
+        if ($announce && in_array(tableNameFromClass($override), SQL_RESERVED_TABLE_NAMES, true)) {
+            echo "  ! table_name '{$override}' is a SQL reserved word. Tina4 interpolates "
+                . "table names UNQUOTED, so the ORM's generated SQL will fail on it -- "
+                . "quote it yourself in raw SQL and migrations.\n";
+        }
+        return $override;
+    }
+
+    $bare = tableNameFromClass($name);
+    if (in_array($bare, SQL_RESERVED_TABLE_NAMES, true)) {
+        $table = pluralizeTable($bare);
+        if ($announce) {
+            echo "  · '{$bare}' is a SQL reserved word; using table_name '{$table}' "
+                . "(Tina4 interpolates table names unquoted). Override with --table-name <name>.\n";
+        }
+        return $table;
+    }
+    return $bare;
 }
 
 /**
@@ -610,8 +663,12 @@ function resolveGeneration(string $what, string $name, array $flags): array
 
     switch ($what) {
         case 'model':
-            [$table, $transform] = toTableNameWithTransform($name);
+            // Honour `--table-name` for the reported table; still name the
+            // reserved-word transformation so a caller sees WHY the table moved.
+            [, $transform] = toTableNameWithTransform($name);
+            $table = resolveTable($name, $flags);
             if ($transform !== null) {
+                $transform['to'] = $table;   // reflect a --table-name override
                 $transformations[] = $transform;
             }
             $timestamp = (new DateTime())->format('YmdHis');
@@ -698,8 +755,10 @@ function resolveGeneration(string $what, string $name, array $flags): array
 
         case 'crud':
             // Composite: model + route(model) + form + view + secure-gate test.
-            [$table, $transform] = toTableNameWithTransform($name);
+            [, $transform] = toTableNameWithTransform($name);
+            $table = resolveTable($name, $flags);
             if ($transform !== null) {
+                $transform['to'] = $table;   // reflect a --table-name override
                 $transformations[] = $transform;
             }
             $routeName = "{$table}s";
@@ -732,7 +791,7 @@ function resolveGeneration(string $what, string $name, array $flags): array
             ];
 
         case 'form':
-            [$table, ] = toTableNameWithTransform($name);
+            $table = resolveTable($name, $flags);
             return [
                 'class_name'      => $name,
                 'table_name'      => $table,
@@ -746,7 +805,7 @@ function resolveGeneration(string $what, string $name, array $flags): array
             ];
 
         case 'view':
-            [$table, ] = toTableNameWithTransform($name);
+            $table = resolveTable($name, $flags);
             $routeName = "{$table}s";
             return [
                 'class_name'      => $name,
@@ -820,7 +879,7 @@ function resolveGeneration(string $what, string $name, array $flags): array
             ];
 
         case 'seeder':
-            [$table, ] = toTableNameWithTransform($name);
+            $table = resolveTable($name, $flags);
             return [
                 'class_name'      => $name,
                 'table_name'      => $table,
@@ -1802,7 +1861,7 @@ function tina4RenderCommands(array $manifest): string
 $TINA4_QUEUE_SUBCOMMANDS = ['work', 'stats', 'retry', 'clear'];
 
 $TINA4_GENERATORS = [
-    'model'      => ['usage' => '<Name> [--fields "name:string,price:float"]', 'summary' => 'ORM model + matching migration'],
+    'model'      => ['usage' => '<Name> [--fields "name:string,price:float"] [--table-name <name>]', 'summary' => 'ORM model + matching migration'],
     'route'      => ['usage' => '<name> [--model Name] [--public]',            'summary' => 'CRUD route file, secure by default (--public opens writes)'],
     'crud'       => ['usage' => '<Name> [--fields "..."] [--public]',           'summary' => 'Model + migration + routes + form + view + test'],
     'migration'  => ['usage' => '<description>',                                'summary' => 'Timestamped migration file'],
@@ -2512,6 +2571,7 @@ DOCKERFILE;
             echo "Usage: tina4php generate <what> <name> [options]\n";
             echo "  Generators: {$allGenerators}\n";
             echo "  Options:    --fields \"name:string,price:float\"  --model ModelName\n";
+            echo "              --table-name <name>       force the table name (default: snake_case; reserved words pluralize)\n";
             echo "              --public                  open a route's writes (default: secure)\n";
             echo "              --every 5m | --cron \"...\"   service schedule (cron only in PHP)\n";
             echo "              --json                    emit a resolution envelope on STDOUT (no other output)\n";
@@ -2663,9 +2723,11 @@ function generateModel(string $name, array $flags, array $fieldTypeMap, bool $sk
 {
     $fields = fieldsOrDefault($flags['fields'] ?? '');
     // Reserved-word guard: Order -> orders (a raw `order` table breaks CREATE
-    // TABLE on every engine). toTableNameWithTransform() reports the swap
-    // for the resolution envelope; here we only need the safe name.
-    [$table, ] = toTableNameWithTransform($name);
+    // TABLE on every engine). The model is where the table is BORN, so this is
+    // the ONE place that announces — it honours `--table-name`, and when it
+    // auto-pluralises a reserved-word class name it prints a loud one-line note
+    // instead of renaming silently (issue #123).
+    $table = resolveTable($name, $flags, true);
 
     // Build typed property lines. `tina4:edit` markers bracket the fields
     // block (ADR-0063) so the human "Edit these lines:" block, and every
@@ -3008,7 +3070,11 @@ PHP;
  */
 function generateCrud(string $name, array $flags, array $fieldTypeMap): void
 {
-    $table = tableNameFromClass($name);
+    // Composite generator: derive the route name from the resolved table so it
+    // agrees with the model. Stay QUIET here (announce defaults to false) — the
+    // generateModel sub-call below announces the reserved-word note exactly once.
+    // `--table-name` flows through $flags to every sub-call.
+    $table = resolveTable($name, $flags);
     $routeName = $table . 's';
     $public = !empty($flags['public']);
 
@@ -3430,7 +3496,9 @@ function generateForm(string $name, array $flags): void
 {
     global $INPUT_TYPE_MAP;
     $fields = fieldsOrDefault($flags['fields'] ?? '');
-    $table = tableNameFromClass($name);
+    // Existing-table generator: honour `--table-name`, match the model's
+    // reserved-word-safe name, stay quiet (no repeated note).
+    $table = resolveTable($name, $flags);
     $routeName = $table . 's';
 
     $dir = 'src/templates/forms';
@@ -3511,7 +3579,9 @@ TWIG;
 function generateView(string $name, array $flags): void
 {
     $fields = fieldsOrDefault($flags['fields'] ?? '');
-    $table = tableNameFromClass($name);
+    // Existing-table generator: honour `--table-name`, match the model's
+    // reserved-word-safe name, stay quiet (no repeated note).
+    $table = resolveTable($name, $flags);
     $routeName = $table . 's';
 
     $dir = 'src/templates/pages';
@@ -4737,7 +4807,10 @@ PHP;
 function generateSeeder(string $name, array $flags): void
 {
     $model = $name;
-    $table = tableNameFromClass($name);
+    // Target an EXISTING table: honour `--table-name` and match the model's
+    // reserved-word-safe name (Order -> orders), but stay quiet (the note was
+    // already printed when the model was generated).
+    $table = resolveTable($name, $flags);
 
     $dir = 'src/seeds';
     @mkdir($dir, 0755, true);

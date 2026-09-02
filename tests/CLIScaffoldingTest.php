@@ -46,10 +46,12 @@ class CLIScaffoldingTest extends TestCase
      */
     public static function setUpBeforeClass(): void
     {
-        if (function_exists('tableNameFromClass')) {
-            return;
-        }
-
+        // NOTE: no early `return` on function_exists('tableNameFromClass'). Another
+        // test (GenerateModelReservedTableTest) also extracts a SUBSET of these
+        // functions; an early return here would skip the ones it did not define
+        // (e.g. generateMigration) and fatal at call time. The per-function guard
+        // (`function_exists($fname) continue`) and per-const guard below make the
+        // scan idempotent, so re-running it fills only what is missing.
         $binPath = __DIR__ . '/../bin/tina4php';
         $source = file_get_contents($binPath);
         $tokens = token_get_all($source);
@@ -61,7 +63,10 @@ class CLIScaffoldingTest extends TestCase
             // generateModel / generateMigration route the table name through
             // toTableNameWithTransform, so this harness must extract it too
             // or the direct-call tests fatal with "undefined function".
-            'pluralizeTable', 'toTableNameWithTransform',
+            // resolveTable (issue #123) is now the entry point every generator
+            // calls, so it MUST be extracted or generateModel/Crud/Seeder/Form/View
+            // fatal with "undefined function resolveTable" at call time.
+            'pluralizeTable', 'toTableNameWithTransform', 'resolveTable',
             'generateModel', 'generateRoute', 'generateMigration',
             'generateMiddleware', 'generateTest', 'generateForm',
             'generateView', 'generateCrud', 'generateAuth',
