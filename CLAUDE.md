@@ -15,7 +15,7 @@ The full discipline lives in `.claude/skills/tina4-maintainer/SKILL.md`; this bl
 
 # Tina4 PHP
 
-Version 3.13.130 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.131 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -1377,7 +1377,7 @@ is authorised on the raw socket peer.
 - Swagger/OpenAPI spec generation
 - Internationalisation (`I18n`)
 - Messenger (.env driven SMTP/IMAP). IMAP reads **fail loud**: `inbox()`/`read()`/`unread()`/`search()`/`folders()` LOG and RAISE `Tina4\MessengerConnectionError` (extends `\RuntimeException`) on a connection/auth/protocol failure instead of swallowing it into an empty result — a *successful* fetch from a genuinely empty mailbox still returns empty (`[]`/`null`/`0`) normally. `send()` is unchanged (returns `{success, message, id}`). **Cross-framework contract:** `inbox(folder, limit, offset)` takes the folder FIRST (same order in all four); the `uid` field is a **STRING** everywhere (the Python master emits `str(uid)`), so a strict `=== 1` comparison must become `=== '1'` — `read()`/`markRead()` still accept `string|int`; and `read()` of a non-existent UID returns a **falsy** value (`null` here, `{}` in Python, `nil` in Ruby, `null` in Node) rather than raising, so `if (!$message)` is the portable missing-message check. Real SMTP + IMAP round-trips are covered against a live GreenMail in `tests/MessengerImapGreenMailTest.php` (ports 3025/3143; `TINA4_TEST_SMTP_*` / `TINA4_TEST_IMAP_*` to relocate)
-- CLI scaffolding: `bin/tina4php generate model/route/migration/middleware`. There
+- CLI scaffolding: `tina4 generate model/route/migration/middleware`. `tina4php` is the PHP package's own CLI; the `tina4` client forwards `generate` to it. There
   is no `composer tina4` script - composer defines exactly four (`serve`, `start`,
   `test`, `lint`) and `composer tina4 ...` errors out
 - Production server: `bin/tina4php serve --production` (OPcache auto-config)
