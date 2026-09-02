@@ -136,6 +136,17 @@ class Server
     private $socket = null;
 
     /**
+     * @var array<int, resource> Extra listeners on the MAIN port for the
+     * sibling loopback family, keyed by resource id.
+     *
+     * `localhost` resolves to ::1 (IPv6) first on Windows, so a server bound
+     * only to 127.0.0.1 refused the browser even though it was serving.
+     * Binding both loopback families closes that gap. These are accepted
+     * exactly like $socket and are closed alongside it.
+     */
+    private array $extraListenSockets = [];
+
+    /**
      * Serve each request in a forked child, so a blocking handler cannot freeze
      * the server. Resolved once at start(); false where pcntl is unavailable.
      */
@@ -372,40 +383,7 @@ class Server
             exit(1);
         }
 
-        $context = stream_context_create([
-            'socket' => [
-                'backlog' => 1024,
-                'so_reuseport' => true,
-                'tcp_nodelay' => true,
-            ],
-        ]);
-        $this->socket = @stream_socket_server(
-            "tcp://{$this->host}:{$this->port}",
-            $errno,
-            $errstr,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-            $context
-        );
-
-        if (!$this->socket) {
-            // Port is in use — kill the occupying process and try once more
-            $this->freePort($this->port);
-            $this->socket = @stream_socket_server(
-                "tcp://{$this->host}:{$this->port}",
-                $errno,
-                $errstr,
-                STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-                $context
-            );
-        }
-
-        if (!$this->socket) {
-            throw new \RuntimeException(
-                "Could not free port {$this->port}: {$errstr} ({$errno})"
-            );
-        }
-
-        stream_set_blocking($this->socket, false);
+        $this->openListenSockets();
         $this->running = true;
         self::$instance = $this;
         // Record THIS process as the Tina4 dev server on the main port, so a
@@ -541,6 +519,125 @@ class Server
     }
 
     /**
+     * Open the main listening socket, plus a sibling loopback listener so
+     * `localhost` is reachable on both IPv4 and IPv6.
+     *
+     * The primary bind keeps its port-takeover retry and its fail-closed
+     * throw (which the CLI catches to fall back to `php -S`). The sibling
+     * binds are best-effort — see openLoopbackSiblings().
+     *
+     * @throws \RuntimeException when the main port cannot be bound.
+     */
+    private function openListenSockets(): void
+    {
+        $context = stream_context_create([
+            'socket' => [
+                'backlog' => 1024,
+                'so_reuseport' => true,
+                'tcp_nodelay' => true,
+            ],
+        ]);
+
+        $this->socket = @stream_socket_server(
+            "tcp://{$this->host}:{$this->port}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+        );
+
+        if (!$this->socket) {
+            // Port is in use — kill the occupying process and try once more.
+            $this->freePort($this->port);
+            $this->socket = @stream_socket_server(
+                "tcp://{$this->host}:{$this->port}",
+                $errno,
+                $errstr,
+                STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+                $context
+            );
+        }
+
+        if (!$this->socket) {
+            throw new \RuntimeException(
+                "Could not free port {$this->port}: {$errstr} ({$errno})"
+            );
+        }
+
+        stream_set_blocking($this->socket, false);
+
+        $this->openLoopbackSiblings();
+    }
+
+    /**
+     * Also listen on the sibling loopback family, best-effort.
+     *
+     * Only fires for a loopback or wildcard host — an explicit LAN address
+     * is bound exactly as asked. The sibling context deliberately omits
+     * so_reuseport: a family the primary socket already answers then fails
+     * to re-bind and is skipped, instead of stacking a duplicate listener
+     * on the same address (which SO_REUSEPORT would otherwise allow).
+     */
+    private function openLoopbackSiblings(): void
+    {
+        $siblings = self::loopbackBindHosts($this->host);
+
+        if ($siblings === []) {
+            return;
+        }
+
+        $context = stream_context_create([
+            'socket' => [
+                'backlog' => 1024,
+                'tcp_nodelay' => true,
+            ],
+        ]);
+
+        foreach ($siblings as $host) {
+            $sibling = @stream_socket_server(
+                "tcp://{$host}:{$this->port}",
+                $errno,
+                $errstr,
+                STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+                $context
+            );
+
+            if (!$sibling) {
+                // Already answered by the primary bind, or the family is
+                // unavailable — either way there is nothing to add.
+                continue;
+            }
+
+            stream_set_blocking($sibling, false);
+            $this->extraListenSockets[(int)$sibling] = $sibling;
+        }
+    }
+
+    /**
+     * Sibling loopback addresses to ALSO listen on, so `localhost` reaches
+     * this server whether it resolves to IPv4 (127.0.0.1) or IPv6 (::1).
+     *
+     * Returns only the families a direct bind of $host does not already
+     * cover. A host that is neither loopback nor a wildcard yields an empty
+     * list — an explicit address is left exactly as asked.
+     *
+     * @param string $host The host the main socket binds.
+     *
+     * @return string[] Extra bind addresses (possibly empty).
+     */
+    public static function loopbackBindHosts(string $host): array
+    {
+        $normalized = strtolower(trim($host, " \t[]"));
+
+        return match ($normalized) {
+            'localhost' => ['127.0.0.1', '[::1]'],
+            '127.0.0.1', '0.0.0.0' => ['[::1]'],
+            '::1', '::' => ['127.0.0.1'],
+            default => [],
+        };
+    }
+
+    /**
      * Accept and serve until stopped.
      *
      * Extracted from start() so a pool worker can run the same loop the
@@ -588,7 +685,12 @@ class Server
                     $this->endRequestChild();
                 }
 
-                $read = array_merge([$this->socket], $this->clients);
+                $read = array_merge(
+                    [$this->socket],
+                    $this->extraListenSockets,
+                    $this->clients
+                );
+
                 if ($this->aiSocket !== null) {
                     $read[] = $this->aiSocket;
                 }
@@ -636,9 +738,13 @@ class Server
                     if (!is_resource($socket)) {
                         continue;
                     }
-                    if ($socket === $this->socket) {
-                        // Accept new connection
-                        $client = @stream_socket_accept($this->socket, 0, $peerName);
+
+                    if (
+                        $socket === $this->socket
+                        || isset($this->extraListenSockets[(int)$socket])
+                    ) {
+                        // Accept new connection (main port, any loopback family)
+                        $client = @stream_socket_accept($socket, 0, $peerName);
                         if ($client) {
                             stream_set_blocking($client, false);
                             $resourceId = (int)$client;
@@ -743,6 +849,15 @@ class Server
             @fclose($this->socket);
             $this->socket = null;
         }
+
+        foreach ($this->extraListenSockets as $id => $sibling) {
+            if (is_resource($sibling)) {
+                @fclose($sibling);
+            }
+
+            unset($this->extraListenSockets[$id]);
+        }
+
         if ($this->aiSocket !== null) {
             @fclose($this->aiSocket);
             $this->aiSocket = null;
