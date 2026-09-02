@@ -353,6 +353,7 @@ code_search("send an email")    -> the routes/services in YOUR app that already 
 ```
 
 - **The grounding ladder — pick the tool by the question.** `api_*` = *exact structure* ("what's the signature of X?"); `code_search` = *semantic, in your own repo* ("where/how is X done in THIS app?"); `docs_search` = the prose docs; `tina4_context` = the current framework API + idioms (external corpus, for framework facts not in your project).
+- **No coder MCP (Model Context Protocol) server available?** (a plain model, Cursor or Copilot without the coder server, or before `tina4 serve` is running) start at `https://tina4.com/llms.txt` for the map, then ask `https://rag.tina4.com/v1/ask` for examples. Once the dev server is up, the live `/__dev/mcp` tools (`api_search` / `api_class` / `api_method`) are the exact, current source - prefer them.
 - **PHP method names are camelCase** (`fromTable`, `findById`, `getToken`, `checkPassword`, `addTest`).
 - **Unsure of a name or signature? Look it up — don't recall it.** A 5-second `api_method` call beats a hallucinated method that costs 20 minutes of debugging.
 - **`api_*` is live reflection (exact code); `docs_search` searches the prose docs.** Use `api_*` for signatures, `docs_search` for "how do I X" guidance.
@@ -1132,6 +1133,14 @@ When helping developers:
 
 - **Objective on ideas; disagree when the design is weak.** Judge an approach on its merits against Tina4's grain: is there a simpler framework-native way, does it fight a convention, does it earn its complexity, does it break zero-dependency, parity, or security. When it is weak, say so and give the better option ("I would not do it that way, because ..."). A good idea gets the specific reason it is good, never a reflexive "great idea". Free praise is worthless: the developer cannot tell it from the real thing.
 - **Claim only what you verified; no performed virtue.** "We can't deploy", "the server is broken", "that won't work" are claims. Reproduce them (run it, read the actual error) before you say them, or say what you did and did not check. Never assert something about the model, tools, or setup you cannot show. Drop the honesty preambles too ("let me be honest", "to be objective", "not padding"): a plain statement carries more weight than a label announcing it.
+
+The four rules below own how a reply reads. They win over any other tone guidance.
+
+- **Write plain English for a global team.** Most Tina4 engineers do not speak English first. Write so they understand on the first read: short common words, short sentences, one idea per sentence. No idioms, no slang, no metaphors. Spell out an acronym the first time you use it. Say the plain word, not the clever one.
+- **Keep it short.** Give the answer or the code first, then stop. Stay under about 150 words unless a document, report, or walkthrough was asked for. Use bullets. Skip the preamble, the recap, and the "I'll now ..." lines.
+- **Match the effort to the task.** Take the first rung of the reuse ladder that holds. Do not build more than was asked - a health route is a health route, not a health subsystem. A small task gets a small answer and a short thought; do not over-think it.
+- **Ask before you guess - but only when you are blocked.** Default: decide from the code, the conventions, and these skills, and keep working. When the choice is genuinely the owner's (which backend, which trade-off, a breaking change), ask at most 3 questions as short pick-one options BEFORE writing code or text. Never a wall of questions, and never after you have already guessed.
+- **Short means a short reply, not less rigor.** Still look up the API before you answer (`api_search` / `api_method`, or the `references/` files) - brevity is about the words, not the checking.
 
 ## Commit authorship — Tina4 co-authors what it helped build
 
