@@ -406,25 +406,43 @@ class DevAdmin
             return $response->json(['ok' => true, 'type' => $type]);
         });
 
-        // API: Version check — proxy to avoid CORS issues with registry APIs
+        // API: Version check — proxy to avoid CORS issues with registry APIs.
+        //
+        // A check that did not happen says so. This used to fall back to
+        // latest = current on any failure, and the toolbar renders that as a
+        // green "You are up to date!" — so a developer several releases behind,
+        // on a machine with no route out, was told the opposite of the truth.
+        // The toolbar already had the right message for this case and could
+        // never reach it, because the failure arrived as a success.
         Router::get('/__dev/api/version-check', function (Request $request, Response $response) {
             $current = App::$VERSION;
-            $latest = $current;
+            $failed = fn(string $why) => $response->json([
+                'current' => $current,
+                'latest' => null,
+                'error' => $why,
+            ]);
             try {
                 $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
                 $json = @file_get_contents('https://repo.packagist.org/p2/tina4stack/tina4php.json', false, $ctx);
-                if ($json) {
-                    $data = json_decode($json, true);
-                    $packages = $data['packages']['tina4stack/tina4php'] ?? [];
-                    $versions = array_column($packages, 'version');
-                    // Filter: stable only (no dev, no rc, no x)
-                    $stable = array_filter($versions, fn($v) => preg_match('/^v?\d+\.\d+\.\d+$/', $v));
-                    $stable = array_map(fn($v) => ltrim($v, 'v'), $stable);
-                    usort($stable, 'version_compare');
-                    $latest = end($stable) ?: $current;
+                if ($json === false || $json === '') {
+                    return $failed('could not reach Packagist');
                 }
-            } catch (\Throwable) {
-                // Offline or timeout — return current as latest
+                $data = json_decode($json, true);
+                $packages = $data['packages']['tina4stack/tina4php'] ?? [];
+                $versions = array_column($packages, 'version');
+                // Filter: stable only (no dev, no rc, no x)
+                $stable = array_filter($versions, fn($v) => preg_match('/^v?\d+\.\d+\.\d+$/', $v));
+                $stable = array_map(fn($v) => ltrim($v, 'v'), $stable);
+                usort($stable, 'version_compare');
+                $latest = end($stable);
+                // Reaching Packagist is not the same as learning the version:
+                // an answer we cannot read one out of is the same lie by
+                // another route.
+                if ($latest === false || $latest === null || $latest === '') {
+                    return $failed('Packagist did not report a stable version');
+                }
+            } catch (\Throwable $e) {
+                return $failed($e->getMessage());
             }
             return $response->json(['current' => $current, 'latest' => $latest]);
         });
@@ -3149,6 +3167,13 @@ CSS;
         el.className = 't4-ok';
         el.innerHTML = 'Latest: <strong class="t4-ok">v' + latest + '</strong> &mdash; You are up to date!';
     }
+    // A check that did not happen is not a clean bill of health. The server
+    // sends latest: null when it could not reach the registry, and saying so is
+    // the whole point -- "up to date" here would be a guess dressed as a fact.
+    function couldNotCheck(el, why) {
+        el.className = 't4-err';
+        el.textContent = 'Could not check for updates' + (why ? ' (' + why + ')' : '');
+    }
     function checkVersion() {
         if (modal.style.display === 'block') { modal.style.display = 'none'; return; }
         modal.style.display = 'block';
@@ -3157,6 +3182,7 @@ CSS;
         el.textContent = 'Checking for updates...';
         fetch('/__dev/api/version-check').then(function (r) { return r.json(); }).then(function (d) {
             var latest = d.latest, current = d.current;
+            if (!latest) { couldNotCheck(el, d.error); return; }
             if (latest === current) { upToDate(el, latest); return; }
             var cP = current.split('.').map(Number), lP = latest.split('.').map(Number);
             var isNewer = false, i, c, l;
