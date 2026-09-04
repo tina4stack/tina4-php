@@ -10,6 +10,8 @@ use Tina4\ErrorTracker;
 use Tina4\MessageLog;
 use Tina4\RequestInspector;
 use Tina4\Router;
+use Tina4\Middleware;
+use Tina4\McpServer;
 use Tina4\Request;
 use Tina4\Response;
 
@@ -1132,48 +1134,15 @@ class DevAdminTest extends TestCase
         }
     }
 
-    // ── Supervisor proxy: chat + threads (Python parity) ───────────
+    // ── Supervisor URL resolver (KEPT: Feedback widget uses it) ─────
     //
-    // Mirror Python's `_api_chat` / `_api_threads` / `_api_threads_sub`
-    // proxies. We stub `DevAdmin::$supervisorTransport` so tests don't
-    // need a live Rust agent — the stub records every outbound call and
-    // returns a scripted response. Each test asserts the URL, method,
-    // and body that PHP would have hit on the wire, plus the shape of
-    // the response the SPA receives back.
-
-    /**
-     * Captured outbound supervisor calls from the test stub. We park them on
-     * the test instance because returning a reference array from a helper
-     * and capturing it by-ref inside the closure rebinds the reference on
-     * function return — the closure would write to a phantom array.
-     * @var array<int, array{method:string, url:string, body:?string, headers:array}>
-     */
-    private array $capturedSupervisorCalls = [];
-
-    private function captureSupervisorCalls(array $script = []): void
-    {
-        // $script: optional [statusCode, body, contentType] per call, in order.
-        // Defaults to 200 / "[]" / application/json when the test doesn't care.
-        $this->capturedSupervisorCalls = [];
-        $index = 0;
-        $self = $this;
-        DevAdmin::$supervisorTransport = function (string $method, string $url, ?string $body, array $headers) use ($self, &$index, $script): array {
-            $self->capturedSupervisorCalls[] = [
-                'method'  => $method,
-                'url'     => $url,
-                'body'    => $body,
-                'headers' => $headers,
-            ];
-            [$status, $payload, $ct] = $script[$index] ?? [200, '[]', 'application/json'];
-            $index++;
-            return [
-                'status'       => $status,
-                'content_type' => $ct,
-                'error'        => '',
-                'chunks'       => function () use ($payload): \Generator { yield $payload; },
-            ];
-        };
-    }
+    // The dev-admin AGENT chat surface — the proxies to the co-located Rust CLI
+    // agent (POST /__dev/api/chat, /execute, /supervise/*, /threads*, GET
+    // /__dev/api/thoughts) — was REMOVED on feature/release3.13.132. The supervisor
+    // TRANSPORT seam (supervisorBaseUrl / callSupervisorTransport /
+    // $supervisorTransport) STAYS because Tina4\Feedback proxies ticket intake to
+    // the same agent through it (see Tina4/Feedback.php). These two tests pin the
+    // URL resolver Feedback relies on; the removal lock-ins are below.
 
     public function testSupervisorUrlOverride(): void
     {
@@ -1211,186 +1180,113 @@ class DevAdminTest extends TestCase
         }
     }
 
-    public function testThreadsListProxiesToSupervisor(): void
+    // ── Agent chat panel REMOVED (feature/release3.13.132) ────────
+    //
+    // Lock in the removal of the dev-admin agentic chat surface: the routes that
+    // proxied to the co-located Rust CLI agent must no longer be registered, and a
+    // real front-controller dispatch of POST /__dev/api/chat must 404. The KEPT
+    // surface — MCP (grounding, mcp/tools, mcp/call), the editor (/__dev/api/file)
+    // and metrics (/__dev/api/metrics) — must still be registered so the
+    // editor/metrics views are the dev-admin landing.
+
+    public function testAgentChatAndSupervisorRoutesAreRemoved(): void
     {
-        $this->captureSupervisorCalls([
-            [200, json_encode(['threads' => [['id' => 'abc', 'title' => 'hello']]]), 'application/json'],
-        ]);
-        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
         DevAdmin::register();
 
-        $callback = $this->findRouteCallback('GET', '/__dev/api/threads');
-        $this->assertNotNull($callback, 'GET /__dev/api/threads must be registered');
-
-        $request = Request::create('GET', '/__dev/api/threads');
-        $response = new Response(true);
-        /** @var Response $result */
-        $result = $callback($request, $response);
-
-        $captured = $this->capturedSupervisorCalls;
-        $this->assertCount(1, $captured, 'Exactly one upstream call');
-        $this->assertSame('GET', $captured[0]['method']);
-        $this->assertSame('http://agent.test:9145/threads', $captured[0]['url']);
-        $this->assertNull($captured[0]['body']);
-
-        $json = json_decode($result->getBody(), true);
-        $this->assertArrayHasKey('threads', $json);
-        $this->assertSame('abc', $json['threads'][0]['id']);
-
-        DevAdmin::resetSupervisorTransport();
-        putenv('TINA4_SUPERVISOR_URL');
+        foreach ([
+            ['POST',  '/__dev/api/chat'],
+            ['POST',  '/__dev/api/execute'],
+            ['POST',  '/__dev/api/supervise/create'],
+            ['GET',   '/__dev/api/supervise/sessions'],
+            ['GET',   '/__dev/api/supervise/diff'],
+            ['POST',  '/__dev/api/supervise/commit'],
+            ['POST',  '/__dev/api/supervise/cancel'],
+            ['GET',   '/__dev/api/thoughts'],
+            ['GET',   '/__dev/api/threads'],
+            ['POST',  '/__dev/api/threads'],
+            ['PATCH', '/__dev/api/threads/{id}'],
+            ['GET',   '/__dev/api/threads/{id}/messages'],
+        ] as [$method, $pattern]) {
+            $this->assertNull(
+                $this->findRouteCallback($method, $pattern),
+                "$method $pattern must NOT be registered — the agent chat panel was removed"
+            );
+        }
     }
 
-    public function testChatProxyForwardsActiveFile(): void
+    public function testChatEndpointRealDispatchIs404(): void
     {
-        // The SPA POSTs {message, thread_id?, active_file?} and expects the
-        // active_file blob (path / language / content) to reach the Rust
-        // agent verbatim — that's what lets the planner see the file the
-        // user has open in the editor without an extra round-trip.
-        $this->captureSupervisorCalls([
-            [200, "event: status\ndata: ok\n\nevent: done\ndata: {}\n\n", 'text/event-stream'],
-        ]);
-        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
+        // The strongest witness: drive the REAL front controller. With the route
+        // gone, a loopback POST /__dev/api/chat resolves to no route and 404s
+        // (not a 5xx, not a silent 200) — the same entry the built-in server,
+        // Swoole and PHP-FPM funnel through.
+        Middleware::reset();
         DevAdmin::register();
 
-        $callback = $this->findRouteCallback('POST', '/__dev/api/chat');
-        $this->assertNotNull($callback, 'POST /__dev/api/chat must be registered');
+        $request = Request::create(
+            method: 'POST',
+            path: '/__dev/api/chat',
+            body: json_encode(['message' => 'hi']),
+            headers: ['content-type' => 'application/json'],
+            remoteIp: '127.0.0.1'
+        );
+        $result = Router::dispatch($request, new Response(true));
 
-        $payload = [
-            'message'     => 'fix the bug',
-            'thread_id'   => 'thread-1',
-            'active_file' => [
-                'path'     => 'src/foo.php',
-                'language' => 'php',
-                'content'  => "<?php\necho 'hi';\n",
-            ],
-        ];
-        $request = Request::create('POST', '/__dev/api/chat', body: $payload);
-        $response = new Response(true);
-        /** @var Response $result */
-        $result = $callback($request, $response);
+        $this->assertSame(
+            404,
+            $result->getStatusCode(),
+            'POST /__dev/api/chat must 404 after the agent chat panel removal'
+        );
 
-        $captured = $this->capturedSupervisorCalls;
-        $this->assertCount(1, $captured);
-        $this->assertSame('POST', $captured[0]['method']);
-        $this->assertSame('http://agent.test:9145/chat', $captured[0]['url']);
-
-        // Body must be valid JSON and round-trip with the same keys —
-        // including active_file. If the proxy drops or rewrites keys,
-        // the editor-aware code path breaks silently.
-        $decoded = json_decode($captured[0]['body'], true);
-        $this->assertIsArray($decoded);
-        $this->assertSame('fix the bug', $decoded['message']);
-        $this->assertSame('thread-1', $decoded['thread_id']);
-        $this->assertArrayHasKey('active_file', $decoded);
-        $this->assertSame('src/foo.php', $decoded['active_file']['path']);
-        $this->assertSame("<?php\necho 'hi';\n", $decoded['active_file']['content']);
-
-        // Response is the SSE stream piped through unchanged. In testing
-        // mode Response::stream() collects the chunks into the body.
-        $body = $result->getBody();
-        $this->assertStringContainsString('event: status', $body);
-        $this->assertStringContainsString('event: done', $body);
-
-        DevAdmin::resetSupervisorTransport();
-        putenv('TINA4_SUPERVISOR_URL');
+        Middleware::reset();
     }
 
-    public function testThreadsPatchUpdatesUpstream(): void
+    public function testEditorMetricsAndGroundingRemainAfterAgentRemoval(): void
     {
-        // PATCH /threads/{id} is how the SPA archives/renames a thread.
-        // Body forwards verbatim — body shape is the agent's contract, not
-        // the framework's, so we just check the bytes match.
-        $this->captureSupervisorCalls([
-            [200, json_encode(['id' => 'thread-42', 'archived' => true]), 'application/json'],
-        ]);
-        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
+        // Editor + metrics are the landing; grounding config is always on.
+        // These are registered unconditionally by register().
         DevAdmin::register();
 
-        $callback = $this->findRouteCallback('PATCH', '/__dev/api/threads/{id}');
-        $this->assertNotNull($callback, 'PATCH /__dev/api/threads/{id} must be registered');
-
-        $request = Request::create('PATCH', '/__dev/api/threads/thread-42', body: ['archived' => true]);
-        // The Router populates ->params during dispatch — we're calling the
-        // callback directly, so populate it manually to mimic real routing.
-        $request->params = ['id' => 'thread-42'];
-        $response = new Response(true);
-        /** @var Response $result */
-        $result = $callback($request, $response);
-
-        $captured = $this->capturedSupervisorCalls;
-        $this->assertCount(1, $captured);
-        $this->assertSame('PATCH', $captured[0]['method']);
-        $this->assertSame('http://agent.test:9145/threads/thread-42', $captured[0]['url']);
-
-        $decoded = json_decode($captured[0]['body'], true);
-        $this->assertSame(['archived' => true], $decoded);
-
-        $json = json_decode($result->getBody(), true);
-        $this->assertTrue($json['archived']);
-
-        DevAdmin::resetSupervisorTransport();
-        putenv('TINA4_SUPERVISOR_URL');
+        foreach ([
+            ['GET',  '/__dev/api/file'],
+            ['POST', '/__dev/api/file/save'],
+            ['GET',  '/__dev/api/metrics/full'],
+            ['GET',  '/__dev/api/metrics/file'],
+            ['GET',  '/__dev/api/grounding/status'],
+            ['POST', '/__dev/api/grounding/token'],
+        ] as [$method, $pattern]) {
+            $this->assertNotNull(
+                $this->findRouteCallback($method, $pattern),
+                "$method $pattern must STILL be registered (KEEP: editor/metrics/grounding)"
+            );
+        }
     }
 
-    public function testThreadsMessagesProxiesGet(): void
+    public function testMcpToolsAndCallSurfaceRemainAfterAgentRemoval(): void
     {
-        // /__dev/api/threads/{id}/messages — message history for one thread.
-        // Verifies the wildcard-style sub-route is registered and the
-        // {id} param survives URL-encoding into the upstream path.
-        $this->captureSupervisorCalls([
-            [200, json_encode(['messages' => [['role' => 'user', 'content' => 'hi']]]), 'application/json'],
-        ]);
-        putenv('TINA4_SUPERVISOR_URL=http://agent.test:9145');
-        DevAdmin::register();
-
-        $callback = $this->findRouteCallback('GET', '/__dev/api/threads/{id}/messages');
-        $this->assertNotNull($callback, 'GET /__dev/api/threads/{id}/messages must be registered');
-
-        $request = Request::create('GET', '/__dev/api/threads/abc/messages');
-        $request->params = ['id' => 'abc'];
-        $response = new Response(true);
-        /** @var Response $result */
-        $result = $callback($request, $response);
-
-        $captured = $this->capturedSupervisorCalls;
-        $this->assertSame('GET', $captured[0]['method']);
-        $this->assertSame('http://agent.test:9145/threads/abc/messages', $captured[0]['url']);
-
-        $json = json_decode($result->getBody(), true);
-        $this->assertSame('hi', $json['messages'][0]['content']);
-
-        DevAdmin::resetSupervisorTransport();
-        putenv('TINA4_SUPERVISOR_URL');
-    }
-
-    public function testChatProxyReturns503WhenAgentUnreachable(): void
-    {
-        // Parity with Python: when the agent is unreachable, the SPA must
-        // get a structured 503 with a `hint` field so the chat panel can
-        // show "Run `tina4 serve`" instead of a dead spinner.
-        DevAdmin::$supervisorTransport = function (): array {
-            return [
-                'status'       => 0,
-                'content_type' => '',
-                'error'        => 'Connection refused',
-                'chunks'       => function (): \Generator { yield ''; },
-            ];
-        };
-        DevAdmin::register();
-
-        $callback = $this->findRouteCallback('POST', '/__dev/api/chat');
-        $request = Request::create('POST', '/__dev/api/chat', body: ['message' => 'hi']);
-        $response = new Response(true);
-        /** @var Response $result */
-        $result = $callback($request, $response);
-
-        $this->assertSame(503, $result->getStatusCode());
-        $json = json_decode($result->getBody(), true);
-        $this->assertSame('agent unreachable', $json['error']);
-        $this->assertArrayHasKey('hint', $json);
-
-        DevAdmin::resetSupervisorTransport();
+        // The MCP shim (/mcp/tools + /mcp/call) is what AI coders use, so it
+        // stays. It is gated behind McpServer::isEnabled() exactly as before —
+        // the agent-chat removal did not touch that gate. Enable MCP the same
+        // way McpDevAdminEndpointTest does, then assert both are registered.
+        $prev = getenv('TINA4_MCP');
+        McpServer::resetDefaultServer();
+        putenv('TINA4_MCP=true');
+        $_ENV['TINA4_MCP'] = 'true';
+        try {
+            DevAdmin::register();
+            $this->assertNotNull(
+                $this->findRouteCallback('GET', '/__dev/api/mcp/tools'),
+                'GET /__dev/api/mcp/tools must STILL be registered when MCP is enabled (KEEP)'
+            );
+            $this->assertNotNull(
+                $this->findRouteCallback('POST', '/__dev/api/mcp/call'),
+                'POST /__dev/api/mcp/call must STILL be registered when MCP is enabled (KEEP)'
+            );
+        } finally {
+            McpServer::resetDefaultServer();
+            $prev === false ? putenv('TINA4_MCP') : putenv('TINA4_MCP=' . $prev);
+            unset($_ENV['TINA4_MCP']);
+        }
     }
 
     // ── Helper ─────────────────────────────────────────────────────
