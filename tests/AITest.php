@@ -203,6 +203,19 @@ class AITest extends TestCase
         $this->assertStringContainsString('Skill', $context);
     }
 
+    public function testCursorAndClineContextsAreByteIdentical(): void
+    {
+        // Cursor and Cline share one body via AITools::cursorStyleContext();
+        // lock the dedup so a future edit to one cannot silently diverge them,
+        // and confirm the shared body still carries its sections.
+        $cursor = AITools::generateContext('cursor');
+        $cline = AITools::generateContext('cline');
+        $this->assertSame($cursor, $cline);
+        $this->assertStringContainsString('## Route Example', $cursor);
+        $this->assertStringContainsString('## ORM Example', $cursor);
+        $this->assertStringContainsString('## Documentation', $cursor);
+    }
+
     // ── Status report (if present) ──
 
     public function testStatusReportWithDetectedTools(): void

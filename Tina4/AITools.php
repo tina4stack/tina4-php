@@ -604,6 +604,15 @@ class AITools
      */
     private static function generateCursorContext(string $version): string
     {
+        return self::cursorStyleContext($version);
+    }
+
+    /**
+     * Shared Cursor / Cline context body — both tools take the same guide
+     * (header, route + ORM examples, conventions, features, docs link).
+     */
+    private static function cursorStyleContext(string $version): string
+    {
         return <<<CONTEXT
 # Tina4 PHP v{$version}
 
@@ -824,57 +833,11 @@ CONTEXT;
     }
 
     /**
-     * Cline context (~42 lines): like cursor.
+     * Cline context (~42 lines): like cursor — shares the Cursor context body.
      */
     private static function generateClineContext(string $version): string
     {
-        return <<<CONTEXT
-# Tina4 PHP v{$version}
-
-Lightweight, zero-dependency PHP web framework. Docs: https://tina4.com
-
-## Route Example
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["users" => []]);
-});
-
-Router::post("/api/users", function(\Tina4\Request \$request, \Tina4\Response \$response) {
-    return \$response(["created" => \$request->body["name"]], 201);
-})->noAuth();
-```
-
-## ORM Example
-
-```php
-class User extends \Tina4\ORM {
-    public \$tableName = "users";
-    public \$primaryKey = "id";
-}
-```
-
-## Conventions
-
-1. Routes return \$response() — always \$response(data) not Response::json()
-2. GET routes are public, POST/PUT/PATCH/DELETE require auth by default
-3. Use ->noAuth() to make write routes public, ->secure() to protect GET routes
-4. Every template extends base.twig
-5. All schema changes via migrations — never create tables in route code
-6. Use built-in features — never install packages for things Tina4 already provides
-7. Service pattern — complex logic in src/app/, routes stay thin
-8. PHPDoc every public method with @param/@return/@throws describing the behaviour, not the fix; no orphaned docblocks
-
-## Built-in Features
-
-Router, ORM, Database (SQLite/PostgreSQL/MySQL/MSSQL/Firebird), Frond templates (Twig-compatible), JWT auth, Sessions (File/Redis/Valkey/MongoDB/DB), GraphQL + GraphiQL, WebSocket + Redis backplane, WSDL/SOAP, Queue (File/RabbitMQ/Kafka/MongoDB), HTTP client, Messenger (SMTP/IMAP), FakeData/Seeder, Migrations, SCSS compiler, Swagger/OpenAPI, i18n, Events, Container/DI, HtmlElement, Inline testing, Error overlay, Dev dashboard, Rate limiter, Response cache, Logging, MCP server
-
-## Documentation
-
-https://tina4.com
-CONTEXT;
+        return self::cursorStyleContext($version);
     }
 
     /**

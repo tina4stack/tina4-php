@@ -46,6 +46,8 @@ trait PdoAdapterTrait
     use ConnectAliasTrait;
 
     use SupportsAtomicBatchTrait;
+    use ExecuteManyLoopTrait;
+    use FetchOneTrait;
 
     private ?\PDO $pdo = null;
     private ?string $lastError = null;
@@ -243,19 +245,6 @@ trait PdoAdapterTrait
         ];
     }
 
-    public function fetchOne(string $sql, array $params = []): ?array
-    {
-        $sql = self::stripTrailingSemicolons($sql);
-        // FAIL LOUD: query() clears error() on entry and records the driver
-        // error on failure (returning []), so a non-null error() here means the
-        // statement failed — RAISE rather than return null ("no row").
-        $rows = $this->query($sql, $params);
-        if ($this->lastError !== null) {
-            throw new DatabaseException($this->engineLabel() . ' fetchOne() failed: ' . $this->lastError);
-        }
-        return $rows[0] ?? null;
-    }
-
     /**
      * Per-engine DDL translation applied to a write statement before it reaches
      * the driver. Default: identity — SQLite and PostgreSQL accept the
@@ -324,19 +313,6 @@ trait PdoAdapterTrait
     public function affectedRows(): int
     {
         return $this->affectedRows;
-    }
-
-    public function executeMany(string $sql, array $paramsList = []): int
-    {
-        // FAIL LOUD: a failing row must NOT be swallowed — execute() raises on a
-        // bad row; let it propagate so the facade's transactional batch path can
-        // roll the whole batch back. Atomicity is provided by the facade.
-        $totalAffected = 0;
-        foreach ($paramsList as $params) {
-            $this->execute($sql, $params);
-            $totalAffected++;
-        }
-        return $totalAffected;
     }
 
     public function insert(string $table, array $data): bool

@@ -60,6 +60,8 @@ class PostgresAdapter implements DatabaseAdapter
     // fetch()/fetchOne()/getColumns() fatalled on PostgreSQL — undetected because
     // the PG test suite skips without a live server.
     use SqlNormalizerTrait;
+    use FetchOneTrait;
+    use ExecuteManyLoopTrait;
 
     /** @var \PgSql\Connection|resource|null */
     private mixed $db = null;
@@ -261,18 +263,9 @@ class PostgresAdapter implements DatabaseAdapter
         ];
     }
 
-    public function fetchOne(string $sql, array $params = []): ?array
+    protected function engineLabel(): string
     {
-        $sql = self::stripTrailingSemicolons($sql);
-        // FAIL LOUD (v3.13.37, DB-contract A): query() clears lastError on
-        // entry and records the driver error on failure (returning []), so a
-        // non-null lastError after the call means the statement failed — RAISE
-        // it instead of returning null (which a caller would read as "no row").
-        $rows = $this->query($sql, $params);
-        if ($this->lastError !== null) {
-            throw new DatabaseException('PostgreSQL fetchOne() failed: ' . $this->lastError);
-        }
-        return $rows[0] ?? null;
+        return 'PostgreSQL';
     }
 
     public function execute(string $sql, array $params = []): bool|DatabaseResult
@@ -363,24 +356,6 @@ class PostgresAdapter implements DatabaseAdapter
             $this->lastError = $e->getMessage();
             throw $e;
         }
-    }
-
-    public function executeMany(string $sql, array $paramsList = []): int
-    {
-        // FAIL LOUD: a failing row must NOT be silently swallowed — the old
-        // catch-and-continue counted only the rows that did not throw and
-        // returned a partial count, hiding data loss. execute() raises on a bad
-        // row; let it propagate so the caller (and the facade's transactional
-        // batch path) can roll back the whole batch. Atomicity for a batch is
-        // provided by Database::insert()/executeMany() (one pinned connection +
-        // one transaction); this primitive just runs each row and never hides a
-        // failure.
-        $totalAffected = 0;
-        foreach ($paramsList as $params) {
-            $this->execute($sql, $params);
-            $totalAffected++;
-        }
-        return $totalAffected;
     }
 
     public function tableExists(string $table): bool

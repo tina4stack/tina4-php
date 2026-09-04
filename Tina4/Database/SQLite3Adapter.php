@@ -40,6 +40,7 @@ class SQLite3Adapter implements DatabaseAdapter
     }
 
     use SqlNormalizerTrait;
+    use FetchOneTrait;
 
     private ?\SQLite3 $db = null;
     private ?string $lastError = null;
@@ -338,18 +339,9 @@ class SQLite3Adapter implements DatabaseAdapter
         return $totalAffected;
     }
 
-    public function fetchOne(string $sql, array $params = []): ?array
+    protected function engineLabel(): string
     {
-        $sql = self::stripTrailingSemicolons($sql);
-        // FAIL LOUD (v3.13.37, DB-contract A): query() clears lastError on
-        // entry and records the driver error on failure (returning []), so a
-        // non-null lastError after the call means the statement failed — RAISE
-        // it instead of returning null (which a caller would read as "no row").
-        $rows = $this->query($sql, $params);
-        if ($this->lastError !== null) {
-            throw new DatabaseException('SQLite3 fetchOne() failed: ' . $this->lastError);
-        }
-        return $rows[0] ?? null;
+        return 'SQLite3';
     }
 
     public function getTables(): array

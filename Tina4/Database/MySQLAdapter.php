@@ -59,6 +59,8 @@ class MySQLAdapter implements DatabaseAdapter
     }
 
     use SqlNormalizerTrait;
+    use FetchOneTrait;
+    use ExecuteManyLoopTrait;
 
     private ?\mysqli $db = null;
     private ?string $lastError = null;
@@ -273,18 +275,9 @@ class MySQLAdapter implements DatabaseAdapter
         ];
     }
 
-    public function fetchOne(string $sql, array $params = []): ?array
+    protected function engineLabel(): string
     {
-        $sql = self::stripTrailingSemicolons($sql);
-        // FAIL LOUD (v3.13.37, DB-contract A): query() clears lastError on
-        // entry and records the driver error on failure (returning []), so a
-        // non-null lastError after the call means the statement failed — RAISE
-        // it instead of returning null (which a caller would read as "no row").
-        $rows = $this->query($sql, $params);
-        if ($this->lastError !== null) {
-            throw new DatabaseException('MySQL fetchOne() failed: ' . $this->lastError);
-        }
-        return $rows[0] ?? null;
+        return 'MySQL';
     }
 
     public function execute(string $sql, array $params = []): bool|DatabaseResult
@@ -357,20 +350,6 @@ class MySQLAdapter implements DatabaseAdapter
             $this->lastError = $e->getMessage();
             throw $e;
         }
-    }
-
-    public function executeMany(string $sql, array $paramsList = []): int
-    {
-        // FAIL LOUD: a failing row must NOT be silently swallowed (see the note
-        // in PostgresAdapter::executeMany). execute() raises on a bad row; let
-        // it propagate so the facade's transactional batch path can roll the
-        // whole batch back instead of committing a partial, lossy result.
-        $totalAffected = 0;
-        foreach ($paramsList as $params) {
-            $this->execute($sql, $params);
-            $totalAffected++;
-        }
-        return $totalAffected;
     }
 
     public function tableExists(string $table): bool
