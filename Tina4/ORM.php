@@ -1083,9 +1083,9 @@ abstract class ORM
      * @param int $offset Starting offset (filter mode only)
      * @param string|null $orderBy ORDER BY clause (filter mode only)
      * @param array<string>|null $include Relationships to eager-load
-     * @return array<int, static>|static|null Array (filter mode), single instance or null (PK mode)
+     * @return ModelCollection<int, static>|static|null ModelCollection carrying the query total (filter mode, ADR-0064), single instance or null (PK mode)
      */
-    public static function find(array|int|string $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null, ?array $include = null): array|static|null
+    public static function find(array|int|string $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null, ?array $include = null): ModelCollection|static|null
     {
         // Scalar form — primary-key lookup (parity with Python/Ruby/Node.js find()).
         if (!is_array($filter)) {
@@ -1133,15 +1133,21 @@ abstract class ORM
             static::eagerLoad($models, $include, $db);
         }
 
-        return $models;
+        return new ModelCollection($models, self::collectionTotal($result, count($models)), $limit, $offset);
     }
 
     /**
      * Get all records with pagination.
      *
-     * @return array<int, static>
+     * Returns a ModelCollection (ADR-0064): the page of models, array-compatible
+     * (iterate / index / count / json_encode all unchanged), that also carries
+     * the table total via getTotalRecords() / toPaginate() — ignoring limit /
+     * offset, respecting soft-delete. Zero extra queries: the total reuses the
+     * COUNT probe fetch() already computed.
+     *
+     * @return ModelCollection<int, static>
      */
-    public function all(int $limit = 100, int $offset = 0, ?array $include = null, ?string $orderBy = null): array
+    public function all(int $limit = 100, int $offset = 0, ?array $include = null, ?string $orderBy = null): ModelCollection
     {
         $this->ensureDb();
 
@@ -1169,7 +1175,32 @@ abstract class ORM
             static::eagerLoad($models, $include, $this->_db);
         }
 
-        return $models;
+        return new ModelCollection($models, self::collectionTotal($result, count($models)), $limit, $offset);
+    }
+
+    /**
+     * Extract the true total for the filter from a `db->fetch()` result.
+     *
+     * `fetch()` returns either the adapter array shape
+     * (`['data' => ..., 'total' => ...]`, where `total` is the COUNT probe) or a
+     * `DatabaseResult` (whose `count` is the same probe). This reads whichever
+     * shape it is, so a ModelCollection's total is sourced from the count the
+     * query ALREADY computed — never a second COUNT. Falls back to the page size
+     * when a shape carries no total.
+     *
+     * @param mixed $result    The value returned by `db->fetch()`.
+     * @param int   $pageCount Rows hydrated on this page (the fallback total).
+     * @return int
+     */
+    private static function collectionTotal(mixed $result, int $pageCount): int
+    {
+        if (is_array($result)) {
+            return (int) ($result['total'] ?? $pageCount);
+        }
+        if ($result instanceof \Tina4\Database\DatabaseResult) {
+            return (int) $result->count;
+        }
+        return $pageCount;
     }
 
     /**
@@ -1485,9 +1516,9 @@ abstract class ORM
      * @param array $params Bound parameters
      * @param int $limit Max results
      * @param int $offset Starting offset
-     * @return array<int, static>
+     * @return ModelCollection<int, static> Page of models carrying the query total (ADR-0064)
      */
-    public function select(string $sql, array $params = [], int $limit = 100, int $offset = 0, ?array $include = null): array
+    public function select(string $sql, array $params = [], int $limit = 100, int $offset = 0, ?array $include = null): ModelCollection
     {
         $this->ensureDb();
         $result = $this->_db->fetch($sql, $params, $limit, $offset);
@@ -1504,7 +1535,7 @@ abstract class ORM
             static::eagerLoad($models, $include, $this->_db);
         }
 
-        return $models;
+        return new ModelCollection($models, self::collectionTotal($result, count($models)), $limit, $offset);
     }
 
     /**
@@ -1543,9 +1574,9 @@ abstract class ORM
      * @param int $offset Starting offset
      * @param array|null $include Relationships to eager-load
      * @param string|null $orderBy ORDER BY clause (e.g. "name ASC")
-     * @return array<int, static>
+     * @return ModelCollection<int, static> Page of models carrying the query total (ADR-0064)
      */
-    public function where(string $filterSql, array $params = [], int $limit = 100, int $offset = 0, ?array $include = null, ?string $orderBy = null): array
+    public function where(string $filterSql, array $params = [], int $limit = 100, int $offset = 0, ?array $include = null, ?string $orderBy = null): ModelCollection
     {
         $this->ensureDb();
 
@@ -1571,7 +1602,7 @@ abstract class ORM
             static::eagerLoad($models, $include, $this->_db);
         }
 
-        return $models;
+        return new ModelCollection($models, self::collectionTotal($result, count($models)), $limit, $offset);
     }
 
     /**
@@ -1682,9 +1713,9 @@ abstract class ORM
      * @param array $params Bound parameters
      * @param int $limit Max results
      * @param int $offset Starting offset
-     * @return array<int, static>
+     * @return ModelCollection<int, static> Page of models carrying the total INCLUDING soft-deleted rows (ADR-0064)
      */
-    public function withTrashed(string $filterSql = '1=1', array $params = [], int $limit = 100, int $offset = 0): array
+    public function withTrashed(string $filterSql = '1=1', array $params = [], int $limit = 100, int $offset = 0): ModelCollection
     {
         $this->ensureDb();
 
@@ -1699,7 +1730,7 @@ abstract class ORM
             $models[] = $model;
         }
 
-        return $models;
+        return new ModelCollection($models, self::collectionTotal($result, count($models)), $limit, $offset);
     }
 
     /**
@@ -1826,8 +1857,13 @@ abstract class ORM
 
     /**
      * Magic static call handler for registered scopes.
+     *
+     * A scope is sugar for where(), so it returns the same array-compatible
+     * ModelCollection where() does (ADR-0064) — carrying the scope's total.
+     *
+     * @return ModelCollection<int, static>
      */
-    public static function __callStatic(string $name, array $arguments): array
+    public static function __callStatic(string $name, array $arguments): ModelCollection
     {
         if (isset(static::$_scopes[static::class][$name])) {
             $scope = static::$_scopes[static::class][$name];
@@ -1890,8 +1926,10 @@ abstract class ORM
         $related = new $relatedClass($this->_db);
 
         // Explicit limit -> single explicit page (never silent truncation).
+        // toArray(): hasMany is a relationship accessor (NOT in ADR-0064's list),
+        // so it keeps its bare-array return; where() now yields a ModelCollection.
         if ($limit !== null) {
-            return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset);
+            return $related->where("{$foreignKey} = :fk", [':fk' => $pkValue], $limit, $offset)->toArray();
         }
 
         // IMPREL-PHP-PARALLEL + cap unify: with no explicit limit, page through
@@ -1912,7 +1950,7 @@ abstract class ORM
                 $pageOffset,
                 null,
                 $orderCol
-            );
+            )->toArray();
             $all = array_merge($all, $batch);
             $pageOffset += self::EAGER_PAGE_SIZE;
         } while (count($batch) === self::EAGER_PAGE_SIZE);
@@ -2508,8 +2546,10 @@ abstract class ORM
     public function cached(string $sql, array $params = [], int $ttl = 60, int $limit = 100, int $offset = 0, ?array $include = null): array
     {
         // ttl <= 0 is NO-CACHE: run it live, store nothing, read nothing.
+        // toArray(): cached() returns a bare array (Python parity: list[Model]),
+        // not a ModelCollection — select() now yields one (ADR-0064).
         if ($ttl <= 0) {
-            return $this->select($sql, $params, $limit, $offset, $include);
+            return $this->select($sql, $params, $limit, $offset, $include)->toArray();
         }
 
         $cacheKey = static::class . ':' . QueryCache::queryKey($sql, $params) . ":{$limit}:{$offset}";
@@ -2518,7 +2558,7 @@ abstract class ORM
             return $hit;
         }
 
-        $result = $this->select($sql, $params, $limit, $offset, $include);
+        $result = $this->select($sql, $params, $limit, $offset, $include)->toArray();
         self::queryCache()->set($cacheKey, $result, $ttl, $this->cacheTags($sql));
         return $result;
     }

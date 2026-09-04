@@ -2852,15 +2852,10 @@ function generateRoute(string $name, array $flags, bool $emitTest = true): void
         \$limit = (int)(\$request->query['per_page'] ?? \$request->query['limit'] ?? 20);
         \$page = (int)(\$request->query['page'] ?? 1);
         \$offset = (int)(\$request->query['offset'] ?? (\$page > 1 ? (\$page - 1) * \$limit : 0));
-        \$model = new {$model}();
-        \$records = array_map(fn(\\Tina4\\ORM \$m) => \$m->toDict(), \$model->all(\$limit, \$offset));
+        \$records = (new {$model}())->all(\$limit, \$offset);
         // tina4:edit  customise the list response (filter / sort / projection)
-        return \$response->json([
-            "records" => \$records,
-            "count" => \$model->count(),
-            "page" => \$page,
-            "per_page" => \$limit,
-        ], 200);
+        // records->toPaginate() -> records, total, page, per_page, total_pages, limit, offset (ADR-0064)
+        return \$response->json(\$records->toPaginate(), 200);
     } catch (\\Throwable \$e) {
         \\Tina4\\Debug::message(\$e->getMessage(), TINA4_LOG_ERROR);
         return \$response->json(["error" => "Failed to list {$routePath}"], 500);
@@ -2959,7 +2954,7 @@ PHP;
         $bList = aiFill(
             "list_{$routePath}",
             "return the {$routePath} collection (add pagination if it grows)",
-            "(new {$m}())->all(\$limit, \$offset) then map \$m->toDict()  (declare {$m} extends \\Tina4\\ORM in src/orm/{$m}.php)",
+            "(new {$m}())->all(\$limit, \$offset)->toPaginate()  (declare {$m} extends \\Tina4\\ORM in src/orm/{$m}.php)",
             "list_{$routePath}: query and return the records",
             ret: 'return $response->json(["records" => $rows], 200);',
             ground: 'tina4_context("list ORM records with pagination", "php")'

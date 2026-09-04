@@ -129,8 +129,9 @@ final class ScopesContractTest extends TestCase
         $users = ScopeUserPhp::active();
         $products = ScopeProductPhp::active();
 
-        $userNames = array_map(static fn($u) => $u->name, $users);
-        $productNames = array_map(static fn($p) => $p->name, $products);
+        // scope() returns a ModelCollection (ADR-0064, like where()); toArray() for array_map.
+        $userNames = array_map(static fn($u) => $u->name, $users->toArray());
+        $productNames = array_map(static fn($p) => $p->name, $products->toArray());
         sort($userNames);
         sort($productNames);
 
@@ -158,7 +159,7 @@ final class ScopesContractTest extends TestCase
 
         $visible = ScopeArticlePhp::news();
         $this->assertCount(2, $visible);
-        $names = array_map(static fn($a) => $a->name, $visible);
+        $names = array_map(static fn($a) => $a->name, $visible->toArray());
         $this->assertNotContains('One', $names);
 
         // Negative: the row is still PHYSICALLY present (raw, unfiltered).
@@ -191,8 +192,8 @@ final class ScopesContractTest extends TestCase
         $page2 = ScopeWidgetPhp::everything(5, 5);
         $this->assertCount(5, $page1);
         $this->assertCount(5, $page2);
-        $ids1 = array_map(static fn($w) => $w->id, $page1);
-        $ids2 = array_map(static fn($w) => $w->id, $page2);
+        $ids1 = array_map(static fn($w) => $w->id, $page1->toArray());
+        $ids2 = array_map(static fn($w) => $w->id, $page2->toArray());
         $this->assertEmpty(array_intersect($ids1, $ids2), 'pages overlap');
     }
 }

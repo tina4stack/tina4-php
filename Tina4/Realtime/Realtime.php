@@ -172,7 +172,9 @@ final class Realtime
             Router::get($paths['files'] . '/{key}', function ($request, $response, $key) use ($store) {
                 $identity = self::identity(self::reqAuth($request));
                 $rows = (new Attachment())->where('storage_key = ?', [$key], 1);
-                if (empty($rows)) {
+                // where() returns a ModelCollection (ADR-0064); empty() is always
+                // false on an object, so test the page size via count().
+                if (count($rows) === 0) {
                     return $response(['error' => 'not found'], 404);
                 }
                 $att = $rows[0];
@@ -370,7 +372,9 @@ final class Realtime
     {
         try {
             $rows = (new ChannelMember())->where('channel_id = ? AND user_id = ?', [$channelId, $identity], 1);
-            if (!empty($rows)) {
+            // where() returns a ModelCollection (ADR-0064); empty() is always
+            // false on an object, so test the page size via count().
+            if (count($rows) > 0) {
                 $member = $rows[0];
                 $member->lastReadAt = self::nowIso();
                 $member->save();

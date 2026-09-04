@@ -125,7 +125,7 @@ class ModelDiscoveryTest extends TestCase
                 $fresh = new Goose(['name' => 'Graylag']);
                 $fresh->save();
                 return $response->json([
-                    'records' => array_map(fn(\Tina4\ORM $m) => $m->toDict(), $goose->all()),
+                    'records' => array_map(fn(\Tina4\ORM $m) => $m->toDict(), $goose->all()->toArray()),
                     'count' => $goose->count(),
                 ]);
             } catch (\Throwable $e) {

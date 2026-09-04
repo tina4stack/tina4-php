@@ -247,7 +247,11 @@ class ORMV3Test extends TestCase
     {
         $user = new TestUser($this->db);
         $results = $user->find(['name' => 'Nonexistent']);
-        $this->assertSame([], $results);
+        // ADR-0064: find(filter) returns a ModelCollection, empty here, and an
+        // empty page still reports its total (0 matches -> 0).
+        $this->assertInstanceOf(\Tina4\ModelCollection::class, $results);
+        $this->assertCount(0, $results);
+        $this->assertSame(0, $results->getTotalRecords());
     }
 
     public function testFindWithOrderBy(): void
@@ -682,9 +686,10 @@ class ORMV3Test extends TestCase
         $this->db->exec("INSERT INTO users (name, email) VALUES ('Alice', 'alice@test.com')");
         $this->db->exec("INSERT INTO users (name, email) VALUES ('Bob', 'bob@test.com')");
 
-        // Array argument => filter-based lookup (returns array, PHP back-compat preserved).
+        // Array argument => filter-based lookup (returns an array-compatible
+        // ModelCollection; index/count/back-compat preserved — ADR-0064).
         $results = TestUser::find(['name' => 'Alice']);
-        $this->assertIsArray($results);
+        $this->assertInstanceOf(\Tina4\ModelCollection::class, $results);
         $this->assertCount(1, $results);
         $this->assertSame('Alice', $results[0]->name);
     }
@@ -1449,7 +1454,7 @@ class ORMV3Test extends TestCase
     // --- ORM find()/all() normalisation (issue #108) ----------------------
 
     /**
-     * all() returns a flat array of model instances.
+     * all() returns an array-compatible ModelCollection of model instances (ADR-0064).
      * This covers the DatabaseResult normalisation path inside the ORM fetch layer.
      */
     public function testAllReturnsModelInstances(): void
@@ -1459,7 +1464,7 @@ class ORMV3Test extends TestCase
 
         $page = (new TestUser($this->db))->all();
 
-        $this->assertIsArray($page, 'all() must return an array');
+        $this->assertInstanceOf(\Tina4\ModelCollection::class, $page, 'all() returns a ModelCollection (ADR-0064)');
         $this->assertGreaterThanOrEqual(2, count($page), 'should contain at least the 2 inserted rows');
 
         foreach ($page as $u) {
@@ -1469,15 +1474,17 @@ class ORMV3Test extends TestCase
     }
 
     /**
-     * find() with no matching column/value must return an empty array without crashing.
+     * find() (filter form) with no matching column/value must return an empty
+     * ModelCollection without crashing (ADR-0064).
      */
     public function testFindWithEmptyResultDoesNotCrash(): void
     {
         // find() takes an associative array of column => value pairs
         $results = TestUser::find(['id' => 99999]);
 
-        $this->assertIsArray($results, 'find() must return an array even when no rows match');
-        $this->assertCount(0, $results, 'find() with no matching rows should return an empty array');
+        $this->assertInstanceOf(\Tina4\ModelCollection::class, $results, 'find() (filter form) returns a ModelCollection (ADR-0064)');
+        $this->assertCount(0, $results, 'find() with no matching rows should be empty');
+        $this->assertSame(0, $results->getTotalRecords(), 'zero matches -> total 0');
     }
 
     /**

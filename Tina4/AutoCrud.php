@@ -9,7 +9,6 @@
 namespace Tina4;
 
 use Tina4\Database\DatabaseAdapter;
-use Tina4\Database\DatabaseResult;
 
 /**
  * Auto-CRUD — discovers ORM models and auto-generates REST endpoints.
@@ -204,36 +203,17 @@ class AutoCrud
 
             if (!empty($filter)) {
                 $models = $model->find($filter, $limit, $offset, $orderBy);
-                // TRUE total for the filter: a COUNT over the SAME predicate
-                // find() built ("<column> = ?" per key, ANDed), NEVER the
-                // rows-returned count - a page-2 request must report 250, not 20.
-                // Mirror find()'s column mapping so the count matches the page.
-                $conditions = [];
-                $params = [];
-                foreach ($filter as $key => $value) {
-                    $conditions[] = $model->getDbColumn($key) . ' = ?';
-                    $params[] = $value;
-                }
-                $total = $model->count(implode(' AND ', $conditions), $params);
             } else {
                 $models = $model->all($limit, $offset);
-                $total = $model->count();
             }
 
-            $records = array_map(fn(ORM $m) => $m->toDict(), $models);
-
-            // ONE canonical envelope (ADR-0043): describe THIS page's result and
-            // let DatabaseResult::toPaginate() derive the exact seven snake_case
-            // keys - records, total, page, per_page, total_pages, limit, offset.
-            // No second, divergent envelope is built here.
-            $result = new DatabaseResult(
-                records: $records,
-                count: $total,
-                limit: $limit,
-                offset: $offset,
-            );
-
-            return $response->json($result->toPaginate());
+            // Dogfood ADR-0064: find()/all() return a ModelCollection that
+            // already carries the TRUE total for the filter (the fetch COUNT
+            // probe, ignoring limit/offset, respecting soft-delete) and emits the
+            // exact seven-key envelope of DatabaseResult::toPaginate() (ADR-0043)
+            // - records, total, page, per_page, total_pages, limit, offset. No
+            // second COUNT query, no hand-built envelope, no page-2 mismatch.
+            return $response->json($models->toPaginate());
         };
     }
 

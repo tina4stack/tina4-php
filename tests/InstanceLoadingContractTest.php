@@ -121,7 +121,8 @@ class InstanceLoadingContractTest extends TestCase
         // The SAME row must also survive a full all() (not just a single
         // find), proving one non-conforming row does not abort a page of results.
         $allRows = (new LoadContractItemV2())->all();
-        $ids = array_map(fn($r) => $r->id, $allRows);
+        // all() returns a ModelCollection (ADR-0064); toArray() for native array_map.
+        $ids = array_map(fn($r) => $r->id, $allRows->toArray());
         $this->assertContains($stored->id, $ids, 'all() aborted instead of returning every row');
 
         // Prove the write path is UNCHANGED: V2's OWN save() still rejects a

@@ -129,7 +129,10 @@ final class RelationshipsContractTest extends TestCase
         // REL-PHP-EAGERLOAD-STATIC: call the PUBLIC static eagerLoad with NO $db
         // arg -- it must resolve the DB via the static path (resolveDb), not the
         // instance getDb() which fatals in a static context.
-        RelAuthorPhp::eagerLoad($authors, ['posts']);
+        // all() returns a ModelCollection (ADR-0064); eagerLoad() takes an array.
+        // The models are the same object references, so relations cached by
+        // eagerLoad are visible when iterating $authors afterwards.
+        RelAuthorPhp::eagerLoad($authors->toArray(), ['posts']);
         $total = 0;
         foreach ($authors as $author) {
             $total += count($author->posts);

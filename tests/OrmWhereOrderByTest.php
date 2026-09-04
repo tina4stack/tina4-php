@@ -51,10 +51,16 @@ class OrmWhereOrderByTest extends TestCase
         $this->db->close();
     }
 
-    /** @param array<int, WhereOrderPerson> $rows @return array<int, string> */
-    private function names(array $rows): array
+    /** @param iterable<int, WhereOrderPerson> $rows @return array<int, string> */
+    private function names(iterable $rows): array
     {
-        return array_map(static fn ($r) => $r->name, $rows);
+        // iterable so a where()/all() ModelCollection (ADR-0064) passes as-is
+        // alongside a bare array; iterate rather than array_map (which needs one).
+        $names = [];
+        foreach ($rows as $r) {
+            $names[] = $r->name;
+        }
+        return $names;
     }
 
     public function testOrderByAscSortsResults(): void
