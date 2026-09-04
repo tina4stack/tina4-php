@@ -3060,7 +3060,11 @@ class DevAdmin
         $safePattern = htmlspecialchars($matchedPattern, ENT_QUOTES);
         $safeRequestId = htmlspecialchars($requestId, ENT_QUOTES);
 
-        $reload = self::$suppressReload ? '0' : '1';
+        // The dev-admin dashboard (any /__dev page) reloads itself gently via its
+        // SPA (in-place git-status refresh), so the toolbar's blunt full-page
+        // reloader must be suppressed there -- otherwise saving from the editor
+        // reloads the whole dashboard. App pages keep normal hot-reload.
+        $reload = (self::$suppressReload || str_starts_with($path, '/__dev')) ? '0' : '1';
 
         $toolbar = <<<HTML
 <link rel="stylesheet" href="/__dev/toolbar.css">
