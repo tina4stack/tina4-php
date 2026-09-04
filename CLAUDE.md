@@ -371,14 +371,20 @@ $user->belongsTo($relatedClass, $foreignKey): ?ORM
 
 // Instance methods that query (also work as User()->where(...))
 $user->findById($id): self
-$user->find($filter, $limit, $offset, $orderBy): array
-$user->select($sql, $params, $limit, $offset): array
+$user->find($filter, $limit, $offset, $orderBy): ModelCollection
+$user->select($sql, $params, $limit, $offset): ModelCollection
 $user->selectOne($sql, $params, $include): ?static
-$user->where($filterSql, $params, $limit, $offset, $include, $orderBy): array
-$user->all($limit, $offset): array
+$user->where($filterSql, $params, $limit, $offset, $include, $orderBy): ModelCollection
+$user->all($limit, $offset): ModelCollection
 $user->count($conditions, $params): int
 $user->findOrFail($id): static
-$user->withTrashed($filter, $params, $limit, $offset): array
+$user->withTrashed($filter, $params, $limit, $offset): ModelCollection
+// find(filter) / select / where / all / withTrashed return a ModelCollection (ADR-0064):
+//   the page of models AND the filter total, independent of $limit/$offset.
+//   $rows->getTotalRecords();  // e.g. 250, reuses the query COUNT -- zero extra queries
+//   $rows->toPaginate();       // ["records"=>..., "total"=>..., "page"=>..., "per_page"=>..., ...]
+//   Array-compatible (foreach / $rows[0] / count() / json_encode); ->toArray() for native array_*.
+//   PHP is the one framework whose return type changed from a bare array to this object.
 $user->scope($name, $filterSql, $params): void  // Registers reusable named method: User::active()
 $user->createTable(): bool
 
