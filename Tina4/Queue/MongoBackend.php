@@ -619,15 +619,30 @@ class MongoBackend implements QueueBackend
             return;
         }
 
-        $this->collection->createIndex(
-            ['topic' => 1, 'status' => 1, 'created_at' => 1],
-            ['name' => 'queue_dequeue_idx']
-        );
-
-        $this->collection->createIndex(
-            ['topic' => 1, 'status' => 1],
-            ['name' => 'queue_size_idx']
-        );
+        // An index on the SAME keys may already exist under a DIFFERENT name --
+        // a sibling Tina4 service in another language uses Mongo's default index
+        // name on these keys, and an older version may have too. That is not an
+        // error: the index already serves the query. Mongo raises
+        // IndexOptionsConflict (85) / IndexKeySpecsConflict (86) in that case, so
+        // tolerate it rather than failing queue startup on a shared Mongo
+        // (MONGO-IDX-IDEMPOTENT).
+        foreach (
+            [
+                [['topic' => 1, 'status' => 1, 'created_at' => 1], 'queue_dequeue_idx'],
+                [['topic' => 1, 'status' => 1], 'queue_size_idx'],
+            ] as [$keys, $name]
+        ) {
+            try {
+                $this->collection->createIndex($keys, ['name' => $name]);
+            } catch (\Throwable $e) {
+                if (
+                    !in_array((int)$e->getCode(), [85, 86], true)
+                    && !str_contains($e->getMessage(), 'already exists')
+                ) {
+                    throw $e;
+                }
+            }
+        }
 
         $this->indexesCreated = true;
     }
