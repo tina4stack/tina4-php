@@ -6,6 +6,88 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.132
+
+ORM reads return a ModelCollection carrying the query total (ADR-0064): where,
+select, find (filter form), all, and with_trashed hand back the page of models AND
+the total for the filter, so you paginate without a second query. get_total_records()
+/ to_paginate() (Python, Ruby); getTotalRecords() / toPaginate() (PHP, Node). The
+total reuses the count the query already ran - zero extra queries. Python's
+where(..., with_count=True) tuple is removed; PHP's return type changes from a bare
+array to an array-compatible ModelCollection object (toArray() escape hatch). Also:
+the dev server binds dual-stack loopback so localhost works on Windows; the dev-admin
+agent chat surface is removed and the dashboard no longer self-reloads; Firebird DDL
+no longer reads a row count and Firebird adapters close cleanly on GC (Python); the
+Valkey session handler subclasses Redis and shared fetch/execute/Frond loops are
+hoisted (behaviour unchanged). Full notes: https://tina4.com/python/36-releases
+
+## 3.13.131
+
+AI skills for a global team: plain English, short replies, effort matched to the
+task, ask-before-guess, and a grounding fallback for tools without the coder server.
+
+## 3.13.130
+
+AI skills discipline pass: objective on ideas (disagree when a design is weak),
+claim only what was verified, and chat instead of narrate.
+
+## 3.13.129
+
+tina4 generate model stops silently pluralising a reserved-word table. It prints a
+note and offers --table-name, so a downstream route or query does not fail with no
+clue the table was renamed.
+
+## 3.13.128
+
+tina4 lint: one command runs the project linter (ruff, phpcs, rubocop, or eslint),
+installs it as a dev dependency on demand, and falls back to a zero-dependency syntax
+baseline with --no-install.
+
+## 3.13.127
+
+A bare TRUE or FALSE now reaches SQL Server and Firebird as 1/0 in every framework.
+Node, PHP and Ruby had skipped the boolean translation on SQL Server, and Ruby on
+Firebird too.
+
+## 3.13.126
+
+The fake-data seeder reads the column name: a products.name column fills with product
+names, not person names.
+
+## 3.13.125
+
+Scaffolded migrations apply on every engine. tina4 generate migration wrote
+SQLite-only DDL (TEXT, REAL, CREATE TABLE IF NOT EXISTS); the generators now emit
+engine-correct types so a migration runs on Firebird and the rest.
+
+## 3.13.124
+
+The database session backend works on Firebird in all four frameworks, with a
+session-engine test in each so the gap cannot reopen.
+
+## 3.13.123
+
+tina4 generate queue <topic> returns the generate_v1_1 envelope: edit_hints[] naming
+the handler line to fill and next[] naming what to run after.
+
+## 3.13.122
+
+The default Content-Security-Policy (default-src 'self') no longer fails silently:
+when an app relies on something the policy blocks, the framework surfaces it instead
+of leaving a blank page.
+
+## 3.13.121
+
+Every migration surface speaks the ADR-0063 generate_v1_1 envelope - the CLI
+migrate:create, the MCP migration_create, and the rest, not just tina4 generate
+migration. Adds a pre-tag release guard.
+
+## 3.13.120
+
+Scaffolding envelope v1.1 (ADR-0063): every tina4 generate verb reports what to edit
+next and what to do after, not just where files went. Introduces the tina4-architect
+skill.
+
 ## 3.13.119
 
 Three real fixes ship in this release.
