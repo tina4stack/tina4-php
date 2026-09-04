@@ -24,12 +24,14 @@ namespace Tina4\Session;
 
 class RedisSessionHandler
 {
-    private string $host;
-    private int $port;
-    private ?string $password;
-    private int $db;
-    private int $ttl;
-    private string $keyPrefix;
+    // protected (not private) so the Valkey subclass and its tests can see the
+    // resolved config -- these are the shared state of the RESP handler.
+    protected string $host;
+    protected int $port;
+    protected ?string $password;
+    protected int $db;
+    protected int $ttl;
+    protected string $keyPrefix;
 
     /**
      * Subclasses (Valkey) override these two; every method below is inherited.
