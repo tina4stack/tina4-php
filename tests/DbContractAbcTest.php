@@ -172,48 +172,60 @@ class DbContractAbcTest extends TestCase
 
     public function testGetNextIdConcurrentNoDuplicates(): void
     {
-        if (!function_exists('pcntl_fork')) {
-            $this->markTestSkipped('pcntl_fork is required for the concurrency test');
-        }
-
         // Concurrency needs a shared on-disk SQLite file — :memory: is private
-        // per connection, so forked children would each get an empty database.
+        // per connection, so each worker would get an empty database.
         $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR
             . 'tina4_seq_concurrent_' . uniqid('', true) . '.db';
         $outDir = $tmp . '.ids';
         @mkdir($outDir);
 
-        // Seed the table + sequence row from the parent first, so every child
+        // Seed the table + sequence row from the parent first, so every worker
         // hits the atomic increment (not a concurrent CREATE TABLE race).
         $seed = Database::create('sqlite:///' . $tmp);
         $seed->execute('CREATE TABLE items (id INTEGER PRIMARY KEY, v TEXT)');
         $seed->getNextId('items'); // creates tina4_sequences + the row, returns 1
         $seed->close();
 
+        // Real concurrency via FRESH processes (proc_open), never pcntl_fork.
+        // Forking a PHPUnit process that has loaded a threaded extension
+        // deadlocks the child: grpc and openswoole both run background threads
+        // holding pthread mutexes, and fork() copies those mutexes in their
+        // LOCKED state, so the child hangs on futex_wait the instant it touches
+        // one — before it does any work (0 ids written, the whole run wedges).
+        // A fresh php process starts clean, so the concurrency is genuine AND
+        // fork-safe on every PHP build (SEQ-CONCURRENCY-FORKSAFE). This still
+        // exercises the real atomic increment: N independent OS processes race
+        // one on-disk SQLite file, no mock.
+        $autoload = \dirname(__DIR__) . '/vendor/autoload.php';
+        $worker = $tmp . '.worker.php';
+        file_put_contents($worker, <<<'PHP'
+            <?php
+            require $argv[1];
+            try {
+                $db = \Tina4\Database\Database::create('sqlite:///' . $argv[2]);
+                file_put_contents($argv[4], (string) $db->getNextId($argv[3]));
+                $db->close();
+            } catch (\Throwable $e) {
+                file_put_contents($argv[4], 'ERR:' . $e->getMessage());
+            }
+            PHP);
+
         $n = 60;
-        $pids = [];
+        $procs = [];
         for ($i = 0; $i < $n; $i++) {
-            $pid = pcntl_fork();
-            if ($pid === -1) {
-                $this->fail('pcntl_fork failed');
+            $proc = proc_open(
+                [PHP_BINARY, $worker, $autoload, $tmp, 'items', $outDir . '/' . $i],
+                [['file', '/dev/null', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']],
+                $pipes
+            );
+            if (\is_resource($proc)) {
+                $procs[] = $proc;
             }
-            if ($pid === 0) {
-                // Child — its own connection to the shared file.
-                $child = Database::create('sqlite:///' . $tmp);
-                try {
-                    $id = $child->getNextId('items');
-                    file_put_contents($outDir . '/' . $i, (string) $id);
-                } catch (\Throwable $e) {
-                    file_put_contents($outDir . '/' . $i, 'ERR:' . $e->getMessage());
-                }
-                $child->close();
-                exit(0);
-            }
-            $pids[] = $pid;
         }
-        foreach ($pids as $pid) {
-            pcntl_waitpid($pid, $status);
+        foreach ($procs as $proc) {
+            proc_close($proc); // blocks until this worker exits
         }
+        @unlink($worker);
 
         $ids = [];
         $errors = [];
