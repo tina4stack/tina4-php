@@ -31,6 +31,14 @@ class RedisSessionHandler
     private int $ttl;
     private string $keyPrefix;
 
+    /**
+     * Subclasses (Valkey) override these two; every method below is inherited.
+     * Valkey is wire-compatible with Redis, so the RESP logic is shared -- the
+     * subclass only changes the env-var prefix and the brand word in messages.
+     */
+    protected string $env = 'REDIS';
+    protected string $brand = 'Redis';
+
     /** @var resource|null TCP socket */
     private $socket = null;
 
@@ -45,15 +53,16 @@ class RedisSessionHandler
      */
     public function __construct(array $config = [])
     {
-        $this->host = $config['host'] ?? (getenv('TINA4_SESSION_REDIS_HOST') ?: 'localhost');
-        $this->port = (int)($config['port'] ?? (getenv('TINA4_SESSION_REDIS_PORT') ?: 6379));
+        $env = $this->env;
+        $this->host = $config['host'] ?? (getenv("TINA4_SESSION_{$env}_HOST") ?: 'localhost');
+        $this->port = (int)($config['port'] ?? (getenv("TINA4_SESSION_{$env}_PORT") ?: 6379));
 
-        $envPass = getenv('TINA4_SESSION_REDIS_PASSWORD');
+        $envPass = getenv("TINA4_SESSION_{$env}_PASSWORD");
         $this->password = $config['password'] ?? ($envPass !== false && $envPass !== '' ? $envPass : null);
 
-        $this->db = (int)($config['db'] ?? (getenv('TINA4_SESSION_REDIS_DB') ?: 0));
+        $this->db = (int)($config['db'] ?? (getenv("TINA4_SESSION_{$env}_DB") ?: 0));
         $this->ttl = (int)($config['ttl'] ?? (getenv('TINA4_SESSION_TTL') ?: 3600));
-        $this->keyPrefix = $config['keyPrefix'] ?? (getenv('TINA4_SESSION_REDIS_PREFIX') ?: 'tina4:session:');
+        $this->keyPrefix = $config['keyPrefix'] ?? (getenv("TINA4_SESSION_{$env}_PREFIX") ?: 'tina4:session:');
     }
 
     /**
@@ -168,7 +177,7 @@ class RedisSessionHandler
     {
         $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
         if (!$this->socket) {
-            throw new \RuntimeException("Redis connection failed: [{$errno}] {$errstr}");
+            throw new \RuntimeException("{$this->brand} connection failed: [{$errno}] {$errstr}");
         }
 
         stream_set_timeout($this->socket, 30);
@@ -177,7 +186,7 @@ class RedisSessionHandler
         if ($this->password !== null) {
             $result = $this->sendCommand('AUTH', $this->password);
             if ($result !== 'OK') {
-                throw new \RuntimeException('Redis authentication failed');
+                throw new \RuntimeException("{$this->brand} authentication failed");
             }
         }
 
@@ -185,7 +194,7 @@ class RedisSessionHandler
         if ($this->db > 0) {
             $result = $this->sendCommand('SELECT', (string)$this->db);
             if ($result !== 'OK') {
-                throw new \RuntimeException("Redis SELECT database {$this->db} failed");
+                throw new \RuntimeException("{$this->brand} SELECT database {$this->db} failed");
             }
         }
     }
@@ -223,7 +232,7 @@ class RedisSessionHandler
                 return $data;
 
             case '-': // Error
-                throw new \RuntimeException('Redis error: ' . $data);
+                throw new \RuntimeException("{$this->brand} error: " . $data);
 
             case ':': // Integer
                 return (int)$data;
@@ -239,7 +248,7 @@ class RedisSessionHandler
                 while ($remaining > 0) {
                     $chunk = fread($this->socket, $remaining);
                     if ($chunk === false || $chunk === '') {
-                        throw new \RuntimeException('Failed to read Redis bulk string');
+                        throw new \RuntimeException("Failed to read {$this->brand} bulk string");
                     }
                     $value .= $chunk;
                     $remaining -= strlen($chunk);
@@ -273,7 +282,7 @@ class RedisSessionHandler
         while (true) {
             $char = fgetc($this->socket);
             if ($char === false) {
-                throw new \RuntimeException('Failed to read from Redis socket');
+                throw new \RuntimeException("Failed to read from {$this->brand} socket");
             }
             if ($char === "\r") {
                 fgetc($this->socket); // consume \n
