@@ -1120,6 +1120,10 @@ Frond templates must work identically across all Tina4 frameworks (PHP, Python, 
 Only use Frond/Twig features documented in the framework — no language-specific extensions. If a
 template feature works in one framework but not another, it's a **framework bug** — report it.
 
+### Web Push (Feature 140)
+
+Use `references/web-push.md` for the provider-neutral Web Push contract. Treat it as a standalone outbound integration, not WebSocket or Server-Sent Events. Keep it configuration-first, fail loudly on partial VAPID configuration, and use PHP's OpenSSL extension without adding a Web Push Composer package.
+
 ## Communication Style
 
 When helping developers:
