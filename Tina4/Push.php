@@ -50,41 +50,43 @@ final class Push
         return ['publicKey' => self::b64($ec['x'] . $ec['y'], "\x04"), 'privateKey' => self::b64($ec['d'])];
     }
 
-    public static function generateKeys(): array { return self::generateVapidKeys(); }
-    public static function fromEnv(array $options = []): self { return new self(...$options); }
-
-    /** @return array{ok:bool,status:int,dead:bool,endpoint:string,response:string} */
+    /** @return array{ok:bool,status:int,dead:bool,retryable:bool,endpoint:string,response:string} */
     public function send(array $subscription, mixed $payload): array
     {
+        $endpoint = $this->endpoint($subscription);
+        [$subject, $publicKey, $privateKey] = $this->configuration();
+        [$public, $private] = $this->vapidKeys($publicKey, $privateKey);
+        $raw = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($raw === false) throw new PushError('Push payload is not JSON serializable');
+        return $this->deliver($endpoint, $subject, $publicKey, $private, $public, $this->encrypt($raw, $subscription));
+    }
+
+    private function endpoint(array $subscription): string
+    {
         $endpoint = $subscription['endpoint'] ?? null;
-        if (!is_string($endpoint) || $endpoint === '') {
-            throw new PushError('A Web Push subscription with an endpoint is required');
-        }
+        if (!is_string($endpoint) || $endpoint === '') throw new PushError('A Web Push subscription with an endpoint is required');
         $parts = parse_url($endpoint);
         if (!is_array($parts) || !in_array(strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true) || empty($parts['host'])) {
             throw new PushError('Push subscription endpoint must use HTTP or HTTPS');
         }
-        [$subject, $publicKey, $privateKey] = $this->configuration();
+        return $endpoint;
+    }
+
+    private function vapidKeys(string $publicKey, string $privateKey): array
+    {
         $public = self::decode($publicKey, 'TINA4_VAPID_PUBLIC');
         $private = self::decode($privateKey, 'TINA4_VAPID_PRIVATE');
-        if (strlen($public) !== 65 || $public[0] !== "\x04") {
-            throw new PushError('TINA4_VAPID_PUBLIC must be a 65-byte P-256 public key');
-        }
-        if (strlen($private) !== 32) {
-            throw new PushError('TINA4_VAPID_PRIVATE must be a 32-byte P-256 private key');
-        }
+        if (strlen($public) !== 65 || $public[0] !== "\x04") throw new PushError('TINA4_VAPID_PUBLIC must be a 65-byte P-256 public key');
+        if (strlen($private) !== 32) throw new PushError('TINA4_VAPID_PRIVATE must be a 32-byte P-256 private key');
         $vapidPrivate = openssl_pkey_get_private(self::privatePem($private, $public));
-        $vapidDetails = $vapidPrivate !== false ? openssl_pkey_get_details($vapidPrivate) : false;
-        $derivedPublic = is_array($vapidDetails) && isset($vapidDetails['ec']['x'], $vapidDetails['ec']['y'])
-            ? "\x04" . $vapidDetails['ec']['x'] . $vapidDetails['ec']['y'] : '';
-        if ($derivedPublic !== $public) {
-            throw new PushError('TINA4_VAPID_PUBLIC does not match TINA4_VAPID_PRIVATE');
-        }
-        $raw = is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if ($raw === false) {
-            throw new PushError('Push payload is not JSON serializable');
-        }
-        $body = $this->encrypt($raw, $subscription);
+        $details = $vapidPrivate !== false ? openssl_pkey_get_details($vapidPrivate) : false;
+        $derived = is_array($details) && isset($details['ec']['x'], $details['ec']['y']) ? "\x04" . $details['ec']['x'] . $details['ec']['y'] : '';
+        if ($derived !== $public) throw new PushError('TINA4_VAPID_PUBLIC does not match TINA4_VAPID_PRIVATE');
+        return [$public, $private];
+    }
+
+    private function deliver(string $endpoint, string $subject, string $publicKey, string $private, string $public, string $body): array
+    {
         $headers = [
             'Authorization: vapid t=' . $this->vapidToken($endpoint, $subject, $private, $public) . ', k=' . $publicKey,
             'Content-Encoding: aes128gcm',
