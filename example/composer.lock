@@ -63,7 +63,7 @@
             "license": [
                 "MIT"
             ],
-            "description": "Tina4 for PHP — 54 built-in features, zero dependencies",
+            "description": "Tina4 for PHP — 140 cataloged features, zero dependencies",
             "transport-options": {
                 "symlink": true,
                 "relative": true

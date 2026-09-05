@@ -16,7 +16,7 @@ Real HTTP benchmarks — identical JSON endpoint. Tina4 uses its built-in `strea
 | CodeIgniter 4 | 1,311 | 1,288 | spark serve | 15+ |
 | Laravel 11 | 257 | 313 | artisan serve | 70+ |
 
-**Key takeaway:** Tina4 PHP dominates at 28,158 req/s — 5.5x faster than Slim, 17.7x faster than Symfony, and 110x faster than Laravel, while shipping 98 features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
+**Key takeaway:** Tina4 PHP dominates at 28,158 req/s — 5.5x faster than Slim, 17.7x faster than Symfony, and 110x faster than Laravel, while shipping 140 cataloged features with 0 dependencies. Tina4's custom `stream_select` non-blocking server outperforms even PHP's built-in `php -S` server.
 
 ---
 
@@ -55,9 +55,9 @@ Reproduce: `cd benchmarks && composer install && php bench_templates.php`
 
 ---
 
-## 2. Feature Comparison (41 of 98 built-in features)
+## 2. Feature Comparison (41 of 140 cataloged features)
 
-Tina4 ships **98 built-in features**. The table below compares the subset that has a
+Tina4 ships **140 cataloged features**. The table below compares the subset that has a
 meaningful equivalent in the competing frameworks, so it is a like-for-like comparison
 rather than the full inventory. Everything listed ships with the core install, with no
 extra packages needed.
