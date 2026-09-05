@@ -6,6 +6,14 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.133
+
+Maintainability pass, no behavior changes. Swagger.generate decomposed into cohesive
+helpers (Python 64->6, PHP 83->6, Node 52->2 cyclomatic; Ruby already lean) with the
+OpenAPI document byte-for-byte identical. Ruby dev-admin handle_request split from a
+138-branch dispatcher into per-concern methods (CC 138->11); routes, responses, and
+the localhost/auth gate unchanged. Full notes: https://tina4.com/python/36-releases
+
 ## 3.13.132
 
 ORM reads return a ModelCollection carrying the query total (ADR-0064): where,
