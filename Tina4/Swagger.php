@@ -324,6 +324,100 @@ class Swagger
      */
     public static function generate(array $routes = []): array
     {
+        $info = self::buildInfo();
+
+        // Resolved security schemes (defaults + env + registry) and the default
+        // scheme secured routes use when no explicit @security is declared.
+        $schemes = self::securitySchemes();
+        $defaultScheme = (string) (DotEnv::getEnv('TINA4_SWAGGER_DEFAULT_SCHEME', 'bearerAuth') ?? 'bearerAuth');
+
+        // Path-filter prefixes.
+        $includePrefixes = self::csvEnv('TINA4_SWAGGER_INCLUDE');
+        $excludePrefixes = self::csvEnv('TINA4_SWAGGER_EXCLUDE');
+
+        // Registered component schemas referenced by routes (-> components.schemas).
+        $refSchemas = [];
+
+        $spec = [
+            'openapi' => self::resolveOpenApiVersion(),
+            'info' => $info,
+            'servers' => self::servers(),
+            'paths' => [],
+            'components' => [
+                'securitySchemes' => $schemes,
+            ],
+        ];
+
+        // Valid OpenAPI path-item methods. WebSocket routes carry method 'WS'
+        // (and any future non-HTTP verb) which is NOT a valid path-item key —
+        // emitting it makes the whole document spec-invalid, so skip them.
+        $httpMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
+
+        // Group routes by path pattern (framework internals + non-HTTP verbs dropped).
+        $grouped = self::groupRoutes(Router::getRoutes(), $includePrefixes, $excludePrefixes, $httpMethods);
+
+        // Accumulators: ORM models referenced (-> components.schemas), tags
+        // actually used (-> top-level tags[]), and seen operationIds (de-dup).
+        $models = [];
+        $usedTags = [];
+        $seenIds = [];
+
+        foreach ($grouped as $pattern => $methods) {
+            $openApiPath = self::convertPath($pattern);
+            $pathParams = self::extractPathParameters($pattern);
+
+            foreach ($methods as $method => $route) {
+                $operation = self::buildOperation(
+                    $route,
+                    $method,
+                    $pattern,
+                    $pathParams,
+                    $schemes,
+                    $defaultScheme,
+                    $models,
+                    $usedTags,
+                    $seenIds,
+                    $refSchemas
+                );
+
+                if (!isset($spec['paths'][$openApiPath])) {
+                    $spec['paths'][$openApiPath] = [];
+                }
+
+                $spec['paths'][$openApiPath][$method] = $operation;
+            }
+        }
+
+        self::buildComponentSchemas($spec, $models, $refSchemas);
+
+        // Top-level tags[] array (name-only is valid OpenAPI).
+        if (!empty($usedTags)) {
+            $spec['tags'] = array_map(fn($t) => ['name' => $t], $usedTags);
+        }
+
+        // If no paths were found, set to empty object so JSON encodes as {}
+        if (empty($spec['paths'])) {
+            $spec['paths'] = new \stdClass();
+        }
+
+        return $spec;
+    }
+
+    // ── generate() building blocks ──────────────────────────────────────
+    // generate() is a thin orchestrator; each cohesive slice of the spec
+    // (info block, route grouping, one path operation, components) is built by
+    // one helper so the top-level method stays readable. The emitted document
+    // is unchanged. Mirrors the Python master's decomposition (parity pair).
+
+    /**
+     * Build the OpenAPI info block: title/version/description plus the optional
+     * contact and license blocks (each key present only when its env is set).
+     * TINA4_SWAGGER_CONTACT_TEAM/_URL fall back to the legacy SWAGGER_CONTACT_*.
+     *
+     * @return array<string, mixed>
+     */
+    private static function buildInfo(): array
+    {
         $title = DotEnv::getEnv('TINA4_SWAGGER_TITLE', 'Tina4 API') ?? 'Tina4 API';
         $version = DotEnv::getEnv('TINA4_SWAGGER_VERSION', '1.0.0') ?? '1.0.0';
         $description = DotEnv::getEnv('TINA4_SWAGGER_DESCRIPTION', '') ?? '';
@@ -334,11 +428,6 @@ class Swagger
             'description' => $description,
         ];
 
-        // Optional contact + license blocks — only present when env is set.
-        // info.contact carries name / url / email, each emitted only when
-        // configured. TINA4_SWAGGER_CONTACT_TEAM/_URL are read with the legacy
-        // SWAGGER_CONTACT_TEAM/_URL as a fallback — parity with the Python and
-        // Ruby masters (PHP alone used to emit only the email).
         $contact = [];
         $contactName = self::firstNonEmpty(
             DotEnv::getEnv('TINA4_SWAGGER_CONTACT_TEAM'),
@@ -365,37 +454,21 @@ class Swagger
         if ($license !== null && $license !== '') {
             $info['license'] = ['name' => $license];
         }
+        return $info;
+    }
 
-        // Resolved security schemes (defaults + env + registry) and the default
-        // scheme secured routes use when no explicit @security is declared.
-        $schemes = self::securitySchemes();
-        $defaultScheme = (string) (DotEnv::getEnv('TINA4_SWAGGER_DEFAULT_SCHEME', 'bearerAuth') ?? 'bearerAuth');
-
-        // Path-filter prefixes.
-        $includePrefixes = self::csvEnv('TINA4_SWAGGER_INCLUDE');
-        $excludePrefixes = self::csvEnv('TINA4_SWAGGER_EXCLUDE');
-
-        // Registered component schemas referenced by routes (-> components.schemas).
-        $refSchemas = [];
-
-        $spec = [
-            'openapi' => self::resolveOpenApiVersion(),
-            'info' => $info,
-            'servers' => self::servers(),
-            'paths' => [],
-            'components' => [
-                'securitySchemes' => $schemes,
-            ],
-        ];
-
-        $routes = Router::getRoutes();
-
-        // Valid OpenAPI path-item methods. WebSocket routes carry method 'WS'
-        // (and any future non-HTTP verb) which is NOT a valid path-item key —
-        // emitting it makes the whole document spec-invalid, so skip them.
-        $httpMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
-
-        // Group routes by path pattern
+    /**
+     * Group routes by path pattern for the paths map. Framework internals
+     * (isIncluded) and non-HTTP verbs (e.g. WebSocket 'ws') are dropped.
+     *
+     * @param array<int, array<string, mixed>> $routes
+     * @param array<int, string>               $include
+     * @param array<int, string>               $exclude
+     * @param array<int, string>               $httpMethods
+     * @return array<string, array<string, array<string, mixed>>>
+     */
+    private static function groupRoutes(array $routes, array $include, array $exclude, array $httpMethods): array
+    {
         $grouped = [];
         foreach ($routes as $route) {
             $pattern = $route['pattern'];
@@ -403,7 +476,7 @@ class Swagger
 
             // Path filtering — framework internals (/swagger, /__dev) are always
             // excluded; then TINA4_SWAGGER_INCLUDE / _EXCLUDE prefixes apply.
-            if (!self::isIncluded($pattern, $includePrefixes, $excludePrefixes)) {
+            if (!self::isIncluded($pattern, $include, $exclude)) {
                 continue;
             }
 
@@ -417,329 +490,512 @@ class Swagger
             }
             $grouped[$pattern][$method] = $route;
         }
+        return $grouped;
+    }
 
-        // Accumulators: ORM models referenced (-> components.schemas), tags
-        // actually used (-> top-level tags[]), and seen operationIds (de-dup).
-        $models = [];
-        $usedTags = [];
-        $seenIds = [];
+    /**
+     * Build the OpenAPI operation object for one route (method + pattern).
+     * Accumulators (models/usedTags/seenIds/refSchemas) are threaded through and
+     * mutated in place, exactly as the inline loop did.
+     *
+     * @param array<string, mixed>                 $route
+     * @param array<int, array<string, mixed>>     $pathParams
+     * @param array<string, array<string, mixed>>  $schemes
+     * @param array<string, string>                $models     by-ref accumulator
+     * @param array<int, string>                   $usedTags   by-ref accumulator
+     * @param array<int, string>                   $seenIds    by-ref accumulator
+     * @param array<string, bool>                  $refSchemas by-ref accumulator
+     * @return array<string, mixed>
+     */
+    private static function buildOperation(
+        array $route,
+        string $method,
+        string $pattern,
+        array $pathParams,
+        array $schemes,
+        string $defaultScheme,
+        array &$models,
+        array &$usedTags,
+        array &$seenIds,
+        array &$refSchemas
+    ): array {
+        $tag = self::inferTag($pattern);
+        $operationId = self::uniqueOperationId($method, $pattern, $seenIds);
 
-        foreach ($grouped as $pattern => $methods) {
-            $openApiPath = self::convertPath($pattern);
-            $pathParams = self::extractPathParameters($pattern);
+        // Docblock annotations merged with stored swagger meta; applies the
+        // @noauth/@secured flags onto $route for the security step below.
+        $docMeta = self::resolveDocMeta($route);
+        $swaggerMeta = $route['swagger'] ?? [];
 
-            foreach ($methods as $method => $route) {
-                $tag = self::inferTag($pattern);
-                $baseId = $method . str_replace(['/', '{', '}', '-', '*'], ['_', '', '', '_', 'wildcard'], $pattern);
-                // De-duplicate: OpenAPI requires operationId unique across the
-                // document (str_replace collapses distinct paths to the same id).
-                $operationId = $baseId;
-                $dupN = 2;
-                while (in_array($operationId, $seenIds, true)) {
-                    $operationId = $baseId . '_' . $dupN;
-                    $dupN++;
-                }
-                $seenIds[] = $operationId;
+        $operation = [
+            'tags' => !empty($docMeta['tags']) ? $docMeta['tags'] : [$tag],
+            'operationId' => $operationId,
+            'summary' => $docMeta['summary'] ?? strtoupper($method) . ' ' . $pattern,
+            'responses' => [
+                '200' => [
+                    'description' => 'Successful response',
+                ],
+            ],
+        ];
 
-                // Parse docblock annotations from the route callback
-                $docMeta = isset($route['callback']) ? self::parseDocBlock($route['callback']) : [
-                    'description' => null,
-                    'summary' => null,
-                    'tags' => [],
-                    'examples' => [],
-                    'responses' => [],
-                    'params' => [],
-                    'deprecated' => false,
-                    'noAuth' => false,
-                    'secured' => false,
-                ];
+        // Add description from docblock
+        if ($docMeta['description'] !== null) {
+            $operation['description'] = $docMeta['description'];
+        }
 
-                // Apply @noauth / @secured annotations to route flags
-                if ($docMeta['noAuth']) {
-                    $route['noAuth'] = true;
-                }
-                if ($docMeta['secured']) {
-                    $route['secure'] = true;
-                }
+        // Mark as deprecated
+        if ($docMeta['deprecated']) {
+            $operation['deprecated'] = true;
+        }
 
-                // Merge stored swagger metadata (from Router::swagger() or AutoCrud)
-                $swaggerMeta = $route['swagger'] ?? [];
-                if (!empty($swaggerMeta)) {
-                    if (isset($swaggerMeta['summary']) && $docMeta['summary'] === null) {
-                        $docMeta['summary'] = $swaggerMeta['summary'];
-                    }
-                    if (isset($swaggerMeta['description']) && $docMeta['description'] === null) {
-                        $docMeta['description'] = $swaggerMeta['description'];
-                    }
-                    if (isset($swaggerMeta['tags']) && empty($docMeta['tags'])) {
-                        $docMeta['tags'] = $swaggerMeta['tags'];
-                    }
-                    if (isset($swaggerMeta['example']) && empty($docMeta['examples'])) {
-                        $docMeta['examples'][] = $swaggerMeta['example'];
-                    }
-                    if (isset($swaggerMeta['deprecated']) && !$docMeta['deprecated']) {
-                        $docMeta['deprecated'] = $swaggerMeta['deprecated'];
-                    }
-                }
-
-                $operation = [
-                    'tags' => !empty($docMeta['tags']) ? $docMeta['tags'] : [$tag],
-                    'operationId' => $operationId,
-                    'summary' => $docMeta['summary'] ?? strtoupper($method) . ' ' . $pattern,
-                    'responses' => [
-                        '200' => [
-                            'description' => 'Successful response',
-                        ],
-                    ],
-                ];
-
-                // Add description from docblock
-                if ($docMeta['description'] !== null) {
-                    $operation['description'] = $docMeta['description'];
-                }
-
-                // Mark as deprecated
-                if ($docMeta['deprecated']) {
-                    $operation['deprecated'] = true;
-                }
-
-                // Collect tags for the top-level tags[] array.
-                foreach ($operation['tags'] as $t) {
-                    if (!in_array($t, $usedTags, true)) {
-                        $usedTags[] = $t;
-                    }
-                }
-
-                // ORM model -> components.schemas + $ref. AutoCrud tags routes
-                // with swagger['model']; build the schema once and reference it.
-                $ref = null;
-                $modelClass = $swaggerMeta['model'] ?? null;
-                if ($modelClass !== null && class_exists($modelClass)) {
-                    $schemaName = (new \ReflectionClass($modelClass))->getShortName();
-                    if (!isset($models[$schemaName])) {
-                        $models[$schemaName] = $modelClass;
-                    }
-                    $ref = '#/components/schemas/' . $schemaName;
-                }
-                $isModelList = !empty($swaggerMeta['modelList']);
-
-                // Add path parameters
-                if (!empty($pathParams)) {
-                    $operation['parameters'] = $pathParams;
-                }
-
-                // Build parameters and requestBody properties from @param annotations
-                $bodyProperties = [];
-                $bodyRequired = [];
-                $queryParams = [];
-                $multipart = false;   // flipped by a @param of type file/binary
-                foreach ($docMeta['params'] as $paramDef) {
-                    // If this param matches a path parameter, update its type/description
-                    $isPathParam = false;
-                    if (isset($operation['parameters'])) {
-                        foreach ($operation['parameters'] as &$existingParam) {
-                            if ($existingParam['name'] === $paramDef['name'] && $existingParam['in'] === 'path') {
-                                $existingParam['schema']['type'] = self::mapParamType($paramDef['type']);
-                                $existingParam['description'] = $paramDef['description'];
-                                $isPathParam = true;
-                                break;
-                            }
-                        }
-                        unset($existingParam);
-                    }
-
-                    if (!$isPathParam) {
-                        // For POST/PUT/PATCH, add to requestBody properties
-                        if (in_array($method, ['post', 'put', 'patch'], true)) {
-                            // A @param of type file/binary makes the body multipart
-                            // and the property a binary string (file upload).
-                            if (in_array($paramDef['type'], ['file', 'binary'], true)) {
-                                $multipart = true;
-                                $bodyProperties[$paramDef['name']] = [
-                                    'type' => 'string',
-                                    'format' => 'binary',
-                                    'description' => $paramDef['description'],
-                                ];
-                            } else {
-                                $bodyProperties[$paramDef['name']] = [
-                                    'type' => self::mapParamType($paramDef['type']),
-                                    'description' => $paramDef['description'],
-                                ];
-                            }
-                            if ($paramDef['required']) {
-                                $bodyRequired[] = $paramDef['name'];
-                            }
-                        } else {
-                            // For GET/DELETE, add as query parameters
-                            $queryParams[] = [
-                                'name' => $paramDef['name'],
-                                'in' => 'query',
-                                'required' => $paramDef['required'],
-                                'description' => $paramDef['description'],
-                                'schema' => [
-                                    'type' => self::mapParamType($paramDef['type']),
-                                ],
-                            ];
-                        }
-                    }
-                }
-
-                // Merge query parameters
-                if (!empty($queryParams)) {
-                    if (!isset($operation['parameters'])) {
-                        $operation['parameters'] = [];
-                    }
-                    $operation['parameters'] = array_merge($operation['parameters'], $queryParams);
-                }
-
-                // A registered custom request schema referenced by name
-                // (swagger['requestSchema'] => 'CreateUser'). Takes precedence
-                // over the inferred / ORM-model body schema.
-                $requestSchemaName = $swaggerMeta['requestSchema'] ?? null;
-
-                // Add request body hint for methods that accept a body
-                if (in_array($method, ['post', 'put', 'patch'], true)) {
-                    // Prefer an explicit registered schema $ref; then an ORM
-                    // model $ref; else build an object schema from @param
-                    // properties (or a bare object).
-                    if ($requestSchemaName !== null) {
-                        $refSchemas[$requestSchemaName] = true;
-                        $schema = ['$ref' => '#/components/schemas/' . $requestSchemaName];
-                    } elseif ($ref !== null) {
-                        $schema = ['$ref' => $ref];
-                    } else {
-                        $schema = ['type' => 'object'];
-                        if (!empty($bodyProperties)) {
-                            $schema['properties'] = $bodyProperties;
-                            if (!empty($bodyRequired)) {
-                                $schema['required'] = $bodyRequired;
-                            }
-                        }
-                    }
-
-                    $mediaContent = ['schema' => $schema];
-
-                    // Add request body example from @example
-                    if (!empty($docMeta['examples'])) {
-                        $mediaContent['example'] = $docMeta['examples'][0];
-                    }
-
-                    // multipart/form-data when a @param file/binary was declared,
-                    // else application/json.
-                    $contentType = $multipart ? 'multipart/form-data' : 'application/json';
-
-                    $operation['requestBody'] = [
-                        'description' => 'Request payload',
-                        'required' => !empty($bodyRequired),
-                        'content' => [
-                            $contentType => $mediaContent,
-                        ],
-                    ];
-                }
-
-                // ORM model response: single -> $ref, list -> array of $ref.
-                // (An explicit @example_response below still overrides per-status.)
-                if ($ref !== null) {
-                    $respSchema = $isModelList
-                        ? ['type' => 'array', 'items' => ['$ref' => $ref]]
-                        : ['$ref' => $ref];
-                    $operation['responses']['200'] = [
-                        'description' => 'Successful response',
-                        'content' => [
-                            'application/json' => ['schema' => $respSchema],
-                        ],
-                    ];
-                }
-
-                // Add example responses from @example_response
-                foreach ($docMeta['responses'] as $status => $example) {
-                    $operation['responses'][(string) $status] = [
-                        'description' => self::statusDescription((int) $status),
-                        'content' => [
-                            'application/json' => [
-                                'example' => $example,
-                            ],
-                        ],
-                    ];
-                }
-
-                // Registered response schemas ($ref) — explicit and authoritative.
-                // swagger['responseSchemas'] => [200 => 'User', 201 => ['User', true]]
-                // (status => name, or status => [name, isList]).
-                $responseSchemaMeta = $swaggerMeta['responseSchemas'] ?? [];
-                foreach ($responseSchemaMeta as $status => $def) {
-                    if (is_array($def)) {
-                        $sname = (string) ($def[0] ?? '');
-                        $isList = !empty($def[1]);
-                    } else {
-                        $sname = (string) $def;
-                        $isList = false;
-                    }
-                    if ($sname === '') {
-                        continue;
-                    }
-                    $refSchemas[$sname] = true;
-                    $sref = '#/components/schemas/' . $sname;
-                    $respSchema = $isList
-                        ? ['type' => 'array', 'items' => ['$ref' => $sref]]
-                        : ['$ref' => $sref];
-                    $operation['responses'][(string) $status] = [
-                        'description' => self::statusDescription((int) $status),
-                        'content' => [
-                            'application/json' => ['schema' => $respSchema],
-                        ],
-                    ];
-                }
-
-                // Security requirement resolution:
-                //   1. An explicit swagger['security'] meta wins. A normalized
-                //      empty list (e.g. 'public') emits security: [] (explicitly
-                //      open), overriding auth_required.
-                //   2. Otherwise a secured route (write-by-default, ->secure(),
-                //      or @secured GET) gets the default scheme.
-                $isWriteMethod = in_array($method, ['post', 'put', 'patch', 'delete'], true);
-                $routeRequiresAuth = $isWriteMethod
-                    ? empty($route['noAuth'])
-                    : !empty($route['secure']);
-
-                if (array_key_exists('security', $swaggerMeta)) {
-                    // A scalar scheme name + a sibling 'scopes' key is the common
-                    // ergonomic form, parity with Python @security("oauth2", scopes=[...]).
-                    $securitySpec = $swaggerMeta['security'];
-                    if (is_string($securitySpec) && !empty($swaggerMeta['scopes']) && is_array($swaggerMeta['scopes'])) {
-                        $securitySpec = ['scheme' => $securitySpec, 'scopes' => $swaggerMeta['scopes']];
-                    }
-                    $reqs = self::normalizeSecurity($securitySpec);
-                    $operation['security'] = empty($reqs)
-                        ? []
-                        : self::sanitizeSecurity($reqs, $schemes);
-                    if (!empty($operation['security'])) {
-                        $operation['responses']['401'] = [
-                            'description' => 'Unauthorized',
-                        ];
-                    }
-                } elseif ($routeRequiresAuth) {
-                    $requirements = [[$defaultScheme => []]];
-                    if ($defaultScheme === 'bearerAuth' && isset($schemes['ssoSession'])) {
-                        $requirements[] = ['ssoSession' => []];
-                    }
-                    $operation['security'] = self::sanitizeSecurity(
-                        $requirements,
-                        $schemes
-                    );
-                    $operation['responses']['401'] = [
-                        'description' => 'Unauthorized',
-                    ];
-                }
-
-                if (!isset($spec['paths'][$openApiPath])) {
-                    $spec['paths'][$openApiPath] = [];
-                }
-
-                $spec['paths'][$openApiPath][$method] = $operation;
+        // Collect tags for the top-level tags[] array.
+        foreach ($operation['tags'] as $t) {
+            if (!in_array($t, $usedTags, true)) {
+                $usedTags[] = $t;
             }
         }
 
+        // ORM model -> components.schemas + $ref (AutoCrud tags routes with
+        // swagger['model']); build the schema once and reference it.
+        $ref = self::resolveModelRef($swaggerMeta, $models);
+        $isModelList = !empty($swaggerMeta['modelList']);
+
+        // Add path parameters
+        if (!empty($pathParams)) {
+            $operation['parameters'] = $pathParams;
+        }
+
+        // Build parameters and requestBody properties from @param annotations.
+        $bodyParts = self::collectParams($operation, $docMeta['params'], $method);
+
+        // A registered custom request schema referenced by name
+        // (swagger['requestSchema'] => 'CreateUser'). Takes precedence over the
+        // inferred / ORM-model body schema.
+        $requestSchemaName = $swaggerMeta['requestSchema'] ?? null;
+
+        self::operationRequestBody(
+            $operation,
+            $method,
+            $requestSchemaName,
+            $ref,
+            $bodyParts['bodyProperties'],
+            $bodyParts['bodyRequired'],
+            $bodyParts['multipart'],
+            $docMeta['examples'],
+            $refSchemas
+        );
+
+        self::operationModelResponse($operation, $ref, $isModelList);
+        self::operationExampleResponses($operation, $docMeta['responses']);
+        self::operationResponseSchemas($operation, $swaggerMeta['responseSchemas'] ?? [], $refSchemas);
+        self::operationSecurity($operation, $swaggerMeta, $route, $method, $defaultScheme, $schemes);
+
+        return $operation;
+    }
+
+    /**
+     * operationId from method + pattern, de-duplicated across the document
+     * (OpenAPI requires it unique; str_replace collapses distinct paths to the
+     * same id). Appends the chosen id to $seenIds.
+     *
+     * @param array<int, string> $seenIds by-ref
+     */
+    private static function uniqueOperationId(string $method, string $pattern, array &$seenIds): string
+    {
+        $baseId = $method . str_replace(['/', '{', '}', '-', '*'], ['_', '', '', '_', 'wildcard'], $pattern);
+        $operationId = $baseId;
+        $dupN = 2;
+        while (in_array($operationId, $seenIds, true)) {
+            $operationId = $baseId . '_' . $dupN;
+            $dupN++;
+        }
+        $seenIds[] = $operationId;
+        return $operationId;
+    }
+
+    /**
+     * Parse docblock annotations for a route and merge stored swagger meta
+     * (Router::swagger() / AutoCrud). Applies @noauth / @secured onto $route.
+     *
+     * @param array<string, mixed> $route by-ref (noAuth/secure flags updated)
+     * @return array{description: string|null, summary: string|null, tags: array, examples: array, responses: array, params: array, deprecated: bool, noAuth: bool, secured: bool}
+     */
+    private static function resolveDocMeta(array &$route): array
+    {
+        // Parse docblock annotations from the route callback
+        $docMeta = isset($route['callback']) ? self::parseDocBlock($route['callback']) : [
+            'description' => null,
+            'summary' => null,
+            'tags' => [],
+            'examples' => [],
+            'responses' => [],
+            'params' => [],
+            'deprecated' => false,
+            'noAuth' => false,
+            'secured' => false,
+        ];
+
+        // Apply @noauth / @secured annotations to route flags
+        if ($docMeta['noAuth']) {
+            $route['noAuth'] = true;
+        }
+        if ($docMeta['secured']) {
+            $route['secure'] = true;
+        }
+
+        // Merge stored swagger metadata (from Router::swagger() or AutoCrud).
+        return self::mergeSwaggerMeta($docMeta, $route['swagger'] ?? []);
+    }
+
+    /**
+     * Merge stored swagger route meta into the parsed docblock metadata. Each
+     * field is filled only when the docblock left it unset (docblock wins). An
+     * empty $swaggerMeta is a no-op (every isset check falls through).
+     *
+     * @param array<string, mixed> $docMeta
+     * @param array<string, mixed> $swaggerMeta
+     * @return array<string, mixed>
+     */
+    private static function mergeSwaggerMeta(array $docMeta, array $swaggerMeta): array
+    {
+        if (isset($swaggerMeta['summary']) && $docMeta['summary'] === null) {
+            $docMeta['summary'] = $swaggerMeta['summary'];
+        }
+        if (isset($swaggerMeta['description']) && $docMeta['description'] === null) {
+            $docMeta['description'] = $swaggerMeta['description'];
+        }
+        if (isset($swaggerMeta['tags']) && empty($docMeta['tags'])) {
+            $docMeta['tags'] = $swaggerMeta['tags'];
+        }
+        if (isset($swaggerMeta['example']) && empty($docMeta['examples'])) {
+            $docMeta['examples'][] = $swaggerMeta['example'];
+        }
+        if (isset($swaggerMeta['deprecated']) && !$docMeta['deprecated']) {
+            $docMeta['deprecated'] = $swaggerMeta['deprecated'];
+        }
+        return $docMeta;
+    }
+
+    /**
+     * Resolve an ORM model reference from swagger['model'] to a $ref, recording
+     * the model in $models for components.schemas. Returns null when no valid
+     * model is declared.
+     *
+     * @param array<string, mixed>  $swaggerMeta
+     * @param array<string, string> $models      by-ref accumulator
+     */
+    private static function resolveModelRef(array $swaggerMeta, array &$models): ?string
+    {
+        $modelClass = $swaggerMeta['model'] ?? null;
+        if ($modelClass === null || !class_exists($modelClass)) {
+            return null;
+        }
+        $schemaName = (new \ReflectionClass($modelClass))->getShortName();
+        if (!isset($models[$schemaName])) {
+            $models[$schemaName] = $modelClass;
+        }
+        return '#/components/schemas/' . $schemaName;
+    }
+
+    /**
+     * Build body/query parameters from @param annotations. Path-matching params
+     * update the existing path parameter in place (via applyPathParamDoc); the
+     * rest become requestBody properties (POST/PUT/PATCH) or query parameters,
+     * which are merged into $operation['parameters'].
+     *
+     * @param array<string, mixed>             $operation by-ref
+     * @param array<int, array<string, mixed>> $docParams
+     * @return array{bodyProperties: array<string, mixed>, bodyRequired: array<int, string>, multipart: bool}
+     */
+    private static function collectParams(array &$operation, array $docParams, string $method): array
+    {
+        $bodyProperties = [];
+        $bodyRequired = [];
+        $queryParams = [];
+        $multipart = false;   // flipped by a @param of type file/binary
+        foreach ($docParams as $paramDef) {
+            // If this param matches a path parameter, update it in place and skip.
+            if (self::applyPathParamDoc($operation, $paramDef)) {
+                continue;
+            }
+
+            // For POST/PUT/PATCH, add to requestBody properties
+            if (in_array($method, ['post', 'put', 'patch'], true)) {
+                // A @param of type file/binary makes the body multipart
+                // and the property a binary string (file upload).
+                if (in_array($paramDef['type'], ['file', 'binary'], true)) {
+                    $multipart = true;
+                    $bodyProperties[$paramDef['name']] = [
+                        'type' => 'string',
+                        'format' => 'binary',
+                        'description' => $paramDef['description'],
+                    ];
+                } else {
+                    $bodyProperties[$paramDef['name']] = [
+                        'type' => self::mapParamType($paramDef['type']),
+                        'description' => $paramDef['description'],
+                    ];
+                }
+                if ($paramDef['required']) {
+                    $bodyRequired[] = $paramDef['name'];
+                }
+            } else {
+                // For GET/DELETE, add as query parameters
+                $queryParams[] = [
+                    'name' => $paramDef['name'],
+                    'in' => 'query',
+                    'required' => $paramDef['required'],
+                    'description' => $paramDef['description'],
+                    'schema' => [
+                        'type' => self::mapParamType($paramDef['type']),
+                    ],
+                ];
+            }
+        }
+
+        // Merge query parameters
+        if (!empty($queryParams)) {
+            if (!isset($operation['parameters'])) {
+                $operation['parameters'] = [];
+            }
+            $operation['parameters'] = array_merge($operation['parameters'], $queryParams);
+        }
+
+        return [
+            'bodyProperties' => $bodyProperties,
+            'bodyRequired' => $bodyRequired,
+            'multipart' => $multipart,
+        ];
+    }
+
+    /**
+     * If a @param matches an existing path parameter, update its type and
+     * description in place and return true; otherwise return false.
+     *
+     * @param array<string, mixed> $operation by-ref
+     * @param array<string, mixed> $paramDef
+     */
+    private static function applyPathParamDoc(array &$operation, array $paramDef): bool
+    {
+        if (!isset($operation['parameters'])) {
+            return false;
+        }
+        foreach ($operation['parameters'] as &$existingParam) {
+            if ($existingParam['name'] === $paramDef['name'] && $existingParam['in'] === 'path') {
+                $existingParam['schema']['type'] = self::mapParamType($paramDef['type']);
+                $existingParam['description'] = $paramDef['description'];
+                unset($existingParam);
+                return true;
+            }
+        }
+        unset($existingParam);
+        return false;
+    }
+
+    /**
+     * Add the requestBody for a body method: an explicit registered schema $ref
+     * (preferred), then an ORM-model $ref, else an object schema from @param
+     * properties. multipart/form-data when a file/binary @param was declared.
+     *
+     * @param array<string, mixed>  $operation      by-ref
+     * @param array<string, mixed>  $bodyProperties
+     * @param array<int, string>    $bodyRequired
+     * @param array<int, mixed>     $examples
+     * @param array<string, bool>   $refSchemas     by-ref accumulator
+     */
+    private static function operationRequestBody(
+        array &$operation,
+        string $method,
+        ?string $requestSchemaName,
+        ?string $ref,
+        array $bodyProperties,
+        array $bodyRequired,
+        bool $multipart,
+        array $examples,
+        array &$refSchemas
+    ): void {
+        if (!in_array($method, ['post', 'put', 'patch'], true)) {
+            return;
+        }
+        if ($requestSchemaName !== null) {
+            $refSchemas[$requestSchemaName] = true;
+            $schema = ['$ref' => '#/components/schemas/' . $requestSchemaName];
+        } elseif ($ref !== null) {
+            $schema = ['$ref' => $ref];
+        } else {
+            $schema = ['type' => 'object'];
+            if (!empty($bodyProperties)) {
+                $schema['properties'] = $bodyProperties;
+                if (!empty($bodyRequired)) {
+                    $schema['required'] = $bodyRequired;
+                }
+            }
+        }
+
+        $mediaContent = ['schema' => $schema];
+
+        // Add request body example from @example
+        if (!empty($examples)) {
+            $mediaContent['example'] = $examples[0];
+        }
+
+        // multipart/form-data when a @param file/binary was declared, else JSON.
+        $contentType = $multipart ? 'multipart/form-data' : 'application/json';
+
+        $operation['requestBody'] = [
+            'description' => 'Request payload',
+            'required' => !empty($bodyRequired),
+            'content' => [
+                $contentType => $mediaContent,
+            ],
+        ];
+    }
+
+    /**
+     * Set the 200 response schema from an ORM model: single -> $ref, list ->
+     * array of $ref. An explicit @example_response still overrides per-status.
+     *
+     * @param array<string, mixed> $operation by-ref
+     */
+    private static function operationModelResponse(array &$operation, ?string $ref, bool $isModelList): void
+    {
+        if ($ref === null) {
+            return;
+        }
+        $respSchema = $isModelList
+            ? ['type' => 'array', 'items' => ['$ref' => $ref]]
+            : ['$ref' => $ref];
+        $operation['responses']['200'] = [
+            'description' => 'Successful response',
+            'content' => [
+                'application/json' => ['schema' => $respSchema],
+            ],
+        ];
+    }
+
+    /**
+     * Add per-status example responses from @example_response.
+     *
+     * @param array<string, mixed>     $operation    by-ref
+     * @param array<int|string, mixed> $docResponses
+     */
+    private static function operationExampleResponses(array &$operation, array $docResponses): void
+    {
+        foreach ($docResponses as $status => $example) {
+            $operation['responses'][(string) $status] = [
+                'description' => self::statusDescription((int) $status),
+                'content' => [
+                    'application/json' => [
+                        'example' => $example,
+                    ],
+                ],
+            ];
+        }
+    }
+
+    /**
+     * Add registered response schemas ($ref) — explicit and authoritative.
+     * swagger['responseSchemas'] => [200 => 'User', 201 => ['User', true]]
+     * (status => name, or status => [name, isList]).
+     *
+     * @param array<string, mixed>     $operation          by-ref
+     * @param array<int|string, mixed> $responseSchemaMeta
+     * @param array<string, bool>      $refSchemas         by-ref accumulator
+     */
+    private static function operationResponseSchemas(array &$operation, array $responseSchemaMeta, array &$refSchemas): void
+    {
+        foreach ($responseSchemaMeta as $status => $def) {
+            if (is_array($def)) {
+                $sname = (string) ($def[0] ?? '');
+                $isList = !empty($def[1]);
+            } else {
+                $sname = (string) $def;
+                $isList = false;
+            }
+            if ($sname === '') {
+                continue;
+            }
+            $refSchemas[$sname] = true;
+            $sref = '#/components/schemas/' . $sname;
+            $respSchema = $isList
+                ? ['type' => 'array', 'items' => ['$ref' => $sref]]
+                : ['$ref' => $sref];
+            $operation['responses'][(string) $status] = [
+                'description' => self::statusDescription((int) $status),
+                'content' => [
+                    'application/json' => ['schema' => $respSchema],
+                ],
+            ];
+        }
+    }
+
+    /**
+     * Merge the per-route security requirement onto the operation.
+     *   1. An explicit swagger['security'] meta wins. A normalized empty list
+     *      (e.g. 'public') emits security: [] (explicitly open), overriding
+     *      auth_required.
+     *   2. Otherwise a secured route (write-by-default, ->secure(), or @secured
+     *      GET) gets the default scheme. A secured operation documents a 401.
+     *
+     * @param array<string, mixed>                $operation   by-ref
+     * @param array<string, mixed>                $swaggerMeta
+     * @param array<string, mixed>                $route
+     * @param array<string, array<string, mixed>> $schemes
+     */
+    private static function operationSecurity(
+        array &$operation,
+        array $swaggerMeta,
+        array $route,
+        string $method,
+        string $defaultScheme,
+        array $schemes
+    ): void {
+        $isWriteMethod = in_array($method, ['post', 'put', 'patch', 'delete'], true);
+        $routeRequiresAuth = $isWriteMethod
+            ? empty($route['noAuth'])
+            : !empty($route['secure']);
+
+        if (array_key_exists('security', $swaggerMeta)) {
+            // A scalar scheme name + a sibling 'scopes' key is the common
+            // ergonomic form, parity with Python @security("oauth2", scopes=[...]).
+            $securitySpec = $swaggerMeta['security'];
+            if (is_string($securitySpec) && !empty($swaggerMeta['scopes']) && is_array($swaggerMeta['scopes'])) {
+                $securitySpec = ['scheme' => $securitySpec, 'scopes' => $swaggerMeta['scopes']];
+            }
+            $reqs = self::normalizeSecurity($securitySpec);
+            $operation['security'] = empty($reqs)
+                ? []
+                : self::sanitizeSecurity($reqs, $schemes);
+            if (!empty($operation['security'])) {
+                $operation['responses']['401'] = [
+                    'description' => 'Unauthorized',
+                ];
+            }
+        } elseif ($routeRequiresAuth) {
+            $requirements = [[$defaultScheme => []]];
+            if ($defaultScheme === 'bearerAuth' && isset($schemes['ssoSession'])) {
+                $requirements[] = ['ssoSession' => []];
+            }
+            $operation['security'] = self::sanitizeSecurity(
+                $requirements,
+                $schemes
+            );
+            $operation['responses']['401'] = [
+                'description' => 'Unauthorized',
+            ];
+        }
+    }
+
+    /**
+     * Build components.schemas from referenced ORM models, then any registered
+     * component schemas referenced via requestSchema / responseSchemas meta.
+     *
+     * @param array<string, mixed>  $spec       by-ref
+     * @param array<string, string> $models
+     * @param array<string, bool>   $refSchemas
+     */
+    private static function buildComponentSchemas(array &$spec, array $models, array $refSchemas): void
+    {
         // Build components.schemas from any ORM models referenced by routes.
         if (!empty($models)) {
             if (!isset($spec['components']['schemas'])) {
@@ -762,18 +1018,6 @@ class Swagger
                 }
             }
         }
-
-        // Top-level tags[] array (name-only is valid OpenAPI).
-        if (!empty($usedTags)) {
-            $spec['tags'] = array_map(fn($t) => ['name' => $t], $usedTags);
-        }
-
-        // If no paths were found, set to empty object so JSON encodes as {}
-        if (empty($spec['paths'])) {
-            $spec['paths'] = new \stdClass();
-        }
-
-        return $spec;
     }
 
     /**
