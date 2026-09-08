@@ -47,7 +47,7 @@ final class Push
         if (!is_array($ec) || !isset($ec['x'], $ec['y'], $ec['d'])) {
             throw new PushError('OpenSSL did not return raw P-256 key material');
         }
-        return ['publicKey' => self::b64($ec['x'] . $ec['y'], "\x04"), 'privateKey' => self::b64($ec['d'])];
+        return ['publicKey' => self::b64(self::point($ec)), 'privateKey' => self::b64(self::pad32($ec['d']))];
     }
 
     /** @return array{ok:bool,status:int,dead:bool,retryable:bool,endpoint:string,response:string} */
@@ -80,7 +80,7 @@ final class Push
         if (strlen($private) !== 32) throw new PushError('TINA4_VAPID_PRIVATE must be a 32-byte P-256 private key');
         $vapidPrivate = openssl_pkey_get_private(self::privatePem($private, $public));
         $details = $vapidPrivate !== false ? openssl_pkey_get_details($vapidPrivate) : false;
-        $derived = is_array($details) && isset($details['ec']['x'], $details['ec']['y']) ? "\x04" . $details['ec']['x'] . $details['ec']['y'] : '';
+        $derived = is_array($details) && isset($details['ec']['x'], $details['ec']['y']) ? self::point($details['ec']) : '';
         if ($derived !== $public) throw new PushError('TINA4_VAPID_PUBLIC does not match TINA4_VAPID_PRIVATE');
         return [$public, $private];
     }
@@ -156,6 +156,26 @@ final class Push
         return $decoded;
     }
 
+    /**
+     * Left-pad a big-endian P-256 field element to its fixed 32-byte width.
+     *
+     * OpenSSL returns raw EC material with leading zero bytes stripped, so a
+     * coordinate, private scalar or ECDH secret whose top byte is zero comes
+     * back short (~0.7% of keys have a 31-byte coordinate). The wire formats
+     * here are all fixed-width, so an unpadded value yields a 64-byte point or
+     * a short secret -- a malformed VAPID key and the wrong encryption keys.
+     */
+    private static function pad32(string $value): string
+    {
+        return str_pad($value, 32, "\x00", STR_PAD_LEFT);
+    }
+
+    /** The 65-byte uncompressed P-256 point (0x04 || X || Y) from openssl EC details. */
+    private static function point(array $ec): string
+    {
+        return "\x04" . self::pad32($ec['x'] ?? '') . self::pad32($ec['y'] ?? '');
+    }
+
     private static function length(int $length): string
     {
         if ($length < 128) return chr($length);
@@ -196,11 +216,12 @@ final class Push
         $ephemeral = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
         $details = openssl_pkey_get_details($ephemeral);
         $ec = $details['ec'] ?? [];
-        $server = "\x04" . ($ec['x'] ?? '') . ($ec['y'] ?? '');
-        $private = $ec['d'] ?? '';
+        $server = self::point($ec);
+        $private = self::pad32($ec['d'] ?? '');
         // PHP's API takes the peer public key first and our private key second.
         $shared = openssl_pkey_derive(openssl_pkey_get_public(self::publicPem($client)), openssl_pkey_get_private(self::privatePem($private, $server)));
         if (!is_string($shared)) throw new PushError('OpenSSL could not derive the Web Push ECDH secret');
+        $shared = self::pad32($shared);
         $ikm = self::hkdf(self::hmac($auth, $shared), "WebPush: info\0" . $client . $server, 32);
         $salt = random_bytes(16);
         $prk = self::hmac($salt, $ikm);

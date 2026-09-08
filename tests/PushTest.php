@@ -24,6 +24,31 @@ final class PushTest extends TestCase
         $this->servers = [];
     }
 
+    public function testVapidKeysAreNeverMalformedByAShortCoordinate(): void
+    {
+        // OpenSSL returns raw EC material with leading zero bytes stripped, so
+        // ~0.7% of P-256 keys have a 31-byte coordinate; an unpadded 0x04||X||Y
+        // is then 64 bytes -- a malformed VAPID public key that a push service
+        // rejects. Generate enough keys to hit the case FOR REAL (no mock),
+        // assert the module always emits a fixed-width key, and independently
+        // assert the short-coordinate case actually occurred in this run so a
+        // green result means the padding fired -- not that 2000 coordinates
+        // happened to be full width.
+        $iterations = 2000;
+        $shortRawCoordinates = 0;
+        for ($i = 0; $i < $iterations; $i++) {
+            $keys = Push::generateVapidKeys();
+            $this->assertSame(65, strlen($this->decode($keys['publicKey'])), 'VAPID public key must be a 65-byte P-256 point');
+            $this->assertSame(32, strlen($this->decode($keys['privateKey'])), 'VAPID private key must be a 32-byte scalar');
+
+            $raw = openssl_pkey_get_details(openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']))['ec'];
+            if (strlen($raw['x']) < 32 || strlen($raw['y']) < 32 || strlen($raw['d']) < 32) {
+                $shortRawCoordinates++;
+            }
+        }
+        $this->assertGreaterThan(0, $shortRawCoordinates, 'no short raw coordinate appeared across ' . $iterations . ' keys, so the regression scenario was not exercised');
+    }
+
     public function testGeneratesKeysAndDeliversToRealEndpoint(): void
     {
         $keys = Push::generateVapidKeys();
