@@ -6,6 +6,17 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.135
+
+Fix release. The dev-admin version check returns no version and a reason when it cannot
+reach Packagist (set TINA4_VERSION_CHECK_URL to override the registry), so the toolbar
+reports "could not check" instead of a false "up to date". The dev server also listens on
+the sibling loopback family on its main port, so localhost reaches it on Windows whether the
+OS resolves to IPv4 or IPv6 (dual-stack, matching the other three frameworks). Web Push pads
+every P-256 coordinate, private scalar, and ECDH secret to the fixed 32-byte width, so a
+leading-zero value never yields a malformed VAPID key. Full notes:
+https://tina4.com/php/36-releases
+
 ## 3.13.134
 
 Feature 140 Web Push is now available with provider-neutral subscription delivery,
