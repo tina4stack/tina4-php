@@ -136,6 +136,23 @@ write-back. Cursor todos / chat checklists are **not** the plan.
 | 6. Verify + tick | Run it for real; **edit the plan file now** — `[x]` Scope/Tests + Commits line | plan file updated in the same turn |
 | 7. Report | Relay completions as a ✅/❌ table that matches the plan file | the status dashboard |
 
+### Build to the journeys, mind the seams  🗺️
+
+Complex apps fail in the seams BETWEEN features, not inside them. When `plan/` carries `journeys/` and `flows/` (the `tina4-architect` skill seeds them), that is the spec — honour it:
+
+- **Build in journey order.** One walkable journey end to end beats ten half-built screens. Every route, model, and template you add traces back to a journey step AND a flow node; if it traces to neither, it is not on the plan — stop and ask.
+- **Walk the completeness net per feature** before you tick it: every screen state (empty / loading / error / permission-denied), every journey edge (abandon, refresh, double-submit, session expiry), authz on every route (not just login), validation + a migration (+ rollback), what the user sees when a dependency is down, the concurrency race, a safe production 500. Answer each or record "N/A because…" — silence is the bug this catches.
+- **Prove the journey, don't assume it.** A task is Done only when its journey steps are walked END TO END against real dependencies (no mocks), positive AND negative — that walk is the acceptance gate, on top of the per-feature tests.
+- **Mark it 🗺️.** When you map, update, or trace a journey or flow, begin the reply `🤖🗺️` so the developer can SEE the seams are being minded.
+
+No `plan/journeys/` on a complex build? That is the signal to bring in `tina4-architect` first — features invented without journeys are the exact gap this closes.
+
+### Reach for the right sibling skill
+
+- **Visual identity — brand, colours, typography, a UI/design system** → the `tina4-design` skill. Let it produce the `design/` deliverables (DESIGN.md, brand-guidelines.html, ui-guide.html) FIRST, then build the UI against those tokens instead of hand-picked CSS.
+- **Reactive browser frontend — signals, components, islands** → the `tina4-js` skill.
+- **A new architectural decision — a queue, a session-backend switch, a second backend** → back to `tina4-architect`; it records the ADR and updates the journeys and flows.
+
 ### Establish the outcome before you scope - infer it, state it, proceed
 
 Scoping starts with knowing what DONE looks like. If the developer's instruction does not state the intended
