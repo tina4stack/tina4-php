@@ -6,6 +6,15 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.136
+
+The AI skills learn to build to the user journeys. The tina4-architect skill now maps goals,
+user journeys, and system flows with a completeness net before it scaffolds a file (a visible
+map marker flags that work while it happens), the developer skills build to those journeys,
+and a new tina4-design skill runs the visual-identity chain (brand guidelines plus an
+interactive UI guide). Framework: a guard test proves a fresh composer require pulls in no
+third-party runtime dependency. Full notes: https://tina4.com/php/36-releases
+
 ## 3.13.135
 
 Fix release. The dev-admin version check returns no version and a reason when it cannot
