@@ -5,7 +5,7 @@ namespace Tina4;
 /** Zero-dependency app-facing AI client (ADR-0053, streaming + multimodal per ADR-0060). */
 final class AI
 {
-    private const PROVIDERS = ['local', 'openai', 'anthropic'];
+    private const PROVIDERS = ['local', 'openai', 'anthropic', 'gemini'];
 
     public static function chat(
         array $messages,
@@ -262,16 +262,20 @@ final class AI
     {
         $selected = strtolower(trim($provider ?? (getenv('TINA4_AI_PROVIDER') ?: 'local')));
         if (!in_array($selected, self::PROVIDERS, true)) {
-            throw new AIConfigError('TINA4_AI_PROVIDER must be local, openai, or anthropic');
+            throw new AIConfigError('TINA4_AI_PROVIDER must be local, openai, anthropic, or gemini');
         }
         $key = getenv('TINA4_AI_KEY') ?: null;
-        if (in_array($selected, ['openai', 'anthropic'], true) && $key === null) {
+        if (in_array($selected, ['openai', 'anthropic', 'gemini'], true) && $key === null) {
             throw new AIConfigError("TINA4_AI_KEY is required for the {$selected} provider");
         }
         $defaults = [
             'local' => ['http://localhost:11437', 'llama3.2'],
             'openai' => ['https://api.openai.com/v1', 'gpt-4o-mini'],
             'anthropic' => ['https://api.anthropic.com/v1', 'claude-3-5-haiku-latest'],
+            // Gemini speaks the OpenAI wire format at its OpenAI-compatible base, so it
+            // rides the openai body/parse/stream path - only the base URL, the endpoint
+            // suffix append, and the Bearer key differ.
+            'gemini' => ['https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-2.5-flash'],
         ];
         $url = $capability === 'embed' && getenv('TINA4_EMBED_URL')
             ? getenv('TINA4_EMBED_URL')
@@ -313,7 +317,11 @@ final class AI
             throw new AIConfigError('AI URL must be an http or https URL');
         }
         $path = rtrim($parts['path'] ?? '', '/');
-        if (in_array($path, ['', '/v1', '/api'], true)) {
+        // "/v1beta/openai" is Gemini's OpenAI-compatible base; append the suffix onto it
+        // exactly as onto a bare host / "/v1" / "/api", so the default gemini base resolves
+        // to .../v1beta/openai/chat/completions (or /embeddings). A full endpoint URL the
+        // caller supplies verbatim still passes through untouched.
+        if (in_array($path, ['', '/v1', '/api', '/v1beta/openai'], true)) {
             $suffix = $provider === 'anthropic' ? '/messages' : ($capability === 'embed' ? '/embeddings' : '/chat/completions');
             $prefix = $path !== '' ? $path : '/v1';
             $authority = $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
@@ -325,7 +333,8 @@ final class AI
     private static function headers(array $config): array
     {
         $headers = ['Content-Type' => 'application/json', 'Accept' => 'application/json'];
-        if ($config['provider'] === 'openai') {
+        if (in_array($config['provider'], ['openai', 'gemini'], true)) {
+            // Gemini uses the OpenAI Bearer scheme, not the Anthropic x-api-key.
             $headers['Authorization'] = 'Bearer ' . $config['key'];
         } elseif ($config['provider'] === 'anthropic') {
             $headers['x-api-key'] = $config['key'];

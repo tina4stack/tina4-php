@@ -723,4 +723,90 @@ final class AIClientContractTest extends TestCase
         $this->assertSame('tool_result', $last['content'][0]['type']);
         $this->assertSame('toolu_1', $last['content'][0]['tool_use_id']);
     }
+
+    // ── Gemini: rides the OpenAI wire family at Gemini's OpenAI-compatible base ──
+
+    /**
+     * Invoke the real private AI::config() so a test can assert the resolved
+     * endpoint + model exactly as the Python master's Ai._config() tests do.
+     * Reflection exercises the real method — it is not a mock.
+     *
+     * @return array<string,mixed>
+     */
+    private function invokeConfig(string $capability, string $provider): array
+    {
+        // Private methods are reflection-invocable without setAccessible() on
+        // PHP >= 8.1 (that call is a deprecated no-op as of 8.5).
+        $method = new \ReflectionMethod(AI::class, 'config');
+        return $method->invoke(null, $capability, null, null, $provider);
+    }
+
+    public function testAiGeminiDefaultEndpointIsOpenaiCompatible(): void
+    {
+        // Gemini's default base resolves to the OpenAI-compatible chat and embeddings
+        // endpoints, so reaching Gemini needs no TINA4_AI_URL override.
+        putenv('TINA4_AI_MODEL');            // unset -> use the gemini default model
+        putenv('TINA4_AI_KEY=gem-key');
+        $chat = $this->invokeConfig('chat', 'gemini');
+        $this->assertSame(
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+            $chat['url']
+        );
+        $this->assertSame('gemini-2.5-flash', $chat['model']);
+        $embed = $this->invokeConfig('embed', 'gemini');
+        $this->assertSame(
+            'https://generativelanguage.googleapis.com/v1beta/openai/embeddings',
+            $embed['url']
+        );
+    }
+
+    public function testAiGeminiChatSendsOpenaiBodyWithBearer(): void
+    {
+        putenv('TINA4_AI_PROVIDER=gemini');
+        putenv('TINA4_AI_KEY=gem-key');
+        putenv('TINA4_AI_MODEL=gemini-2.5-flash');
+        putenv('TINA4_AI_URL=' . $this->base('/openai'));
+        $result = AI::chat([['role' => 'user', 'content' => 'hello']]);
+        $this->assertSame('hello world', $result->text);
+        $this->assertSame('gemini-2.5-flash', $result->model);
+        $sent = $this->state()['requests'][0];
+        $this->assertSame('Bearer gem-key', $sent['authorization']); // Gemini uses the OpenAI Bearer scheme
+        $this->assertNull($sent['x_api_key']);                       // not the Anthropic header
+        $this->assertSame('gemini-2.5-flash', $sent['body']['model']);
+        $this->assertSame([['role' => 'user', 'content' => 'hello']], $sent['body']['messages']);
+    }
+
+    public function testAiGeminiEmbeddingsAreSupported(): void
+    {
+        // Unlike Anthropic, Gemini exposes embeddings on its OpenAI-compatible API.
+        putenv('TINA4_AI_PROVIDER=gemini');
+        putenv('TINA4_AI_KEY=gem-key');
+        putenv('TINA4_EMBED_URL=' . $this->base('/embeddings'));
+        $this->assertSame([0.0, 0.25, 0.5], AI::embed('hello'));
+        $this->assertSame([[0.0, 0.25, 0.5], [1.0, 0.25, 0.5]], AI::embed(['one', 'two']));
+    }
+
+    public function testAiGeminiRequiresAKey(): void
+    {
+        putenv('TINA4_AI_PROVIDER=gemini');   // setUp() has cleared TINA4_AI_KEY
+        $this->expectException(AIConfigError::class);
+        $this->expectExceptionMessage('TINA4_AI_KEY is required');
+        AI::chat([['role' => 'user', 'content' => 'hello']]);
+    }
+
+    public function testAiGeminiStreamsOpenaiStyleDeltas(): void
+    {
+        putenv('TINA4_AI_PROVIDER=gemini');
+        putenv('TINA4_AI_KEY=gem-key');
+        putenv('TINA4_AI_URL=' . $this->base('/stream-openai'));
+        $events = iterator_to_array(AI::chat([['role' => 'user', 'content' => 'hello']], stream: true), false);
+        $text = '';
+        foreach ($events as $event) {
+            if ($event['type'] === 'text_delta') {
+                $text .= $event['text'] ?? '';
+            }
+        }
+        $this->assertSame('hello world', $text);
+        $this->assertSame('done', end($events)['type']);
+    }
 }
