@@ -6,6 +6,14 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.137
+
+Gemini joins the Ai client as a first-class provider. Set TINA4_AI_PROVIDER=gemini with a
+TINA4_AI_KEY and the AI client reaches Google Gemini through its OpenAI-compatible endpoint,
+with the same normalised responses, streaming, tool-use, retries and embeddings every other
+provider gets and no new dependency. Gemini rides the existing OpenAI wire family, so the
+whole provider is a thin alias: the base URL, the endpoint suffix, and the Bearer key.
+
 ## 3.13.136
 
 The AI skills learn to build to the user journeys. The tina4-architect skill now maps goals,
