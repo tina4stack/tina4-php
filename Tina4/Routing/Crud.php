@@ -321,7 +321,7 @@ class Crud
                 } else {
                     $object->create($request->params);
                 }
-                $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
                 $function("update", $object, null, $request);
                 $object->save();
                 $jsonResult = $function("afterUpdate", $object, null, $request);
@@ -342,7 +342,7 @@ class Crud
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
                 $object->create($request->params);
-                $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
                 $function("delete", $object, null, $request);
                 if (!$object->softDelete) {
                     $object->delete();
