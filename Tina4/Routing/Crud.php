@@ -321,7 +321,7 @@ class Crud
                 } else {
                     $object->create($request->params);
                 }
-                $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
                 $function("update", $object, null, $request);
                 $object->save();
                 $jsonResult = $function("afterUpdate", $object, null, $request);
@@ -342,7 +342,7 @@ class Crud
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
                 $object->create($request->params);
-                $object->load("{$object->getFieldName($object->primaryKey)} = '{$id}'");
+                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
                 $function("delete", $object, null, $request);
                 if (!$object->softDelete) {
                     $object->delete();
@@ -403,27 +403,41 @@ class Crud
             $orderBy = $request["order"];
         }
 
+        //Column names the request is allowed to reference, taken from the ORM itself
+        $allowedColumns = self::getAllowedColumnNames($ORM);
+
         $filter = null;
         $listOfColumnNames = null;
         if (!empty($request["search"])) {
             $search = $request["search"];
 
             foreach ($columns as $id => $column) {
-                $columnName = $ORM->getFieldName($column["data"], $ORM->fieldMapping);
+                if (!is_array($column) || !isset($column["data"])) {
+                    continue;
+                }
+
+                $columnName = self::getSafeColumnName($ORM, $column["data"], $allowedColumns);
+
+                //Anything that does not resolve to a known column is ignored
+                if ($columnName === null) {
+                    continue;
+                }
+
                 if (($column["searchable"] == "true")) {
                     // Prioritises general search over column search
-                    if (!empty($search["value"])) {
+                    if (!empty($search["value"]) && is_scalar($search["value"])) {
                         // Searches all searchable fields for the search box value
                         //Add each searchable column to array
                         $listOfColumnNames[] = $tablePrefix . $columnName;
                         //Split search phrase into individual searchable words
-                        $splitValue = explode(" ", $search["value"]);
+                        $splitValue = explode(" ", (string)$search["value"]);
 
                         //Iterate searchable words
                         foreach ($splitValue as $singleValue) {
                             //Check that the values aren't whitespaces
                             if (!empty($singleValue)) {
-                                $filterValue = " like '%" . strtoupper($singleValue) . "%'";
+                                //The search box holds data, never SQL, so it is quoted as a literal
+                                $filterValue = " like " . self::escapeLiteral($ORM, "%" . strtoupper($singleValue) . "%");
                                 //Check if $filer is already an array
                                 if (!is_array($filter)) {
                                     $filter[] = $filterValue;
@@ -440,11 +454,15 @@ class Crud
                         $isRegex = $column['search']['regex'] ?? false;
 
                         if ($isRegex == "true") {
-                            // Use REGEXP for regex search
-                            $filter[] = " REGEXP '" . $searchValue . "'";
+                            // Use REGEXP for regex search. The pattern is data, so it is quoted.
+                            $filter[] = " REGEXP " . self::escapeLiteral($ORM, (string)$searchValue);
                         } else {
                             // a standard search filter any sql can be used.
                             // fieldName "=5" or " like '%test%'"
+                            //
+                            // NOTE: this branch is a deliberate SQL passthrough and the value
+                            // arrives from the request, so an application exposing it to
+                            // untrusted callers must validate it before it gets here.
                             $filter[] = $searchValue;
                         }
                     }
@@ -455,8 +473,19 @@ class Crud
         $ordering = null;
         if (!empty($orderBy)) {
             foreach ($orderBy as $id => $orderEntry) {
-                $columnName = $ORM->getFieldName($columns[$orderEntry["column"]]["data"], $ORM->fieldMapping);
-                $ordering[] = $tablePrefix . $columnName . " " . $orderEntry["dir"];
+                if (!is_array($orderEntry) || !isset($orderEntry["column"], $columns[$orderEntry["column"]]["data"])) {
+                    continue;
+                }
+
+                $columnName = self::getSafeColumnName($ORM, $columns[$orderEntry["column"]]["data"], $allowedColumns);
+
+                if ($columnName === null) {
+                    continue;
+                }
+
+                //Only asc/desc may reach the statement
+                $direction = strtolower(trim((string)($orderEntry["dir"] ?? ""))) === "desc" ? "desc" : "asc";
+                $ordering[] = $tablePrefix . $columnName . " " . $direction;
             }
         }
 
@@ -467,16 +496,21 @@ class Crud
 
         $where = "";
         //Check that filter isn't empty
-        if (is_array($filter) && count($filter) > 0) {
+        if (is_array($filter) && count($filter) > 0 && !empty($listOfColumnNames)) {
             $whereArray = null;
+            $columnsToSearch = "";
 
             //Concatenate row columns into a single searchable string
 
             //Check for type of database
             if (!empty($ORM->DBA)) {
                 //Mysql
+                //upper() on the column as well as the value: the search term is
+                //uppercased above, so without this the comparison only matches
+                //data that is already uppercase on any engine whose LIKE is
+                //case-sensitive (PostgreSQL, and MySQL under a binary collation).
                 foreach ($listOfColumnNames as $id => $listColumn) {
-                    $listOfColumnNames[$id] = "coalesce($listColumn, '')";
+                    $listOfColumnNames[$id] = "upper(coalesce($listColumn, ''))";
                 }
 
                 if (in_array(get_class($ORM->DBA), ["Tina4\DataMySQL", "Tina4\DataMSSQL"])) {
@@ -486,27 +520,118 @@ class Crud
                 }
             }
 
-            //Create check statement per searched word
-            foreach ($filter as $searchFor) {
-                $whereArray[] = $columnsToSearch . $searchFor;
+            //Without a connection there is nothing to concatenate the columns with,
+            //so the filter is dropped rather than emitted against no column at all.
+            if ($columnsToSearch !== "") {
+                //Create check statement per searched word
+                foreach ($filter as $searchFor) {
+                    $whereArray[] = $columnsToSearch . $searchFor;
+                }
+
+                //Glue each searchable phrase with "and" to ensure that it contains all searched words
+                $where = join(" and ", $whereArray);
             }
-
-            //Glue each searchable phrase with "and" to ensure that it contains all searched words
-            $where = join(" and ", $whereArray);
         }
 
-        if (!empty($request["start"])) {
-            $start = $request["start"];
-        } else {
-            $start = 0;
-        }
-
-        if (!empty($request["length"])) {
-            $length = $request["length"];
-        } else {
-            $length = 10;
-        }
+        //Both are concatenated into a limit/offset by the caller, so they are cast
+        $start = !empty($request["start"]) ? (int)$request["start"] : 0;
+        $length = !empty($request["length"]) ? (int)$request["length"] : 10;
 
         return ["length" => $length, "start" => $start, "orderBy" => $order, "where" => $where];
+    }
+
+    /**
+     * The column names a request may reference, taken from the ORM's own fields
+     * and its field mapping.
+     *
+     * An empty set means the ORM exposes no fields — a bare Tina4\ORM, for
+     * instance — in which case only the identifier shape is enforced and the
+     * previous behaviour is preserved.
+     *
+     * @param ORM $ORM
+     * @return array
+     */
+    private static function getAllowedColumnNames(ORM $ORM): array
+    {
+        $allowed = [];
+
+        foreach ($ORM->getFieldNames() as $fieldName) {
+            $allowed[strtolower($fieldName)] = true;
+        }
+
+        if (!empty($ORM->fieldMapping) && is_array($ORM->fieldMapping)) {
+            foreach ($ORM->fieldMapping as $mappedName) {
+                if (is_string($mappedName)) {
+                    $allowed[strtolower($mappedName)] = true;
+                }
+            }
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * Resolves a DataTables column to a database column name.
+     *
+     * Column names cannot be bound as parameters, so they are concatenated into
+     * the statement. Returns null unless the result is a bare identifier and a
+     * field the ORM actually knows about.
+     *
+     * @param ORM $ORM
+     * @param mixed $requestedColumn
+     * @param array $allowedColumns
+     * @return string|null
+     */
+    private static function getSafeColumnName(ORM $ORM, $requestedColumn, array $allowedColumns): ?string
+    {
+        if (!is_string($requestedColumn) || $requestedColumn === "") {
+            return null;
+        }
+
+        $columnName = (string)$ORM->getFieldName($requestedColumn, $ORM->fieldMapping);
+
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $columnName)) {
+            return null;
+        }
+
+        if (!empty($allowedColumns) && !isset($allowedColumns[strtolower($columnName)])) {
+            return null;
+        }
+
+        return $columnName;
+    }
+
+    /**
+     * Quotes a value as a SQL string literal, using the connection's own escaping
+     * where the driver offers it.
+     *
+     * @param ORM|null $ORM
+     * @param string $value
+     * @return string
+     */
+    private static function escapeLiteral(?ORM $ORM, string $value): string
+    {
+        $dba = $ORM->DBA ?? null;
+
+        if (!empty($dba)) {
+            $driver = get_class($dba);
+
+            if ($driver === "Tina4\\DataPostgresql" && !empty($dba->dbh) && function_exists("pg_escape_literal")) {
+                $escaped = @pg_escape_literal($dba->dbh, $value);
+
+                if ($escaped !== false) {
+                    return $escaped;
+                }
+            }
+
+            if ($driver === "Tina4\\DataMySQL") {
+                //MySQL treats a backslash as an escape character unless
+                //NO_BACKSLASH_ESCAPES is set, so it has to be neutralised too.
+                return "'" . str_replace(["\\", "'"], ["\\\\", "''"], $value) . "'";
+            }
+        }
+
+        //Standard SQL, and what MSSQL and SQLite3 expect: double the quote.
+        return "'" . str_replace("'", "''", $value) . "'";
     }
 }
