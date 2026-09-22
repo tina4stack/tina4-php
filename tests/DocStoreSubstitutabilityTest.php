@@ -7,6 +7,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use function Tina4\getCollection;
 use function Tina4\isServerless;
 
@@ -345,9 +346,7 @@ PHP;
 
     // ── the shared round trip, on BOTH providers ────────────────────────────
 
-    /**
-     * @dataProvider providerCases
-     */
+    #[DataProvider('providerCases')]
     public function testInsertThenFindOneReturnsWhatWasStored(?string $marker): void
     {
         $uri = $this->resolve($marker);
@@ -361,9 +360,7 @@ PHP;
         $collection->deleteMany([]);
     }
 
-    /**
-     * @dataProvider providerCases
-     */
+    #[DataProvider('providerCases')]
     public function testUpdateOneSetIsVisibleToTheNextRead(?string $marker): void
     {
         $uri = $this->resolve($marker);
@@ -376,9 +373,7 @@ PHP;
         $collection->deleteMany([]);
     }
 
-    /**
-     * @dataProvider providerCases
-     */
+    #[DataProvider('providerCases')]
     public function testCountDocumentsAgreesWithWhatWasInserted(?string $marker): void
     {
         $uri = $this->resolve($marker);
@@ -392,9 +387,7 @@ PHP;
         $collection->deleteMany([]);
     }
 
-    /**
-     * @dataProvider providerCases
-     */
+    #[DataProvider('providerCases')]
     public function testAComparisonOperatorFiltersTheSameWay(?string $marker): void
     {
         $uri = $this->resolve($marker);
@@ -438,8 +431,8 @@ PHP;
      * is the half that cannot be changed. This test pins the outcome - ONE
      * spelling, working identically on both.
      *
-     * @dataProvider providerCases
      */
+    #[DataProvider('providerCases')]
     public function testTheDriverSpellingWorksOnBothProviders(?string $marker): void
     {
         $uri = $this->resolve($marker);
@@ -471,8 +464,8 @@ PHP;
      * Asserted by USE, not by reflection: a delegator that answers
      * method_exists and then fatals would sail through a reflection check.
      *
-     * @dataProvider providerCases
      */
+    #[DataProvider('providerCases')]
     public function testTheUniformSpellingWorksOnBothProviders(?string $marker): void
     {
         $uri = $this->resolve($marker);
@@ -587,8 +580,8 @@ PHP;
      * what a Mongo sort document actually is, and it used to raise a TypeError
      * on the fallback.
      *
-     * @dataProvider providerCases
      */
+    #[DataProvider('providerCases')]
     public function testTheCursorChainWorksOnBothProviders(?string $marker): void
     {
         $uri = $this->resolve($marker);

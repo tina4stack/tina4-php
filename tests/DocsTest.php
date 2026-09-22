@@ -15,13 +15,12 @@ declare(strict_types=1);
 namespace Tina4\Tests;
 
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Group;
 use Tina4\Docs;
 use Tina4\App;
 
-/**
- * @group docs
- * @group live-rag
- */
+#[Group('docs')]
+#[Group('live-rag')]
 class DocsTest extends TestCase
 {
     /** @var string Temp project root with one user model + route + template */

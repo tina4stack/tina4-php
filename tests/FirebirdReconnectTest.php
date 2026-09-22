@@ -23,6 +23,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\FirebirdAdapter;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 class FirebirdReconnectTest extends TestCase
 {
@@ -41,9 +42,7 @@ class FirebirdReconnectTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider deadConnectionMessages
-     */
+    #[DataProvider('deadConnectionMessages')]
     public function testIsDeadConnectionMatchesRealWorldMarkers(string $msg): void
     {
         $this->assertTrue(
@@ -67,8 +66,8 @@ class FirebirdReconnectTest extends TestCase
      * Logical SQL errors must NOT trigger a reconnect — retrying would mask
      * real bugs (and would just fail again immediately).
      *
-     * @dataProvider logicalErrorMessages
      */
+    #[DataProvider('logicalErrorMessages')]
     public function testIsDeadConnectionDoesNotMatchLogicalErrors(string $msg): void
     {
         $this->assertFalse(

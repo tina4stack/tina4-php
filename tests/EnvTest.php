@@ -12,6 +12,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Env;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 class EnvTest extends TestCase
 {
@@ -49,9 +50,7 @@ class EnvTest extends TestCase
         $this->assertFalse(Env::bool('FOO'));  // default-default
     }
 
-    /**
-     * @dataProvider truthyValues
-     */
+    #[DataProvider('truthyValues')]
     public function testBoolTruthyValues(string $value): void
     {
         $this->setEnv('FOO', $value);
@@ -66,9 +65,7 @@ class EnvTest extends TestCase
         ]);
     }
 
-    /**
-     * @dataProvider falsyValues
-     */
+    #[DataProvider('falsyValues')]
     public function testBoolFalsyValues(string $value): void
     {
         $this->setEnv('FOO', $value);

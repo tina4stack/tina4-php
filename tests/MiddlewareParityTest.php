@@ -24,6 +24,7 @@ use Tina4\CaseInsensitiveArray;
 use Tina4\Request;
 use Tina4\Response;
 use Tina4\Router;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 class ParityClassMiddleware
 {
@@ -53,9 +54,7 @@ class MiddlewareParityTest extends TestCase
 
     // ── PY-10-02: middleware does not auto-disable auth gate ────────
 
-    /**
-     * @dataProvider writeMethodProvider
-     */
+    #[DataProvider('writeMethodProvider')]
     public function testWriteMethodWithMiddlewareKeepsAuthRequired(string $method): void
     {
         Router::{strtolower($method)}('/api/widgets', fn($rq, $rs) => $rs('ok'))

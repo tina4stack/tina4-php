@@ -8,6 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\SQLTranslator;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * The batch-write contract (feature 3 of the feature audit).
@@ -74,8 +75,8 @@ class BatchWriteContractTest extends TestCase
     /**
      * Every case in the shared fixture, checked against the same answer key.
      *
-     * @dataProvider caseProvider
      */
+    #[DataProvider('caseProvider')]
     public function testCaseFromTheSharedFixture(string $name): void
     {
         $case = null;

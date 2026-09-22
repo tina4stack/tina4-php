@@ -6,6 +6,7 @@ namespace Tests;
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * The write-path contract (feature 3/4 of the feature audit).
@@ -347,8 +348,8 @@ class WritePathContractTest extends TestCase
     /**
      * Every case in the shared fixture, checked against the same answer key.
      *
-     * @dataProvider caseProvider
      */
+    #[DataProvider('caseProvider')]
     public function testCaseFromTheSharedFixture(string $name): void
     {
         $case = $this->findCase($name);

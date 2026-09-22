@@ -44,6 +44,7 @@ use Tina4\Response;
 use Tina4\Router;
 use Tina4\TestClient;
 use Tina4\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /** A GLOBAL class-based middleware that denies without setting its own response -
  *  the gap this feature closes (Middleware::runBefore's default fallback). */
@@ -153,7 +154,7 @@ class ErrorPagesContractTest extends TestCase
         ];
     }
 
-    /** @dataProvider jsonNegotiationCases */
+    #[DataProvider('jsonNegotiationCases')]
     public function testJsonAcceptYieldsAJsonErrorBody(int $code, string $path, ?string $setup): void
     {
         if ($setup) {
@@ -180,7 +181,7 @@ class ErrorPagesContractTest extends TestCase
         ];
     }
 
-    /** @dataProvider htmlNegotiationCases */
+    #[DataProvider('htmlNegotiationCases')]
     public function testBrowserAcceptYieldsTheHtmlErrorPage(int $code, string $path, ?string $setup, string $accept): void
     {
         if ($setup) {
@@ -272,7 +273,7 @@ class ErrorPagesContractTest extends TestCase
         ];
     }
 
-    /** @dataProvider reflectedPathCases */
+    #[DataProvider('reflectedPathCases')]
     public function testAReflectedPathInAnErrorPageIsEscaped(int $code, string $path, ?string $setup): void
     {
         if ($setup) {
