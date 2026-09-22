@@ -56,9 +56,7 @@ final class PushTest extends TestCase
         $this->assertSame(32, strlen($this->decode($keys['privateKey'])));
 
         [$url, $requestFile] = $this->server();
-        $client = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
-        $details = openssl_pkey_get_details($client);
-        $p256dh = $this->b64("\x04" . $details['ec']['x'] . $details['ec']['y']);
+        $p256dh = $this->clientP256dh();
         $subscription = ['endpoint' => $url . '?status=201', 'keys' => ['p256dh' => $p256dh, 'auth' => $this->b64(str_repeat("\x07", 16))]];
 
         $result = (new Push('mailto:test@tina4.com', $keys['publicKey'], $keys['privateKey']))->send($subscription, ['message' => 'hello']);
@@ -118,9 +116,7 @@ final class PushTest extends TestCase
 
     private function subscription(string $url, string $status): array
     {
-        $client = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
-        $details = openssl_pkey_get_details($client);
-        $p256dh = $this->b64("\x04" . $details['ec']['x'] . $details['ec']['y']);
+        $p256dh = $this->clientP256dh();
         $this->assertSame(65, strlen($this->decode($p256dh)));
         return ['endpoint' => $url . '?status=' . $status, 'keys' => ['p256dh' => $p256dh, 'auth' => $this->b64(str_repeat("\x07", 16))]];
     }
@@ -149,6 +145,26 @@ PHP);
         }
         $this->servers[] = [$process, $pipes, $root];
         return ["http://127.0.0.1:$port/push", $requestFile];
+    }
+
+    /**
+     * A well-formed base64url client subscription key: the uncompressed P-256
+     * point 0x04 || X || Y, always 65 bytes.
+     *
+     * openssl_pkey_get_details() returns each coordinate as a raw big-endian
+     * integer with leading zero bytes dropped (~1/256 chance per coordinate), so
+     * "\x04" . $x . $y is occasionally 63-64 bytes and a real subscription key is
+     * always 65. Left-pad both coordinates to 32 bytes so the point is well-formed
+     * every run (browsers always send the padded 65-byte form).
+     */
+    private function clientP256dh(): string
+    {
+        $ec = openssl_pkey_get_details(
+            openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1'])
+        )['ec'];
+        $x = str_pad($ec['x'], 32, "\x00", STR_PAD_LEFT);
+        $y = str_pad($ec['y'], 32, "\x00", STR_PAD_LEFT);
+        return $this->b64("\x04" . $x . $y);
     }
 
     private function b64(string $value): string
