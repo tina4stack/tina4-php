@@ -40,12 +40,32 @@ class Metrics
         return [$resolved, $mode];
     }
 
+    /**
+     * Returns the absolute path to a binary on the system PATH, or null when
+     * the binary is not on PATH.
+     *
+     * @param string $name Binary name to locate (e.g. "tina4").
+     *
+     * @return string|null Absolute path to the binary, or null when absent.
+     */
+    private static function locateOnPath(string $name): ?string
+    {
+        $isWindows = PHP_OS_FAMILY === "Windows";
+        $lookup = $isWindows ? "where" : "command -v";
+        // The redirect that silences the shell's "not found" chatter is
+        // OS-specific: cmd.exe needs `2>nul`. A Unix `2>/dev/null` there is
+        // read as a redirect to a `\dev\null` path, which fails BEFORE the
+        // lookup runs - so a binary that IS on PATH would read as absent.
+        $discard = $isWindows ? "2>nul" : "2>/dev/null";
+        $output = @shell_exec("$lookup $name $discard");
+        $first = is_string($output) ? trim(strtok($output, "\n") ?: "") : "";
+
+        return $first !== "" ? $first : null;
+    }
+
     private static function enginePath(): ?string
     {
-        $which = PHP_OS_FAMILY === "Windows" ? "where" : "command -v";
-        $output = @shell_exec("$which tina4 2>/dev/null");
-        $first = is_string($output) ? trim(strtok($output, "\n") ?: "") : "";
-        return $first !== "" ? $first : null;
+        return self::locateOnPath("tina4");
     }
 
     private static function runEngine(string $path): array
