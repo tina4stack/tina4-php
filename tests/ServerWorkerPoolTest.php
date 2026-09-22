@@ -156,6 +156,33 @@ PHP);
         return array_values(array_filter(array_map('trim', explode("\n", $out))));
     }
 
+    /**
+     * Block until the supervisor has forked its full pool, returning the live
+     * worker pids (never more than $timeoutSecs).
+     *
+     * Reading the pool's strength from the OS process table is deterministic;
+     * inferring it from the distinct pids seen over a burst of requests is not.
+     * The kernel is free to hand a run of accept()s to a single already-warm
+     * worker, so under load a healthy pool can transiently answer every request
+     * from one pid. Callers that only need "a real pool is up" wait on this
+     * rather than counting response pids.
+     *
+     * @return string[]
+     */
+    private function waitForWorkers(int $want, float $timeoutSecs = 15.0): array
+    {
+        $deadline = microtime(true) + $timeoutSecs;
+        $pids = [];
+        do {
+            $pids = $this->liveWorkerPids();
+            if (count($pids) >= $want) {
+                return $pids;
+            }
+            usleep(150000);
+        } while (microtime(true) < $deadline);
+        return $pids;
+    }
+
     /** @return string[] Distinct pids seen over $n requests. */
     private function collectPids(int $n): array
     {
@@ -353,7 +380,17 @@ PHP);
     public function testShutdownTakesEveryWorkerWithIt(): void
     {
         $port = $this->startServer();
-        $this->assertGreaterThan(1, count($this->collectPids(30)), 'need a real pool first');
+        // Precondition: a real pool is up. Assert it from the OS process table
+        // (the supervisor's actual children) rather than from the distinct pids
+        // seen over a burst of requests, which is load-balancing- and timing-
+        // dependent and can transiently read as a single worker under load -
+        // making this guard flaky in a full-suite run even though shutdown, the
+        // property actually under test below, is unaffected.
+        $this->assertCount(
+            self::WORKERS,
+            $this->waitForWorkers(self::WORKERS),
+            'need a real pool first'
+        );
 
         $this->stopServer();
 
