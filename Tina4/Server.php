@@ -271,7 +271,7 @@ class Server
     /** @var bool Cached debug mode flag (avoid parsing env on every request) */
     private bool $isDebug = false;
 
-    /** @var bool Cached no-reload flag — disables file watcher and WebSocket live reload */
+    /** @var bool Cached flag — the framework's own file watcher stands down (see reloadPlan()) */
     private bool $noReload = false;
 
     /** @var string Host to bind to */
@@ -390,11 +390,12 @@ class Server
         // later `tina4 serve` can identify it as reclaimable (TAKEOVER-DEC-01).
         PortTakeover::writePidfile($this->port);
         $this->isDebug = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        // Disable the internal file watcher when launched by the Rust CLI (--managed).
-        // The Rust CLI owns file watching, SCSS compilation, and browser reload.
-        // Running both causes double-reloads and SCSS recompile loops.
-        $isManaged = in_array('--managed', $_SERVER['argv'] ?? [], true);
-        $this->noReload = $isManaged || DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_RELOAD', 'false'));
+        $reloadPlan = self::reloadPlan(
+            $_SERVER['argv'] ?? [],
+            $this->isDebug,
+            DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_RELOAD', 'false'))
+        );
+        $this->noReload = !$reloadPlan['watcher'];
 
         // AI dual-port: open port+1 when TINA4_DEBUG=true and TINA4_NO_AI_PORT is not set
         $noAiPort = DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_AI_PORT', 'false'));
@@ -438,11 +439,14 @@ class Server
         }
 
         // Register built-in hot reload WebSocket endpoint (dev mode only, unless TINA4_NO_RELOAD=true)
-        if ($this->isDebug && !$this->noReload) {
+        if ($reloadPlan['socket']) {
             Router::websocket('/__dev_reload', function ($connection, $data, $event) {
                 // No-op handler — clients just connect to receive reload signals
             });
-            // Build initial file map
+        }
+
+        // Build initial file map — only when the framework is the one watching.
+        if (!$this->noReload) {
             $this->detectFileChanges();
         }
 
@@ -2818,6 +2822,42 @@ class Server
     }
 
     // ── Hot Reload ─────────────────────────────────────────────────
+
+    /**
+     * What a run does about live reload: whether to serve the reload socket,
+     * and whether to run the framework's own file watcher.
+     *
+     * These are two different questions that used to share one flag.
+     * `--managed` (how the Rust CLI always launches us) means the CLI owns
+     * file watching, SCSS compilation and change detection — running ours as
+     * well causes double reloads and SCSS recompile loops, so the watcher
+     * stands down. But the socket is not the watcher: it is the channel the
+     * CLI's own POST /__dev/api/reload broadcasts on (DevAdmin::registerRoutes
+     * → Server::broadcastWebSocket($payload, '/__dev_reload')). Skipping its
+     * registration under --managed left that broadcast with no route to reach
+     * on every run `tina4 serve` produces, while the dev toolbar and the
+     * /__dev dashboard bundle kept dialling it and reconnecting on every
+     * close, for ever.
+     *
+     * TINA4_NO_RELOAD=true (`tina4php serve --no-reload`) is the developer
+     * opting out of live reload altogether, so it turns both off — including
+     * under --managed.
+     *
+     * @param  list<string> $argv        process arguments, as $_SERVER['argv']
+     * @param  bool         $isDebug     TINA4_DEBUG
+     * @param  bool         $noReloadEnv TINA4_NO_RELOAD
+     * @return array{socket: bool, watcher: bool}
+     */
+    public static function reloadPlan(array $argv, bool $isDebug, bool $noReloadEnv): array
+    {
+        $isManaged = in_array('--managed', $argv, true);
+        $reloadWanted = $isDebug && !$noReloadEnv;
+
+        return [
+            'socket' => $reloadWanted,
+            'watcher' => $reloadWanted && !$isManaged,
+        ];
+    }
 
     /**
      * Scan watched directories for file changes.
