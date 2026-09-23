@@ -85,6 +85,15 @@ class ServerWorkerPoolTest extends TestCase
 \Tina4\Router::get("/pid", function ($request, $response) {
     return $response((string)getmypid(), 200, "text/plain");
 });
+// Same, but holds the worker busy briefly. Firing several of these AT ONCE
+// forces the pool to answer from several workers: a worker serves one
+// connection at a time, so one still sleeping here cannot also take the next
+// concurrent request. That makes "served by more than one process"
+// deterministic instead of racing the kernel's accept() scheduling.
+\Tina4\Router::get("/pid-hold", function ($request, $response) {
+    usleep(250000);
+    return $response((string)getmypid(), 200, "text/plain");
+});
 PHP);
 
         $autoload = dirname(__DIR__) . '/vendor/autoload.php';
@@ -196,6 +205,53 @@ PHP);
         return array_keys($seen);
     }
 
+    /**
+     * Distinct server pids seen when $connections requests are IN FLIGHT AT ONCE.
+     *
+     * Every connection is opened and its request sent BEFORE any response is
+     * read, so the workers accept them concurrently. A pre-forked pool serves
+     * one connection per worker at a time, so N simultaneous connections to a
+     * handler that briefly holds the worker are answered by N distinct workers.
+     * That is what makes "served by more than one process" deterministic: a
+     * SEQUENTIAL burst can be answered entirely by one already-warm worker
+     * before its siblings get a turn (the kernel may re-hand accept() to the
+     * same process), which is the timing that made a distinct-pid count flaky
+     * under load.
+     *
+     * @return string[]
+     */
+    private function collectPidsConcurrently(int $connections, string $path, float $timeout = 15.0): array
+    {
+        $sockets = [];
+        for ($i = 0; $i < $connections; $i++) {
+            $sock = @stream_socket_client("tcp://127.0.0.1:{$this->port}", $errno, $errstr, $timeout);
+            if (is_resource($sock)) {
+                fwrite($sock, "GET {$path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+                $sockets[] = $sock;
+            }
+        }
+
+        $pids = [];
+        $deadline = microtime(true) + $timeout;
+        foreach ($sockets as $sock) {
+            $raw = '';
+            while (!feof($sock) && microtime(true) < $deadline) {
+                $chunk = fread($sock, 8192);
+                if ($chunk === false) {
+                    break;
+                }
+                $raw .= $chunk;
+            }
+            fclose($sock);
+            $split = strpos($raw, "\r\n\r\n");
+            $body = $split === false ? '' : trim(substr($raw, $split + 4));
+            if ($body !== '') {
+                $pids[$body] = true;
+            }
+        }
+        return array_keys($pids);
+    }
+
     // ── POSITIVE ────────────────────────────────────────────────────────────
 
     /**
@@ -207,15 +263,25 @@ PHP);
     public function testRequestsAreServedBySeveralWorkerProcesses(): void
     {
         $this->startServer();
-        $this->get('/pid');   // warm the pool
+        // A real pool is up first — asserted from the OS process table, which is
+        // deterministic (see waitForWorkers), not inferred from response pids.
+        $this->assertCount(
+            self::WORKERS,
+            $this->waitForWorkers(self::WORKERS),
+            'the pool did not start at strength'
+        );
 
-        $pids = $this->collectPids(60);
+        // Fire the requests CONCURRENTLY at a handler that holds each worker
+        // busy, so the pool MUST answer from several workers (see
+        // collectPidsConcurrently). A sequential burst could come back entirely
+        // from one already-warm worker, which is what made this flaky under load.
+        $pids = $this->collectPidsConcurrently(self::WORKERS, '/pid-hold');
 
-        $this->assertNotEmpty($pids, 'the pool served nothing');
+        $this->assertNotEmpty($pids, 'the pool served nothing under a concurrent burst');
         $this->assertGreaterThan(
             1,
             count($pids),
-            'every request came back from the SAME pid, so nothing is pooled: '
+            'concurrent requests were all served by the SAME pid, so nothing is pooled: '
             . implode(',', $pids)
         );
         $this->assertLessThanOrEqual(
