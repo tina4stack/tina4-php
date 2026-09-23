@@ -208,6 +208,10 @@ class Crud
      * @param bool $secure
      * @param bool $cached
      * @param array $middleware
+     * @param ORM|null $filterObject ORM the "read" handler actually queries, when it differs
+     *                               from $object (typically a view). getDataTablesFilter()
+     *                               only accepts columns of the ORM it is given, so without
+     *                               this the view's own columns are silently ignored.
      */
     public static function route(
         $path,
@@ -215,7 +219,8 @@ class Crud
         $function,
         bool $secure = false,
         bool $cached = false,
-        array $middleware = []
+        array $middleware = [],
+        ?ORM $filterObject = null
     ): void {
         list(, $caller) = debug_backtrace(false);
 
@@ -272,8 +277,8 @@ class Crud
          */
         Route::get(
             $path,
-            function (Response $response, Request $request) use ($object, $function) {
-                $filter = Crud::getDataTablesFilter("t.", new $object());
+            function (Response $response, Request $request) use ($object, $function, $filterObject) {
+                $filter = Crud::getDataTablesFilter("t.", $filterObject ?? new $object());
                 $jsonResult = $function("read", new $object(), $filter, $request);
 
                 return $response($jsonResult, HTTP_OK);
@@ -313,6 +318,32 @@ class Crud
          * @example {example}
          */
         Route::post(
+            $path . "/{id}",
+            function (Response $response, Request $request) use ($object, $function) {
+                $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
+                if (!empty($request->data)) {
+                    $object->create($request->data);
+                } else {
+                    $object->create($request->params);
+                }
+                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
+                $function("update", $object, null, $request);
+                $object->save();
+                $jsonResult = $function("afterUpdate", $object, null, $request);
+
+                return $response($jsonResult, HTTP_OK);
+            }
+        )->secure($secure)
+            ->cache($cached)
+            ->middleware($middleware);
+
+        /**
+         * @description  {description} for {path}
+         * @summary Put by Id for {path}
+         * @tags {tags}
+         * @example {example}
+         */
+        Route::put(
             $path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
                 $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
@@ -605,11 +636,14 @@ class Crud
      * Quotes a value as a SQL string literal, using the connection's own escaping
      * where the driver offers it.
      *
+     * Public so that callers assembling their own where clauses alongside this
+     * filter can quote their values the same way.
+     *
      * @param ORM|null $ORM
      * @param string $value
      * @return string
      */
-    private static function escapeLiteral(?ORM $ORM, string $value): string
+    public static function escapeLiteral(?ORM $ORM, string $value): string
     {
         $dba = $ORM->DBA ?? null;
 
