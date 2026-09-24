@@ -82,13 +82,19 @@ final class MongoBson
             $keyEnd = strpos($data, "\x00", $position);
             $key = substr($data, $position, $keyEnd - $position);
             $position = $keyEnd + 1;
-            $document[$key] = self::decodeValue($data, $position, $type);
+            $document[$key] = self::decodeValue($data, $position, $type, $end);
         }
         $position++; // terminator
         return $document;
     }
 
-    private static function decodeValue(string $data, int &$position, int $type): mixed
+    /**
+     * Every type a server reply can carry must CONSUME its bytes. A replica-set
+     * member adds electionId (ObjectId), opTime / operationTime / $clusterTime
+     * (Timestamp) and a BinData signature to every write reply; returning null
+     * for those without advancing read the value's bytes as the next key.
+     */
+    private static function decodeValue(string $data, int &$position, int $type, int $end): mixed
     {
         switch ($type) {
             case 0x01: // double
@@ -126,7 +132,25 @@ final class MongoBson
                 $value = unpack('P', substr($data, $position, 8))[1];
                 $position += 8;
                 return $value;
+            case 0x05: // binary: int32 length + subtype byte + bytes
+                $length = unpack('V', substr($data, $position, 4))[1];
+                $position += 5;
+                $value = substr($data, $position, $length);
+                $position += $length;
+                return $value;
+            case 0x07: // ObjectId, as its 24-char hex string
+                $value = bin2hex(substr($data, $position, 12));
+                $position += 12;
+                return $value;
+            case 0x11: // Timestamp, uint64 (seconds << 32 | increment)
+                $value = unpack('P', substr($data, $position, 8))[1];
+                $position += 8;
+                return $value;
             default:
+                // An unknown type cannot be sized, so its bytes cannot be
+                // skipped. Stop at the containing document's boundary rather
+                // than read them as keys.
+                $position = $end;
                 return null;
         }
     }
