@@ -12,6 +12,29 @@
 namespace Tina4;
 
 /**
+ * A zero-argument Closure registered through ``addGlobal`` (ADR-0085).
+ *
+ * Node's Frond auto-calls any function reached by a bare reference and uses the
+ * return value. PHP stored the Closure instead, so ``{% if admin_only %}`` with
+ * ``addGlobal('admin_only', fn() => ...)`` was always truthy. Wrapping a
+ * zero-parameter Closure in this marker at registration lets ``resolveVariable``
+ * invoke it once for a bare reference, while ``admin_only()`` still calls it
+ * through the ordinary function-call path (``__invoke`` forwards). A Closure
+ * that declares parameters is left unwrapped and behaves exactly as before.
+ */
+final class FrondAutoGlobal
+{
+    public function __construct(private \Closure $fn)
+    {
+    }
+
+    public function __invoke(mixed ...$args): mixed
+    {
+        return ($this->fn)(...$args);
+    }
+}
+
+/**
  * Frond - Zero-dependency Twig-like template engine for Tina4.
  *
  * Supports: variables, filters, control structures (if/for/set/include/extends/block/macro/cache),
@@ -444,7 +467,7 @@ class Frond
                 return null;
             case 'addGlobal':
                 [$name, $value] = $args;
-                $this->globals[$name] = $value;
+                $this->globals[$name] = self::wrapGlobal($value);
                 return null;
             case 'addTest':
                 [$name, $fn] = $args;
@@ -470,7 +493,7 @@ class Frond
                 return null;
             case 'addGlobal':
                 [$name, $value] = $args;
-                self::$classGlobals[$name] = $value;
+                self::$classGlobals[$name] = self::wrapGlobal($value);
                 return null;
             case 'addTest':
                 [$name, $fn] = $args;
@@ -2586,6 +2609,21 @@ class Frond
         }
     }
 
+    /**
+     * Wrap a bare zero-parameter Closure so a bare reference to it auto-calls
+     * (ADR-0085). Anything else — a value, or a Closure that declares
+     * parameters — is returned unchanged, matching Node, which only auto-calls
+     * plain functions (never a callable string or an ``__invoke`` object).
+     */
+    private static function wrapGlobal(mixed $value): mixed
+    {
+        if ($value instanceof \Closure
+            && (new \ReflectionFunction($value))->getNumberOfParameters() === 0) {
+            return new FrondAutoGlobal($value);
+        }
+        return $value;
+    }
+
     private function resolveVariable(string $expr, array &$data): mixed
     {
         $expr = trim($expr);
@@ -2652,6 +2690,12 @@ class Frond
             }
         }
 
+        // ADR-0085: a bare reference to a zero-argument callable global uses its
+        // return value. ``g()`` never reaches here as a wrapper — the
+        // function-call path invokes it directly — so each global is called once.
+        if ($current instanceof FrondAutoGlobal) {
+            return ($current)();
+        }
         return $current;
     }
 
