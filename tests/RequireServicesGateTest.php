@@ -373,7 +373,7 @@ class RequireServicesGateTest extends TestCase
     public function testThePredicateCoversAllFourBranches(): void
     {
         $unsetAll = [
-            'TINA4_TEST_FIREBIRD_URL' => null, 'TINA4_TEST_PG_URL' => null,
+            'TINA4_TEST_FIREBIRD_URL' => null, 'TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGIS_URL' => null,
             'TINA4_TEST_MYSQL_URL' => null, 'TINA4_TEST_MSSQL_URL' => null, 'TINA4_TEST_SWOOLE' => null,
             'TINA4_TEST_OIDC_ISSUER' => null, 'TINA4_TEST_NEO4J_URL' => null, 'TINA4_TEST_MEMGRAPH_URL' => null,
             'TINA4_TEST_ARANGO_URL' => null, 'TINA4_TEST_ULTIPA_URL' => null,
@@ -384,7 +384,7 @@ class RequireServicesGateTest extends TestCase
             $this->assertFalse(RequireServicesGate::isExcusedSkip(''));
             $this->assertFalse(RequireServicesGate::isExcusedSkip('needs:firebird without brackets'));
             // optional engines, none promised -> excused
-            foreach (['firebird', 'postgres', 'mysql', 'mssql', 'swoole', 'oidc', 'neo4j', 'memgraph', 'arango', 'ultipa'] as $engine) {
+            foreach (['firebird', 'postgres', 'postgis', 'mysql', 'mssql', 'swoole', 'oidc', 'neo4j', 'memgraph', 'arango', 'ultipa'] as $engine) {
                 $this->assertTrue(RequireServicesGate::isExcusedSkip("[needs:{$engine}] unavailable"), $engine);
             }
             // always-provisioned -> never excused
@@ -400,7 +400,7 @@ class RequireServicesGateTest extends TestCase
         });
 
         foreach ([
-            'firebird' => 'TINA4_TEST_FIREBIRD_URL', 'postgres' => 'TINA4_TEST_PG_URL', 'mysql' => 'TINA4_TEST_MYSQL_URL',
+            'firebird' => 'TINA4_TEST_FIREBIRD_URL', 'postgres' => 'TINA4_TEST_PG_URL', 'postgis' => 'TINA4_TEST_POSTGIS_URL', 'mysql' => 'TINA4_TEST_MYSQL_URL',
             'mssql' => 'TINA4_TEST_MSSQL_URL', 'swoole' => 'TINA4_TEST_SWOOLE', 'oidc' => 'TINA4_TEST_OIDC_ISSUER',
             'neo4j' => 'TINA4_TEST_NEO4J_URL', 'memgraph' => 'TINA4_TEST_MEMGRAPH_URL',
             'arango' => 'TINA4_TEST_ARANGO_URL', 'ultipa' => 'TINA4_TEST_ULTIPA_URL',

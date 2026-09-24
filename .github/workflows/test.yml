@@ -84,6 +84,24 @@ jobs:
           --health-timeout 3s
           --health-retries 20
 
+      # PostGIS for GisPostgisContractTest - a SEPARATE container on 55433,
+      # because the plain postgres:16 image has no PostGIS extension to install.
+      # Same service as tina4-python's CI. Without it that test skipped under the
+      # gate while TINA4_TEST_PG_URL was set (a PostGIS the job never provided).
+      postgis:
+        image: postgis/postgis:16-3.4
+        ports:
+          - 55433:5432
+        env:
+          POSTGRES_USER: tina4
+          POSTGRES_PASSWORD: tina4
+          POSTGRES_DB: tina4_gis
+        options: >-
+          --health-cmd "pg_isready -U tina4 -d tina4_gis"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
       # RabbitMQ for the live AMQP 0-9-1 handshake / enqueue-dequeue-ack test.
       rabbitmq:
         image: rabbitmq:3-management
@@ -135,6 +153,7 @@ jobs:
     env:
       # Enable the real-service integration tests (they skip when unset).
       TINA4_TEST_PG_URL: postgres://tina4:tina4@localhost:55432/tina4_php
+      TINA4_TEST_POSTGIS_URL: postgres://tina4:tina4@localhost:55433/tina4_gis
       TINA4_TEST_PG_HOST: localhost
       TINA4_TEST_PG_PORT: '55432'
       TINA4_TEST_PG_USERNAME: tina4

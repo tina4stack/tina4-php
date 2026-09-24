@@ -55,6 +55,8 @@ final class RequireServicesGate
         'firebird' => ['TINA4_TEST_FIREBIRD_URL'],
         // Canonical coordinate only (ADR-0038 / tests/fixtures/test_env_contract.json).
         'postgres' => ['TINA4_TEST_PG_URL'],
+        // PostGIS is its own server (a separate container on 55433 in CI and on the lab).
+        'postgis'  => ['TINA4_TEST_POSTGIS_URL'],
         'mysql'    => ['TINA4_TEST_MYSQL_URL'],
         'mssql'    => ['TINA4_TEST_MSSQL_URL'],
         'swoole'   => ['TINA4_TEST_SWOOLE'],
