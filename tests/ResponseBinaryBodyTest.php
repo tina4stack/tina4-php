@@ -31,8 +31,10 @@ class ResponseBinaryBodyTest extends TestCase
             'ignore_errors' => true,
             'timeout' => 10,
         ]]);
-        $body = file_get_contents("http://127.0.0.1:{$port}{$path}", false, $context);
-        $headers = http_get_last_response_headers() ?? [];
+        $stream = fopen("http://127.0.0.1:{$port}{$path}", 'rb', false, $context);
+        $headers = stream_get_meta_data($stream)['wrapper_data'] ?? [];
+        $body = stream_get_contents($stream);
+        fclose($stream);
         $status = (int)(explode(' ', $headers[0] ?? '')[1] ?? 0);
         $type = '';
         foreach ($headers as $line) {
