@@ -28,7 +28,7 @@ def locked_components(root):
         lock = tomllib.loads((root / 'uv.lock').read_text())
         for p in lock.get('package', []):
             if p.get('source', {}).get('registry'):
-                yield 'pypi', p['name'], p['version'], 'NOASSERTION'
+                yield 'pypi', p['name'], p['version'], 'NOASSERTION', ''
     elif (root / 'package-lock.json').is_file():
         lock = json.loads((root / 'package-lock.json').read_text())
         for path, p in lock.get('packages', {}).items():
@@ -37,24 +37,44 @@ def locked_components(root):
             name = p.get('name') or path.rsplit('node_modules/', 1)[-1]
             if 'version' not in p:
                 raise ValueError('Unversioned lock component: ' + path)
-            yield 'npm', name, p['version'], p.get('license') or 'NOASSERTION'
+            yield 'npm', name, p['version'], p.get('license') or 'NOASSERTION', ''
     elif (root / 'composer.lock').is_file():
         lock = json.loads((root / 'composer.lock').read_text())
         for p in lock.get('packages', []) + lock.get('packages-dev', []):
             licences = p.get('license', [])
-            yield 'composer', p['name'], p['version'], ' OR '.join(licences) or 'NOASSERTION'
+            yield 'composer', p['name'], p['version'], ' OR '.join(licences) or 'NOASSERTION', ''
     elif (root / 'Gemfile.lock').is_file():
-        for line in (root / 'Gemfile.lock').read_text().splitlines():
+        lines = (root / 'Gemfile.lock').read_text().splitlines()
+        platforms = []
+        in_platforms = False
+        for line in lines:
+            if line == 'PLATFORMS':
+                in_platforms = True
+            elif line and not line.startswith(' '):
+                in_platforms = False
+            elif in_platforms and line.strip():
+                platforms.append(line.strip())
+        # Longest suffix first: x86_64-linux-musl is not the version's
+        # prerelease suffix, and must not collapse to x86_64-linux.
+        platforms.sort(key=len, reverse=True)
+        for line in lines:
             match = re.fullmatch(r'    ([\w.-]+) \(([^ ,)]+)\)', line)
             if match:
-                yield 'gem', match[1], match[2], 'NOASSERTION'
+                version, platform = match[2], ''
+                for candidate in platforms:
+                    if version.endswith('-' + candidate):
+                        version, platform = version[:-(len(candidate) + 1)], candidate
+                        break
+                yield 'gem', match[1], version, 'NOASSERTION', platform
 
 
 def generate(root, output, name, version, licence, repository):
-    artifacts = sorted(p for p in output.iterdir() if p.is_file() and p.name not in {'SHA256SUMS', 'sbom.spdx.json'})
+    artifacts = sorted(p for p in output.iterdir() if p.is_file() and p.name not in {'SHA256SUMS', 'sbom.spdx.json', '.gitignore'})
     if not artifacts:
         raise ValueError('No built release artifacts; refusing an empty SBOM')
     for p in artifacts:
+        if not p.name.endswith(('.whl', '.tar.gz', '.tgz', '.gem', '.zip')):
+            raise ValueError('Unexpected release artifact: ' + p.name)
         if p.is_symlink() or not re.fullmatch(r'[A-Za-z0-9_.+-]+', p.name):
             raise ValueError('Unsafe artifact filename: ' + p.name)
     commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
@@ -87,11 +107,11 @@ def generate(root, output, name, version, licence, repository):
             {'spdxElementId': identifier, 'relationshipType': 'GENERATED_FROM', 'relatedSpdxElement': 'SPDXRef-Source'},
         ])
     components = sorted(set(locked_components(root)))
-    for i, (ecosystem, component, resolved, declared) in enumerate(components):
+    for i, (ecosystem, component, resolved, declared, platform) in enumerate(components):
         identifier = f'SPDXRef-Locked-{i}'
         item = package(identifier, component, resolved, declared, 'NOASSERTION')
         item['externalRefs'] = [{'referenceCategory': 'PACKAGE-MANAGER', 'referenceType': 'purl',
-                                 'referenceLocator': f'pkg:{ecosystem}/{quote(component, safe="/")}@{quote(resolved, safe="")}' }]
+                                 'referenceLocator': f'pkg:{ecosystem}/{quote(component, safe="/")}@{quote(resolved, safe="")}' + (f'?platform={quote(platform, safe="")}' if platform else '') }]
         doc['relationships'].append({'spdxElementId': 'SPDXRef-Source', 'relationshipType': 'OTHER',
                                      'relatedSpdxElement': identifier,
                                      'comment': 'Resolved lockfile build-input inventory; not an assertion of bundled runtime dependency.'})

@@ -49,6 +49,38 @@ class ReleaseEvidenceTests(unittest.TestCase):
         artifact.write_bytes(b'tampered')
         self.assertNotEqual(original, hashlib.sha256(artifact.read_bytes()).hexdigest())
 
+    def test_ruby_platform_is_not_part_of_gem_version(self):
+        (self.output / 'example-1.0.0.gem').write_bytes(b'gem archive fixture')
+        (self.root / 'Gemfile.lock').write_text("""GEM
+  remote: https://rubygems.org/
+  specs:
+    pg (1.6.3)
+    pg (1.6.3-x86_64-linux)
+    pg (1.6.3-x86_64-linux-musl)
+    sqlite3 (2.0.0.pre.1-arm64-darwin)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+  x86_64-linux-musl
+  arm64-darwin
+
+DEPENDENCIES
+  pg
+  sqlite3
+""")
+        self.emit()
+        document = json.loads((self.output / 'sbom.spdx.json').read_text())
+        components = [p for p in document['packages'] if p['SPDXID'].startswith('SPDXRef-Locked-')]
+        self.assertEqual(len(components), 4)
+        references = {p['externalRefs'][0]['referenceLocator']: p['versionInfo'] for p in components}
+        self.assertEqual(references, {
+            'pkg:gem/pg@1.6.3': '1.6.3',
+            'pkg:gem/pg@1.6.3?platform=x86_64-linux': '1.6.3',
+            'pkg:gem/pg@1.6.3?platform=x86_64-linux-musl': '1.6.3',
+            'pkg:gem/sqlite3@2.0.0.pre.1?platform=arm64-darwin': '2.0.0.pre.1',
+        })
+
     def test_symlink_cannot_pull_outside_bytes_into_release(self):
         outside = self.root / 'outside'
         outside.write_text('not a release asset')

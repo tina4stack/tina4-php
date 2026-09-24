@@ -34,7 +34,7 @@ jobs:
           python3 scripts/test_release_evidence.py
           python3 scripts/release_evidence.py --output dist --name tina4php --version "$version" --license MIT --repository tina4stack/tina4-php
           (cd dist && sha256sum --check SHA256SUMS)
-          python3 -c 'import json; s=json.load(open("dist/sbom.spdx.json")); assert s["spdxVersion"] == "SPDX-2.3"; assert s["packages"] and s["files"]'
+          python3 -c 'import json,hashlib; from pathlib import Path; s=json.load(open("dist/sbom.spdx.json")); assert s["spdxVersion"] == "SPDX-2.3"; a=[p for p in s["packages"] if "packageFileName" in p]; assert len(a)==1; assert all(p["checksums"]==[{"algorithm":"SHA256","checksumValue":hashlib.sha256(Path("dist",p["packageFileName"]).read_bytes()).hexdigest()}] for p in a)'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-package-php
