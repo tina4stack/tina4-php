@@ -1,3 +1,9 @@
+# Copyright (c) 2026 Code Infinity
+# SPDX-License-Identifier: MPL-2.0
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 name: Release packages and publication
 
 on:
@@ -32,7 +38,7 @@ jobs:
             test "$version" = "$GITHUB_REF_NAME" || { echo "Tag/source version mismatch"; exit 1; }
           fi
           python3 scripts/test_release_evidence.py
-          python3 scripts/release_evidence.py --output dist --name tina4php --version "$version" --license MIT --repository tina4stack/tina4-php
+          python3 scripts/release_evidence.py --output dist --name tina4php --version "$version" --license MPL-2.0 --repository tina4stack/tina4-php
           (cd dist && sha256sum --check SHA256SUMS)
           python3 -c 'import json,hashlib; from pathlib import Path; s=json.load(open("dist/sbom.spdx.json")); assert s["spdxVersion"] == "SPDX-2.3"; a=[p for p in s["packages"] if "packageFileName" in p]; assert len(a)==1; assert all(p["checksums"]==[{"algorithm":"SHA256","checksumValue":hashlib.sha256(Path("dist",p["packageFileName"]).read_bytes()).hexdigest()}] for p in a)'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

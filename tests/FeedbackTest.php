@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 // Feedback (and its sibling DevAdmin/MessageLog/RequestInspector classes)
 // live alongside DevAdmin under PSR-4, so they autoload on first reference.
 // Force-include DevAdmin.php to pull in MessageLog/RequestInspector too,

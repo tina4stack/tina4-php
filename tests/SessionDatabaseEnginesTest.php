@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 - The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  *
  * SESSION CONTRACT invariant 5: the database backend works on every engine it
  * claims. PHP's half of the parity lock-in behind ADR-0028.

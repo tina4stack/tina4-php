@@ -8,6 +8,8 @@ https://tina4.com/php/36-releases
 
 ## 3.13.138
 
+This release is available under MPL-2.0, with separate commercial terms available from Code Infinity. Copyright Code Infinity. Previously published releases retain their original licences.
+
 Security and interoperability release, integrating the reviewed changes since 3.13.137.
 
 - HTTP handling rejects CR/LF/NUL in headers and ambiguous request framing, including duplicate Content-Length headers. Security headers cover every response and entry point; same-origin requests do not trigger CORS. Explicit Content-Type is preserved exactly once, binary responses remain byte-for-byte intact, and invalid upload-limit configuration falls back safely.

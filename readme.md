@@ -536,8 +536,8 @@ Full guides, API reference, and examples at **[tina4.com](https://tina4.com)**.
 
 ## License
 
-MIT (c) 2007-2026 Tina4 Stack
-https://opensource.org/licenses/MIT
+MPL-2.0. Copyright (c) 2026 Code Infinity. Separate commercial terms are available from Code Infinity. Previously published releases retain their original licences.
+https://mozilla.org/MPL/2.0/
 
 ---
 

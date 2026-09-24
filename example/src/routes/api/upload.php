@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 define('UPLOAD_DIR', __DIR__ . '/../../public/uploads');
 define('ALLOWED_UPLOAD_TYPES', ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']);
 

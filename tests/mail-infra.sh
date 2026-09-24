@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Code Infinity
+# SPDX-License-Identifier: MPL-2.0
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 # Stand up the TLS + AUTH mail servers the Messenger transport tests drive
 # (tests/MessengerTlsTransportTest.php; vendored byte-for-byte in behaviour from
 # tina4-ruby spec/support/mail-infra.sh, which first shipped it). Idempotent: safe to re-run. The plain GreenMail

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * ODBC provider contract -- feature 13 (ODBC-DEC-01 provision a REAL ODBC source
  * + run the shared write-path fixture through it; ODBC-DEC-02 the latent fixes).
