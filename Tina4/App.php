@@ -1754,10 +1754,13 @@ HTML;
     }
 
     /**
-     * Environment variables that mark a CI run. Any of them set (and not
-     * "false"/"0") keeps the browser closed.
+     * Environment variables that mark a CI run (ADR-0070 ci_env_vars). Any of
+     * them set to a value outside CI_NOT_SET_VALUES keeps the browser closed.
      */
-    public const CI_ENVIRONMENT_VARIABLES = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'JENKINS_URL', 'TF_BUILD'];
+    public const CI_ENVIRONMENT_VARIABLES = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'JENKINS_URL', 'TF_BUILD', 'TEAMCITY_VERSION'];
+
+    /** Values (trimmed, lower-cased) that mean "not CI" (ADR-0070 ci_not_set_values). Empty is not CI either. */
+    public const CI_NOT_SET_VALUES = ['false', '0', 'no', 'off'];
 
     /**
      * Whether `tina4 serve` should open a browser: only for a developer at a
@@ -1772,7 +1775,7 @@ HTML;
         }
         foreach (self::CI_ENVIRONMENT_VARIABLES as $name) {
             $value = strtolower(trim((string)DotEnv::getEnv($name, '')));
-            if ($value !== '' && $value !== 'false' && $value !== '0') {
+            if ($value !== '' && !in_array($value, self::CI_NOT_SET_VALUES, true)) {
                 return false;
             }
         }
