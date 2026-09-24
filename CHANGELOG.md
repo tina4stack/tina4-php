@@ -6,6 +6,20 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.138
+
+Security and interoperability release, integrating the reviewed changes since 3.13.137.
+
+- HTTP handling rejects CR/LF/NUL in headers and ambiguous request framing, including duplicate Content-Length headers. Security headers cover every response and entry point; same-origin requests do not trigger CORS. Explicit Content-Type is preserved exactly once, binary responses remain byte-for-byte intact, and invalid upload-limit configuration falls back safely.
+- ORM, AutoCrud and database write helpers allow only declared fields or plain column identifiers. AutoCrud and GraphQL address rows by bound primary keys, respect the selected connection, and reject malformed filter/sort values. DocStore validates SQLite fallback field paths; delete accepts lists of filter maps; mapped-field read-back is covered across live engines.
+- Database writes through fetch/fetchOne execute once, without pagination or stale query-cache results, and commit correctly. Execute returns produced rows. Placeholder parsing preserves question marks inside SQL literals, identifiers and comments, and parameter-free SQL is sent unchanged. Firebird relation checks look up the table by name; MSSQL captures IDENTITY in the insert batch and uses the available connection-timeout constant.
+- Frond preserves trusted SafeString form markup, re-escapes values after filters, sanitises data URIs, and hardens JavaScript, CSS and HTML-attribute escaping. Unicode escaping works without mbstring; shared fixtures cover escape strategies.
+- MongoDB session and cache clients share a complete BSON codec, including replica-set reply types exercised against MongoDB 8.
+- Messenger uses verified implicit TLS for ssl on any port and requires successful STARTTLS when requested. Redis WebSocket backplanes authenticate and select the configured database. API, MQTT and database errors redact credentials; missing-driver diagnostics name the package and installation command. Explicit Kafka brokers override environment defaults without treating an AMQP queue URL as Kafka brokers.
+- SOAP rejects malformed/empty or non-UTF-8 bodies and resolves operations by local name. GraphQL treats commas as insignificant between arguments, fields and list values.
+- Development-server banners report the actual bound address. Browser opening obeys the shared development/CI gate, and test processes disable browser launches by default.
+- Maintainer skills estimate work from measured agent durations and carry the shared ISO control guidance. Contribution/security policies and DCO/CLA checks are included. CI enforces tagged service-skip reasons, provisions PostGIS, TLS mail and authenticated Redis, and covers live WebSocket and MongoDB replica-set behavior.
+
 ## 3.13.137
 
 Gemini joins the Ai client as a first-class provider. Set TINA4_AI_PROVIDER=gemini with a
