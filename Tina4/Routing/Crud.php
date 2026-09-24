@@ -320,18 +320,7 @@ class Crud
         Route::post(
             $path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
-                $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
-                if (!empty($request->data)) {
-                    $object->create($request->data);
-                } else {
-                    $object->create($request->params);
-                }
-                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
-                $function("update", $object, null, $request);
-                $object->save();
-                $jsonResult = $function("afterUpdate", $object, null, $request);
-
-                return $response($jsonResult, HTTP_OK);
+                return self::updateById($response, $request, $object, $function);
             }
         )->secure($secure)
             ->cache($cached)
@@ -346,18 +335,7 @@ class Crud
         Route::put(
             $path . "/{id}",
             function (Response $response, Request $request) use ($object, $function) {
-                $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
-                if (!empty($request->data)) {
-                    $object->create($request->data);
-                } else {
-                    $object->create($request->params);
-                }
-                $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
-                $function("update", $object, null, $request);
-                $object->save();
-                $jsonResult = $function("afterUpdate", $object, null, $request);
-
-                return $response($jsonResult, HTTP_OK);
+                return self::updateById($response, $request, $object, $function);
             }
         )->secure($secure)
             ->cache($cached)
@@ -410,6 +388,33 @@ class Crud
         }
 
         return $objects;
+    }
+
+    /**
+     * Updates the record named by the last inline param and returns the
+     * "afterUpdate" result. Shared by the POST /{id} and PUT /{id} routes, which
+     * keep separate closures only so each carries its own swagger docblock.
+     *
+     * @param Response $response
+     * @param Request $request
+     * @param ORM $object
+     * @param callable $function The crud callback registered for the route
+     * @return mixed
+     */
+    private static function updateById(Response $response, Request $request, ORM $object, callable $function)
+    {
+        $id = $request->inlineParams[count($request->inlineParams) - 1]; //get the id on the last param
+        if (!empty($request->data)) {
+            $object->create($request->data);
+        } else {
+            $object->create($request->params);
+        }
+        $object->load("{$object->getFieldName($object->primaryKey)} = ?", [$id]);
+        $function("update", $object, null, $request);
+        $object->save();
+        $jsonResult = $function("afterUpdate", $object, null, $request);
+
+        return $response($jsonResult, HTTP_OK);
     }
 
     /**
@@ -637,7 +642,9 @@ class Crud
      * where the driver offers it.
      *
      * Public so that callers assembling their own where clauses alongside this
-     * filter can quote their values the same way.
+     * filter can quote their values the same way. Prefer bound `?` parameters
+     * wherever the query allows them; reach for this only when extending the
+     * string filter getDataTablesFilter() returns.
      *
      * @param ORM|null $ORM
      * @param string $value
