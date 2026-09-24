@@ -48,6 +48,11 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 - [x] IMAP 'none' (/imap) silently upgraded with STARTTLS whenever the server offered it
 
 ## Commits
-- (filled per commit)
+- a90e456d  fix(backplane): AUTH + SELECT against a password Redis; redact URLs in Mqtt and Api errors
+- c9bf70ca  fix(drivers): S3 and database-cache messages name the package and its install command
+- c9047b5b  fix(wsdl): refuse non-UTF-8 SOAP bodies before parsing; match operations by local name
+- ec3f510d  test(drivers): a missing-extension error may be a RuntimeException subclass
+- a855d443  fix(wsdl): accept only the exact encoding name UTF-8 in the XML declaration
+- 25eac4c7  fix(messenger): ADR-0071 mail encryption
 
-## Status: In Progress
+## Status: Complete (pending lab full-suite verification at HEAD)
