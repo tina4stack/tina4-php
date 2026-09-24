@@ -82,6 +82,9 @@ class WebSocketHardeningTest extends TestCase
     private function requireRedis(): void
     {
         $sock = @fsockopen(self::REDIS_HOST, self::REDIS_PORT, $errno, $errstr, 2);
+        if (!$sock && getenv('TINA4_REQUIRE_SERVICES')) {
+            $this->fail(sprintf('TINA4_REQUIRE_SERVICES is set but Redis/Valkey is not reachable at %s:%d', self::REDIS_HOST, self::REDIS_PORT));
+        }
         if (!$sock) {
             $this->markTestSkipped(
                 sprintf('Redis/Valkey not reachable at %s:%d (%s) — backplane test needs a real service',

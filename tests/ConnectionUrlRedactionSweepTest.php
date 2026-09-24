@@ -58,6 +58,67 @@ final class ConnectionUrlRedactionSweepTest extends TestCase
         }
     }
 
+    /**
+     * Ruby's hand-rolled redactor stopped at the first ':' or '@' inside the
+     * password and leaked the tail. PHP has one primitive, DatabaseUrl::redact,
+     * which takes userinfo up to the LAST '@'. Pinned through the real connect
+     * failure path of every engine, in a child process so the framework's own
+     * log output (written straight to STDOUT) is captured too.
+     */
+    public function testPasswordsWithColonOrAtNeverReachAConnectErrorOrTheLog(): void
+    {
+        $script = sys_get_temp_dir() . '/tina4-db-redaction-' . bin2hex(random_bytes(6)) . '.php';
+        file_put_contents($script, <<<'PHP'
+<?php
+require getenv('CHILD_AUTOLOAD');
+$urls = [
+    'postgresql://tina4:pw-s3:cret@127.0.0.1:1/tina4',
+    'postgresql://tina4:pw-s3@cret@127.0.0.1:1/tina4',
+    'mysql://tina4:pw-s3:cret@127.0.0.1:1/tina4',
+    'mysql://tina4:pw-s3@cret@127.0.0.1:1/tina4',
+    'firebird://SYSDBA:pw-s3@cret@127.0.0.1:1//tmp/tina4-absent.fdb',
+    'mssql://sa:pw-s3@cret@127.0.0.1:1/master',
+    'mongodb://tina4:pw-s3@cret@127.0.0.1:1/tina4',
+    'odbc:DRIVER={PostgreSQL Unicode};SERVER=127.0.0.1;PORT=1;DATABASE=x;UID=tina4;PWD=pw-s3:cret;',
+    'odbc:DRIVER={PostgreSQL Unicode};SERVER=127.0.0.1;PORT=1;DATABASE=x;UID=tina4;PWD={pw-s3@cret};',
+    'notaurl-pw-s3@cret',
+];
+$messages = [];
+foreach ($urls as $url) {
+    try {
+        \Tina4\Database\Database::create($url);
+        $messages[] = 'CONNECTED';
+    } catch (\Throwable $error) {
+        $messages[] = get_class($error) . ': ' . $error->getMessage();
+    }
+    $messages[] = \Tina4\DatabaseUrl::redact($url);
+}
+echo "
+@@RESULT@@" . json_encode($messages);
+PHP);
+        $environment = getenv();
+        $environment['CHILD_AUTOLOAD'] = dirname(__DIR__) . '/vendor/autoload.php';
+        $environment['TINA4_NO_BROWSER'] = 'true';
+        $environment['TINA4_LOG_LEVEL'] = 'DEBUG';
+        $environment['TINA4_DATABASE_CONNECT_TIMEOUT'] = '2';
+        $process = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $environment);
+        $this->assertIsResource($process);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+        unlink($script);
+
+        $marker = strrpos($stdout, '@@RESULT@@');
+        $this->assertNotFalse($marker, "child failed:\n{$stdout}\n{$stderr}");
+        $messages = json_decode(substr($stdout, $marker + strlen('@@RESULT@@')), true);
+        $this->assertCount(20, $messages);
+        $this->assertNotContains('CONNECTED', $messages, 'a connection to a closed port succeeded');
+        $this->assertStringNotContainsString('cret', $stdout . $stderr, 'a password tail reached an error or the log');
+        $this->assertContains('postgresql://tina4:***@127.0.0.1:1/tina4', $messages);
+    }
+
     public function testHttpsUnavailableErrorNeverContainsTheUrlPassword(): void
     {
         $script = sys_get_temp_dir() . '/tina4-https-unavailable-' . bin2hex(random_bytes(6)) . '.php';

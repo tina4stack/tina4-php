@@ -18,6 +18,12 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 - [x] Item 8: SMTP certificates verified with host name (verify_peer + verify_peer_name + peer_name); no opt-out
 - [x] Item 8: IMAP starttls -> /imap/tls-sslv23 (c-client /tls is TLSv1-only and fails on modern servers); none -> /imap/notls; ssl accepted as implicit TLS
 - [x] Item 8: example/.env.example drops TINA4_MAIL_TLS_INSECURE and states the ADR-0071 semantics
+- [x] Extra (a): DB connect errors + log with passwords containing ':' / '@' and ODBC PWD= - no leak in PHP (one primitive, userinfo to the LAST '@'); pinned by a real connect-failure test, mutation-proved
+- [x] Extra (b): SMTP and IMAP unknown / empty-after-trim values raise with the value as given (tests pin '', '   ')
+- [x] Extra (c): no fake backplane stand-in in PHP tests (RedisBackplane is always real); WebSocketHardeningTest's Redis gate now FAILS under TINA4_REQUIRE_SERVICES instead of skipping
+- [x] Extra (d): Kafka push to a closed port raises (reproduced for real); found + fixed: an explicit `brokers` was overwritten by TINA4_KAFKA_BROKERS / TINA4_QUEUE_URL (ADR-0041), and an amqp:// TINA4_QUEUE_URL became the kafka broker list
+- [ ] OWED: NATS backplane - no NATS server on the lab, so NATSBackplane has no live test (needs basis-company/nats + a nats container)
+- [ ] OWED: RedisBackplane ext-redis path (AUTH/SELECT via phpredis) - the lab PHP has no ext-redis, only the raw RESP path ran live
 
 ## Parity
 | Item | PHP before | PHP after |
@@ -55,4 +61,4 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 - a855d443  fix(wsdl): accept only the exact encoding name UTF-8 in the XML declaration
 - 25eac4c7  fix(messenger): ADR-0071 mail encryption
 
-## Status: Complete (pending lab full-suite verification at HEAD)
+## Status: Complete (NATS + ext-redis backplane paths owed, see Scope)
