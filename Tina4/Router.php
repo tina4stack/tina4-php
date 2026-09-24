@@ -967,7 +967,12 @@ class Router
             && str_ends_with($request->path, '/')
             && DotEnv::isTruthy(DotEnv::getEnv('TINA4_TRAILING_SLASH_REDIRECT', 'false'))
         ) {
-            $target = rtrim($request->path, '/');
+            // Collapse any leading run of "/" or "\" so the target stays a
+            // same-origin absolute path. Without this, "//evil.com/" normalises
+            // to "//evil.com", which a browser treats as the protocol-relative
+            // absolute URL of another host — a trailing-slash convenience must
+            // never double as an open redirect (security F3).
+            $target = '/' . ltrim(rtrim($request->path, '/'), "/\\");
             // Preserve query string when present
             if (!empty($request->query)) {
                 $target .= '?' . http_build_query($request->query);
