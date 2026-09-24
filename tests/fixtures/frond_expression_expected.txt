@@ -82,3 +82,8 @@ number-format-locale	1 234,57
 block-set	[Hi Andre]
 block-set-safe	[&lt;b&gt;&amp;x&lt;/b&gt;]
 inline-set-equals-in-string	[a = b]
+esc-js-escape	\x3Cb\x3E\x26x\x3C\x2Fb\x3E
+esc-e-js	\x3Cb\x3E\x26x\x3C\x2Fb\x3E
+esc-e-url	%3Cb%3E%26x%3C%2Fb%3E
+esc-e-css	\00003C b\00003E \000026 x\00003C \00002F b\00003E 
+esc-e-html-attr	&#x3C;b&#x3E;&#x26;x&#x3C;&#x2F;b&#x3E;

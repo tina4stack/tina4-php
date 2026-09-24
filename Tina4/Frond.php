@@ -1234,7 +1234,7 @@ class Frond
                     $renderedParent = null;
                     $getParent = function () use ($engine, $parentBody, &$data, &$renderedParent) {
                         if ($renderedParent === null) {
-                            $renderedParent = self::RAW_MARKER . $engine->execute($parentBody, $data);
+                            $renderedParent = new SafeString($engine->execute($parentBody, $data));
                         }
                         return $renderedParent;
                     };
@@ -1278,26 +1278,15 @@ class Frond
     {
 
         $value = $this->evaluateExpression($expr, $data);
-        $isRaw = false;
 
-        // SafeString instances bypass auto-escape (parity with Python frond.SafeString)
+        // Trusted output is marked ONLY by the SafeString type (F1/ADR-0077).
+        // There is no in-band marker string any more, so user data can never
+        // forge a "raw" flag by containing a magic byte sequence.
         if ($value instanceof SafeString) {
             return (string)$value;
         }
 
-        if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
-            $value = str_replace(self::RAW_MARKER, '', $value);
-            $isRaw = true;
-        }
-
-        $str = $this->valueToString($value);
-
-        // Auto-escape unless raw
-        if (!$isRaw) {
-            $str = htmlspecialchars($str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        }
-
-        return $str;
+        return htmlspecialchars($this->valueToString($value), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     private function valueToString(mixed $value): string
@@ -1390,15 +1379,129 @@ class Frond
      * and both were illegal inside a JavaScript string literal before ES2019.
      *
      * @param mixed $value Any value to serialize.
-     * @return string Raw-marked JSON, safe to drop into HTML or a script block.
+     * @return SafeString JSON, safe to drop into HTML or a script block.
      */
-    private function jsonSafe(mixed $value): string
+    private function jsonSafe(mixed $value): SafeString
     {
-        return self::RAW_MARKER . str_replace(
+        return new SafeString(str_replace(
             ['<', '>', '&', "'", "\u{2028}", "\u{2029}"],
             ['\\u003c', '\\u003e', '\\u0026', '\\u0027', '\\u2028', '\\u2029'],
             $this->jsonText($value)
-        );
+        ));
+    }
+
+    /**
+     * Escape strategies shared by ``js_escape`` and ``e(strategy)`` (F5/F7,
+     * ADR-0077), byte-identical to the Python master. Twig-compatible.
+     */
+    /** @return list<string> UTF-8 characters; mbstring is optional. */
+    private static function unicodeChars(string $value): array
+    {
+        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+        if ($chars === false) {
+            throw new \InvalidArgumentException('Frond: escape input must be valid UTF-8');
+        }
+        return $chars;
+    }
+
+    /** Decode one UTF-8 character already validated by unicodeChars(). */
+    private static function unicodeOrd(string $char): int
+    {
+        $first = ord($char[0]);
+        $length = strlen($char);
+        $code = $first & [1 => 0x7F, 2 => 0x1F, 3 => 0x0F, 4 => 0x07][$length];
+        for ($i = 1; $i < $length; $i++) {
+            $code = ($code << 6) | (ord($char[$i]) & 0x3F);
+        }
+        return $code;
+    }
+
+    private static function jsEscape(mixed $value): string
+    {
+        $out = '';
+        $s = (string)$value;
+        foreach (self::unicodeChars($s) as $ch) {
+            if (preg_match('/[A-Za-z0-9,._]/', $ch)) {
+                $out .= $ch;
+                continue;
+            }
+            $code = self::unicodeOrd($ch);
+            if ($code < 0x80) {
+                $out .= sprintf('\\x%02X', $code);
+            } elseif ($code <= 0xFFFF) {
+                $out .= sprintf('\\u%04X', $code);
+            } else {
+                $code -= 0x10000;
+                $out .= sprintf('\\u%04X', 0xD800 + ($code >> 10));
+                $out .= sprintf('\\u%04X', 0xDC00 + ($code & 0x3FF));
+            }
+        }
+        return $out;
+    }
+
+    private static function cssEscape(mixed $value): string
+    {
+        $out = '';
+        foreach (self::unicodeChars((string)$value) as $ch) {
+            if (preg_match('/[A-Za-z0-9]/', $ch)) {
+                $out .= $ch;
+            } else {
+                $out .= sprintf('\\%06X ', self::unicodeOrd($ch));
+            }
+        }
+        return $out;
+    }
+
+    private static function htmlAttrEscape(mixed $value): string
+    {
+        $out = '';
+        foreach (self::unicodeChars((string)$value) as $ch) {
+            if (preg_match('/[A-Za-z0-9,.\-_]/', $ch)) {
+                $out .= $ch;
+            } else {
+                $out .= sprintf('&#x%02X;', self::unicodeOrd($ch));
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Dispatch e(strategy)/escape(strategy). An unknown strategy throws, so a
+     * typo can never silently pass the value through unescaped.
+     */
+    private static function escapeStrategy(mixed $value, string $strategy = 'html'): SafeString
+    {
+        $s = trim($strategy, " '\"");
+        switch ($s) {
+            case '':
+            case 'html':
+                return new SafeString(htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+            case 'js':
+                return new SafeString(self::jsEscape($value));
+            case 'url':
+                return new SafeString(rawurlencode((string)$value));
+            case 'css':
+                return new SafeString(self::cssEscape($value));
+            case 'html_attr':
+            case 'attr':
+                return new SafeString(self::htmlAttrEscape($value));
+            default:
+                throw new \InvalidArgumentException("Unknown escape strategy: {$strategy}");
+        }
+    }
+
+    /**
+     * Confine a client-supplied media type to a strict ``type/subtype`` grammar
+     * (F3/ADR-0077) so a ``data_uri`` value cannot break out of the attribute
+     * it is placed in. Anything malformed falls back to a safe default.
+     */
+    private static function sanitiseMediaType(string $type): string
+    {
+        $type = trim($type);
+        if (preg_match('~^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$~', $type)) {
+            return $type;
+        }
+        return 'application/octet-stream';
     }
 
     private function executeIf(array $node, array &$data): string
@@ -1480,12 +1583,9 @@ class Frond
 
     private function executeSet(array $node, array &$data): string
     {
-        $value = $this->evaluateExpression($node['expr'], $data);
-        // Strip raw marker from set values
-        if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
-            $value = str_replace(self::RAW_MARKER, '', $value);
-        }
-        $data[$node['name']] = $value;
+        // A SafeString RHS stays safe; any other value is stored as-is and is
+        // escaped when {{ name }} renders it. No in-band marker to strip.
+        $data[$node['name']] = $this->evaluateExpression($node['expr'], $data);
         return '';
     }
 
@@ -1506,7 +1606,7 @@ class Frond
         if ($node['name'] === '') {
             return '';
         }
-        $data[$node['name']] = self::RAW_MARKER . $this->execute($node['body'], $data);
+        $data[$node['name']] = new SafeString($this->execute($node['body'], $data));
         return '';
     }
 
@@ -1758,9 +1858,6 @@ class Frond
             if ($node['type'] === 'output') {
                 // Evaluate without escaping
                 $value = $this->evaluateExpression($node['expr'], $data);
-                if (is_string($value) && str_contains($value, self::RAW_MARKER)) {
-                    $value = str_replace(self::RAW_MARKER, '', $value);
-                }
                 $out .= $this->valueToString($value);
             } else {
                 $out .= $this->executeNode($node, $data);
@@ -2328,11 +2425,7 @@ class Frond
         $result = '';
         foreach ($scan['concat'] as $part) {
             $val = $this->evaluateExpression($part, $data);
-            $str = $this->valueToString($val);
-            if (is_string($val) && str_contains($val, self::RAW_MARKER)) {
-                $str = str_replace(self::RAW_MARKER, '', $str);
-            }
-            $result .= $str;
+            $result .= $this->valueToString($val);
         }
         return $result;
     }
@@ -2448,7 +2541,12 @@ class Frond
         $obj = $this->resolveVariable($objPath, $data);
         $args = trim($argsStr) !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
 
-        if (is_array($obj) && isset($obj[$methodName]) && is_callable($obj[$methodName])) {
+        // Only invoke a value that is a real Closure placed in the context by
+        // the application. A plain STRING from data must never be treated as a
+        // callable function name (F6/ADR-0077): is_callable('shell_exec') is
+        // true, so the old is_callable check let template data name any PHP
+        // function to run. A Closure cannot be forged from request data.
+        if (is_array($obj) && isset($obj[$methodName]) && $obj[$methodName] instanceof \Closure) {
             return ($obj[$methodName])(...$args);
         }
         if (is_object($obj) && method_exists($obj, $methodName)) {
@@ -2993,13 +3091,13 @@ class Frond
                 case 'float':      return (float)$value;
                 case 'abs':        return abs(is_numeric($value) ? $value : 0);
                 case 'escape':
-                case 'e':          return self::RAW_MARKER . htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                case 'e':          return self::escapeStrategy($value, $args[0] ?? 'html');
                 case 'striptags':  return strip_tags((string)$value);
-                case 'nl2br':      return self::RAW_MARKER . nl2br(htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+                case 'nl2br':      return new SafeString(nl2br(htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')));
                 case 'keys':       return is_array($value) ? array_keys($value) : [];
                 case 'values':     return is_array($value) ? array_values($value) : [];
                 case 'raw':
-                case 'safe':       return self::RAW_MARKER . (is_string($value) ? str_replace(self::RAW_MARKER, '', $value) : $this->valueToString($value));
+                case 'safe':       return new SafeString($this->valueToString($value));
                 // Fall through to generic dispatch for other filters
             }
         }
@@ -3162,7 +3260,7 @@ class Frond
             case 'iterable':
                 return is_array($value) || is_iterable($value);
             case 'string':
-                return is_string($value) && !str_contains($value, self::RAW_MARKER);
+                return is_string($value) || $value instanceof SafeString;
             case 'number':
                 return is_int($value) || is_float($value);
             case 'boolean':
@@ -3226,7 +3324,7 @@ class Frond
 
     /* ─── macro calls ─── */
 
-    private function callMacro(string $name, string $argsStr, array &$data): string
+    private function callMacro(string $name, string $argsStr, array &$data): SafeString
     {
         $macro = $this->macros[$name];
         $argValues = $argsStr !== '' ? $this->parseFilterArgs($argsStr, $data) : [];
@@ -3244,7 +3342,7 @@ class Frond
         }
         // Macro output is already-rendered HTML — mark as raw so auto-escape
         // doesn't double-encode it when the call is used in an expression.
-        return self::RAW_MARKER . $this->execute($macro['body'], $macroData);
+        return new SafeString($this->execute($macro['body'], $macroData));
     }
 
     /* ─── from import ─── */
@@ -3329,9 +3427,9 @@ class Frond
         $this->filters['striptags'] = fn($v) => strip_tags((string)$v);
 
         // Encoding
-        $this->filters['escape'] = fn($v) => self::RAW_MARKER . htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $this->filters['escape'] = fn($v, ...$a) => self::escapeStrategy($v, $a[0] ?? 'html');
         $this->filters['e'] = $this->filters['escape'];
-        $this->filters['raw'] = fn($v) => self::RAW_MARKER . (is_string($v) ? str_replace(self::RAW_MARKER, '', $v) : $this->valueToString($v));
+        $this->filters['raw'] = fn($v) => new SafeString($this->valueToString($v));
         $this->filters['safe'] = $this->filters['raw'];
         // See jsonSafe(): raw-marked on purpose. HTML-escaping JSON produces
         // {&quot;a&quot;:1}, a SyntaxError inside <script>, which is the filter's
@@ -3344,7 +3442,7 @@ class Frond
         $this->filters['base64encode'] = &$this->filters['base64_encode'];
         $this->filters['base64_decode'] = fn($v) => base64_decode((string)$v);
         $this->filters['base64decode'] = &$this->filters['base64_decode'];
-        $this->filters['data_uri'] = fn($v) => is_array($v) ? self::RAW_MARKER . 'data:' . ($v['type'] ?? 'application/octet-stream') . ';base64,' . base64_encode($v['content'] ?? '') : (string)$v;
+        $this->filters['data_uri'] = fn($v) => is_array($v) ? new SafeString('data:' . self::sanitiseMediaType($v['type'] ?? 'application/octet-stream') . ';base64,' . base64_encode($v['content'] ?? '')) : (string)$v;
         $this->filters['url_encode'] = fn($v) => rawurlencode((string)$v);
 
         // Hashing
@@ -3455,7 +3553,7 @@ class Frond
             $s = preg_replace(self::RE_SLUG_STRIP, '-', $s);
             return trim($s, '-');
         };
-        $this->filters['nl2br'] = fn($v) => self::RAW_MARKER . nl2br(htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+        $this->filters['nl2br'] = fn($v) => new SafeString(nl2br(htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')));
         $this->filters['format'] = function($v, ...$args) {
             return vsprintf((string)$v, $args);
         };
@@ -3480,13 +3578,13 @@ class Frond
      * Shared by the {{ value|dump }} filter and the {{ dump(value) }} global
      * function so both produce identical output and obey the same gating.
      *
-     * Returned string is prefixed with self::RAW_MARKER so the template
-     * engine's auto-escape pass skips the HTML entities we produce.
+     * Debug output carries the SafeString type so the template engine keeps
+     * the escaped HTML markup intact.
      *
      * @param mixed $v Value to dump
      * @return string  <pre>...</pre> in debug mode, empty string in production
      */
-    public static function renderDump(mixed $v): string
+    public static function renderDump(mixed $v): SafeString|string
     {
         $debugMode = strtolower(getenv('TINA4_DEBUG') ?: '') === 'true';
         if (!$debugMode) {
@@ -3494,7 +3592,7 @@ class Frond
         }
         ob_start();
         var_dump($v);
-        return self::RAW_MARKER . '<pre>' . htmlspecialchars((string)ob_get_clean(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
+        return new SafeString('<pre>' . htmlspecialchars((string)ob_get_clean(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>');
     }
 
     private function registerBuiltinGlobals(): void
@@ -3530,9 +3628,9 @@ class Frond
         };
 
         // formToken / form_token — returns full <input> element
-        $formTokenFn = static function (string $descriptor = '') use ($generateFormJwt): string {
+        $formTokenFn = static function (string $descriptor = '') use ($generateFormJwt): SafeString {
             $token = $generateFormJwt($descriptor);
-            return self::RAW_MARKER . '<input type="hidden" name="formToken" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+            return new SafeString('<input type="hidden" name="formToken" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">');
         };
 
         // formTokenValue / form_token_value — returns just the raw JWT string
@@ -3561,6 +3659,6 @@ class Frond
         $this->filters['tojson'] = &$this->filters['to_json'];
 
         // Escape for safe embedding in JavaScript strings (marked raw to bypass auto-escaping)
-        $this->filters['js_escape'] = fn($v) => self::RAW_MARKER . str_replace(["\\", "'", '"', "\n", "\r"], ["\\\\", "\\'", '\\"', "\\n", "\\r"], (string)$v);
+        $this->filters['js_escape'] = fn($v) => new SafeString(self::jsEscape($v));
     }
 }

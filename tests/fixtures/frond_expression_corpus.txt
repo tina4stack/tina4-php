@@ -82,3 +82,8 @@ number-format-locale|{{ f|number_format(2, ",", " ") }}
 block-set|{% set cap %}Hi {{ name }}{% endset %}[{{ cap }}]
 block-set-safe|{% set cap %}{{ html }}{% endset %}[{{ cap }}]
 inline-set-equals-in-string|{% set s = "a = b" %}[{{ s }}]
+esc-js-escape|{{ html|js_escape }}
+esc-e-js|{{ html|e('js') }}
+esc-e-url|{{ html|e('url') }}
+esc-e-css|{{ html|e('css') }}
+esc-e-html-attr|{{ html|e('html_attr') }}
