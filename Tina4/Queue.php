@@ -844,8 +844,21 @@ class Queue
      */
     private function resolveKafkaConfig(array $config): array
     {
-        $url = getenv('TINA4_QUEUE_URL');
-        if ($url) {
+        // AN EXPLICIT brokers WINS OVER THE ENV (ADR-0041), as it already does
+        // for RabbitMQ and MongoDB above. This used to overwrite it with
+        // TINA4_QUEUE_URL / TINA4_KAFKA_BROKERS, so `new Queue('kafka',
+        // ['brokers' => ...])` silently produced to whatever broker the
+        // environment named.
+        if (isset($config['brokers']) && $config['brokers'] !== '') {
+            return $config;
+        }
+
+        // TINA4_QUEUE_URL serves three backends with three schemes; only a
+        // kafka:// (or scheme-less host:port) value is a broker list. An amqp://
+        // URL exported for a RabbitMQ queue used to become this queue's broker
+        // list - host "amqp", and its password printed in the connect error.
+        $url = (string)(getenv('TINA4_QUEUE_URL') ?: '');
+        if ($url !== '' && (str_starts_with($url, 'kafka://') || !str_contains($url, '://'))) {
             $config['brokers'] = str_replace('kafka://', '', $url);
         }
         $brokers = getenv('TINA4_KAFKA_BROKERS');

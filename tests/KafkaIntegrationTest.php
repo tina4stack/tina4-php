@@ -143,6 +143,61 @@ class KafkaIntegrationTest extends TestCase
     }
 
     /**
+     * NEGATIVE: a push to an unreachable broker (a real closed port) RAISES; it
+     * never returns an id as if the job had been accepted. The positive twin is
+     * testRealProduceConsumeRoundTrip against the live broker.
+     */
+    public function testPushToAnUnreachableBrokerRaisesInsteadOfReportingSuccess(): void
+    {
+        $queue = new Queue('kafka', ['brokers' => '127.0.0.1:1'], $this->topic);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Kafka connection failed: could not connect to any broker in [127.0.0.1:1]');
+        $queue->push(['task' => 'must-not-be-accepted']);
+    }
+
+    /**
+     * TINA4_QUEUE_URL serves three backends with three URL schemes. An amqp://
+     * URL exported for a RabbitMQ queue must not become a kafka queue's broker
+     * list (it used to: host "amqp", connect failed). A kafka queue ignores a
+     * URL whose scheme is not kafka:// and uses its own broker setting.
+     */
+    public function testAnAmqpQueueUrlIsNotUsedAsTheKafkaBrokerList(): void
+    {
+        $savedQueueUrl = getenv('TINA4_QUEUE_URL');
+        $savedBrokers = getenv('TINA4_KAFKA_BROKERS');
+        putenv('TINA4_QUEUE_URL=amqp://guest:rabbit-s3cret@127.0.0.1:5672/');
+        putenv('TINA4_KAFKA_BROKERS');
+        try {
+            $queue = new Queue('kafka', [], $this->topic);
+            $backend = (new \ReflectionProperty($queue, 'externalBackend'))->getValue($queue);
+            // Reads the real backend's resolved broker list; substitutes nothing.
+            $brokers = (new \ReflectionProperty($backend, 'brokers'))->getValue($backend);
+            $this->assertSame('localhost:9092', $brokers, 'an amqp:// TINA4_QUEUE_URL became the kafka broker list');
+        } finally {
+            putenv($savedQueueUrl === false ? 'TINA4_QUEUE_URL' : "TINA4_QUEUE_URL={$savedQueueUrl}");
+            putenv($savedBrokers === false ? 'TINA4_KAFKA_BROKERS' : "TINA4_KAFKA_BROKERS={$savedBrokers}");
+        }
+    }
+
+    public function testAKafkaQueueUrlIsStillUsedWhenNoBrokersAreGiven(): void
+    {
+        $savedQueueUrl = getenv('TINA4_QUEUE_URL');
+        $savedBrokers = getenv('TINA4_KAFKA_BROKERS');
+        putenv('TINA4_QUEUE_URL=kafka://broker-a.example:9093,broker-b.example:9093');
+        putenv('TINA4_KAFKA_BROKERS');
+        try {
+            $queue = new Queue('kafka', [], $this->topic);
+            $backend = (new \ReflectionProperty($queue, 'externalBackend'))->getValue($queue);
+            $brokers = (new \ReflectionProperty($backend, 'brokers'))->getValue($backend);
+            $this->assertSame('broker-a.example:9093,broker-b.example:9093', $brokers);
+        } finally {
+            putenv($savedQueueUrl === false ? 'TINA4_QUEUE_URL' : "TINA4_QUEUE_URL={$savedQueueUrl}");
+            putenv($savedBrokers === false ? 'TINA4_KAFKA_BROKERS' : "TINA4_KAFKA_BROKERS={$savedBrokers}");
+        }
+    }
+
+    /**
      * NEGATIVE: popping a topic that does not exist yields null, not an exception.
      *
      * A real broker answers a fetch for an unknown topic with
