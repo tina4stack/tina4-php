@@ -186,10 +186,19 @@ class RabbitMQBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
-    public function size(string $topic): int
+    public function size(string $topic, string $status = 'pending'): int
     {
         $this->ensureConnected();
-        return $this->declareQueue($topic);
+        // ADR-0022 dec 7: dead aliases count the <topic>.dead_letter queue
+        // depth (a passive/idempotent declare). RabbitMQ has no queryable
+        // "completed"/"reserved" count, so those non-pending statuses stay 0.
+        if (in_array($status, ['dead', 'failed', 'dead_letter'], true)) {
+            return $this->declareQueue($topic . '.dead_letter', true);
+        }
+        if ($status !== 'pending') {
+            return 0;
+        }
+        return $this->declareQueue($topic, true);
     }
 
     /** {@inheritDoc} */
@@ -503,9 +512,15 @@ class RabbitMQBackend implements QueueBackend
     /**
      * Declare a queue and return the message count.
      */
-    private function declareQueue(string $queue): int
+    private function declareQueue(string $queue, bool $force = false): int
     {
-        if (isset($this->declaredQueues[$queue])) {
+        // The cache avoids re-declaring for enqueue/get (where the count is
+        // unused). But size() NEEDS the real message_count, and a cached
+        // short-circuit returned 0 for any already-declared queue — so
+        // size('dead') read 0 because deadLetter() had already declared the
+        // .dead_letter queue. $force re-issues Queue.Declare and reads the live
+        // count (same-channel ordering means a prior publish is already counted).
+        if (!$force && isset($this->declaredQueues[$queue])) {
             return 0;
         }
 

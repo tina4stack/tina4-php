@@ -275,6 +275,60 @@ abstract class ORM
     }
 
     /**
+     * Register AutoCrud routes for a model CLASS without instantiating it.
+     *
+     * Bug 5 (book review): AutoCrud registration used to live only in
+     * __construct(), so `$autoCrud = true` produced no routes until the first
+     * `new Model()` — GET /api/notes 404'd after discovery until an instance
+     * existed. ModelDiscovery now calls this at discovery time, and the
+     * constructor calls it too; a shared static guard means neither
+     * double-registers. Reads the class DEFAULTS via reflection (autoCrud,
+     * tableName, _db) so no instance is needed. If the DB is not bound yet at
+     * discovery it defers silently — the next `new Model()` or rescan retries,
+     * so behaviour is never worse than before.
+     */
+    public static function registerAutoCrudForClass(string $class): void
+    {
+        static $autoCrudRegistered = [];
+        if (isset($autoCrudRegistered[$class])) {
+            return;
+        }
+        try {
+            $ref = new \ReflectionClass($class);
+        } catch (\Throwable $e) {
+            return;
+        }
+        $defaults = $ref->getDefaultProperties();
+        if (empty($defaults['autoCrud']) || ($defaults['tableName'] ?? '') === '') {
+            return;
+        }
+        // Mark registered BEFORE doing the work: AutoCrud::register() constructs
+        // the model to introspect it, and that constructor calls back into here
+        // — the guard must already be set or it recurses to a stack overflow.
+        $autoCrudRegistered[$class] = true;
+        try {
+            $dbSpec = $defaults['_db'] ?? null;
+            if ($dbSpec instanceof DatabaseAdapter) {
+                $db = $dbSpec;
+            } elseif (is_string($dbSpec) && $dbSpec !== '') {
+                if (!isset(self::$_namedDbs[$dbSpec])) {
+                    throw new \RuntimeException("Named database '{$dbSpec}' not found.");
+                }
+                $db = self::$_namedDbs[$dbSpec];
+            } else {
+                $db = static::resolveDb();
+            }
+            $crud = new AutoCrud($db);
+            $crud->register($class);
+            $crud->generateRoutes();
+        } catch (\Throwable $e) {
+            // DB not ready at discovery — un-mark so the first new Model()/rescan retries.
+            unset($autoCrudRegistered[$class]);
+            \Tina4\Log::debug("AutoCrud registration deferred for {$class}: " . $e->getMessage());
+        }
+    }
+
+    /**
      * Cause of the most recent failed {@see save()} (a validation message or a
      * driver error), or null when the last save() succeeded. Mirrors the
      * adapter's getError()/error(): after save() returns false a caller using
@@ -448,20 +502,11 @@ abstract class ORM
         // Auto-wire relationships from $foreignKeys declarations
         $this->_processForeignKeys();
 
-        // Auto-register for CRUD if flagged
+        // Auto-register for CRUD if flagged. Shared static guard with
+        // ModelDiscovery (which registers at discovery time), so a first
+        // `new Model()` and discovery never double-register (bug 5).
         if ($this->autoCrud && $this->tableName !== '') {
-            static $autoCrudRegistered = [];
-            $class = static::class;
-            if (!isset($autoCrudRegistered[$class])) {
-                $autoCrudRegistered[$class] = true;
-                try {
-                    $crud = new AutoCrud(static::resolveDbFor($this));
-                    $crud->register($class);
-                    $crud->generateRoutes();
-                } catch (\Throwable $e) {
-                    // Silently skip if AutoCrud not available or DB not ready
-                }
-            }
+            static::registerAutoCrudForClass(static::class);
         }
     }
 

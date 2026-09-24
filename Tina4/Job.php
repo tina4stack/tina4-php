@@ -112,11 +112,20 @@ class Job implements \ArrayAccess, \JsonSerializable
     }
 
     /**
-     * Reject this job with a reason. Alias for fail().
+     * Reject this job permanently — dead-letter it NOW, no retry (ADR-0023).
+     *
+     * Distinct from fail(): fail() records a failed attempt and only
+     * dead-letters once maxRetries is exhausted (the job is retried first).
+     * reject() is for a message the consumer KNOWS is poison — it goes straight
+     * to the dead-letter store on this call. AMQP basic.reject(requeue=false)
+     * semantics. Was a literal alias for fail() before 3.13.139.
      */
     public function reject(string $reason = ''): void
     {
-        $this->fail($reason);
+        $this->status = 'dead';
+        $this->error = $reason;
+        $this->queue->rejectJob($this->topic, $this->snapshot(), $reason);
+        $this->attempts++;
     }
 
     /**
