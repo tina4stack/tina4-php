@@ -82,7 +82,7 @@ class PoolFiberTransactionIsolationTest extends TestCase
             $db->startTransaction();
             $db->execute("INSERT INTO {$table} VALUES (1), (1)");
             try { $db->commit(); $this->fail('Deferred unique constraint must reject commit'); }
-            catch (\Exception $e) { $this->assertStringContainsString('duplicate', $e->getMessage()); }
+            catch (\Tina4\Database\DatabaseException $e) { $this->assertStringContainsString('duplicate', $e->getMessage()); }
             (new Fiber(function () use ($db): void {
                 try { $db->checkout(); $this->fail('Failed commit released the transaction'); }
                 catch (\RuntimeException $e) { $this->assertStringContainsString('pool exhausted', $e->getMessage()); }
@@ -90,7 +90,7 @@ class PoolFiberTransactionIsolationTest extends TestCase
             $db->rollback();
             $this->assertSame([], $db->fetch("SELECT id FROM {$table}")->toArray());
             try { $db->execute("INSERT INTO {$table} (absent) VALUES (2)"); $this->fail('Missing column must fail'); }
-            catch (\Exception $e) { $this->assertStringContainsString('absent', $e->getMessage()); }
+            catch (\Tina4\Database\DatabaseException $e) { $this->assertStringContainsString('absent', $e->getMessage()); }
             $this->assertSame(8, $db->fetchOne('SELECT 8 AS value')['value']);
         } finally {
             $db->rollback();
@@ -111,7 +111,7 @@ class PoolFiberTransactionIsolationTest extends TestCase
                 try {
                     if ($started) { $db->rollback(); } else { $db->startTransaction(); }
                     $this->fail('Terminated connection must fail');
-                } catch (\Exception $e) { $this->assertNotSame('', $e->getMessage()); }
+                } catch (\Tina4\Database\DatabaseException $e) { $this->assertNotSame('', $e->getMessage()); }
                 $this->assertSame(9, $db->fetchOne('SELECT 9 AS value')['value']);
             } finally { $db->close(); $witness->close(); }
         }
