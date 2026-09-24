@@ -198,12 +198,20 @@ class AutoCrud
                     if ($column === null) {
                         return $response->error('UNKNOWN_FIELD', "Unknown filter field '{$key}'", 400);
                     }
+                    // filter[name][]=x / filter[name][x]=y arrive as arrays -
+                    // a filter value is one value, never a bound array.
+                    if (!is_scalar($value)) {
+                        return $response->error('INVALID_QUERY_PARAMETER', "Filter value for '{$key}' must be a single value", 400);
+                    }
                     $filter[$column] = $value;
                 }
             }
 
             $orderBy = null;
             if (isset($request->query['sort'])) {
+                if (!is_string($request->query['sort'])) {
+                    return $response->error('INVALID_QUERY_PARAMETER', "Query parameter 'sort' must be a single comma-separated string", 400);
+                }
                 [$orderBy, $unknownField] = $this->parseSortParam($model, $request->query['sort']);
                 if ($unknownField !== null) {
                     return $response->error('UNKNOWN_FIELD', "Unknown sort field '{$unknownField}'", 400);

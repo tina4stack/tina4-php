@@ -21,7 +21,7 @@ use function Tina4\resetDefaultStore;
  * Shared case names (verbatim across the four frameworks, gated by the contract
  * fixture auditor):
  *   AutoCrud  - unknown_filter_field_returns_400, unknown_sort_field_returns_400,
- *               declared_filter_and_sort_still_work
+ *               declared_filter_and_sort_still_work, odd_typed_query_values_return_400
  *   ORM       - orm_find_rejects_undeclared_filter_key (SQLite, PostgreSQL, MySQL,
  *               MSSQL, Firebird)
  *   DocStore  - docstore_rejects_unsafe_field_path, docstore_accepts_safe_field_paths,
@@ -189,6 +189,33 @@ final class IdentifierAllowListContractTest extends TestCase
         $this->assertSame([2], $this->listIds('/api/allow_list_dynamic?filter[displayOrder]=3'));
         $this->assertSame([3, 1, 2], $this->listIds('/api/allow_list_dynamic?sort=displayOrder'));
         $this->assertSame([1, 3], $this->listIds('/api/allow_list_dynamic?filter[label]=x&sort=-display_order'));
+    }
+
+    private function assertInvalidQueryParameter(string $pathAndQuery, string $message): void
+    {
+        [$status, $json, $raw] = $this->get($pathAndQuery);
+        $this->assertSame(400, $status, "{$pathAndQuery}: {$raw}");
+        $this->assertSame(
+            ['error' => true, 'code' => 'INVALID_QUERY_PARAMETER', 'message' => $message, 'status' => 400],
+            $json,
+            "{$pathAndQuery}: {$raw}",
+        );
+    }
+
+    public function testOddTypedQueryValuesReturn400(): void
+    {
+        $sortMessage = "Query parameter 'sort' must be a single comma-separated string";
+        $this->assertInvalidQueryParameter('/api/allow_list_item?sort[]=name', $sortMessage);
+        $this->assertInvalidQueryParameter('/api/allow_list_item?sort[a]=name', $sortMessage);
+        $this->assertInvalidQueryParameter('/api/allow_list_item?filter[name]=alpha&sort[]=name', $sortMessage);
+
+        $this->assertInvalidQueryParameter('/api/allow_list_item?filter[name][]=alpha', "Filter value for 'name' must be a single value");
+        $this->assertInvalidQueryParameter('/api/allow_list_item?filter[name][x]=alpha', "Filter value for 'name' must be a single value");
+        $this->assertInvalidQueryParameter('/api/allow_list_item?filter[givenName][x]=Ann', "Filter value for 'givenName' must be a single value");
+        $this->assertInvalidQueryParameter('/api/allow_list_dynamic?filter[label][]=x', "Filter value for 'label' must be a single value");
+
+        // the plain forms still work
+        $this->assertSame([1], $this->listIds('/api/allow_list_item?filter[name]=alpha&sort=name'));
     }
 
     // ── ORM::find(filter-map) on every engine ───────────────────────────────
