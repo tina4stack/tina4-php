@@ -30,6 +30,16 @@ InvalidArgumentException in the library). Branch `fix/identifier-allow-list` off
 - [x] MSSQL: PDO::DBLIB_ATTR_CONNECTION_TIMEOUT (deprecated in PHP 8.5) -> Pdo\Dblib::ATTR_CONNECTION_TIMEOUT when available
 - [x] .gitignore the session files served test apps write under tests/fixtures/data
 
+### Addendum 3 (write keys) + defects found on the way
+- [x] G1: AutoCrud POST/PUT bodies allow-listed via resolveFieldColumn (testAutocrudWriteBodyAcceptsOnlyDeclaredFields)
+- [x] G2: ORM save() writes only the model's fields (testOrmSaveWritesOnlyDeclaredFields, 5 engines)
+- [x] G3: Database/adapter write helpers accept only plain-identifier keys (testDbWriteHelpersRejectNonIdentifierKeys, 5 engines)
+- [x] Database::delete() list-of-filter-maps form deleted nothing (testDatabaseDeleteAcceptsAListOfFilterMaps)
+- [x] AutoCrud GET/PUT/DELETE {id} went to load() as a WHERE fragment (testAutocrudIdRouteAddressesOnlyThatRow)
+- [x] GraphQL fromOrm id query/mutations: same load() pattern + exists() called without its argument (testGraphqlIdArgumentAddressesOnlyThatRow)
+- [x] CI test job provisions PostGIS; gate keys postgis on TINA4_TEST_POSTGIS_URL
+- [x] GraphQL commas are insignificant (testCommasAreInsignificantBetweenArgumentsAndFields)
+
 ## Parity
 | Feature                               | Python | PHP | Ruby | Node |
 |---------------------------------------|--------|-----|------|------|
@@ -71,6 +81,25 @@ File: tests/IdentifierAllowListContractTest.php (+ fixture app tests/fixtures/id
 - 7899b004  Tag engine skip sites with [needs:<engine>]
 - 6742095e  Gate: postgres is promised by TINA4_TEST_PG_URL only; isolate the predicate test
 - 54b8a8d7  Tag the live graph-engine skips with [needs:<engine>]
+
+- 39115747  Database::delete() handles a list of filter maps
+- dc07322e  Database write helpers accept only plain identifiers as column keys
+- 2996be4e  ORM save() writes only the model's fields
+- 67f3c855  AutoCrud write bodies are allow-listed through the model's fields
+- 078d34bf  Test ADR-0069 write keys: AutoCrud bodies, ORM save, DB write helpers
+- 12e6a21e  AutoCrud id routes load the row by bound primary key
+- 5c8d3852  Test AutoCrud id routes address only that row; independent reads in write tests
+- 5d5bacf2  GraphQL fromOrm id queries and mutations load the row by bound primary key
+- 7a91d33b  CI provisions PostGIS; the gate keys postgis on TINA4_TEST_POSTGIS_URL
+- da1022c2  GraphQL: commas are insignificant tokens
+- 76e4c011  Test that GraphQL commas are insignificant between arguments, fields and list values
+- f66424fb  Rename the gate tests to the shared contract case names
+
+## Verification (lab, addendum 3, HEAD 76e4c011, gate armed + graph env)
+- 5751 tests, 24853 assertions, 0 failures, 0 errors, 42 skipped. The gate reports 37
+  violations: the graph tests (neo4j/memgraph/arango/ultipa driver packages not installed on
+  the lab while their coordinates are set) - a lab environment gap, reported by the lead.
+  The other 5 skips are tagged swoole/oidc, not promised on this run.
 
 ## Verification (lab, PHP 8.3.6 + every service, gate armed)
 - Full suite at 54b8a8d7: 5736 tests, 24502 assertions, 0 failures, 1 error, 42 skipped,
