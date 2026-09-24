@@ -53,7 +53,8 @@ final class RequireServicesGate
      */
     private const OPTIONAL_ENGINES = [
         'firebird' => ['TINA4_TEST_FIREBIRD_URL'],
-        'postgres' => ['TINA4_TEST_PG_URL', 'TINA4_TEST_POSTGRES_URL'],
+        // Canonical coordinate only (ADR-0038 / tests/fixtures/test_env_contract.json).
+        'postgres' => ['TINA4_TEST_PG_URL'],
         'mysql'    => ['TINA4_TEST_MYSQL_URL'],
         'mssql'    => ['TINA4_TEST_MSSQL_URL'],
         'swoole'   => ['TINA4_TEST_SWOOLE'],

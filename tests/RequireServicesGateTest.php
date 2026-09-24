@@ -303,26 +303,22 @@ class RequireServicesGateTest extends TestCase
         $this->assertStringContainsString($reason, $output);
     }
 
-    /** postgres is promised by EITHER spelling of its coordinate. */
-    public function testThePostgresTagHonoursBothCoordinateSpellings(): void
+    /** postgres is promised by its canonical coordinate, TINA4_TEST_PG_URL (ADR-0038). */
+    public function testThePostgresTagFollowsItsCanonicalCoordinate(): void
     {
         $reason = '[needs:postgres] PostgreSQL unreachable at localhost:5432';
-        foreach ([
-            'GateFixturePgUrl' => ['TINA4_TEST_PG_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php', 'TINA4_TEST_POSTGRES_URL' => null],
-            'GateFixturePostgresUrl' => ['TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGRES_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php'],
-        ] as $className => $environment) {
-            [$output, $code] = $this->runPhpunit(
-                [$className => $this->beforeClassFixture($className, $reason, 1)],
-                true,
-                $environment,
-            );
-            $this->assertNotSame(0, $code, "{$className}: a promised PostgreSQL skip must fail.\n" . $output);
-        }
+
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixturePgUrl' => $this->beforeClassFixture('GateFixturePgUrl', $reason, 1)],
+            true,
+            ['TINA4_TEST_PG_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php'],
+        );
+        $this->assertNotSame(0, $code, "a promised PostgreSQL skip must fail.\n" . $output);
 
         [$output, $code] = $this->runPhpunit(
             ['GateFixtureNoPostgres' => $this->beforeClassFixture('GateFixtureNoPostgres', $reason, 1)],
             true,
-            ['TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGRES_URL' => null],
+            ['TINA4_TEST_PG_URL' => null],
         );
         $this->assertSame(0, $code, "no PostgreSQL promised: the tagged skip must stay green.\n" . $output);
     }
@@ -377,7 +373,7 @@ class RequireServicesGateTest extends TestCase
     public function testThePredicateCoversAllFourBranches(): void
     {
         $unsetAll = [
-            'TINA4_TEST_FIREBIRD_URL' => null, 'TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGRES_URL' => null,
+            'TINA4_TEST_FIREBIRD_URL' => null, 'TINA4_TEST_PG_URL' => null,
             'TINA4_TEST_MYSQL_URL' => null, 'TINA4_TEST_MSSQL_URL' => null, 'TINA4_TEST_SWOOLE' => null,
             'TINA4_TEST_OIDC_ISSUER' => null, 'TINA4_TEST_NEO4J_URL' => null, 'TINA4_TEST_MEMGRAPH_URL' => null,
             'TINA4_TEST_ARANGO_URL' => null, 'TINA4_TEST_ULTIPA_URL' => null,
@@ -409,11 +405,12 @@ class RequireServicesGateTest extends TestCase
             'neo4j' => 'TINA4_TEST_NEO4J_URL', 'memgraph' => 'TINA4_TEST_MEMGRAPH_URL',
             'arango' => 'TINA4_TEST_ARANGO_URL', 'ultipa' => 'TINA4_TEST_ULTIPA_URL',
         ] as $engine => $coordinate) {
-            $this->withEnvironment([$coordinate => 'promised'], function () use ($engine): void {
+            // every other coordinate unset, so the host's own exports cannot decide it
+            $this->withEnvironment(array_merge($unsetAll, [$coordinate => 'promised']), function () use ($engine): void {
                 $this->assertFalse(RequireServicesGate::isExcusedSkip("[needs:{$engine}] unavailable"), "{$engine} promised");
             });
             // a blank coordinate is not a promise
-            $this->withEnvironment([$coordinate => '   '], function () use ($engine): void {
+            $this->withEnvironment(array_merge($unsetAll, [$coordinate => '   ']), function () use ($engine): void {
                 $this->assertTrue(RequireServicesGate::isExcusedSkip("[needs:{$engine}] unavailable"), "{$engine} blank");
             });
         }
