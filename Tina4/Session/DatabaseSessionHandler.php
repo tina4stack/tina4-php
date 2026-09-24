@@ -453,11 +453,9 @@ class DatabaseSessionHandler
      * per-engine types make the statement legal everywhere, and the catch closes
      * the window the types cannot.
      *
-     * Firebird's branch is verified at the SQL level against a live Firebird
-     * 5.0.4 but has not been exercised end to end through a PHP Firebird driver,
-     * and the read path has a known gap on that engine (Firebird folds unquoted
-     * identifiers to UPPER, and firstRow() reads $row['data'] only), so the
-     * database session backend is not claimed working on Firebird.
+     * Firebird's branch is exercised end to end through pdo_firebird against a
+     * live Firebird 5.0.4 (tests/SessionDatabaseFirebirdTest.php), including this
+     * concurrent first-use race with six real processes.
      */
     private function ensureTable(): void
     {
