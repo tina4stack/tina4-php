@@ -89,6 +89,8 @@ RUN composer dump-autoload --no-dev --optimize
 
 # -- Stage 2: lean Alpine runtime -------------------------------------------
 FROM php:8.4-cli-alpine3.23
+COPY LICENSE NOTICE COMMERCIAL-LICENSE.md /usr/share/licenses/tina4/
+
 WORKDIR /app
 
 # SQLite + OPcache only -- add database extensions in your own Dockerfile
@@ -113,6 +115,9 @@ COPY --from=composer-stage /build/bin/ /app/bin/
 
 # The bundled demo app, so the image runs out of the box.
 COPY --from=composer-stage /build/example/ /app/
+
+# Framework assets and their bundled third-party notices.
+COPY --from=composer-stage /build/src/public/ /app/src/public/
 
 EXPOSE 7145
 ENV TINA4_OVERRIDE_CLIENT=true
