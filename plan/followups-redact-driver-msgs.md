@@ -13,7 +13,11 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 - [x] Item 6: WSDL refuses BOM / non-UTF-8 / NUL / non-UTF-8-declared bodies with the Malformed XML Client fault, before any parse
 - [x] Item 6 (found): operation + params matched by local name in any namespace (Python parity)
 - [x] Item 7: SOAP parity table (10 payloads) - matches Python after the fixes
-- [ ] Item 8: ADR-0071 SMTP transport table, STARTTLS required, unknown value raises, certs verified (SMTP + IMAP)
+- [x] Item 8: ADR-0071 SMTP transport table (ssl = implicit TLS any port; 465 always implicit; tls/starttls STARTTLS required before AUTH; none never upgrades)
+- [x] Item 8: unknown SMTP / IMAP encryption raises at construction (exact ADR messages)
+- [x] Item 8: SMTP certificates verified with host name (verify_peer + verify_peer_name + peer_name); no opt-out
+- [x] Item 8: IMAP starttls -> /imap/tls-sslv23 (c-client /tls is TLSv1-only and fails on modern servers); none -> /imap/notls; ssl accepted as implicit TLS
+- [x] Item 8: example/.env.example drops TINA4_MAIL_TLS_INSECURE and states the ADR-0071 semantics
 
 ## Parity
 | Item | PHP before | PHP after |
@@ -23,12 +27,13 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 | 2 driver messages | ⚠️ S3 no command; db-cache swallowed | ✅ |
 | 6 WSDL UTF-16 / UTF-7 | ❌ entity expanded | ✅ |
 | 7 SOAP parity | ❌ 5/10 differ (namespace) | ✅ 10/10 |
-| 8 ADR-0071 | ❌ | |
+| 8 ADR-0071 | ❌ ssl clear off 465; tls opportunistic; certs unverified; typos = clear | ✅ |
 
 ## Tests (written first, real - no mocks, positive + negative)
 - [x] WebSocketBackplaneAuthTest (real password Redis, real child-process log output)
 - [x] ConnectionUrlRedactionSweepTest (Mqtt pure logic; Api in a child with no https wrapper)
 - [x] WsdlEncodingSecurityTest (real UTF-16 BOM payload, UTF-16 no BOM, UTF-7, UTF-8 BOM, invalid UTF-8; namespace resolution)
+- [x] MessengerTlsTransportTest (lab GreenMail / Mailpit / Dovecot TLS servers; trusted vs untrusted child processes)
 - [x] DriverMissingMessageTest (child processes: composer autoloader without aws; `php -n` without pgsql; negative control with pgsql loaded + unreachable server)
 
 ## Bugs
@@ -39,6 +44,8 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 
 - [x] WSDL: UTF-16 (BOM or not) and UTF-7 bodies hid the DOCTYPE from the byte regex; libxml expanded the entity
 - [x] WSDL: an operation in a client namespace (not urn:<ServiceName>) got "Empty SOAP Body"
+- [x] IMAP STARTTLS (/imap/tls) never worked against a modern server: c-client negotiates TLSv1 only
+- [x] IMAP 'none' (/imap) silently upgraded with STARTTLS whenever the server offered it
 
 ## Commits
 - (filled per commit)
