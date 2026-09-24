@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
 use Tina4\Database\DatabaseAdapter;
+use Tina4\Auth;
 use Tina4\AutoCrud;
 use Tina4\ORM;
 use Tina4\Request;
@@ -26,9 +27,11 @@ use function Tina4\resetDefaultStore;
  * fixture auditor):
  *   AutoCrud  - unknown_filter_field_returns_400, unknown_sort_field_returns_400,
  *               declared_filter_and_sort_still_work, odd_typed_query_values_return_400,
- *               autocrud_list_uses_the_registered_connection
- *   ORM       - orm_find_rejects_undeclared_filter_key (SQLite, PostgreSQL, MySQL,
- *               MSSQL, Firebird)
+ *               autocrud_list_uses_the_registered_connection,
+ *               autocrud_write_body_accepts_only_declared_fields
+ *   ORM       - orm_find_rejects_undeclared_filter_key, orm_save_writes_only_declared_fields
+ *               (SQLite, PostgreSQL, MySQL, MSSQL, Firebird)
+ *   Database  - db_write_helpers_reject_non_identifier_keys (same engines)
  *   DocStore  - docstore_rejects_unsafe_field_path, docstore_accepts_safe_field_paths,
  *               docstore_safe_paths_match_on_real_mongo
  *
@@ -75,6 +78,7 @@ class AllowListConnItem extends ORM
 final class IdentifierAllowListContractTest extends TestCase
 {
     private static ?TestServer $server = null;
+    private const SECRET = 'identifier-allow-list-contract-secret';
     private static string $dbPath = '';
 
     /** Keys that must never resolve: a real-but-undeclared column + non-identifiers. */
@@ -114,6 +118,7 @@ final class IdentifierAllowListContractTest extends TestCase
         self::$server = TestServer::start(__DIR__ . '/fixtures/identifier_allow_list_app.php', [
             'TINA4_TEST_DB_PATH' => self::$dbPath,
             'TINA4_DEBUG' => 'false',
+            'TINA4_SECRET' => self::SECRET,
         ]);
         return self::$server;
     }
@@ -230,6 +235,80 @@ final class IdentifierAllowListContractTest extends TestCase
 
         // the plain forms still work
         $this->assertSame([1], $this->listIds('/api/allow_list_item?filter[name]=alpha&sort=name'));
+    }
+
+    // ── AutoCrud write bodies (ADR-0069 G1) ─────────────────────────────────
+
+    /** @return array{0: int, 1: mixed, 2: string} */
+    private function write(string $method, string $path, array $body): array
+    {
+        $ch = curl_init($this->server()->base() . $path);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . Auth::getToken(['sub' => 'allow-list-tester'], self::SECRET),
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+        $raw = curl_exec($ch);
+        if ($raw === false) {
+            $this->fail('curl error: ' . curl_error($ch));
+        }
+        return [(int)curl_getinfo($ch, CURLINFO_HTTP_CODE), json_decode((string)$raw, true), (string)$raw];
+    }
+
+    /** @return array<string, mixed>|null the stored row, read straight from the SQLite file */
+    private function storedRow(string $table, int $id): ?array
+    {
+        $db = Database::create('sqlite:///' . self::$dbPath);
+        try {
+            return $db->fetchOne("SELECT * FROM {$table} WHERE id = ?", [$id]);
+        } finally {
+            $db->close();
+        }
+    }
+
+    public function testAutocrudWriteBodyAcceptsOnlyDeclaredFields(): void
+    {
+        // CREATE on a declared model: declared fields (by property and by column)
+        // are written; an undeclared real column and non-identifier keys are dropped.
+        [$status, $json, $raw] = $this->write('POST', '/api/allow_list_item', [
+            'name' => 'echo', 'score' => 5, 'givenName' => 'Eve', 'sort_rank' => 9,
+            'internal_note' => 'dropped', 'na me' => 'dropped', "na'me" => 'dropped',
+        ]);
+        $this->assertSame(201, $status, $raw);
+        foreach (['internal_note', 'na me', "na'me"] as $dropped) {
+            $this->assertArrayNotHasKey($dropped, $json, $raw);
+        }
+        $row = $this->storedRow('allow_list_item', (int)$json['id']);
+        $this->assertSame('echo', $row['name']);
+        $this->assertSame('Eve', $row['first_name']);
+        $this->assertSame(9, (int)$row['sort_rank']);
+        $this->assertNull($row['internal_note']);
+
+        // UPDATE: the undeclared column keeps its stored value
+        $id = (int)$json['id'];
+        [$status, $json, $raw] = $this->write('PUT', "/api/allow_list_item/{$id}", [
+            'name' => 'echo-2', 'internal_note' => 'dropped', 'na[me' => 'dropped',
+        ]);
+        $this->assertSame(200, $status, $raw);
+        $this->assertArrayNotHasKey('na[me', $json, $raw);
+        $this->assertNotSame('dropped', $json['internal_note'] ?? null, $raw);
+        $row = $this->storedRow('allow_list_item', $id);
+        $this->assertSame('echo-2', $row['name']);
+        $this->assertNull($row['internal_note']);
+
+        // A model with no declared fields writes its REAL columns and drops the rest.
+        [$status, $json, $raw] = $this->write('POST', '/api/allow_list_dynamic', [
+            'label' => 'z', 'weight' => 11, 'displayOrder' => 4, 'not_a_column' => 'dropped', 'la bel' => 'dropped',
+        ]);
+        $this->assertSame(201, $status, $raw);
+        $this->assertArrayNotHasKey('not_a_column', $json, $raw);
+        $this->assertArrayNotHasKey('la bel', $json, $raw);
+        $row = $this->storedRow('allow_list_dynamic', (int)$json['id']);
+        $this->assertSame('z', $row['label']);
+        $this->assertSame(11, (int)$row['weight']);
+        $this->assertSame(4, (int)$row['display_order']);
     }
 
     // ── AutoCrud uses the connection it was constructed with ────────────────
@@ -442,6 +521,137 @@ final class IdentifierAllowListContractTest extends TestCase
                 }
             }
         }
+    }
+
+    /** @return array<string, mixed>|null one ala_php_item row with lower-cased keys (Firebird reports upper case) */
+    private static function itemRow(Database $db, int $id): ?array
+    {
+        $row = $db->fetchOne('SELECT * FROM ala_php_item WHERE id = ?', [$id]);
+        return $row === null ? null : array_change_key_case($row, CASE_LOWER);
+    }
+
+    private static function itemCount(Database $db): int
+    {
+        $row = $db->fetchOne('SELECT COUNT(*) AS row_total FROM ala_php_item');
+        return (int)array_change_key_case($row, CASE_LOWER)['row_total'];
+    }
+
+    #[DataProvider('engineProvider')]
+    public function testOrmSaveWritesOnlyDeclaredFields(string $engine): void
+    {
+        $db = $this->engineDb($engine);
+        ORM::bindDatabase($db, 'identifier_allow_list');
+        try {
+            $this->createItemTable($db, $engine);
+
+            // INSERT through a declared model: an undeclared real column set by
+            // fill() and by plain assignment is not written.
+            $item = new AllowListOrmItem(['id' => 10, 'name' => 'ten', 'givenName' => 'Tia', 'internal_note' => 'dropped']);
+            $item->other_note = 'dropped';
+            $this->assertNotFalse($item->save(), (string)$item->getError());
+            $row = self::itemRow($db, 10);
+            $this->assertSame('ten', $row['name']);
+            $this->assertSame('Tia', $row['first_name']);
+            $this->assertNull($row['internal_note']);
+
+            // UPDATE through a declared model keeps the undeclared column as stored.
+            $loaded = new AllowListOrmItem();
+            $this->assertTrue($loaded->load('id = ?', [1]));
+            $loaded->name = 'alpha-2';
+            $loaded->internal_note = 'dropped';
+            $this->assertNotFalse($loaded->save(), (string)$loaded->getError());
+            $row = self::itemRow($db, 1);
+            $this->assertSame('alpha-2', $row['name']);
+            $this->assertSame('n1', $row['internal_note']);
+
+            // A model with no declared fields writes real columns only; a key that
+            // is not a column is dropped instead of reaching the column list.
+            $dynamic = new AllowListOrmDynamic(['id' => 11, 'name' => 'eleven', 'internal_note' => 'kept', 'not_a_column' => 'dropped', 'na me' => 'dropped']);
+            $this->assertNotFalse($dynamic->save(), (string)$dynamic->getError());
+            $row = self::itemRow($db, 11);
+            $this->assertSame('eleven', $row['name']);
+            $this->assertSame('kept', $row['internal_note']);
+        } finally {
+            $this->dropItemTable($db, $engine);
+            if ($engine === 'firebird') {
+                try {
+                    $db->close();
+                } catch (\Throwable) {
+                }
+            }
+        }
+    }
+
+    private const NON_IDENTIFIER_KEYS = ['na me', "na'me", 'na[me', 'na(me', '1name', ''];
+
+    private function assertInvalidColumn(string $key, callable $write): void
+    {
+        try {
+            $write();
+            $this->fail('the write helper accepted the column key ' . json_encode($key));
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame("Invalid column name '{$key}'", $exception->getMessage());
+        }
+    }
+
+    #[DataProvider('engineProvider')]
+    public function testDbWriteHelpersRejectNonIdentifierKeys(string $engine): void
+    {
+        $db = $this->engineDb($engine);
+        try {
+            $this->createItemTable($db, $engine);
+            $before = self::itemCount($db);
+
+            foreach (self::NON_IDENTIFIER_KEYS as $key) {
+                $this->assertInvalidColumn($key, fn () => $db->insert('ala_php_item', ['id' => 20, $key => 'x']));
+                $this->assertInvalidColumn($key, fn () => $db->insert('ala_php_item', [['id' => 21, $key => 'x'], ['id' => 22, $key => 'y']]));
+                $this->assertInvalidColumn($key, fn () => $db->update('ala_php_item', [$key => 'x'], 'id = ?', [1]));
+                $this->assertInvalidColumn($key, fn () => $db->update('ala_php_item', ['name' => 'x'], [$key => 1]));
+                $this->assertInvalidColumn($key, fn () => $db->delete('ala_php_item', [$key => 1]));
+                $this->assertInvalidColumn($key, fn () => $db->delete('ala_php_item', [['id' => 1], [$key => 2]]));
+            }
+            if ($engine === 'firebird') {
+                $db->commit();
+            }
+            $this->assertSame($before, self::itemCount($db));
+            $this->assertSame('alpha', self::itemRow($db, 1)['name']);
+
+            // positive: plain identifiers still insert / update / delete
+            $db->insert('ala_php_item', ['id' => 30, 'name' => 'thirty', 'first_name' => 'Tom']);
+            $db->insert('ala_php_item', [['id' => 31, 'name' => 'a31'], ['id' => 32, 'name' => 'a32']]);
+            $db->update('ala_php_item', ['name' => 'thirty-2'], ['id' => 30]);
+            $db->update('ala_php_item', ['name' => 'a31-2'], 'id = ?', [31]);
+            $db->delete('ala_php_item', ['id' => 32]);
+            if ($engine === 'firebird') {
+                $db->commit();
+            }
+            $this->assertSame('thirty-2', self::itemRow($db, 30)['name']);
+            $this->assertSame('Tom', self::itemRow($db, 30)['first_name']);
+            $this->assertSame('a31-2', self::itemRow($db, 31)['name']);
+            $this->assertNull(self::itemRow($db, 32));
+        } finally {
+            $this->dropItemTable($db, $engine);
+            if ($engine === 'firebird') {
+                try {
+                    $db->close();
+                } catch (\Throwable) {
+                }
+            }
+        }
+    }
+
+    /** The batch (list) form of delete removes each listed row (it used to remove none). */
+    public function testDatabaseDeleteAcceptsAListOfFilterMaps(): void
+    {
+        $db = Database::create('sqlite::memory:');
+        $db->execute('CREATE TABLE ala_php_item (id INTEGER NOT NULL PRIMARY KEY, name VARCHAR(50))');
+        $db->insert('ala_php_item', [['id' => 1, 'name' => 'a'], ['id' => 2, 'name' => 'b'], ['id' => 3, 'name' => 'c']]);
+
+        $result = $db->delete('ala_php_item', [['id' => 1], ['id' => 2]]);
+
+        $this->assertSame(2, $result->affectedRows);
+        $this->assertSame([3], array_map(static fn (array $row): int => (int)$row['id'], $db->fetch('SELECT id FROM ala_php_item')->records));
+        $db->close();
     }
 
     // ── DocStore SQLite fallback + real MongoDB ─────────────────────────────
