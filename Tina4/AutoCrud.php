@@ -339,28 +339,23 @@ class AutoCrud
     }
 
     /**
-     * Guard a write body's DANGEROUS keys before it reaches fill()/the
-     * constructor (CRUD-MASS-ASSIGNMENT).
+     * Allow-list a write body before it reaches fill()/the constructor
+     * (CRUD-MASS-ASSIGNMENT, ADR-0069 G1).
      *
-     * PHP models may declare columns as typed properties OR leave them
-     * fully dynamic - {@see ORM::getModelProperties()} explicitly merges in
-     * `__set()`-captured dynamic properties by design, and AutoCrudV3Test's
-     * own `CrudItem` fixture declares NO typed properties at all, relying
-     * entirely on dynamic assignment. So there is no closed "known columns"
-     * set to allow-list against without locking a dynamic-property model's
-     * create/update out of every column (measured: a strict allow-list on
-     * `getFieldDefinitions()` alone turns `testCreateItem` red - `name`
-     * never reaches the row, NOT NULL fails). This is a DENY-list of the two
-     * genuinely dangerous keys instead: `is_deleted` is never
-     * client-writable (soft-delete is mutated only by delete()/restore());
-     * the primary key is never taken from the body - insert() only drops a
-     * FALSY client PK (a truthy one can flip save() onto its update()
-     * branch, silently overwriting an unrelated existing row), and on a PUT
-     * a body PK would move update()'s own WHERE clause off the
-     * URL-addressed row (fill() assigns properties before save()/pkWhere()
-     * run) - so it is stripped on create AND update, except a genuinely
-     * natural (single-column, non-auto-increment) key on CREATE, where a
-     * caller-chosen key is the documented way to create a row
+     * A key is written only when it resolves to one of the model's fields
+     * through ORM::resolveFieldColumn() - the same resolver the list route's
+     * filter/sort use: a declared field (by property or by its column), or for
+     * a model that declares no fields, one of the table's real columns. Every
+     * other key is DROPPED (writes drop, reads 400 - CRUD-DEC-02).
+     *
+     * Two resolvable keys are still never client-writable: `is_deleted`
+     * (soft-delete is mutated only by delete()/restore()), and the primary key
+     * - insert() only drops a FALSY client PK (a truthy one can flip save()
+     * onto its update() branch, silently overwriting an unrelated existing
+     * row), and on a PUT a body PK would move update()'s own WHERE clause off
+     * the URL-addressed row. So the PK is stripped on create AND update, except
+     * a genuinely natural (single-column, non-auto-increment) key on CREATE,
+     * where a caller-chosen key is the documented way to create a row
      * (buildExample() keeps such a key in the sample body).
      *
      * @param array<string, mixed> $data
@@ -369,7 +364,7 @@ class AutoCrud
     {
         $pkProps = $probe->getPrimaryKeys();
         $defs = $probe->getFieldDefinitions();
-        $reverseMapping = array_flip($probe->fieldMapping);
+        $pkColumns = array_map(static fn (string $pk): string => strtolower($probe->getDbColumn($pk)), $pkProps);
 
         $singlePk = count($pkProps) === 1 ? $pkProps[0] : null;
         $autoIncrement = $singlePk !== null && ($defs[$singlePk]['auto_increment'] ?? false);
@@ -377,11 +372,15 @@ class AutoCrud
 
         $allowed = [];
         foreach ($data as $key => $value) {
-            $propName = $reverseMapping[$key] ?? $key;
-            if ($propName === 'is_deleted') {
+            $column = $probe->resolveFieldColumn((string)$key);
+            if ($column === null) {
                 continue;
             }
-            if ($stripPk && in_array($propName, $pkProps, true)) {
+            $column = strtolower($column);
+            if ($column === 'is_deleted') {
+                continue;
+            }
+            if ($stripPk && in_array($column, $pkColumns, true)) {
                 continue;
             }
             $allowed[$key] = $value;
