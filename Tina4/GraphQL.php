@@ -182,6 +182,17 @@ class GraphQL
 
         $self = $this;
         Router::post($endpoint, function (Request $request, Response $response) use ($self) {
+            // F4 (CSRF): require an application/json content-type. A browser can
+            // only send a cross-site POST with text/plain, form-urlencoded or
+            // multipart bodies without a CORS preflight; demanding JSON forces
+            // the preflight (and its same-origin/allow-list check) for any
+            // cross-site caller, so a forged form cannot drive a mutation.
+            // Same-origin XHR/fetch and server clients set application/json.
+            if (!str_contains(strtolower($request->contentType), 'application/json')) {
+                return $response->json(['data' => null, 'errors' => [[
+                    'message' => 'GraphQL requires a Content-Type of application/json',
+                ]]], 415);
+            }
             $body = $request->body;
             if (is_string($body)) {
                 $decoded = json_decode($body, true);
