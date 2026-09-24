@@ -127,11 +127,11 @@ class OrmFieldColumnReadbackTest extends TestCase
         }
         if ($engine === 'firebird') {
             if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-                $this->markTestSkipped('firebird client not installed: ext-interbase');
+                $this->markTestSkipped('[needs:firebird] firebird client not installed: ext-interbase');
             }
             $url = getenv('TINA4_TEST_FIREBIRD_URL');
             if (!$url) {
-                $this->markTestSkipped('firebird not set: TINA4_TEST_FIREBIRD_URL (needs a live Firebird)');
+                $this->markTestSkipped('[needs:firebird] firebird not set: TINA4_TEST_FIREBIRD_URL (needs a live Firebird)');
             }
             return Database::create($url);
         }
@@ -144,7 +144,7 @@ class OrmFieldColumnReadbackTest extends TestCase
         $host = getenv("TINA4_TEST_{$prefix}_HOST") ?: '127.0.0.1';
         $port = (int) (getenv("TINA4_TEST_{$prefix}_PORT") ?: $defaultPort);
         if (!self::reachable($host, $port)) {
-            $this->markTestSkipped("{$engine} unreachable at {$host}:{$port}");
+            $this->markTestSkipped("[needs:{$engine}] {$engine} unreachable at {$host}:{$port}");
         }
         $database = getenv("TINA4_TEST_{$prefix}_DB") ?: $defaultDb;
         $user = getenv("TINA4_TEST_{$prefix}_USERNAME") ?: $defaultUser;
