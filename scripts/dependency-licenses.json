@@ -32,11 +32,11 @@
     {
       "ecosystem": "composer",
       "name": "mongodb/mongodb",
-      "version": "2.3.0",
+      "version": "2.4.2",
       "platform": "",
       "lock_license": "Apache-2.0",
       "upstream_declaration": "Apache-2.0",
-      "evidence": "composer.lock"
+      "evidence": "composer.lock: https://github.com/mongodb/mongo-php-library@1fbdc2ffff18a1ad6d92043b40060e4f546982ff"
     },
     {
       "ecosystem": "composer",
@@ -302,11 +302,11 @@
     {
       "ecosystem": "composer",
       "name": "symfony/polyfill-php85",
-      "version": "v1.38.1",
+      "version": "v1.41.0",
       "platform": "",
       "lock_license": "MIT",
       "upstream_declaration": "MIT",
-      "evidence": "composer.lock"
+      "evidence": "composer.lock: https://github.com/symfony/polyfill-php85.git@255fab485aaa1006ed411040c42aecd7b5302d7a"
     },
     {
       "ecosystem": "composer",

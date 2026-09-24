@@ -12,6 +12,8 @@ This release is available under MPL-2.0, with separate commercial terms availabl
 
 Security and interoperability release, integrating the reviewed changes since 3.13.137.
 
+- Update the development-only MongoDB SDK to 2.4.2 (security fix floor 2.4.1), with its PHP 8.5 polyfill updated and reviewed licence inventory refreshed. No required runtime dependencies are added.
+
 - HTTP handling rejects CR/LF/NUL in headers and ambiguous request framing, including duplicate Content-Length headers. Security headers cover every response and entry point; same-origin requests do not trigger CORS. Explicit Content-Type is preserved exactly once, binary responses remain byte-for-byte intact, and invalid upload-limit configuration falls back safely.
 - Pooled database operations hold exclusive leases per Fiber or Swoole coroutine. Cross-context dirty reads and rolled-back unrelated writes are prevented; exhaustion fails immediately, failed commits retain leases until rollback, and broken connections are discarded. PostgreSQL transaction commands now raise on server failure instead of silently reporting success. Direct adapter I/O uses checkout/checkin.
 - ORM, AutoCrud and database write helpers allow only declared fields or plain column identifiers. AutoCrud and GraphQL address rows by bound primary keys, respect the selected connection, and reject malformed filter/sort values. DocStore validates SQLite fallback field paths; delete accepts lists of filter maps; mapped-field read-back is covered across live engines.
