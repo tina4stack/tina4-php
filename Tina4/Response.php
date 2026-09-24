@@ -74,6 +74,12 @@ class Response
     /** @var array<string, string> Response headers */
     private array $headers = [];
 
+    /**
+     * True once the route set Content-Type with header(); $response($data)
+     * then keeps it instead of detecting one (ADR-0072, tina4-python#144).
+     */
+    private bool $contentTypeFromHeader = false;
+
     /** @var string Response body content */
     private string $body = '';
 
@@ -137,7 +143,7 @@ class Response
         $data = $this->jsonable($data);
 
         if ($contentType !== null) {
-            $this->headers['Content-Type'] = $contentType;
+            $this->setContentType($contentType);
             if (is_array($data)) {
                 $this->body = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             } elseif ($data === null) {
@@ -146,20 +152,20 @@ class Response
                 $this->body = (string)$data;
             }
         } elseif (is_array($data)) {
-            $this->headers['Content-Type'] = 'application/json';
+            $this->detectedContentType('application/json');
             $this->body = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         } elseif (is_string($data)) {
             $trimmed = trim($data);
             if (str_starts_with($trimmed, '<') && str_ends_with($trimmed, '>')) {
-                $this->headers['Content-Type'] = 'text/html; charset=UTF-8';
+                $this->detectedContentType('text/html; charset=UTF-8');
             } else {
-                $this->headers['Content-Type'] = 'text/plain; charset=UTF-8';
+                $this->detectedContentType('text/plain; charset=UTF-8');
             }
             $this->body = $data;
         } elseif ($data === null) {
             $this->body = '';
         } else {
-            $this->headers['Content-Type'] = 'text/plain; charset=UTF-8';
+            $this->detectedContentType('text/plain; charset=UTF-8');
             $this->body = (string)$data;
         }
 
@@ -192,8 +198,42 @@ class Response
     public function header(string $name, string $value): self
     {
         self::assertSafeHeader($name, $value);
-        $this->headers[$name] = $value;
+        $this->storeHeader($name, $value);
         return $this;
+    }
+
+    /**
+     * Store one header. Content-Type (any case) is not a second header: it
+     * replaces the response's one content type, and $response($data) keeps it
+     * instead of detecting one (ADR-0072, tina4-python#144).
+     */
+    private function storeHeader(string $name, string $value): void
+    {
+        if (strcasecmp($name, 'Content-Type') === 0) {
+            $this->setContentType($value);
+            $this->contentTypeFromHeader = true;
+            return;
+        }
+        $this->headers[$name] = $value;
+    }
+
+    /** Set the one Content-Type, whatever case an earlier writer used for its key. */
+    private function setContentType(string $contentType): void
+    {
+        foreach (array_keys($this->headers) as $existing) {
+            if (strcasecmp((string)$existing, 'Content-Type') === 0) {
+                unset($this->headers[$existing]);
+            }
+        }
+        $this->headers['Content-Type'] = $contentType;
+    }
+
+    /** A detected content type never replaces one the route set with header(). */
+    private function detectedContentType(string $contentType): void
+    {
+        if (!$this->contentTypeFromHeader) {
+            $this->setContentType($contentType);
+        }
     }
 
     /** RFC 9110 `token`: one or more `tchar`. */
@@ -288,7 +328,7 @@ class Response
             self::assertSafeHeader((string)$name, (string)$value);
         }
         foreach ($headers as $name => $value) {
-            $this->headers[$name] = $value;
+            $this->storeHeader((string)$name, (string)$value);
         }
         return $this;
     }
@@ -459,7 +499,7 @@ class Response
             }
             if ($contentType !== null) {
                 self::assertSafeHeader('Content-Type', $contentType);
-                $this->headers['content-type'] = $contentType;
+                $this->setContentType($contentType);
             }
             $this->body = (string) $data;
             if ($statusCode !== null) {
