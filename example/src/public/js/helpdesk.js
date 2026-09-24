@@ -15,7 +15,15 @@
     if (!sessionList || !messagesEl) return;
 
     // Track chat sessions: { clientId: { name, messages: [{sender, text, isAdmin, isSystem}], unread } }
-    var sessions = {};
+    // Prototype-safe map: keys are client IDs that arrive over the WebSocket, so
+    // they are attacker-controlled. A null prototype means a "__proto__" key can
+    // never reach Object.prototype, and isUnsafeKey() rejects the dangerous names
+    // outright at every write site (CodeQL: prototype pollution / property injection).
+    var sessions = Object.create(null);
+
+    function isUnsafeKey(key) {
+        return key === "__proto__" || key === "constructor" || key === "prototype";
+    }
     var activeSession = null;
     var chatSocket = null;
 
@@ -124,6 +132,7 @@
     }
 
     function addSession(clientId, name) {
+        if (isUnsafeKey(clientId)) return;
         if (sessions[clientId]) return;
         sessions[clientId] = {
             name: name || clientId,
@@ -140,6 +149,7 @@
     }
 
     function markSessionOffline(clientId) {
+        if (isUnsafeKey(clientId)) return;
         if (sessions[clientId]) {
             sessions[clientId].online = false;
             renderSessionList();
@@ -147,6 +157,7 @@
     }
 
     function addMessageToSession(clientId, sender, text, isAdmin, isSystem) {
+        if (isUnsafeKey(clientId)) return;
         if (!sessions[clientId]) {
             addSession(clientId, sender || clientId);
         }
@@ -164,6 +175,7 @@
     }
 
     function selectSession(clientId) {
+        if (isUnsafeKey(clientId)) return;
         activeSession = clientId;
         var sess = sessions[clientId];
         if (sess) {
