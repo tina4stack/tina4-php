@@ -248,9 +248,7 @@ class AutoCrud
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
-            $model->load($request->params['id']);
-
-            if (!$model->exists($request->params['id'])) {
+            if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -307,9 +305,7 @@ class AutoCrud
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
-            $model->load($request->params['id']);
-
-            if (!$model->exists($request->params['id'])) {
+            if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -336,6 +332,21 @@ class AutoCrud
 
             return $response->json(['error' => 'Failed to update record', 'detail' => $model->getError()], 500);
         };
+    }
+
+    /**
+     * Load the row a GET/PUT/DELETE /{table}/{id} route addresses.
+     *
+     * tina4: ADR-0069 - the {id} URL segment is a VALUE bound against the
+     * primary-key column, never SQL. (load() takes its string argument as a
+     * WHERE fragment, so passing the segment straight through made the path
+     * part of the statement and addressed whichever row that fragment matched
+     * first.) Same key rule as ORM::findById()/exists(): the first key column.
+     */
+    private function loadByRouteId(ORM $model, string $id): bool
+    {
+        $pkColumn = $model->getDbColumn($model->getPrimaryKeys()[0]);
+        return $model->load("{$pkColumn} = ?", [$id]);
     }
 
     /**
@@ -397,9 +408,7 @@ class AutoCrud
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
-            $model->load($request->params['id']);
-
-            if (!$model->exists($request->params['id'])) {
+            if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
