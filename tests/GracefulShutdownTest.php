@@ -574,6 +574,7 @@ class GracefulShutdownTest extends TestCase
         $environment = $env + [
             'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
             'HOME' => getenv('HOME') ?: sys_get_temp_dir(),
+            'TINA4_NO_BROWSER' => 'true', // a hand-built env inherits nothing: never open a browser
             // Boot directly (no tina4 CLI in a test), keep it quiet, and keep
             // migrations and the AI port out of the picture.
             'TINA4_OVERRIDE_CLIENT' => 'true',
