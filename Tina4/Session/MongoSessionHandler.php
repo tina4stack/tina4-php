@@ -25,8 +25,24 @@ class MongoSessionHandler
     private string $collection;
     private int $ttl;
 
-    /** @var resource|null TCP socket */
+    /** @var resource|null TCP socket - the process's shared connection to this server */
     private $socket = null;
+
+    /**
+     * One live connection per process and server, shared by every handler.
+     *
+     * Session builds a handler per request, so a connection owned by the
+     * handler meant a NEW TCP connection to MongoDB for every request a
+     * long-lived process served. Keyed by pid as well as host:port, so a
+     * process forked after a connection was opened never writes into its
+     * parent's socket.
+     *
+     * @var array<string, resource>
+     */
+    private static array $connections = [];
+
+    /** @var bool Whether the current connection was opened by an EARLIER call (a candidate for having gone stale) */
+    private bool $reusedConnection = false;
 
     /** @var int Request ID counter */
     private int $requestId = 0;
@@ -148,41 +164,101 @@ class MongoSessionHandler
     }
 
     /**
-     * Close the connection.
+     * Close this process's shared connection to the server.
+     *
+     * Every handler in the process shares the connection, so the next read or
+     * write from any of them opens a fresh one.
+     *
+     * @return void
      */
     public function close(): void
     {
-        if ($this->socket) {
-            fclose($this->socket);
-            $this->socket = null;
+        $key = $this->connectionKey();
+        if (isset(self::$connections[$key])) {
+            @fclose(self::$connections[$key]);
+            unset(self::$connections[$key]);
         }
+        $this->socket = null;
     }
 
     // ── MongoDB Wire Protocol (OP_MSG) ──────────────────────────
 
+    private function connectionKey(): string
+    {
+        return getmypid() . '|' . $this->host . ':' . $this->port;
+    }
+
+    /**
+     * Point this handler at the process's live connection, opening one only
+     * when there is none or the one there has been closed by the peer.
+     */
     private function ensureConnected(): void
     {
-        if ($this->socket === null) {
+        $key = $this->connectionKey();
+        $shared = self::$connections[$key] ?? null;
+        if (!is_resource($shared) || feof($shared)) {
+            $this->close();
             $this->connect();
+            $this->reusedConnection = false;
+            return;
         }
+        $this->socket = $shared;
+        $this->reusedConnection = true;
     }
 
     private function connect(): void
     {
-        $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
-        if (!$this->socket) {
+        $socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
+        if (!$socket) {
             throw new \RuntimeException("MongoDB connection failed: [{$errno}] {$errstr}");
         }
-        stream_set_timeout($this->socket, 30);
+        stream_set_timeout($socket, 30);
+        self::$connections[$this->connectionKey()] = $socket;
+        $this->socket = $socket;
     }
 
     /**
      * Send an OP_MSG command and read the response.
      *
+     * A shared connection can die between requests (a MongoDB restart, an idle
+     * timeout) in a way feof() only sees once it is used. A failure on a
+     * REUSED connection therefore drops it and retries once on a fresh one;
+     * every command this handler sends (find, upsert, delete by _id) is
+     * idempotent, so the retry cannot apply a change twice. A failure on a
+     * connection opened for this very call is the server's answer and raises.
+     *
      * @param array $command The command document
      * @return array Response document
      */
     private function command(array $command): array
+    {
+        try {
+            return $this->sendCommand($command);
+        } catch (\RuntimeException $failure) {
+            if (!$this->reusedConnection) {
+                $this->close();
+                throw $failure;
+            }
+            $this->reusedConnection = false;
+            $this->close();
+            $this->connect();
+            try {
+                return $this->sendCommand($command);
+            } catch (\RuntimeException $retryFailure) {
+                // Never leave a half-read connection behind for the next caller.
+                $this->close();
+                throw $retryFailure;
+            }
+        }
+    }
+
+    /**
+     * One OP_MSG round trip on the current connection.
+     *
+     * @param array $command The command document
+     * @return array Response document
+     */
+    private function sendCommand(array $command): array
     {
         $this->requestId++;
         $bsonCmd = \Tina4\MongoBson::encode($command);
@@ -199,7 +275,10 @@ class MongoSessionHandler
             . pack('V', 0)               // responseTo
             . pack('V', 2013);           // OP_MSG opcode
 
-        fwrite($this->socket, $header . $sections);
+        $message = $header . $sections;
+        if (@fwrite($this->socket, $message) !== strlen($message)) {
+            throw new \RuntimeException('Failed to send MongoDB command');
+        }
 
         // Read response
         return $this->readResponse();
@@ -207,7 +286,7 @@ class MongoSessionHandler
 
     private function readResponse(): array
     {
-        $headerData = fread($this->socket, 16);
+        $headerData = (string) @fread($this->socket, 16);
         if (strlen($headerData) < 16) {
             throw new \RuntimeException('Failed to read MongoDB response header');
         }
@@ -217,7 +296,7 @@ class MongoSessionHandler
 
         $payload = '';
         while ($remaining > 0) {
-            $chunk = fread($this->socket, min($remaining, 8192));
+            $chunk = @fread($this->socket, min($remaining, 8192));
             if ($chunk === false || $chunk === '') {
                 throw new \RuntimeException('Failed to read MongoDB response');
             }

@@ -769,7 +769,7 @@ class Router
         }
         $request->session = $session;
 
-        $result = self::dispatchInner($request, $response);
+        $result = self::withSecurityHeaders($request, self::dispatchInner($request, $response));
 
         // No session means nothing to persist and no cookie to emit. The
         // request still serves - that is the degrade half of the policy.
@@ -1314,6 +1314,18 @@ class Router
     }
 
     /**
+     * Whether this process is a php CLI worker (Swoole, RoadRunner, a PSR-7
+     * bridge, TestClient): nothing sends PHP's own headers there, so a cookie
+     * must travel on the Response that is returned.
+     *
+     * @return bool True under the cli / phpdbg SAPI
+     */
+    private static function isCliWorker(): bool
+    {
+        return PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg';
+    }
+
+    /**
      * Emit the Tina4 session cookie, by whichever route the SAPI allows.
      *
      * Two paths, and the choice is forced rather than stylistic: once headers
@@ -1340,7 +1352,7 @@ class Router
                 || strcasecmp($sameSite, 'None') === 0
                 || Request::isSecureScheme();
 
-            if (headers_sent() || $result->isTesting() || $result->isRawSocket()) {
+            if (headers_sent() || $result->isTesting() || $result->isRawSocket() || self::isCliWorker()) {
                 // Built-in server mode: headers are managed via the Response object,
                 // so setcookie() would trigger a fatal error. Build the Set-Cookie
                 // header manually and attach it to the Response instead.
@@ -1374,6 +1386,12 @@ class Router
                 // this reason; App::__invoke() (Apache/nginx/FPM/php -S,
                 // where headers_sent() is a REAL, meaningful signal) does
                 // not, so this branch's reach on that path is unchanged.
+                //
+                // self::isCliWorker() closes the last gap: Swoole, RoadRunner
+                // and every PSR-7 bridge call App::__invoke() inside a php CLI
+                // worker and send the Response it RETURNS. headers_sent() never
+                // flips there, so native setcookie() went into the void and no
+                // first visit ever got its session cookie.
                 $expires = gmdate('D, d M Y H:i:s T', time() + $ttl);
                 $cookie = "{$sessionCookieName}={$sid}; Expires={$expires}; Path=/; HttpOnly; SameSite={$sameSite}";
                 if ($secure) {
@@ -2110,6 +2128,38 @@ class Router
 
         $errorResp = self::renderError($response, 404, 'Not Found', $request);
         return self::injectDevToolbar($request, $errorResp, 'error');
+    }
+
+    /**
+     * Give every response the app emits the security headers.
+     *
+     * SecurityHeadersMiddleware's before hook decorates only the Response it is
+     * handed, so anything built outside it went out bare: an unmatched path
+     * (a static file - an SPA's index.html at "/" included - the template
+     * fallback, a 404, a 405), a CSRF 403 (CSRF is attached, and runs, before
+     * the security headers), and any middleware or handler answering with a
+     * fresh Response. This runs once on the final response. It only FILLS
+     * headers that are missing (case-insensitively), so a value the app set
+     * itself - a route's own X-Frame-Options or CSP - is never overruled, and it
+     * does nothing while the middleware is not registered.
+     *
+     * @param Request  $request  The incoming request
+     * @param Response $response The response about to be sent
+     * @return Response The same response, carrying the security headers when registered
+     */
+    private static function withSecurityHeaders(Request $request, Response $response): Response
+    {
+        if (!in_array(Middleware\SecurityHeadersMiddleware::class, Middleware::getGlobal(), true)) {
+            return $response;
+        }
+        [, $defaults] = Middleware\SecurityHeadersMiddleware::beforeSecurity($request, new Response());
+        $present = array_change_key_case($response->getHeaders());
+        foreach ($defaults->getHeaders() as $name => $value) {
+            if (!array_key_exists(strtolower($name), $present)) {
+                $response->header($name, $value);
+            }
+        }
+        return $response;
     }
 
     private static function dispatchInner(Request $request, Response $response): Response

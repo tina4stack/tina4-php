@@ -389,6 +389,11 @@ class FirebirdAdapter implements DatabaseAdapter
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + ROWS pagination.
         $sql = self::stripTrailingSemicolons($sql);
 
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
+
         // v3.13.37 (DB-contract A): the MAIN paginated query must FAIL LOUD — a
         // bad statement RAISES instead of being swallowed into an empty result
         // set (parity with execute(), fetchOne() and the Python master). The
@@ -930,8 +935,9 @@ class FirebirdAdapter implements DatabaseAdapter
      * it from the positional value list. Works around the ibase/fbird driver
      * mis-binding a PHP null (XSQLDA "empty pointer to data at SQLVAR index N").
      *
-     * String literals ('' -escaped, Firebird style) and `--` line comments are
-     * skipped so a `?` inside them is never miscounted. NULL semantics are
+     * Literals, quoted identifiers and comments are skipped
+     * ({@see \Tina4\SQLTranslator::replacePlaceholders()}) so a `?` inside them
+     * is never miscounted. NULL semantics are
      * preserved — the column is still written as SQL NULL, just via a literal
      * instead of a bound parameter.
      *
@@ -944,27 +950,20 @@ class FirebirdAdapter implements DatabaseAdapter
             return [$sql, $params];
         }
 
-        $index = 0;
         $kept = [];
-        $rewritten = preg_replace_callback(
-            "/'(?:[^']|'')*'|--[^\n]*|\?/s",
-            static function (array $m) use (&$index, &$kept, $params): string {
-                if ($m[0] !== '?') {
-                    return $m[0]; // string literal / comment — preserved verbatim
-                }
+        $rewritten = \Tina4\SQLTranslator::replacePlaceholders(
+            $sql,
+            static function (int $index) use (&$kept, $params): string {
                 $value = array_key_exists($index, $params) ? $params[$index] : null;
-                $index++;
                 if ($value === null) {
                     return 'NULL';
                 }
                 $kept[] = $value;
                 return '?';
-            },
-            $sql
+            }
         );
 
-        // Fail safe: if the PCRE engine bailed, leave the statement untouched.
-        return $rewritten === null ? [$sql, $params] : [$rewritten, $kept];
+        return [$rewritten, $kept];
     }
 
     /**

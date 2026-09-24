@@ -556,7 +556,9 @@ Backends: file, redis, valkey, mongodb, memcached, database.
 ### Database extras
 
 ```php
-$db->execute($sql, $params): bool|DatabaseResult  // SUCCESS: true for writes, DatabaseResult for RETURNING/CALL/EXEC/SELECT.
+$db->execute($sql, $params): bool|DatabaseResult  // SUCCESS: a DatabaseResult HOLDING THE ROWS of any statement that produces them
+                                                   // (SELECT, WITH ... SELECT, RETURNING / SQL Server OUTPUT, CALL/EXEC), run once
+                                                   // with no COUNT probe or pagination; true for a write or DDL that produces none.
                                                    // FAILURE: RAISES \Tina4\Database\DatabaseException — never returns false.
                                                    // The cause is still captured on getError(). Mirrors fetch()/fetchOne(),
                                                    // which also raise. Don't test the return — wrap in try/catch:
@@ -1271,8 +1273,13 @@ SQLTranslator::booleanToInt(string $sql): string         // TRUE/FALSE -> 1/0
 SQLTranslator::ilikeToLike(string $sql): string          // ILIKE -> LOWER() LIKE LOWER()
 SQLTranslator::concatPipesToFunc(string $sql): string    // || -> CONCAT()
 SQLTranslator::autoIncrementSyntax(string $sql, string $dialect): string
-SQLTranslator::placeholderStyle(string $sql, string $style): string  // ? -> :1,:2 or %s
-SQLTranslator::namedToPositional(string $sql, array $params): array  // :name -> ?, reorders params (used by MySQL/MSSQL/Firebird/Postgres adapters; skips string literals + comments; duplicate names bind once per occurrence)
+SQLTranslator::placeholderStyle(string $sql, string $style): string  // ? -> :1,:2 or %s (%s style also doubles every literal %)
+SQLTranslator::namedToPositional(string $sql, array $params, bool $backslashEscapes = true): array  // :name -> ?, reorders params (used by MySQL/MSSQL/Firebird/Postgres adapters; duplicate names bind once per occurrence)
+SQLTranslator::replacePlaceholders(string $sql, callable $replacement, bool $backslashEscapes = false): string  // rewrite each ? in SQL code
+SQLTranslator::mapSqlCode(string $sql, callable $transform, bool $backslashEscapes = false): string  // transform SQL code only
+// Every placeholder rewrite skips string literals ('...', E'...', $$...$$, $tag$...$tag$),
+// quoted identifiers ("..." and `...`) and comments (-- and /* */), so a ? or :name inside them is
+// never a placeholder. PostgreSQL sends SQL with no parameters untouched (the jsonb ? operator works).
 SQLTranslator::hasReturning(string $sql): bool
 SQLTranslator::extractReturning(string $sql): array      // ['sql' => ..., 'columns' => [...]]
 

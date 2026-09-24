@@ -221,9 +221,10 @@ class MSSQLAdapter implements DatabaseAdapter
             [$sql, $values] = self::inlineBinaryParams($sql, $values);
 
             if ($this->driver === 'pdo') {
-                $stmt = $this->db->prepare($sql);
-                $stmt->execute($values);
-                return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $stmt = $this->db->prepare($this->bindForDblib($sql, $values));
+                $stmt->execute();
+                // A statement with no result set (a procedure that returns none) yields no rows.
+                return $stmt->columnCount() > 0 ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
             }
 
             $stmt = empty($values)
@@ -255,6 +256,11 @@ class MSSQLAdapter implements DatabaseAdapter
         $this->lastError = null;
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + OFFSET/FETCH append.
         $sql = self::stripTrailingSemicolons($sql);
+
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
 
         // v3.13.37 (DB-contract A): the MAIN query must FAIL LOUD — a bad
         // statement RAISES instead of being swallowed into an empty result set
@@ -353,8 +359,8 @@ class MSSQLAdapter implements DatabaseAdapter
                 // PDO is in ERRMODE_EXCEPTION — a bad statement raises a
                 // PDOException, caught below and re-raised as DatabaseException
                 // (FAIL LOUD parity with the sqlsrv branch).
-                $stmt = $this->db->prepare($sql);
-                $stmt->execute($values);
+                $stmt = $this->db->prepare($this->bindForDblib($sql, $values));
+                $stmt->execute();
                 $this->affectedRows = max(0, $stmt->rowCount());
                 return true;
             }
@@ -620,42 +626,53 @@ class MSSQLAdapter implements DatabaseAdapter
         if ($values === []) {
             return [$sql, $values];
         }
-        $out = '';
         $kept = [];
-        $index = 0;
-        $length = strlen($sql);
-        $inString = false;
-        for ($position = 0; $position < $length; $position++) {
-            $char = $sql[$position];
-            if ($char === "'") {
-                // A doubled '' inside a literal is an escaped quote, not a close.
-                if ($inString && $position + 1 < $length && $sql[$position + 1] === "'") {
-                    $out .= "''";
-                    $position++;
-                    continue;
-                }
-                $inString = !$inString;
-                $out .= $char;
-                continue;
-            }
-            if ($char === '?' && !$inString) {
+        $scanned = 0;
+        $out = \Tina4\SQLTranslator::replacePlaceholders(
+            $sql,
+            static function (int $index) use (&$kept, &$scanned, $values): string {
+                $scanned = $index + 1;
                 $value = $values[$index] ?? null;
-                $index++;
                 if (is_string($value) && self::isBinaryParam($value)) {
-                    $out .= '0x' . bin2hex($value);
-                } else {
-                    $out .= '?';
-                    $kept[] = $value;
+                    return '0x' . bin2hex($value);
                 }
-                continue;
+                $kept[] = $value;
+                return '?';
             }
-            $out .= $char;
-        }
+        );
         // Any values past the placeholders we scanned (should not happen) are kept.
-        for ($count = count($values); $index < $count; $index++) {
-            $kept[] = $values[$index];
+        return [$out, array_merge($kept, array_slice(array_values($values), $scanned))];
+    }
+
+    /**
+     * Bind positional values the way pdo_dblib itself does, but at the right
+     * placeholders.
+     *
+     * pdo_dblib has no server-side prepare: PDO emulates binding by splicing
+     * each value, quoted with the driver's own quoter, over its `?`. PDO's
+     * placeholder scanner (PHP 8.3) also counts a `?` inside a comment or a
+     * quoted identifier, so such a statement failed with "number of bound
+     * variables does not match number of tokens". This does the same
+     * substitution - PDO::quote() for every value, bound as a string exactly as
+     * execute($values) binds it, NULL for null - only at the placeholders in SQL
+     * code ({@see \Tina4\SQLTranslator::replacePlaceholders()}), and hands PDO
+     * a statement with nothing left to bind.
+     *
+     * @param string $sql    SQL with positional `?` placeholders
+     * @param array  $values Positional values, in order
+     * @return string The statement with every value spliced in
+     */
+    private function bindForDblib(string $sql, array $values): string
+    {
+        if ($values === []) {
+            return $sql;
         }
-        return [$out, $kept];
+        return \Tina4\SQLTranslator::replacePlaceholders(
+            $sql,
+            fn(int $index): string => ($values[$index] ?? null) === null
+                ? 'NULL'
+                : $this->db->quote((string) $values[$index])
+        );
     }
 
     /**

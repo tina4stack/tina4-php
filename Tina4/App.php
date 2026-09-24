@@ -1561,10 +1561,22 @@ HTML;
             // and the Swoole integration documented above could never run.
             // Measured on openswoole 26.2.0 / PHP 8.3: getMethod PRESENT,
             // getUri absent. See tests/AppInvokeSwooleTest.php.
+            //
+            // Swoole's parser MOVES the Cookie header out of $header and into
+            // $cookie, so it is rebuilt here - without it no Swoole request
+            // ever carried the session cookie back and no session resumed.
+            $swooleHeaders = $request->header ?? [];
+            if (!empty($request->cookie) && !isset($swooleHeaders['cookie'])) {
+                $pairs = [];
+                foreach ($request->cookie as $cookieName => $cookieValue) {
+                    $pairs[] = $cookieName . '=' . rawurlencode((string) $cookieValue);
+                }
+                $swooleHeaders['cookie'] = implode('; ', $pairs);
+            }
             $tina4Request = new Request(
                 method: $request->server['request_method'] ?? 'GET',
                 path: $request->server['request_uri'] ?? '/',
-                headers: $request->header ?? [],
+                headers: $swooleHeaders,
                 body: $request->rawContent() ?: '',
                 query: $request->get ?? [],
                 ip: $request->server['remote_addr'] ?? '127.0.0.1',

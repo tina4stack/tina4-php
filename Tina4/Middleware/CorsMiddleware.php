@@ -25,8 +25,15 @@ use Tina4\Response;
  *
  * DENY BY DEFAULT (ADR-0018). With TINA4_CORS_ORIGINS unset, NO
  * Access-Control-Allow-Origin is emitted and the browser's own CORS check
- * blocks the cross-origin request. "*" still works, it just has to be asked
- * for. Breaking change from the old permissive default.
+ * blocks the cross-origin request. List the specific origins to allow.
+ * Breaking change from the old permissive default.
+ *
+ * SAME-ORIGIN IS NOT CROSS-ORIGIN. Browsers send Origin on every same-origin
+ * POST/PUT/PATCH/DELETE, so a request whose Origin equals its own
+ * scheme://host[:port] (http:80 and https:443 as default ports) is recognised
+ * and never warned about. That only silences the warning - it adds no CORS
+ * header - so a spoofed Host gains nothing. A disallowed cross-origin request
+ * still warns, naming the specific origin to add to TINA4_CORS_ORIGINS.
  *
  * CREDENTIALS AND THE WILDCARD ARE MUTUALLY EXCLUSIVE. The Fetch Standard's
  * CORS check treats "*" as a literal (not a wildcard) once the request's
@@ -55,7 +62,11 @@ class CorsMiddleware
      */
     public static bool $preMatch = true;
 
-    /** Warn-once ledger, keyed by reason, so a scripted probe cannot flood the log. */
+    /**
+     * Warn-once ledger, keyed by REASON only (unconfigured, denied,
+     * wildcard-credentials), so a scripted probe cannot flood the log or grow
+     * the ledger (ADR-0048). The first message still names its origin.
+     */
     private static array $warned = [];
 
     private readonly string $allowedOrigins;
@@ -92,12 +103,23 @@ class CorsMiddleware
     }
 
     /**
+     * The reasons warned about so far in this process - bounded by
+     * construction, never an origin (ADR-0048). Node's corsWarningReasons().
+     *
+     * @return list<string>
+     */
+    public static function warnedReasons(): array
+    {
+        return array_keys(self::$warned);
+    }
+
+    /**
      * Log an actionable CORS warning at most once per reason per process.
      *
      * A rejected cross-origin request is otherwise invisible: the browser
      * reports a generic CORS failure and the server log says nothing.
      *
-     * @param string $key Dedupe key for this warning.
+     * @param string $key The reason: unconfigured, denied or wildcard-credentials.
      * @param string $message The actionable message to log.
      * @return void
      */
@@ -138,18 +160,20 @@ class CorsMiddleware
      * apart the way two parallel implementations do.
      *
      * @param string|null $requestOrigin The Origin header from the request
+     * @param bool $sameOrigin Whether the request is same-origin: its warnings
+     *   are suppressed, the headers themselves are unchanged
      * @return array<string, string> Headers to set on the response
      */
-    public function getHeaders(?string $requestOrigin = null): array
+    public function getHeaders(?string $requestOrigin = null, bool $sameOrigin = false): array
     {
         $allowed = $this->getAllowedOriginList();
 
         if ($allowed === []) {
-            if ($requestOrigin !== null && $requestOrigin !== '') {
+            if ($requestOrigin !== null && $requestOrigin !== '' && !$sameOrigin) {
                 self::warnOnce('unconfigured',
                     "CORS: refused cross-origin request from {$requestOrigin} — no policy is configured. "
-                    . 'Set TINA4_CORS_ORIGINS to the origins you want to allow, e.g. '
-                    . "TINA4_CORS_ORIGINS=https://app.example.com (or '*' to allow any origin).");
+                    . "If {$requestOrigin} should be allowed, set TINA4_CORS_ORIGINS={$requestOrigin} "
+                    . '(a comma-separated list of the specific origins to allow).');
             }
             return [];
         }
@@ -166,10 +190,14 @@ class CorsMiddleware
 
         $origin = $this->resolveOrigin($requestOrigin);
         if ($origin === null) {
-            if ($requestOrigin !== null && $requestOrigin !== '') {
-                self::warnOnce("denied:{$requestOrigin}",
+            if ($requestOrigin !== null && $requestOrigin !== '' && !$sameOrigin) {
+                // Keyed by the REASON, never the origin (ADR-0048): the Origin
+                // header is attacker-chosen, so a per-origin key grew this
+                // ledger and the log by one entry per invented value.
+                self::warnOnce('denied',
                     "CORS: origin {$requestOrigin} is not in TINA4_CORS_ORIGINS ({$this->allowedOrigins}) "
-                    . '— the browser will block this response.');
+                    . "— the browser will block this response. If {$requestOrigin} should be allowed, "
+                    . 'add it to TINA4_CORS_ORIGINS.');
             }
             return $headers;
         }
@@ -277,6 +305,45 @@ class CorsMiddleware
     }
 
     /**
+     * Whether the request's Origin is the request's own origin.
+     *
+     * The own origin is the scheme (X-Forwarded-Proto's first hop, else the
+     * connection) plus the Host header. Both sides are compared as
+     * scheme://host:port with the default port filled in (http 80, https 443),
+     * so http://app.example and http://app.example:80 are the same origin.
+     *
+     * @param string|null $requestOrigin The Origin header, if any
+     * @param Request $request The request it arrived on
+     * @return bool True when the Origin names the request's own origin
+     */
+    public static function isSameOrigin(?string $requestOrigin, Request $request): bool
+    {
+        $host = trim((string) $request->header('Host'));
+        if ($requestOrigin === null || $requestOrigin === '' || $host === '') {
+            return false;
+        }
+        $scheme = Request::isSecureScheme((string) ($request->header('X-Forwarded-Proto') ?? '')) ? 'https' : 'http';
+        $own = self::normalizeOrigin("{$scheme}://{$host}");
+        return $own !== null && $own === self::normalizeOrigin($requestOrigin);
+    }
+
+    /** An origin as scheme://host:port with the default port made explicit, or null. */
+    private static function normalizeOrigin(string $origin): ?string
+    {
+        $parts = parse_url(trim($origin));
+        if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+        $scheme = strtolower($parts['scheme']);
+        $port = $parts['port'] ?? match ($scheme) {
+            'http' => 80,
+            'https' => 443,
+            default => null,
+        };
+        return $scheme . '://' . strtolower($parts['host']) . ($port === null ? '' : ':' . $port);
+    }
+
+    /**
      * Fold a new Vary field name into whatever Vary the response already has.
      *
      * @param array<string, string> $existingHeaders Headers already on the response.
@@ -321,7 +388,8 @@ class CorsMiddleware
         $requestOrigin = $request->header('Origin') ?? ($_SERVER['HTTP_ORIGIN'] ?? null);
 
         $existingHeaders = $response->getHeaders();
-        foreach ((new self())->getHeaders($requestOrigin) as $name => $value) {
+        $sameOrigin = self::isSameOrigin($requestOrigin, $request);
+        foreach ((new self())->getHeaders($requestOrigin, $sameOrigin) as $name => $value) {
             // Response::header() overwrites by key, so Vary is MERGED rather
             // than clobbering a value another layer already set (gzip sets
             // Vary: Accept-Encoding).

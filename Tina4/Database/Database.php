@@ -61,6 +61,13 @@ class Database implements DatabaseAdapter
     private int $affectedRows = 0;
 
     /**
+     * The key an execute() of a write with RETURNING / OUTPUT handed back. Such a
+     * statement runs through the adapter's query(), which records no last id, so
+     * lastInsertId() answers from here until the next execute(). Null otherwise.
+     */
+    private int|string|null $returnedId = null;
+
+    /**
      * @var DatabaseAdapter|null Adapter pinned to the current transaction.
      *
      * With pooling enabled, ordinary calls round-robin through the pool.
@@ -454,9 +461,11 @@ class Database implements DatabaseAdapter
      * framework's own fetch()/fetchOne()): on a SQL error — bad statement,
      * constraint violation, dead/aborted connection, missing driver — this
      * sets getError() AND RAISES a {@see DatabaseException} (or lets a driver
-     * exception propagate). It never returns false. On SUCCESS the return is
-     * unchanged: true for a plain write/DDL, or a DatabaseResult for
-     * RETURNING / CALL / EXEC / SELECT — always truthy.
+     * exception propagate). It never returns false. On SUCCESS it returns a
+     * DatabaseResult holding the rows of any statement that produces them -
+     * SELECT, WITH ... SELECT, a write with RETURNING (SQL Server: OUTPUT), a
+     * CALL/EXEC - run once, with no COUNT probe and no pagination; and true
+     * for a write or DDL that produces none. Always truthy.
      *
      * Callers that need a bool must wrap this in try/catch (see ORM::save(),
      * ORM::createTable(), Migration::migrate(), DevAdmin + MCP database tools).
@@ -469,6 +478,42 @@ class Database implements DatabaseAdapter
     public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
         $adapter = $this->getNextAdapter();
+
+        // A statement that produces rows - a query, a CALL/EXEC, a write with
+        // RETURNING or OUTPUT - hands them back as a DatabaseResult. It runs
+        // ONCE through the adapter's query(), with no COUNT probe and no
+        // pagination, and commits like any other statement outside a
+        // transaction.
+        if (SqlStatement::producesRows($sql)) {
+            try {
+                $rows = $adapter->query($sql, $params);
+            } catch (\Exception $e) {
+                $this->affectedRows = 0;
+                $this->lastError = $e->getMessage();
+                throw $e;
+            }
+            if ($adapter->error() !== null) {
+                $this->affectedRows = 0;
+                $this->lastError = $adapter->error();
+                throw new DatabaseException('Database::execute() failed: ' . $this->lastError);
+            }
+            $this->affectedRows = SqlStatement::isWrite($sql) ? count($rows) : 0;
+            $this->lastError = null;
+            // A write that returned its key keeps lastInsertId() working, as it
+            // did when RETURNING went through the adapter's execute().
+            $first = $rows[0] ?? [];
+            $this->returnedId = SqlStatement::isWrite($sql) && $first !== [] ? reset($first) : null;
+            return new DatabaseResult(
+                records: $rows,
+                columns: $rows === [] ? [] : array_keys($rows[0]),
+                count: count($rows),
+                adapter: $adapter,
+                sql: $sql,
+                affectedRows: $this->affectedRows,
+            );
+        }
+
+        $this->returnedId = null;
         try {
             $result = $adapter->execute($sql, $params);
         } catch (\Exception $e) {
@@ -485,12 +530,6 @@ class Database implements DatabaseAdapter
         // it via affectedRows(); the dev-MCP database_execute tool returns it.
         $this->affectedRows = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
 
-        $upper = strtoupper(trim($sql));
-        if (str_contains($upper, 'RETURNING') || str_starts_with($upper, 'CALL ') ||
-            str_starts_with($upper, 'EXEC ') || str_starts_with($upper, 'SELECT ')) {
-            $this->lastError = null;
-            return $result instanceof DatabaseResult ? $result : new DatabaseResult(records: is_array($result) ? $result : []);
-        }
         // Plain write/DDL: PHP adapters return a boolean and record the driver
         // error in error(). A false return means the statement failed — capture
         // the cause and RAISE rather than return false (the old behaviour
@@ -595,6 +634,7 @@ class Database implements DatabaseAdapter
      */
     private function writeResult(DatabaseAdapter $adapter, bool $withLastId, int $minAffected = 0): DatabaseResult
     {
+        $this->returnedId = null; // this write's id comes from the adapter
         // A successful single-row insert affects exactly one row, but some
         // adapters (PDO `INSERT ... RETURNING` on Postgres, MSSQL's identity
         // insert) do not surface a rowcount on the insert path, reporting 0.
@@ -975,7 +1015,7 @@ class Database implements DatabaseAdapter
      */
     public function lastInsertId(): int|string
     {
-        return $this->getNextAdapter()->lastInsertId();
+        return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
     }
 
     /**
@@ -1116,7 +1156,7 @@ class Database implements DatabaseAdapter
      */
     public function getLastId(): int|string
     {
-        return $this->getNextAdapter()->lastInsertId();
+        return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
     }
 
     /**
@@ -1641,6 +1681,7 @@ class Database implements DatabaseAdapter
      */
     public function executeMany(string $sql, array $paramsList = []): DatabaseResult
     {
+        $this->returnedId = null;
         // ADR-0044 (DBA-B01): empty input is a successful no-op — it opens no
         // transaction, calls no adapter, and performs no write.
         if ($paramsList === []) {
