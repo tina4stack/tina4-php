@@ -108,12 +108,9 @@ abstract class WSDL
         }
 
         // POST — handle SOAP request
+        // An empty body is malformed XML like any other unparseable body:
+        // the same Client fault Python returns (handleSOAP answers it).
         $xmlBody = $this->request->rawBody;
-        if (empty($xmlBody)) {
-            $fault = $this->soapFault('Client', 'Empty request body');
-            return $response($fault, 400, 'text/xml; charset=UTF-8');
-        }
-
         $soapResponse = $this->handleSOAP($xmlBody);
         return $response($soapResponse, 200, 'text/xml; charset=UTF-8');
     }
