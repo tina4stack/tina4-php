@@ -18,6 +18,24 @@ class FrondEscapingHardeningTest extends TestCase
         return new Frond(__DIR__ . '/templates');
     }
 
+    public function testUnicodeEscapeStrategiesWithoutMbstring(): void
+    {
+        $script = 'require ' . var_export(dirname(__DIR__) . '/vendor/autoload.php', true) . ';'
+            . '$f = new \Tina4\Frond();'
+            . 'foreach (["js", "css", "html_attr"] as $strategy) {'
+            . 'echo $f->renderString("{{ value|e(\\"" . $strategy . "\\") }}", ["value" => "é😀<"]), "\\n"; }';
+        $process = proc_open([PHP_BINARY, '-n', '-r', $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $this->assertSame(0, proc_close($process), $error);
+        $this->assertSame("\\u00E9\\uD83D\\uDE00\\x3C\n\\0000E9 \\01F600 \\00003C \n&#xE9;&#x1F600;&#x3C;\n", $output);
+    }
+
     // F1: trusted output is a SafeString type, never an in-band marker string.
     public function testMarkerBytesInUserDataAreNotTreatedAsRaw(): void
     {

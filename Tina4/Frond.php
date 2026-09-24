@@ -1394,18 +1394,38 @@ class Frond
      * Escape strategies shared by ``js_escape`` and ``e(strategy)`` (F5/F7,
      * ADR-0077), byte-identical to the Python master. Twig-compatible.
      */
+    /** @return list<string> UTF-8 characters; mbstring is optional. */
+    private static function unicodeChars(string $value): array
+    {
+        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+        if ($chars === false) {
+            throw new \InvalidArgumentException('Frond: escape input must be valid UTF-8');
+        }
+        return $chars;
+    }
+
+    /** Decode one UTF-8 character already validated by unicodeChars(). */
+    private static function unicodeOrd(string $char): int
+    {
+        $first = ord($char[0]);
+        $length = strlen($char);
+        $code = $first & [1 => 0x7F, 2 => 0x1F, 3 => 0x0F, 4 => 0x07][$length];
+        for ($i = 1; $i < $length; $i++) {
+            $code = ($code << 6) | (ord($char[$i]) & 0x3F);
+        }
+        return $code;
+    }
+
     private static function jsEscape(mixed $value): string
     {
         $out = '';
         $s = (string)$value;
-        $len = mb_strlen($s, 'UTF-8');
-        for ($i = 0; $i < $len; $i++) {
-            $ch = mb_substr($s, $i, 1, 'UTF-8');
+        foreach (self::unicodeChars($s) as $ch) {
             if (preg_match('/[A-Za-z0-9,._]/', $ch)) {
                 $out .= $ch;
                 continue;
             }
-            $code = mb_ord($ch, 'UTF-8');
+            $code = self::unicodeOrd($ch);
             if ($code < 0x80) {
                 $out .= sprintf('\\x%02X', $code);
             } elseif ($code <= 0xFFFF) {
@@ -1422,11 +1442,11 @@ class Frond
     private static function cssEscape(mixed $value): string
     {
         $out = '';
-        foreach (mb_str_split((string)$value, 1, 'UTF-8') as $ch) {
+        foreach (self::unicodeChars((string)$value) as $ch) {
             if (preg_match('/[A-Za-z0-9]/', $ch)) {
                 $out .= $ch;
             } else {
-                $out .= sprintf('\\%06X ', mb_ord($ch, 'UTF-8'));
+                $out .= sprintf('\\%06X ', self::unicodeOrd($ch));
             }
         }
         return $out;
@@ -1435,11 +1455,11 @@ class Frond
     private static function htmlAttrEscape(mixed $value): string
     {
         $out = '';
-        foreach (mb_str_split((string)$value, 1, 'UTF-8') as $ch) {
+        foreach (self::unicodeChars((string)$value) as $ch) {
             if (preg_match('/[A-Za-z0-9,.\-_]/', $ch)) {
                 $out .= $ch;
             } else {
-                $out .= sprintf('&#x%02X;', mb_ord($ch, 'UTF-8'));
+                $out .= sprintf('&#x%02X;', self::unicodeOrd($ch));
             }
         }
         return $out;
@@ -3558,17 +3578,17 @@ class Frond
      * Shared by the {{ value|dump }} filter and the {{ dump(value) }} global
      * function so both produce identical output and obey the same gating.
      *
-     * Returned string is prefixed with self::RAW_MARKER so the template
-     * engine's auto-escape pass skips the HTML entities we produce.
+     * Debug output carries the SafeString type so the template engine keeps
+     * the escaped HTML markup intact.
      *
      * @param mixed $v Value to dump
      * @return string  <pre>...</pre> in debug mode, empty string in production
      */
-    public static function renderDump(mixed $v): SafeString
+    public static function renderDump(mixed $v): SafeString|string
     {
         $debugMode = strtolower(getenv('TINA4_DEBUG') ?: '') === 'true';
         if (!$debugMode) {
-            return new SafeString('');
+            return '';
         }
         ob_start();
         var_dump($v);
@@ -3608,7 +3628,7 @@ class Frond
         };
 
         // formToken / form_token — returns full <input> element
-        $formTokenFn = static function (string $descriptor = '') use ($generateFormJwt): string {
+        $formTokenFn = static function (string $descriptor = '') use ($generateFormJwt): SafeString {
             $token = $generateFormJwt($descriptor);
             return new SafeString('<input type="hidden" name="formToken" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">');
         };
