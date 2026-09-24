@@ -133,4 +133,64 @@ class SessionDatabaseFirebirdTest extends TestCase
         $reader->destroy($sessionId);
         $probe->close();
     }
+
+    /**
+     * Concurrent FIRST USE on Firebird: six real processes race to create
+     * TINA4_SESSION and every one of them writes its row.
+     *
+     * Firebird has no IF NOT EXISTS, and the RDB$RELATIONS check inside the
+     * EXECUTE BLOCK is check-then-act, so the losers of the race get a unique
+     * violation on RDB$RELATIONS. SessionDatabaseEnginesTest runs the same race
+     * on the other engines; Firebird lives here because only this file knows
+     * how to reach it (TINA4_TEST_FIREBIRD_URL).
+     */
+    public function testConcurrentFirstUseIsSafeOnFirebird(): void
+    {
+        $db = $this->connectOrSkip();
+        $this->dropSessionTable($db);
+        $db->close();
+
+        $workerCount = 6;
+        $startAt = microtime(true) + 1.5;
+        $environment = array_merge(getenv(), [
+            'T4_RACE_URL' => $this->pdoUrl(),
+            'T4_RACE_USERNAME' => '',
+            'T4_RACE_PASSWORD' => '',
+            'TINA4_AUTO_CACHING' => 'false',
+            'TINA4_DB_CACHE' => 'false',
+        ]);
+
+        $workers = [];
+        for ($worker = 0; $worker < $workerCount; $worker++) {
+            $pipes = [];
+            $process = proc_open(
+                [PHP_BINARY, __DIR__ . '/fixtures/session_concurrent_first_use.php', sprintf('%.6F', $startAt), 'fb-race-' . $worker],
+                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                dirname(__DIR__),
+                $environment
+            );
+            $this->assertIsResource($process, 'could not start concurrent worker ' . $worker);
+            $workers[] = [$process, $pipes, $worker];
+        }
+
+        $failures = [];
+        foreach ($workers as [$process, $pipes, $worker]) {
+            $output = trim(stream_get_contents($pipes[1]) . ' ' . stream_get_contents($pipes[2]));
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($process);
+            if ($exitCode !== 0) {
+                $failures[] = "worker {$worker} exited {$exitCode}: {$output}";
+            }
+        }
+
+        $probe = Database::create($this->pdoUrl());
+        $row = array_change_key_case($probe->fetchOne('SELECT COUNT(*) AS n FROM tina4_session') ?? []);
+        $this->dropSessionTable($probe);
+        $probe->close();
+
+        $this->assertSame([], $failures, 'concurrent first use is NOT safe on Firebird: ' . implode('; ', $failures));
+        $this->assertSame($workerCount, (int) ($row['n'] ?? -1), 'every racing worker must have written its row');
+    }
 }
