@@ -24,8 +24,10 @@ use Tina4\Response;
  *   - DEC-02 loopback: a non-loopback socket peer is refused 403 (raw peer,
  *     XFF-proof), except on the MCP surface which carries its own 404 gate.
  *
- * Scoped to /__dev writes only — the deliberately cross-origin /__feedback
- * widget and the /ai proxy are untouched. Safe methods (GET/HEAD/OPTIONS) skip.
+ * ADR-0078: every /__dev request, reads included, also passes a Host
+ * allow-list (loopback names + TINA4_HOST) against DNS rebinding. The path is
+ * normalised first, so `//__dev/...` cannot slip past the prefix match.
+ * The deliberately cross-origin /__feedback widget and the /ai proxy are untouched.
  * Registered only on the dev path (DevAdmin::register), so production never
  * carries the middleware at all.
  */
@@ -41,12 +43,11 @@ class DevAdminSecurityMiddleware
      */
     public static function beforeDevAdmin(Request $request, Response $response): Response|array
     {
-        $method = strtoupper($request->method ?? 'GET');
-        $path = (string) ($request->path ?? '');
-        if (in_array($method, ['GET', 'HEAD', 'OPTIONS'], true) || !str_starts_with($path, '/__dev')) {
+        $path = (string) preg_replace('#/+#', '/', (string) ($request->path ?? ''));
+        if (!str_starts_with($path, '/__dev')) {
             return [$request, $response];
         }
-        $denial = DevAdmin::guardMutation($request);
+        $denial = DevAdmin::guardRequest($request);
         if ($denial !== null) {
             return $response->json(['ok' => false, 'error' => $denial[1]], $denial[0]);
         }

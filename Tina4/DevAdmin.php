@@ -668,9 +668,17 @@ class DevAdmin
                 if ($db === null) {
                     return $response->json(['error' => 'No database configured'], 400);
                 }
+                // ADR-0078: only a name the database itself reports is accepted,
+                // and it is quoted as an identifier - never spliced raw into SQL.
+                if (!in_array($name, $db->getTables(), true)) {
+                    return $response->json(['error' => 'unknown table'], 404);
+                }
+                $quoted = str_contains(strtolower((string) DotEnv::getEnv('TINA4_DATABASE_URL', '')), 'mysql')
+                    ? '`' . str_replace('`', '``', $name) . '`'
+                    : '"' . str_replace('"', '""', $name) . '"';
                 $columns = $db->getColumns($name);
-                $sample = $db->query("SELECT * FROM {$name} LIMIT 10");
-                $countResult = $db->query("SELECT COUNT(*) as total FROM {$name}");
+                $sample = $db->query("SELECT * FROM {$quoted} LIMIT 10");
+                $countResult = $db->query("SELECT COUNT(*) as total FROM {$quoted}");
                 $total = (int) ($countResult[0]['total'] ?? 0);
                 return $response->json([
                     'table' => $name,
@@ -1785,8 +1793,10 @@ class DevAdmin
             // after the SPA restores previously-open tabs from
             // localStorage that no longer exist on disk.
             $requested = (string) ($request->query['path'] ?? '');
-            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/).
-            if (self::isSecretPath($requested)) {
+            $path = self::devAdminSafePath($requested);
+            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/),
+            // judged on the RESOLVED path so `.env/.` or a symlink cannot slip past (ADR-0078).
+            if (self::isSecretPath($requested) || ($path !== null && self::isSecretPath((string) self::devAdminRel($path)))) {
                 return $response->json([
                     'error' => 'Refused: secret file',
                     'path' => $requested,
@@ -1795,7 +1805,6 @@ class DevAdmin
                     'size' => 0,
                 ], 403);
             }
-            $path = self::devAdminSafePath($requested);
             if ($path === null || !is_file($path)) {
                 return $response->json([
                     'error' => 'not found',
@@ -1824,11 +1833,12 @@ class DevAdmin
         });
 
         Router::get('/__dev/api/file/raw', function (Request $request, Response $response) {
-            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/).
-            if (self::isSecretPath((string) ($request->query['path'] ?? ''))) {
+            $path = self::devAdminSafePath((string) ($request->query['path'] ?? ''));
+            // DEVADMIN-DEC-03: never serve secret material, judged on the RESOLVED path (ADR-0078).
+            if (self::isSecretPath((string) ($request->query['path'] ?? ''))
+                || ($path !== null && self::isSecretPath((string) self::devAdminRel($path)))) {
                 return $response->json(['error' => 'Refused: secret file'], 403);
             }
-            $path = self::devAdminSafePath($request->query['path'] ?? '');
             if ($path === null || !is_file($path)) {
                 return $response->text('not found', 404);
             }
@@ -2714,13 +2724,35 @@ class DevAdmin
             $absolute = '/' . implode('/', $parts);
         }
 
-        // Must live under the project root — string-prefix check,
-        // both sides already in `/` form.
+        // Must live under the project root — string-prefix check with a
+        // trailing separator, both sides already in `/` form.
         if ($absolute !== $root
             && !str_starts_with($absolute . '/', $root . '/')) {
             return null;
         }
-        return $absolute;
+        // ADR-0078: follow symlinks the way the OS will when it opens the
+        // file. Resolve the deepest part that exists (a save may name a new
+        // file) and re-check containment on that real path.
+        $existing = $absolute;
+        $tail = '';
+        while ($existing !== $root && !file_exists($existing) && !is_link($existing)) {
+            $slash = strrpos($existing, '/');
+            if ($slash === false || $slash === 0) {
+                break;
+            }
+            $tail = substr($existing, $slash) . $tail;
+            $existing = substr($existing, 0, $slash);
+        }
+        $real = realpath($existing);
+        if ($real === false) {
+            return is_link($existing) ? null : $absolute;
+        }
+        $resolved = str_replace('\\', '/', $real) . $tail;
+        if ($resolved !== $root
+            && !str_starts_with($resolved . '/', $root . '/')) {
+            return null;
+        }
+        return $resolved;
     }
 
     /**
@@ -2732,7 +2764,7 @@ class DevAdmin
     {
         $absolute = str_replace('\\', '/', $absolute);
         $root = self::devAdminProjectRoot();
-        if (!str_starts_with($absolute, $root)) {
+        if ($absolute !== $root && !str_starts_with($absolute, $root . '/')) {
             return null;
         }
         return ltrim(substr($absolute, strlen($root)), '/');
@@ -2927,18 +2959,16 @@ class DevAdmin
     /**
      * Whether the request carried a token matching TINA4_MCP_TOKEN.
      *
-     * The token may arrive as `Authorization: Bearer <t>`, `X-MCP-Token`, or
-     * `X-Api-Key`. Compared timing-safe against TINA4_MCP_TOKEN (falling back
-     * to TINA4_API_KEY). With NO configured token this returns false, so a
+     * The token may arrive as `Authorization: Bearer <t>` or `X-MCP-Token`.
+     * Compared timing-safe against TINA4_MCP_TOKEN only; the application's
+     * TINA4_API_KEY never unlocks the dev surface (ADR-0078). With NO configured
+     * token this returns false, so a
      * remote caller can never present a "valid" token by accident. Mirrors
      * the Python dev_admin `_mcp_token_ok` helper.
      */
     private static function mcpTokenOk(Request $request): bool
     {
         $expected = DotEnv::getEnv('TINA4_MCP_TOKEN');
-        if ($expected === null || $expected === '') {
-            $expected = DotEnv::getEnv('TINA4_API_KEY');
-        }
         if ($expected === null || $expected === '') {
             return false;
         }
@@ -2949,9 +2979,6 @@ class DevAdmin
         }
         if ($provided === '') {
             $provided = (string) ($request->headers['x-mcp-token'] ?? '');
-        }
-        if ($provided === '') {
-            $provided = (string) ($request->headers['x-api-key'] ?? '');
         }
         if ($provided === '') {
             return false;
@@ -2990,7 +3017,9 @@ class DevAdmin
     {
         $sfs = strtolower(trim((string) ($request->headers['sec-fetch-site'] ?? '')));
         if ($sfs !== '') {
-            return in_array($sfs, ['same-origin', 'same-site', 'none'], true);
+            // ADR-0078: same-site is a DIFFERENT origin (a sibling subdomain);
+            // only the dashboard itself (same-origin) or a typed URL (none) pass.
+            return in_array($sfs, ['same-origin', 'none'], true);
         }
         $origin = trim((string) ($request->headers['origin'] ?? ''));
         if ($origin !== '') {
@@ -3012,10 +3041,56 @@ class DevAdmin
      */
     public static function guardMutation(Request $request): ?array
     {
+        return self::guardRequest($request);
+    }
+
+    /**
+     * True when the Host header names the loopback machine or the configured
+     * TINA4_HOST (ADR-0078). A rebound DNS name is refused. A missing Host is
+     * not a browser request (every browser sends one); the peer gate governs it.
+     *
+     * @param array<string, mixed> $headers
+     */
+    public static function devHostAllowed(array|\ArrayAccess $headers): bool
+    {
+        $host = strtolower(trim((string) ($headers['host'] ?? $headers['Host'] ?? '')));
+        if ($host === '') {
+            return true;
+        }
+        if (str_starts_with($host, '[')) {
+            $end = strpos($host, ']');
+            $name = $end === false ? $host : substr($host, 1, $end - 1);
+        } elseif (substr_count($host, ':') === 1) {
+            $name = explode(':', $host, 2)[0];
+        } else {
+            $name = $host;
+        }
+        $allowed = ['localhost', '127.0.0.1', '::1'];
+        $configured = strtolower(trim((string) DotEnv::getEnv('TINA4_HOST', ''), " []"));
+        if ($configured !== '') {
+            $allowed[] = $configured;
+        }
+        return in_array($name, $allowed, true);
+    }
+
+    /**
+     * Return [status, error] to REFUSE any /__dev request (read or write), or
+     * null to allow (ADR-0078): Host allow-list, then same-origin, then the
+     * loopback peer (the MCP surface keeps its own 404 gate for the peer).
+     *
+     * @return array{0:int,1:string}|null
+     */
+    public static function guardRequest(Request $request): ?array
+    {
+        // A request carrying the valid TINA4_MCP_TOKEN is not a DNS-rebinding
+        // page (a browser cannot know the token), so it may name any Host.
+        if (!self::devHostAllowed($request->headers ?? []) && !self::mcpTokenOk($request)) {
+            return [403, 'dev-admin: refused (host not allowed)'];
+        }
         if (!self::devSameOriginOk($request)) {
             return [403, 'dev-admin: refused (cross-origin request)'];
         }
-        $path = (string) ($request->path ?? '');
+        $path = (string) preg_replace('#/+#', '/', (string) ($request->path ?? ''));
         if (!str_starts_with($path, '/__dev/api/mcp') && !str_starts_with($path, '/__dev/mcp')) {
             $remoteIp = (string) ($request->remoteIp ?? '');
             if (!(McpServer::isLoopback($remoteIp) || self::mcpTokenOk($request))) {

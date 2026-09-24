@@ -199,10 +199,12 @@ class HealthCharacterisationTest extends TestCase
         $this->assertSame('ok', $this->json('/health')['status']);
     }
 
-    public function testTheBodyReportsTheFrameworkVersion(): void
+    public function testTheBodyOmitsTheFrameworkVersionOutsideDebug(): void
     {
+        // ADR-0078: this app boots with TINA4_DEBUG=false, so the exact
+        // version is not disclosed (debug mode adds it back).
         $this->boot();
-        $this->assertSame(\Tina4\App::$VERSION, $this->json('/health')['version']);
+        $this->assertArrayNotHasKey('version', $this->json('/health'));
     }
 
     public function testTheBodyNamesTheFramework(): void

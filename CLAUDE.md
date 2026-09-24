@@ -1359,7 +1359,7 @@ is authorised on the raw socket peer.
 |---|---|
 | `TINA4_MCP` / `TINA4_DEBUG` | Whether MCP is enabled at all (capability gate). |
 | `TINA4_MCP_REMOTE` | Set `true` to allow non-loopback MCP callers (still requires a valid token). |
-| `TINA4_MCP_TOKEN` | Bearer token authorising a remote MCP request (fallback `TINA4_API_KEY`); accepted as `Authorization: Bearer`, `X-MCP-Token`, or `X-Api-Key`. With no token configured a remote caller is always denied; loopback never needs it. |
+| `TINA4_MCP_TOKEN` | Bearer token authorising a remote MCP or dev-admin request (never `TINA4_API_KEY`, ADR-0078); accepted as `Authorization: Bearer` or `X-MCP-Token`. With no token configured a remote caller is always denied; loopback never needs it. |
 
 ## Key Architecture
 
