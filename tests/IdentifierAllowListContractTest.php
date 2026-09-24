@@ -28,7 +28,8 @@ use function Tina4\resetDefaultStore;
  *   AutoCrud  - unknown_filter_field_returns_400, unknown_sort_field_returns_400,
  *               declared_filter_and_sort_still_work, odd_typed_query_values_return_400,
  *               autocrud_list_uses_the_registered_connection,
- *               autocrud_write_body_accepts_only_declared_fields
+ *               autocrud_write_body_accepts_only_declared_fields,
+ *               autocrud_id_route_addresses_only_that_row
  *   ORM       - orm_find_rejects_undeclared_filter_key, orm_save_writes_only_declared_fields
  *               (SQLite, PostgreSQL, MySQL, MSSQL, Firebird)
  *   Database  - db_write_helpers_reject_non_identifier_keys (same engines)
@@ -257,14 +258,22 @@ final class IdentifierAllowListContractTest extends TestCase
         return [(int)curl_getinfo($ch, CURLINFO_HTTP_CODE), json_decode((string)$raw, true), (string)$raw];
     }
 
-    /** @return array<string, mixed>|null the stored row, read straight from the SQLite file */
+    /**
+     * The stored row, read straight from the SQLite file with ext-sqlite3 - an
+     * independent reader, so no framework-level query cache can answer instead.
+     *
+     * @return array<string, mixed>|null
+     */
     private function storedRow(string $table, int $id): ?array
     {
-        $db = Database::create('sqlite:///' . self::$dbPath);
+        $sqlite = new \SQLite3(self::$dbPath, SQLITE3_OPEN_READONLY);
         try {
-            return $db->fetchOne("SELECT * FROM {$table} WHERE id = ?", [$id]);
+            $statement = $sqlite->prepare("SELECT * FROM {$table} WHERE id = :id");
+            $statement->bindValue(':id', $id, SQLITE3_INTEGER);
+            $row = $statement->execute()->fetchArray(SQLITE3_ASSOC);
+            return $row === false ? null : $row;
         } finally {
-            $db->close();
+            $sqlite->close();
         }
     }
 
@@ -295,7 +304,7 @@ final class IdentifierAllowListContractTest extends TestCase
         $this->assertArrayNotHasKey('na[me', $json, $raw);
         $this->assertNotSame('dropped', $json['internal_note'] ?? null, $raw);
         $row = $this->storedRow('allow_list_item', $id);
-        $this->assertSame('echo-2', $row['name']);
+        $this->assertSame('echo-2', $row['name'], $raw);
         $this->assertNull($row['internal_note']);
 
         // A model with no declared fields writes its REAL columns and drops the rest.
@@ -309,6 +318,74 @@ final class IdentifierAllowListContractTest extends TestCase
         $this->assertSame('z', $row['label']);
         $this->assertSame(11, (int)$row['weight']);
         $this->assertSame(4, (int)$row['display_order']);
+    }
+
+    /** @return int the stored row count of a table, read straight from the SQLite file */
+    private function storedCount(string $table): int
+    {
+        $sqlite = new \SQLite3(self::$dbPath, SQLITE3_OPEN_READONLY);
+        try {
+            return (int)$sqlite->querySingle("SELECT COUNT(*) FROM {$table}");
+        } finally {
+            $sqlite->close();
+        }
+    }
+
+    /** @return array{0: int, 1: mixed, 2: string} */
+    private function authorised(string $method, string $path): array
+    {
+        $ch = curl_init($this->server()->base() . $path);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . Auth::getToken(['sub' => 'allow-list-tester'], self::SECRET)]);
+        $raw = curl_exec($ch);
+        if ($raw === false) {
+            $this->fail('curl error: ' . curl_error($ch));
+        }
+        return [(int)curl_getinfo($ch, CURLINFO_HTTP_CODE), json_decode((string)$raw, true), (string)$raw];
+    }
+
+    /** GET / PUT / DELETE /api/{table}/{id} address exactly the row with that primary key. */
+    public function testAutocrudIdRouteAddressesOnlyThatRow(): void
+    {
+        [, $first] = $this->write('POST', '/api/allow_list_item', ['name' => 'row-a', 'score' => 1]);
+        [, $second] = $this->write('POST', '/api/allow_list_item', ['name' => 'row-b', 'score' => 2]);
+        $firstId = (int)$first['id'];
+        $secondId = (int)$second['id'];
+
+        [$status, $json, $raw] = $this->get("/api/allow_list_item/{$secondId}");
+        $this->assertSame(200, $status, $raw);
+        $this->assertSame($secondId, (int)$json['id'], $raw);
+        $this->assertSame('row-b', $json['name'], $raw);
+
+        [$status, $json, $raw] = $this->write('PUT', "/api/allow_list_item/{$secondId}", ['name' => 'row-b-2']);
+        $this->assertSame(200, $status, $raw);
+        $this->assertSame($secondId, (int)$json['id'], $raw);
+        $this->assertSame('row-b-2', $this->storedRow('allow_list_item', $secondId)['name']);
+        $this->assertSame('row-a', $this->storedRow('allow_list_item', $firstId)['name']);
+        $this->assertSame('alpha', $this->storedRow('allow_list_item', 1)['name']);
+
+        // an id that is not a key value of any row is a 404 that changes nothing
+        $before = $this->storedCount('allow_list_item');
+        foreach (['not-an-id', rawurlencode('2 x'), '999999'] as $missing) {
+            [$status, , $raw] = $this->get("/api/allow_list_item/{$missing}");
+            $this->assertSame(404, $status, "GET {$missing}: {$raw}");
+            [$status, , $raw] = $this->write('PUT', "/api/allow_list_item/{$missing}", ['name' => 'nope']);
+            $this->assertSame(404, $status, "PUT {$missing}: {$raw}");
+            [$status, , $raw] = $this->authorised('DELETE', "/api/allow_list_item/{$missing}");
+            $this->assertSame(404, $status, "DELETE {$missing}: {$raw}");
+        }
+        $this->assertSame($before, $this->storedCount('allow_list_item'));
+        $this->assertSame('alpha', $this->storedRow('allow_list_item', 1)['name']);
+
+        // DELETE removes exactly the addressed row, on a model with no declared fields too
+        [, $third] = $this->write('POST', '/api/allow_list_dynamic', ['label' => 'd1', 'weight' => 1]);
+        [, $fourth] = $this->write('POST', '/api/allow_list_dynamic', ['label' => 'd2', 'weight' => 2]);
+        [$status, , $raw] = $this->authorised('DELETE', '/api/allow_list_dynamic/' . (int)$fourth['id']);
+        $this->assertSame(200, $status, $raw);
+        $this->assertNull($this->storedRow('allow_list_dynamic', (int)$fourth['id']));
+        $this->assertSame('d1', $this->storedRow('allow_list_dynamic', (int)$third['id'])['label']);
+        $this->assertSame('x', $this->storedRow('allow_list_dynamic', 1)['label']);
     }
 
     // ── AutoCrud uses the connection it was constructed with ────────────────
@@ -447,7 +524,10 @@ final class IdentifierAllowListContractTest extends TestCase
     private function createItemTable(Database $db, string $engine): void
     {
         $this->dropItemTable($db, $engine);
-        $db->execute('CREATE TABLE ala_php_item (id INTEGER NOT NULL PRIMARY KEY, name VARCHAR(50), first_name VARCHAR(50), sort_rank INTEGER, internal_note VARCHAR(50))');
+        // MSSQL over FreeTDS defaults a column without NULL/NOT NULL to NOT NULL;
+        // say NULL there (Firebird does not accept the keyword, the rest default to it).
+        $nullable = $engine === 'mssql' ? ' NULL' : '';
+        $db->execute("CREATE TABLE ala_php_item (id INTEGER NOT NULL PRIMARY KEY, name VARCHAR(50){$nullable}, first_name VARCHAR(50){$nullable}, sort_rank INTEGER{$nullable}, internal_note VARCHAR(50){$nullable})");
         if ($engine === 'firebird') {
             $db->commit();
         }
