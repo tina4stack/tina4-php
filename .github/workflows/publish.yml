@@ -8,6 +8,11 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Gate the publish behind a protected environment (ADR-0081). Configure
+    # required reviewers / a tag deployment-branch rule on the `release`
+    # environment in Settings -> Environments, and keep PACKAGIST_TOKEN as an
+    # ENVIRONMENT secret so no other workflow can read it.
+    environment: release
     # softprops/action-gh-release calls the GitHub REST API with the
     # default GITHUB_TOKEN. That token only writes to the repository if
     # the job declares contents:write. Make it explicit so we don't
@@ -15,11 +20,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      # Third-party and first-party actions are pinned by commit SHA (supply
+      # chain): a moved tag can never swap the action out from under us.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0  # need full history for git log on the tagged commit
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.2'
 
@@ -47,19 +54,30 @@ jobs:
           cat /tmp/release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           body_path: /tmp/release-notes.md
 
       - name: Notify Packagist
         env:
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+          PACKAGIST_USER: tina4stack
+          PACKAGIST_REPO_URL: https://github.com/tina4stack/tina4-php
         run: |
-          if [ -n "${PACKAGIST_TOKEN}" ]; then
-            curl -s -XPOST "https://packagist.org/api/update-package?username=tina4stack&apiToken=${PACKAGIST_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d '{"repository":{"url":"https://github.com/tina4stack/tina4-php"}}'
-            echo "Packagist notified."
-          else
+          if [ -z "${PACKAGIST_TOKEN}" ]; then
             echo "PACKAGIST_TOKEN not set — skipping Packagist notification."
+            exit 0
           fi
+          # F17: keep the API token OUT of the process argv and any command trace.
+          # Packagist's update-package API authenticates by query parameter
+          # (username + apiToken) — there is no header form — so the URL is handed
+          # to curl through a config file on stdin instead of on the command line.
+          # `ps`, a `set -x` trace and the job log never see the token (it is a
+          # masked secret and is only ever sent to packagist.org over HTTPS).
+          curl --fail --silent --show-error --config - <<CURLCFG
+          url = "https://packagist.org/api/update-package?username=${PACKAGIST_USER}&apiToken=${PACKAGIST_TOKEN}"
+          request = "POST"
+          header = "Content-Type: application/json"
+          data = "{\"repository\":{\"url\":\"${PACKAGIST_REPO_URL}\"}}"
+          CURLCFG
+          echo "Packagist notified."
