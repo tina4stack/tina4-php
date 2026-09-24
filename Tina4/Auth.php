@@ -159,12 +159,22 @@ class Auth
                     $prefix = "\n";
                 }
             }
+            // The file holds a signing secret, so it must be owner-only (0600),
+            // never the default 0644 (F15, parity with the Python master's
+            // os.open(...,0o600)). Create it 0600 BEFORE writing the secret so it
+            // is never briefly group/world-readable; an existing .env.local is
+            // tightened after the append.
+            if (!is_file($path)) {
+                @touch($path);
+                @chmod($path, 0600);
+            }
             // Suppress the PHP warning a failed open emits — we detect the
             // false return and throw our own clean exception (caught below).
             $written = @file_put_contents($path, $prefix . "TINA4_SECRET={$newSecret}\n", FILE_APPEND);
             if ($written === false) {
                 throw new \RuntimeException("could not write {$path}");
             }
+            @chmod($path, 0600);
             self::logInfo('Auth: generated a development secret, saved to .env.local (gitignored)');
         } catch (\Throwable $e) {
             // Keep the in-memory secret for this run; just warn.
