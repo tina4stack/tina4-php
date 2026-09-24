@@ -739,10 +739,16 @@ class Api
     private function baseHeaders(?string $targetUrl = null): array
     {
         $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->headers);
-        if ($this->authHeader !== '') {
+        // Attach the configured Authorization / Cookie ONLY when the request
+        // target is same-origin as the configured base. A path that is itself an
+        // absolute off-origin URL otherwise leaks the bearer token / session
+        // cookie to an attacker-chosen host - the same cross-origin strip already
+        // applied to followed redirects, now for the initial target too.
+        $sameOriginAsBase = $targetUrl === null || $this->sameOrigin($targetUrl, $this->baseUrl);
+        if ($this->authHeader !== '' && $sameOriginAsBase) {
             $headers['Authorization'] = $this->authHeader;
         }
-        if ($this->cookiesEnabled) {
+        if ($this->cookiesEnabled && $sameOriginAsBase) {
             $cookieHeader = $this->cookieHeaderValue();
             if ($cookieHeader !== null) {
                 $headers['Cookie'] = $cookieHeader;
