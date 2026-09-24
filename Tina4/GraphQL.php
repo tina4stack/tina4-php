@@ -826,8 +826,7 @@ class GraphQL
         // Query: single record by ID
         $this->addQuery($singular, ['id' => 'ID!'], $className, function ($root, $args, $context) use ($ormInstance) {
             $model = clone $ormInstance;
-            $model->load($args['id']);
-            return $model->exists() ? $model->toDict() : null;
+            return self::loadById($model, $args['id']) ? $model->toDict() : null;
         });
 
         // Query: list with pagination
@@ -862,8 +861,7 @@ class GraphQL
         $updateArgs = array_merge(['id' => 'ID!'], $mutationArgs);
         $this->addMutation("update{$className}", $updateArgs, $className, function ($root, $args, $context) use ($ormInstance, $primaryKey) {
             $model = clone $ormInstance;
-            $model->load($args['id']);
-            if (!$model->exists()) {
+            if (!self::loadById($model, $args['id'])) {
                 return null;
             }
             $data = $args;
@@ -876,8 +874,7 @@ class GraphQL
         // Mutation: delete
         $this->addMutation("delete{$className}", ['id' => 'ID!'], 'Boolean', function ($root, $args, $context) use ($ormInstance) {
             $model = clone $ormInstance;
-            $model->load($args['id']);
-            if (!$model->exists()) {
+            if (!self::loadById($model, $args['id'])) {
                 return false;
             }
             $model->delete();
@@ -885,6 +882,19 @@ class GraphQL
         });
 
         return $this;
+    }
+
+    /**
+     * Load the row an auto-generated query/mutation's `id` argument addresses.
+     *
+     * tina4: ADR-0069 - the argument is a VALUE bound against the primary-key
+     * column, never SQL: load() takes a string argument as a WHERE fragment.
+     * Same key rule as ORM::findById()/exists() (the first key column).
+     */
+    private static function loadById(ORM $model, mixed $id): bool
+    {
+        $pkColumn = $model->getDbColumn($model->getPrimaryKeys()[0]);
+        return $model->load("{$pkColumn} = ?", [$id]);
     }
 
     /**

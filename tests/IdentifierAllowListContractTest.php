@@ -33,6 +33,7 @@ use function Tina4\resetDefaultStore;
  *   ORM       - orm_find_rejects_undeclared_filter_key, orm_save_writes_only_declared_fields
  *               (SQLite, PostgreSQL, MySQL, MSSQL, Firebird)
  *   Database  - db_write_helpers_reject_non_identifier_keys (same engines)
+ *   GraphQL   - graphql_id_argument_addresses_only_that_row (auto-schema from an ORM model)
  *   DocStore  - docstore_rejects_unsafe_field_path, docstore_accepts_safe_field_paths,
  *               docstore_safe_paths_match_on_real_mongo
  *
@@ -71,6 +72,15 @@ class AllowListOrmDynamic extends ORM
 class AllowListConnItem extends ORM
 {
     public string $tableName = 'allow_list_conn';
+    public string $primaryKey = 'id';
+    public int $id = 0;
+    public ?string $name = null;
+}
+
+/** A declared model exposed through GraphQL::fromOrm() (graphql_id_argument_addresses_only_that_row). */
+class AllowListGqlItem extends ORM
+{
+    public string $tableName = 'allow_list_gql';
     public string $primaryKey = 'id';
     public int $id = 0;
     public ?string $name = null;
@@ -433,6 +443,44 @@ final class IdentifierAllowListContractTest extends TestCase
             @unlink($globalPath);
             @unlink($registeredPath);
         }
+    }
+
+    // ── GraphQL auto-schema id argument ─────────────────────────────────────
+
+    public function testGraphqlIdArgumentAddressesOnlyThatRow(): void
+    {
+        $db = Database::create('sqlite::memory:');
+        $db->execute('CREATE TABLE allow_list_gql (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->insert('allow_list_gql', [['id' => 1, 'name' => 'alpha'], ['id' => 2, 'name' => 'bravo'], ['id' => 3, 'name' => 'charlie']]);
+        $names = static fn (): array => array_column($db->fetch('SELECT id, name FROM allow_list_gql ORDER BY id')->records, 'name', 'id');
+
+        $graphql = new \Tina4\GraphQL();
+        $graphql->fromOrm(new AllowListGqlItem($db));
+
+        $result = $graphql->execute('{ allowListGqlItem(id: "2") { id name } }');
+        $this->assertSame('bravo', $result['data']['allowListGqlItem']['name'] ?? null, json_encode($result));
+
+        $result = $graphql->execute('mutation { updateAllowListGqlItem(id: "3", name: "charlie-2") { id name } }');
+        $this->assertSame('charlie-2', $result['data']['updateAllowListGqlItem']['name'] ?? null, json_encode($result));
+        $this->assertSame([1 => 'alpha', 2 => 'bravo', 3 => 'charlie-2'], $names());
+
+        $result = $graphql->execute('mutation { deleteAllowListGqlItem(id: "2") }');
+        $this->assertTrue($result['data']['deleteAllowListGqlItem'] ?? null, json_encode($result));
+        $this->assertSame([1 => 'alpha', 3 => 'charlie-2'], $names());
+
+        // an id that is not a key value of any row addresses nothing
+        foreach (['not-an-id', '2 x', '999'] as $missing) {
+            $query = sprintf('{ allowListGqlItem(id: %s) { id name } }', json_encode($missing));
+            $result = $graphql->execute($query);
+            $this->assertArrayHasKey('data', $result, json_encode($result));
+            $this->assertNull($result['data']['allowListGqlItem'] ?? null, json_encode($result));
+            $result = $graphql->execute(sprintf('mutation { updateAllowListGqlItem(id: %s, name: "nope") { id } }', json_encode($missing)));
+            $this->assertNull($result['data']['updateAllowListGqlItem'] ?? null, json_encode($result));
+            $result = $graphql->execute(sprintf('mutation { deleteAllowListGqlItem(id: %s) }', json_encode($missing)));
+            $this->assertFalse($result['data']['deleteAllowListGqlItem'] ?? null, json_encode($result));
+        }
+        $this->assertSame([1 => 'alpha', 3 => 'charlie-2'], $names());
+        $db->close();
     }
 
     // ── ORM::find(filter-map) on every engine ───────────────────────────────
