@@ -1,0 +1,330 @@
+{
+  "schema": 1,
+  "scope": "Resolved development and optional dependencies; not a bundled-code licence grant",
+  "components": [
+    {
+      "ecosystem": "composer",
+      "name": "cebe/php-openapi",
+      "version": "1.8.0",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "justinrainbow/json-schema",
+      "version": "6.10.0",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "marc-mabe/php-enum",
+      "version": "v4.7.2",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "mongodb/mongodb",
+      "version": "2.3.0",
+      "platform": "",
+      "lock_license": "Apache-2.0",
+      "upstream_declaration": "Apache-2.0",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "myclabs/deep-copy",
+      "version": "1.13.4",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "nikic/php-parser",
+      "version": "v5.7.0",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phar-io/manifest",
+      "version": "2.0.4",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phar-io/version",
+      "version": "3.2.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phpunit/php-code-coverage",
+      "version": "11.0.12",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phpunit/php-file-iterator",
+      "version": "5.1.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phpunit/php-invoker",
+      "version": "5.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phpunit/php-text-template",
+      "version": "4.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phpunit/php-timer",
+      "version": "7.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "phpunit/phpunit",
+      "version": "11.5.55",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "psr/log",
+      "version": "3.0.2",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/cli-parser",
+      "version": "3.0.2",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/code-unit",
+      "version": "3.0.3",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/code-unit-reverse-lookup",
+      "version": "4.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/comparator",
+      "version": "6.3.3",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/complexity",
+      "version": "4.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/diff",
+      "version": "6.0.2",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/environment",
+      "version": "7.2.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/exporter",
+      "version": "6.3.2",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/global-state",
+      "version": "7.0.2",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/lines-of-code",
+      "version": "3.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/object-enumerator",
+      "version": "6.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/object-reflector",
+      "version": "4.0.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/recursion-context",
+      "version": "6.0.3",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/type",
+      "version": "5.1.3",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "sebastian/version",
+      "version": "5.0.2",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "staabm/side-effects-detector",
+      "version": "1.0.5",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "symfony/deprecation-contracts",
+      "version": "v3.7.1",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "symfony/polyfill-ctype",
+      "version": "v1.37.0",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "symfony/polyfill-php85",
+      "version": "v1.38.1",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "symfony/yaml",
+      "version": "v7.4.15",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "theseer/tokenizer",
+      "version": "1.3.1",
+      "platform": "",
+      "lock_license": "BSD-3-Clause",
+      "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    }
+  ]
+}
