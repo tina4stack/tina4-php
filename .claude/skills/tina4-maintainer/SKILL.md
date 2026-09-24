@@ -343,6 +343,29 @@ This is non-negotiable for anything that commits, merges, or releases — and th
 every status you report: a claim is either proven-and-qualified, or it is not made. A re-run is
 trivial against the cost of shipping a masked regression to four public registries.
 
+## ISO controls (ADR-0073) - standing rules for every change
+
+Tina4 is working towards OpenChain conformance (ISO/IEC 18974 security assurance, ISO/IEC 5230
+licence compliance). ADR-0073 (`tina4-documentation/plan/v3/decisions/ADR-0073.md`) makes these
+controls mandatory. Follow them on every change, without being asked:
+
+- **Pull requests only.** Never push to a release line (`v3`, `main`, `master`, `v2`). Open a PR,
+  wait for the required CI checks, then merge. Never force-push, and never move or delete a tag.
+- **Zero runtime dependencies.** Drivers and optional servers are application dependencies
+  (ADR-0067). A new dev dependency needs a written reason in the PR.
+- **Undisclosed vulnerabilities stay private.** Commits, PR text, issues and plan documents describe
+  a security fix factually, with no exploit payload or proof of concept, until the fix ships with
+  its advisory. Fix it in every affected framework in the same release.
+- **Every security fix gets a permanent regression test** in each affected framework: real
+  dependency, no mocks, proven by mutation.
+- **Releases carry evidence:** checksums, an SBOM, provenance, and release-note entries for
+  security fixes. Pin release-workflow actions by commit SHA.
+- **Licences are checked** on every PR; bundled third-party code ships with its notices.
+- **No ISO claim without evidence.** Never write that Tina4 is ISO certified, conformant or aligned
+  in a README, page or release note until the plan's evidence exists.
+- **Shared machines:** set `TINA4_NO_BROWSER=true` for local runs, kill only the processes you
+  started, and use your own ports and lab directory.
+
 ## The Guiding Philosophy
 
 > **"The best code you write is the code you don't write."**
