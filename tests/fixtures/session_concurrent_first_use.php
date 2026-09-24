@@ -44,6 +44,17 @@ try {
     // is kept as given, so the handler has to unwrap it to know which engine's
     // CREATE TABLE to send. Injecting one here exercises that unwrap for real.
     $handler = new \Tina4\Session\DatabaseSessionHandler(['db' => $database]);
+
+    // MySQL only: hold a named lock across the first use, the way an app that
+    // serialises work with GET_LOCK does. MySQL resolves the metadata-lock
+    // deadlock inside CREATE TABLE IF NOT EXISTS by backing the victim off
+    // silently ONLY when the session holds no other metadata lock; with one held
+    // the victim gets 1213 "Deadlock found" instead. That is the CI failure of
+    // run 35972320442, made deterministic (25 of 30 rounds on the lab before the
+    // fix), so the retry in ensureTable() is exercised every run, not by luck.
+    if (getenv('T4_RACE_HOLD_NAMED_LOCK')) {
+        $database->fetchOne("SELECT GET_LOCK(?, 0) AS held", ['tina4-race-' . $sessionId]);
+    }
 } catch (\Throwable $connectFailure) {
     fwrite(STDERR, 'connect: ' . get_class($connectFailure) . ': ' . $connectFailure->getMessage());
     exit(2);

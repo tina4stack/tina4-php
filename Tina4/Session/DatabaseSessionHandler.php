@@ -145,6 +145,17 @@ class DatabaseSessionHandler
         . 'expires_at DOUBLE PRECISION NOT NULL'
         . ')';
 
+    /**
+     * How many times ensureTable() tries the CREATE before a failure is real, and
+     * the base pause between tries (it grows linearly: 50, 100, 150, 200 ms).
+     *
+     * Bounded on purpose: a genuine failure (no CREATE grant, a broken
+     * connection) still surfaces, at most half a second later, and only on the
+     * first use of a handler. The same numbers are used by all four frameworks.
+     */
+    private const CREATE_ATTEMPTS = 5;
+    private const CREATE_RETRY_DELAY_MS = 50;
+
     /** @var DatabaseAdapter|null Resolved on FIRST USE, never in the constructor. */
     private ?DatabaseAdapter $db = null;
 
@@ -418,22 +429,33 @@ class DatabaseSessionHandler
      *    SQLite/PostgreSQL/MySQL, IF OBJECT_ID on SQL Server, the RDB$RELATIONS
      *    check on Firebird. Every one of those is CHECK-THEN-ACT and has a
      *    window; none of them is a race guard.
-     * 3. The catch. THIS is the race guard, and it is engine-agnostic: two
-     *    workers both pass (1) and (2), both issue CREATE TABLE, and the loser
-     *    errors. It RE-CHECKS rather than parsing the error message, because
-     *    "already exists" is spelled differently by every engine (Msg 2714 on
-     *    SQL Server, SQLSTATE 42S01 on Firebird, a pg_type unique-index
-     *    violation on PostgreSQL) and a string match would rot.
+     * 3. The catch and the bounded retry. THIS is the race guard, and it is
+     *    engine-agnostic: two workers both pass (1) and (2), both issue CREATE
+     *    TABLE, and the loser errors. It RE-CHECKS rather than parsing the
+     *    error message, because "already exists" is spelled differently by
+     *    every engine (Msg 2714 on SQL Server, SQLSTATE 42S01 on Firebird, a
+     *    pg_type unique-index violation on PostgreSQL) and a string match would
+     *    rot.
+     *
+     *    The re-check is RETRIED because the loser can fail before the winner
+     *    has committed. MEASURED on MySQL 8.4 (the lab and CI run 35972320442):
+     *    CREATE TABLE IF NOT EXISTS takes a shared metadata lock on the name,
+     *    checks, then upgrades it to exclusive. Two sessions upgrading at once
+     *    is a metadata-lock deadlock. MySQL usually backs the victim off and
+     *    retries it silently (1,289 such deadlocks in 400 eight-worker rounds,
+     *    none reached a client), but it cannot when the session already holds
+     *    a metadata lock, and then the victim gets 1213 "Deadlock found" while
+     *    the winner's table is still invisible. A single immediate re-check
+     *    turned that into a failed request. Waiting and looking again, a few
+     *    times, turns it back into the lost race it is.
      *
      * Node's DDL plus this catch is strictly better than either alone: the
      * per-engine types make the statement legal everywhere, and the catch closes
      * the window the types cannot.
      *
-     * Firebird's branch is verified at the SQL level against a live Firebird
-     * 5.0.4 but has not been exercised end to end through a PHP Firebird driver,
-     * and the read path has a known gap on that engine (Firebird folds unquoted
-     * identifiers to UPPER, and firstRow() reads $row['data'] only), so the
-     * database session backend is not claimed working on Firebird.
+     * Firebird's branch is exercised end to end through pdo_firebird against a
+     * live Firebird 5.0.4 (tests/SessionDatabaseFirebirdTest.php), including this
+     * concurrent first-use race with six real processes.
      */
     private function ensureTable(): void
     {
@@ -441,10 +463,11 @@ class DatabaseSessionHandler
             return;
         }
 
-        if (!$this->db()->tableExists('tina4_session')) {
+        for ($attempt = 1; !$this->db()->tableExists('tina4_session'); $attempt++) {
             try {
                 $this->db()->execute(self::CREATE_TABLE[$this->engineName()] ?? self::CREATE_TABLE_FALLBACK);
                 $this->db()->commit();
+                break;
             } catch (\Throwable $e) {
                 // A failed statement leaves PostgreSQL's transaction aborted, so
                 // the re-check below would fail for the wrong reason without this.
@@ -453,9 +476,19 @@ class DatabaseSessionHandler
                 } catch (\Throwable) {
                     // Best effort - an engine with no open transaction is fine.
                 }
-                if (!$this->db()->tableExists('tina4_session')) {
+                // The loop condition re-checks. The loser of the race can fail
+                // BEFORE the winner has committed its CREATE - MySQL answers
+                // 1213 "Deadlock found" (the S->X metadata-lock upgrade inside
+                // CREATE TABLE IF NOT EXISTS) while the table is still invisible.
+                // Re-checking once at that instant rethrew a lost race as a
+                // failure, so wait and look again, a bounded number of times.
+                if ($attempt >= self::CREATE_ATTEMPTS) {
+                    if ($this->db()->tableExists('tina4_session')) {
+                        break;
+                    }
                     throw $e;
                 }
+                usleep(self::CREATE_RETRY_DELAY_MS * $attempt * 1000);
             }
         }
 
