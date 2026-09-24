@@ -20,6 +20,8 @@ Report it privately, using either of these:
 1. **GitHub private vulnerability reporting** (preferred): open the repository's **Security** tab and choose **Report a vulnerability**. You and the maintainers get a private advisory to work in.
 2. **Email:** info@tina4.com, with `SECURITY` in the subject line.
 
+The full policy, including our safe-harbour commitment for good-faith research, is at https://tina4.com/general/security-research.html.
+
 Please include:
 
 - the affected package and version (or commit)
