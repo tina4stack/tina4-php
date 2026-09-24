@@ -79,9 +79,12 @@ trait MissingExtensionCase
             "constructing this with ext-{$extension} genuinely absent must raise, so the developer "
             . 'is told what to install instead of hitting an undefined-function fatal'
         );
-        $this->assertSame(
-            \RuntimeException::class,
-            $report['class'],
+        // A RuntimeException or a subclass of one: the database adapters raise
+        // Tina4\Database\DatabaseDriverMissing, so a caller can tell a missing
+        // driver from an unreachable server, and every catch (RuntimeException)
+        // still catches it.
+        $this->assertTrue(
+            is_string($report['class']) && is_a($report['class'], \RuntimeException::class, true),
             'the missing-extension error must be a RuntimeException. Got: ' . (string)$report['class']
         );
         $this->assertStringContainsString(
