@@ -148,6 +148,12 @@ class ModelDiscovery
                 if (is_subclass_of($class, ORM::class)) {
                     $discovered[] = ['class' => $class, 'file' => $file];
                     Log::debug("Discovered model: {$class}");
+                    // Bug 5: register AutoCrud routes at DISCOVERY, not on the
+                    // first `new Model()`. A model with `$autoCrud = true` now
+                    // answers GET /api/<table> as soon as its class loads.
+                    // No-op when autoCrud is false; defers if the DB is not
+                    // bound yet (retried by a later new Model()/rescan).
+                    ORM::registerAutoCrudForClass($class);
                 }
             }
         }
