@@ -283,14 +283,23 @@ class RouterAuthSourcesTest extends TestCase
     public function testGalleryWriteRouteBypassesAuthGate(): void
     {
         // Sibling prefix check in the same guard — /api/gallery/ and
-        // /gallery/ must use $request->path too.
-        Router::post('/api/gallery/deploy', fn($rq, $rs) => $rs->json(['ok' => true]));
+        // /gallery/ must use $request->path too. The gallery demos skip auth
+        // in debug mode only (ADR-0078), so this runs with TINA4_DEBUG on.
+        $saved = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=true');
+        $_ENV['TINA4_DEBUG'] = 'true';
+        try {
+            Router::post('/api/gallery/deploy', fn($rq, $rs) => $rs->json(['ok' => true]));
 
-        $request = $this->createRequest('POST', '/api/gallery/deploy');
-        $response = $this->dispatchInner($request, new Response(true));
+            $request = $this->createRequest('POST', '/api/gallery/deploy');
+            $response = $this->dispatchInner($request, new Response(true));
 
-        $this->assertNotEquals(401, $response->getStatusCode(), '/api/gallery write route must NOT be 401 by the auth gate');
-        $this->assertEquals(200, $response->getStatusCode());
+            $this->assertNotEquals(401, $response->getStatusCode(), '/api/gallery write route must NOT be 401 by the auth gate');
+            $this->assertEquals(200, $response->getStatusCode());
+        } finally {
+            $saved === false ? putenv('TINA4_DEBUG') : putenv("TINA4_DEBUG={$saved}");
+            unset($_ENV['TINA4_DEBUG']);
+        }
     }
 
     public function testNonDevWriteRouteStillRequiresAuth(): void

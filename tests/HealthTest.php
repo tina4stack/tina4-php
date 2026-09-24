@@ -14,9 +14,15 @@ class HealthTest extends TestCase
 {
     private string $tempDir;
     private ?App $app = null;
+    private string|false $savedDebug = false;
 
     protected function setUp(): void
     {
+        // ADR-0078: the health body carries the version in debug mode only;
+        // these cases characterise the debug body.
+        $this->savedDebug = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=true');
+        $_ENV['TINA4_DEBUG'] = 'true';
         $this->tempDir = sys_get_temp_dir() . '/tina4_health_test_' . uniqid();
         mkdir($this->tempDir, 0755, true);
         Log::reset();
@@ -24,6 +30,8 @@ class HealthTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->savedDebug === false ? putenv('TINA4_DEBUG') : putenv("TINA4_DEBUG={$this->savedDebug}");
+        unset($_ENV['TINA4_DEBUG']);
         if ($this->app !== null) {
             // Release the App's global error/exception handlers inside this test's
             // boundary and neutralise its __destruct so the Router-reachable App
@@ -56,8 +64,21 @@ class HealthTest extends TestCase
                     }
                 }
             }
-            rmdir($this->tempDir);
+            // Debug mode (ADR-0078) also drops .tina4/ and friends here.
+            $this->removeTree($this->tempDir);
         }
+    }
+
+    private function removeTree(string $dir): void
+    {
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) && !is_link($path) ? $this->removeTree($path) : @unlink($path);
+        }
+        @rmdir($dir);
     }
 
     public function testHealthDataStructure(): void
