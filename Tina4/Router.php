@@ -64,7 +64,7 @@ class Router
     // ADR-0010 (static resolves inside dispatchNoMatch, after matching),
     // ADR-0012 (post-match globals -> auth gate -> the route's own middleware).
     //
-    // The methods NOT listed here - extractAuthToken, bindHandlerArgs,
+    // The methods NOT listed here - extractAuthTokens, bindHandlerArgs,
     // runOneRouteMiddleware, runClassMiddlewareHooks, runCallableMiddleware,
     // invokeCallableMiddleware, resolveMiddlewareClass,
     // middlewareResultToResponse, handlerResultToResponse - are HELPERS a
@@ -710,7 +710,7 @@ class Router
         // TINA4_PHP_SESSION_NAME (default: PHPSESSID, PHP's default).
         //
         // Fixes tina4stack/tina4-php#112.
-        self::startNativeSession();
+        self::startNativeSession($request);
 
         // Auto-start Tina4's own session — read session ID from cookie,
         // lazy-create on first use. This is independent of $_SESSION
@@ -770,6 +770,8 @@ class Router
         $request->session = $session;
 
         $result = self::withSecurityHeaders($request, self::dispatchInner($request, $response));
+
+        self::finishNativeSession($result);
 
         // No session means nothing to persist and no cookie to emit. The
         // request still serves - that is the degrade half of the policy.
@@ -1207,8 +1209,26 @@ class Router
      *
      * Fixes tina4stack/tina4-php#112.
      */
-    private static function startNativeSession(): void
+    private static function startNativeSession(?Request $request = null): void
     {
+        // A long-running process (the CLI SAPI: tina4's own server, Swoole,
+        // RoadRunner) serves many users from one PHP process, and $_SESSION is
+        // a process global. The native session this router opened for an
+        // earlier request is closed and $_SESSION is emptied before this
+        // request starts its own, so one user's session can never be read by
+        // the next (ADR-0079 s5). A session the host application started
+        // itself before dispatch is left alone.
+        if (self::isCliWorker()) {
+            if (session_status() === PHP_SESSION_ACTIVE && self::$routerNativeSessionActive) {
+                session_write_close();
+            }
+            if (session_status() !== PHP_SESSION_ACTIVE) {
+                $_SESSION = [];
+            }
+            self::$routerNativeSessionActive = false;
+            self::$routerNativeSessionIsNew = false;
+        }
+
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             self::configureNativeSessionStorage();
 
@@ -1236,8 +1256,68 @@ class Router
                 'httponly' => true,
                 'samesite' => $sameSite,
             ]);
-            @session_start();
+            if (self::isCliWorker() && $request !== null) {
+                // No SAPI parses this request's cookie into $_COOKIE and none
+                // will send header() output, so bind the session to THIS
+                // request's own cookie and emit the cookie on the Response
+                // (finishNativeSession) ourselves.
+                // use_strict_mode: an id the store has never issued is replaced
+                // with a fresh one, never adopted (no session fixation).
+                $incoming = $request->cookies[session_name()] ?? null;
+                $incoming = is_string($incoming) && preg_match('/^[A-Za-z0-9,-]{22,256}$/', $incoming) === 1
+                    ? $incoming : null;
+                session_id($incoming ?? session_create_id());
+                @session_start(['use_strict_mode' => 1]);
+                self::$routerNativeSessionIsNew = session_status() === PHP_SESSION_ACTIVE && session_id() !== $incoming;
+            } else {
+                @session_start();
+            }
+            self::$routerNativeSessionActive = session_status() === PHP_SESSION_ACTIVE;
         }
+    }
+
+    /** True when the router opened the native session for the request in flight. */
+    private static bool $routerNativeSessionActive = false;
+
+    /** True when that session was created for this request (its cookie must be sent). */
+    private static bool $routerNativeSessionIsNew = false;
+
+    /** One PHP process serves many requests: tina4's server, Swoole, RoadRunner, CLI. */
+    /**
+     * End the request's native session in a long-running process.
+     *
+     * Emits the native session cookie on the Response when this request
+     * created the session (no SAPI will send one), then writes and closes the
+     * session so its data persists and its file lock is released. $_SESSION is
+     * left readable for code that runs after dispatch; the next dispatch
+     * empties it before starting the next request's session.
+     */
+    private static function finishNativeSession(Response $result): void
+    {
+        if (!self::isCliWorker() || !self::$routerNativeSessionActive) {
+            return;
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            if (self::$routerNativeSessionIsNew) {
+                $params = session_get_cookie_params();
+                $options = [
+                    'path' => $params['path'] ?: '/',
+                    'secure' => (bool)$params['secure'],
+                    'httponly' => true,
+                    'samesite' => $params['samesite'] ?: 'Lax',
+                ];
+                if (!empty($params['domain'])) {
+                    $options['domain'] = $params['domain'];
+                }
+                if ((int)$params['lifetime'] > 0) {
+                    $options['expires'] = time() + (int)$params['lifetime'];
+                }
+                $result->cookie(session_name(), session_id(), $options);
+            }
+            session_write_close();
+        }
+        self::$routerNativeSessionActive = false;
+        self::$routerNativeSessionIsNew = false;
     }
 
     /**
@@ -1736,41 +1816,37 @@ class Router
     }
 
     /**
-     * Find the request's auth token, in priority order.
+     * The request's candidate auth tokens, in priority order.
      *
      * Three transports, and the ORDER is the contract: an explicit
-     * Authorization header beats a form token, which beats a session token.
-     * The source is returned alongside because a body formToken earns a
-     * FreshToken response header, and the other two do not.
+     * Authorization header beats a body formToken, which beats a session
+     * token. The source travels with each token because a body token earns a
+     * FreshToken response header and the other two do not.
      *
      * @param Request $request The incoming request
-     * @return array{0: string|null, 1: string|null} [token, source] - both null when absent
+     * @return array<int, array{0: string, 1: string}> [token, source] pairs
      */
-    private static function extractAuthToken(Request $request): array
+    private static function extractAuthTokens(Request $request): array
     {
-        $token = null;
-        $tokenSource = null;
+        $candidates = [];
 
-            // Priority 1: Authorization Bearer header
-            $bearerToken = $request->bearerToken();
-            if ($bearerToken !== null) {
-                $token = $bearerToken;
-                $tokenSource = 'header';
+        $bearerToken = $request->bearerToken();
+        if ($bearerToken !== null) {
+            $candidates[] = [$bearerToken, 'header'];
+        }
+
+        if (is_array($request->body) && !empty($request->body['formToken']) && is_string($request->body['formToken'])) {
+            $candidates[] = [$request->body['formToken'], 'body'];
+        }
+
+        if ($request->session !== null && $request->session->has('token')) {
+            $sessionToken = $request->session->get('token');
+            if (is_string($sessionToken) && $sessionToken !== '') {
+                $candidates[] = [$sessionToken, 'session'];
             }
+        }
 
-            // Priority 2: formToken in request body
-            if ($token === null && is_array($request->body) && !empty($request->body['formToken'])) {
-                $token = $request->body['formToken'];
-                $tokenSource = 'body';
-            }
-
-            // Priority 3: Session token
-            if ($token === null && $request->session !== null && $request->session->has('token')) {
-                $token = $request->session->get('token');
-                $tokenSource = 'session';
-            }
-
-        return [$token, $tokenSource];
+        return $candidates;
     }
 
     /**
@@ -1901,9 +1977,10 @@ class Router
         }
 
         if ($requiresAuth) {
-            $sso = $request->session?->get('_tina4_sso');
-            $ssoIdentity = is_array($sso) ? ($sso['identity'] ?? null) : null;
-            if (is_array($ssoIdentity) && !empty($ssoIdentity['issuer']) && !empty($ssoIdentity['subject'])) {
+            // A provider-verified OIDC identity counts only while it is live
+            // (ADR-0079 s5).
+            $ssoIdentity = Sso::liveSessionIdentity($request->session?->get('_tina4_sso'));
+            if ($ssoIdentity !== null) {
                 $request->user = $ssoIdentity;
                 $deny = self::rbacForbidden($route, $request, $response);
                 if ($deny !== null) {
@@ -1911,29 +1988,39 @@ class Router
                 }
                 return null;
             }
-            $token = null;
+
+            // The first slot holding a token decides, except that a form token
+            // ("type": "form") proves where a write came from, not who sent it:
+            // it is skipped and the next slot is tried (ADR-0079 s1). So a
+            // logged-in user posting a rendered form (form token in the body,
+            // auth token in the session) is still authenticated by the session.
+            //
+            // Auth::validToken resolves TINA4_SECRET itself ($_ENV first, then
+            // getenv); pre-resolving here with getenv() alone would disagree
+            // with Auth::getToken and reject valid tokens.
+            $payload = null;
             $tokenSource = null;
-
-            [$token, $tokenSource] = self::extractAuthToken($request);
-
-            if ($token === null) {
-                return $response->json(['error' => 'Unauthorized'], 401);
+            $token = null;
+            foreach (self::extractAuthTokens($request) as [$candidate, $source]) {
+                $candidatePayload = Auth::validToken($candidate);
+                if ($candidatePayload !== null && !Auth::isIdentityPayload($candidatePayload)) {
+                    continue;
+                }
+                if ($candidatePayload === null) {
+                    return $response->json(['error' => 'Unauthorized'], 401);
+                }
+                [$payload, $tokenSource, $token] = [$candidatePayload, $source, $candidate];
+                break;
             }
 
-            // Pass token only — Auth::validToken resolves SECRET consistently
-            // ($_ENV first, then getenv). Pre-resolving here with `getenv()` only
-            // would mismatch Auth::getToken's resolution and reject valid tokens
-            // whenever $_ENV['SECRET'] differs from getenv('SECRET') (e.g. when
-            // .env loads SECRET into $_ENV but a test or runtime override calls
-            // putenv with a different value).
-            if (!Auth::validToken($token)) {
+            if ($payload === null) {
                 return $response->json(['error' => 'Unauthorized'], 401);
             }
 
             // Attach decoded JWT payload to the request for downstream use
-            $request->user = Auth::getPayload($token);
+            $request->user = $payload;
 
-            // When body formToken validates, return a FreshToken header so
+            // When a body token validates, return a FreshToken header so
             // frond.js can use the Authorization header on subsequent requests
             if ($tokenSource === 'body') {
                 $freshToken = Auth::refreshToken($token);

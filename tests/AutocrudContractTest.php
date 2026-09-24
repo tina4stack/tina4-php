@@ -32,7 +32,7 @@ final class AutocrudContractTest extends TestCase
 {
     private static TestServer $server;
     private static string $dbPath;
-    private static string $secret = 'autocrud-contract-test-secret';
+    private static string $secret = 'autocrud-contract-test-secret-01';
 
     public static function setUpBeforeClass(): void
     {

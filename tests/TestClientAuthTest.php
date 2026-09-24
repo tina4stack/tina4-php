@@ -30,7 +30,7 @@ use Tina4\TestClient;
 
 class TestClientAuthTest extends TestCase
 {
-    private string $secret = 'php-testclient-auth-secret';
+    private string $secret = 'php-testclient-auth-secret-01234';
     private ?string $priorApiKey = null;
 
     protected function setUp(): void

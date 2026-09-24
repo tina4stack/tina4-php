@@ -36,6 +36,24 @@ class Auth
         . 'TINA4_DEBUG set, or TINA4_ENV=production.';
 
     /**
+     * Token purposes that are never an identity (ADR-0079 s1).
+     *
+     * Frond's formToken() signs a JWT with the same TINA4_SECRET as an auth
+     * token, marked "type": "form". A form token proves where a write came
+     * from, never who the caller is, so every identity gate refuses these
+     * purposes. validToken() itself stays purpose-neutral: CsrfMiddleware
+     * needs it to validate form tokens.
+     */
+    public const NON_IDENTITY_TOKEN_TYPES = ['form'];
+
+    /**
+     * Minimum HMAC key length in bytes (ADR-0079 s2): the HS256 output size,
+     * RFC 7518 s3.2. A blank key is the shortest case - anyone can reproduce
+     * an HMAC made with it.
+     */
+    public const MIN_SECRET_BYTES = 32;
+
+    /**
      * Supported HMAC algorithms mapped to the hash_hmac digest that signs them.
      *
      * The digest is looked up here rather than hardcoded, so the "alg" the header
@@ -280,6 +298,61 @@ class Auth
             . ' `disable_functions` directive.';
     }
 
+    /**
+     * True when a VERIFIED payload may stand for a caller's identity.
+     *
+     * A payload whose "type" claim is a reserved non-identity purpose (a Frond
+     * form token) is refused. Application payloads are otherwise untouched: an
+     * app that puts "type" => "admin" in its own auth token is unaffected.
+     *
+     * @param array<string, mixed>|null $payload A payload returned by validToken()
+     */
+    public static function isIdentityPayload(?array $payload): bool
+    {
+        return $payload !== null
+            && !in_array($payload['type'] ?? null, self::NON_IDENTITY_TOKEN_TYPES, true);
+    }
+
+    /**
+     * The actionable error for a weak HMAC key, or null when the key is usable.
+     */
+    public static function insecureSecretMessage(string $secret): ?string
+    {
+        $length = strlen($secret);
+        if ($length >= self::MIN_SECRET_BYTES) {
+            return null;
+        }
+        $what = $length === 0 ? 'is not set' : "is {$length} bytes";
+        return "Auth: TINA4_SECRET {$what}; an HMAC JWT secret must be at least "
+            . self::MIN_SECRET_BYTES . ' bytes. Generate one with `openssl rand -hex 32` and set '
+            . 'TINA4_SECRET in your environment or .env.';
+    }
+
+    /**
+     * Refuse to boot with a secret that makes tokens forgeable (ADR-0079 s2).
+     *
+     * Outside dev a blank TINA4_SECRET is refused; in any mode a set-but-short
+     * one is refused. Dev with a blank secret has already had one minted into
+     * .env.local by ensureDevSecret(). RS256 keys are PEMs and are not measured.
+     *
+     * @throws \RuntimeException with the actionable message
+     */
+    public static function requireBootSecret(): void
+    {
+        $algorithm = trim((string)(getenv('TINA4_JWT_ALGORITHM') ?: ($_ENV['TINA4_JWT_ALGORITHM'] ?? 'HS256')));
+        if (in_array($algorithm, self::RSA_ALGORITHMS, true)) {
+            return;
+        }
+        $secret = self::resolveSecret();
+        if ($secret === '' && self::isDev()) {
+            return;
+        }
+        $message = self::insecureSecretMessage($secret);
+        if ($message !== null) {
+            throw new \RuntimeException($message);
+        }
+    }
+
     /** True when running in dev (TINA4_DEBUG truthy). */
     private static function isDev(): bool
     {
@@ -440,6 +513,14 @@ class Auth
                 return null;
             }
         } else {
+            // A blank or short HMAC key verifies tokens anyone can mint, so the
+            // token is REJECTED (fail closed with a 401, never a 500) and the
+            // operator is told why. ADR-0079 s2.
+            $weak = self::insecureSecretMessage($secret);
+            if ($weak !== null) {
+                self::logWarning($weak);
+                return null;
+            }
             $expected = self::sign($signingInput, $secret, $algorithm);
             if (!hash_equals($expected, $signatureB64)) {
                 return null;
@@ -575,11 +656,9 @@ class Auth
                 return null; // No token — signal 401
             }
 
-            $token = substr($authHeader, 7);
-            if (!self::validToken($token)) {
-                return null; // Invalid/expired token
-            }
-            return self::getPayload($token);
+            $payload = self::validToken(substr($authHeader, 7));
+            // Invalid, expired, or a form token (not an identity, ADR-0079 s1)
+            return self::isIdentityPayload($payload) ? $payload : null;
         };
     }
 
@@ -598,14 +677,13 @@ class Auth
      */
     public static function refreshToken(string $token, int $expiresIn = 60): ?string
     {
-        if (!self::validToken($token)) {
-            return null;
-        }
-
-        $payload = self::getPayload($token);
+        $payload = self::validToken($token);
         if ($payload === null) {
             return null;
         }
+        // Refresh preserves PURPOSE: a form token comes back as a form token
+        // (CSRF rotation) and so can still never pass an identity gate. The
+        // route gate issues a FreshToken only for an identity token. ADR-0079 s1.
 
         // Remove old timing claims — getToken sets fresh ones
         unset($payload['iat'], $payload['exp']);
@@ -635,8 +713,10 @@ class Auth
             // Try JWT first — both overrides are forwarded; $algorithm used to be
             // accepted and then dropped on the floor, so a caller asking for a
             // different algorithm silently got the env one.
-            if (self::validToken($token, $secret, $algorithm)) {
-                return self::getPayload($token);
+            $payload = self::validToken($token, $secret, $algorithm);
+            if ($payload !== null) {
+                // A form token is not an identity (ADR-0079 s1).
+                return self::isIdentityPayload($payload) ? $payload : null;
             }
 
             // Fallback: treat Bearer value as API key
@@ -753,6 +833,10 @@ class Auth
             "Unsupported JWT algorithm '{$algorithm}' reached the signer."
         );
 
+        $weak = self::insecureSecretMessage($secret);
+        if ($weak !== null) {
+            throw new \InvalidArgumentException($weak);
+        }
         return self::base64urlEncode(hash_hmac($digest, $message, $secret, true));
     }
 }

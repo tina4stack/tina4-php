@@ -117,12 +117,12 @@ class DevSecretTest extends TestCase
     public function testExistingSecretIsLeftUntouchedNoWrite(): void
     {
         $this->setEnv('TINA4_DEBUG', 'true');
-        $this->setEnv('TINA4_SECRET', 'already-set-secret');
+        $this->setEnv('TINA4_SECRET', 'already-set-secret-0123456789abc');
 
         $result = Auth::ensureDevSecret($this->tmpDir);
 
         $this->assertNull($result);                                  // no-op
-        $this->assertSame('already-set-secret', getenv('TINA4_SECRET')); // unchanged
+        $this->assertSame('already-set-secret-0123456789abc', getenv('TINA4_SECRET')); // unchanged
         $this->assertFileDoesNotExist($this->tmpDir . '/.env.local'); // no write
     }
 

@@ -2020,7 +2020,9 @@ PHP;
 
         // Create .env
         if (!file_exists($targetDir . '.env')) {
-            file_put_contents($targetDir . '.env', "TINA4_DEBUG=true\nTINA4_DEBUG_LEVEL=ALL\n");
+            // TINA4_LOG_LEVEL, never the removed TINA4_DEBUG_LEVEL, which the
+            // logger rejects on its first line.
+            file_put_contents($targetDir . '.env', "TINA4_DEBUG=true\nTINA4_LOG_LEVEL=ALL\n");
             echo "  Created .env\n";
         }
 
@@ -2093,19 +2095,30 @@ DOCKERFILE;
     // ────────────────────────────────────────────
     case 'serve':
     case 'start':
-        // Load .env BEFORE port resolution so TINA4_PORT from .env is visible to getenv()
-        $envFile = $cwd . DIRECTORY_SEPARATOR . '.env';
-        if (is_file($envFile) && class_exists('\Tina4\DotEnv')) {
-            \Tina4\DotEnv::loadEnv($envFile);
-        }
-        // Load .env.local AFTER .env as an override (gitignored local overrides).
-        $envLocalFile = $cwd . DIRECTORY_SEPARATOR . '.env.local';
-        if (is_file($envLocalFile) && class_exists('\Tina4\DotEnv')) {
-            \Tina4\DotEnv::loadEnv($envLocalFile, overwrite: true);
-        }
-
         // Parse flags from $args
         [$serveFlags, $servePositional] = parseFlags($args);
+
+        // --production turns debug off: the explicit flag beats .env and the
+        // environment (ADR-0041, ADR-0079 s3). It used to only choose
+        // FrankenPHP. Set BEFORE the env files load: loads are first-wins.
+        if (isset($serveFlags['production'])) {
+            putenv('TINA4_DEBUG=false');
+            $_ENV['TINA4_DEBUG'] = 'false';
+            $_SERVER['TINA4_DEBUG'] = 'false';
+        }
+
+        // Load env BEFORE port resolution so TINA4_PORT from .env is visible to
+        // getenv(). Same precedence as App: real env > .env.local > .env, each
+        // load first-wins. .env.local used to load with overwrite, so a stale
+        // gitignored file beat a value the operator exported (ADR-0079 s3).
+        $envLocalFile = $cwd . DIRECTORY_SEPARATOR . '.env.local';
+        if (is_file($envLocalFile) && class_exists('\Tina4\DotEnv')) {
+            \Tina4\DotEnv::loadEnv($envLocalFile, overwrite: false);
+        }
+        $envFile = $cwd . DIRECTORY_SEPARATOR . '.env';
+        if (is_file($envFile) && class_exists('\Tina4\DotEnv')) {
+            \Tina4\DotEnv::loadEnv($envFile, overwrite: false);
+        }
         $flagPort = $serveFlags['port'] ?? null;
         $flagHost = $serveFlags['host'] ?? null;
         $noBrowser = isset($serveFlags['no-browser']);

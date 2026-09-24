@@ -168,7 +168,7 @@ class LegacyEnvGuardTest extends TestCase
 
     public function testGuardDetectsViaEnvSuperglobal(): void
     {
-        $_ENV['SECRET'] = 'old-secret';
+        $_ENV['SECRET'] = 'old-secret-0123456789abcdef01234';
 
         try {
             App::checkLegacyEnvVars(exit: false);

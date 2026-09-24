@@ -22,7 +22,7 @@ use Tina4\Auth;
  */
 class AuthJwtAlgorithmNbfTest extends TestCase
 {
-    private string $secret = 'jwt-cluster-regression-secret';
+    private string $secret = 'jwt-cluster-regression-secret-01';
 
     protected function setUp(): void
     {

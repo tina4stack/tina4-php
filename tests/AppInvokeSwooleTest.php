@@ -64,7 +64,12 @@ class AppInvokeSwooleTest extends TestCase
     return $response($request->body, 200);
 })->noAuth();
 PHP);
-        file_put_contents($this->appDir . '/.env', "TINA4_DEBUG=false\nTINA4_OVERRIDE_CLIENT=true\n");
+        // A 32+ byte secret: outside dev App::start() refuses a blank or short
+        // one (ADR-0079 s2).
+        file_put_contents(
+            $this->appDir . '/.env',
+            "TINA4_DEBUG=false\nTINA4_OVERRIDE_CLIENT=true\nTINA4_SECRET=swoole-transport-test-secret-0123456789abcdef\n"
+        );
     }
 
     /**
@@ -205,5 +210,149 @@ PHP);
             array_flip(array_keys(array_filter($_SERVER, static fn($v) => $v === '/hello?who=swoole'))),
             'the request was resolved from globals rather than from the Swoole object'
         );
+    }
+
+    // ── A REAL SWOOLE WORKER: request state must not outlive the request ───
+
+    /**
+     * Two users on ONE real openswoole worker (ADR-0079 s4, s5).
+     *
+     * A Swoole worker is one PHP process serving request after request, and
+     * $_SESSION is a process global. The router used to start the native
+     * session once and never close it, so the second user read the first
+     * user's $_SESSION. And the worker ran under the CLI SAPI, where
+     * $_SERVER['REMOTE_ADDR'] is never set, so App::__invoke() handed the
+     * router an empty peer that the loopback gates counted as local.
+     *
+     * No mocks: a real openswoole HTTP server in a child process, real sockets,
+     * real PHP session files, a real cookie round trip.
+     */
+    public function testTwoUsersOnARealSwooleWorkerNeverShareANativeSession(): void
+    {
+        [$port, $stop] = $this->startSwooleWorker();
+        try {
+            [$loginHeaders] = $this->httpGet($port, '/login?name=alice');
+
+            // The leak itself, checked first: a second user with no cookie at all.
+            [, $stranger] = $this->httpGet($port, '/whoami');
+            $this->assertNull($stranger['who'], 'a second user read the first user\'s $_SESSION');
+
+            $cookie = $this->nativeSessionCookie($loginHeaders);
+            $this->assertNotSame('', $cookie, 'the worker never sent the native session cookie: ' . implode(' | ', $loginHeaders));
+            $this->assertMatchesRegularExpression('/^Set-Cookie:\s*tina4_session=/mi', implode("\n", $loginHeaders),
+                'the Tina4 session cookie never reached the client');
+
+            [, $alice] = $this->httpGet($port, '/whoami', $cookie);
+            $this->assertSame('alice', $alice['who'], 'the first user lost her own session');
+
+            [, $strangerAgain] = $this->httpGet($port, '/whoami');
+            $this->assertNull($strangerAgain['who'], 'the session leaked after the owner returned');
+        } finally {
+            $stop();
+        }
+    }
+
+    public function testASwooleWorkerRequestCarriesItsRealPeer(): void
+    {
+        [$port, $stop] = $this->startSwooleWorker();
+        try {
+            [, $body] = $this->httpGet($port, '/whoami');
+            $this->assertSame('127.0.0.1', $body['peer'], 'the Swoole branch dropped the socket peer');
+        } finally {
+            $stop();
+        }
+    }
+
+    /** @return array{0: int, 1: \Closure} [port, stop] */
+    private function startSwooleWorker(): array
+    {
+        file_put_contents($this->appDir . '/src/routes/native_session.php', <<<'PHP'
+<?php
+\Tina4\Router::get("/login", function ($request, $response) {
+    $_SESSION["who"] = $request->query["name"] ?? "";
+    $request->session->set("who", $request->query["name"] ?? "");
+    return $response(["ok" => true]);
+});
+\Tina4\Router::get("/whoami", function ($request, $response) {
+    return $response(["who" => $_SESSION["who"] ?? null, "peer" => $request->remoteIp]);
+});
+PHP);
+        mkdir($this->appDir . '/php-sessions', 0700, true);
+        $port = \FreePort::get();
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $worker = $this->appDir . '/worker.php';
+        file_put_contents($worker, <<<PHP
+<?php
+require '{$autoload}';
+putenv('TINA4_PHP_SESSION_PATH={$this->appDir}/php-sessions');
+\$app = new \\Tina4\\App('{$this->appDir}');
+\$server = new \\Swoole\\Http\\Server('127.0.0.1', {$port});
+\$server->set(['worker_num' => 1, 'log_level' => 5]);
+\$server->on('request', function (\$request, \$response) use (\$app) {
+    \$result = \$app(\$request);
+    \$response->status(\$result->getStatusCode());
+    foreach (\$result->getHeaders() as \$name => \$value) {
+        \$response->header(\$name, (string)\$value);
+    }
+    foreach (\$result->getCookies() as \$name => \$cookie) {
+        \$response->cookie(\$name, \$cookie['value'], (int)\$cookie['expires'], \$cookie['path'], \$cookie['domain'],
+            (bool)\$cookie['secure'], (bool)\$cookie['httponly'], (string)\$cookie['samesite']);
+    }
+    \$response->end((string)\$result->getBody());
+});
+\$server->start();
+PHP);
+        $env = array_filter(getenv(), fn($key) => !str_starts_with($key, 'TINA4_'), ARRAY_FILTER_USE_KEY);
+        $env['TINA4_NO_BROWSER'] = 'true';
+        $process = proc_open([PHP_BINARY, $worker], [1 => ['file', $this->appDir . '/worker.log', 'a'], 2 => ['file', $this->appDir . '/worker.log', 'a']], $pipes, $this->appDir, $env);
+        $this->assertIsResource($process, 'could not start the Swoole worker');
+        $deadline = microtime(true) + 20;
+        while (microtime(true) < $deadline) {
+            $probe = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
+            if ($probe !== false) {
+                fclose($probe);
+                break;
+            }
+            usleep(100000);
+        }
+        $stop = function () use ($process): void {
+            $status = proc_get_status($process);
+            if ($status['running']) {
+                // The master forks a manager and a worker: signal the whole group.
+                @exec('pkill -TERM -P ' . (int)$status['pid']);
+                proc_terminate($process, 15);
+                $wait = microtime(true) + 5;
+                while (proc_get_status($process)['running'] && microtime(true) < $wait) {
+                    usleep(50000);
+                }
+                @exec('pkill -KILL -P ' . (int)$status['pid']);
+                proc_terminate($process, 9);
+            }
+            proc_close($process);
+        };
+        return [$port, $stop];
+    }
+
+    /** @return array{0: string[], 1: array<string, mixed>|null} [response header lines, JSON body] */
+    private function httpGet(int $port, string $path, string $cookie = ''): array
+    {
+        $context = stream_context_create(['http' => [
+            'method' => 'GET', 'ignore_errors' => true, 'timeout' => 10,
+            'header' => $cookie !== '' ? "Cookie: {$cookie}\r\n" : '',
+        ]]);
+        $body = @file_get_contents("http://127.0.0.1:{$port}{$path}", false, $context);
+        $this->assertNotFalse($body, "GET {$path} failed; worker log: " . @file_get_contents($this->appDir . '/worker.log'));
+        return [$http_response_header ?? [], json_decode((string)$body, true)];
+    }
+
+    /** The native (PHPSESSID) cookie pair from a response's Set-Cookie lines, or ''. */
+    private function nativeSessionCookie(array $headers): string
+    {
+        foreach ($headers as $line) {
+            if (preg_match('/^Set-Cookie:\s*(PHPSESSID=[^;]+)/i', $line, $match) === 1) {
+                return $match[1];
+            }
+        }
+        return '';
     }
 }
