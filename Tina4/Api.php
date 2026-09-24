@@ -331,7 +331,7 @@ class Api
         $bodyStr = $this->buildMultipartBody($boundary, $fieldName, $uploadName, $content, $partContentType, $extraFields);
 
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
-        $reqHeaders = $this->baseHeaders();
+        $reqHeaders = $this->baseHeaders($url);
         $reqHeaders['Content-Type'] = "multipart/form-data; boundary={$boundary}";
         if (!empty($headers)) {
             $reqHeaders = array_merge($reqHeaders, $headers);
@@ -365,7 +365,7 @@ class Api
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
         }
-        $headers = $this->baseHeaders();
+        $headers = $this->baseHeaders($url);
 
         // An injected transport can't stream (it returns a buffered result), so
         // write its body out; only the real path streams chunk-by-chunk.
@@ -500,7 +500,7 @@ class Api
     protected function attempt(string $method = 'GET', string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
-        $headers = $this->baseHeaders();
+        $headers = $this->baseHeaders($url);
         $content = $this->prepareBody($body, $contentType, $headers);
         return $this->dispatch(strtoupper($method), $url, $headers, $content);
     }
@@ -703,13 +703,19 @@ class Api
      *
      * @return array<string,string>
      */
-    private function baseHeaders(): array
+    private function baseHeaders(?string $targetUrl = null): array
     {
         $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->headers);
-        if ($this->authHeader !== '') {
+        // Attach the configured Authorization / Cookie ONLY when the request
+        // target is same-origin as the configured base. A path that is itself an
+        // absolute off-origin URL otherwise leaks the bearer token / session
+        // cookie to an attacker-chosen host - the same cross-origin strip already
+        // applied to followed redirects, now for the initial target too.
+        $sameOriginAsBase = $targetUrl === null || $this->sameOrigin($targetUrl, $this->baseUrl);
+        if ($this->authHeader !== '' && $sameOriginAsBase) {
             $headers['Authorization'] = $this->authHeader;
         }
-        if ($this->cookiesEnabled) {
+        if ($this->cookiesEnabled && $sameOriginAsBase) {
             $cookieHeader = $this->cookieHeaderValue();
             if ($cookieHeader !== null) {
                 $headers['Cookie'] = $cookieHeader;
@@ -951,7 +957,7 @@ class Api
         }
 
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
-        $requestHeaders = $this->baseHeaders();
+        $requestHeaders = $this->baseHeaders($url);
         foreach ($extraHeaders as $name => $value) {
             $requestHeaders[$name] = $value;
         }
