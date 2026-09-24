@@ -445,11 +445,11 @@ class DbContractAbcTest extends TestCase
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    /** Read the private pinnedAdapter to assert pin state. */
+    /** Read the active execution context to assert its private transaction pin. */
     private function pinIsRetained(Database $db): bool
     {
         $ref = new \ReflectionClass($db);
-        $prop = $ref->getProperty('pinnedAdapter');
-        return $prop->getValue($db) !== null;
+        $context = $ref->getMethod('executionContext')->invoke($db);
+        return $context->pinnedAdapter !== null;
     }
 }
