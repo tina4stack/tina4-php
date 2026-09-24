@@ -54,12 +54,9 @@ class SecurityHeadersMiddleware
      */
     public static function beforeSecurity(Request $request, Response $response): array
     {
-        $response->header(
-            'X-Frame-Options',
-            DotEnv::getEnv('TINA4_FRAME_OPTIONS', 'SAMEORIGIN')
-        );
-
-        $response->header('X-Content-Type-Options', 'nosniff');
+        $canonical = self::canonicalHeaders();
+        $response->header('X-Frame-Options', $canonical['X-Frame-Options']);
+        $response->header('X-Content-Type-Options', $canonical['X-Content-Type-Options']);
 
         // HSTS is HTTPS-only (SECHDR-DEC-02): a downgrade-protection header on a
         // plain-HTTP response is inert at best and ships a bad max-age on an
@@ -79,24 +76,31 @@ class SecurityHeadersMiddleware
         if (DotEnv::getEnv('TINA4_CSP', null) === null) {
             self::warnCspDefaultOnce();
         }
-        $response->header(
-            'Content-Security-Policy',
-            DotEnv::getEnv('TINA4_CSP', "default-src 'self'")
-        );
-
-        $response->header(
-            'Referrer-Policy',
-            DotEnv::getEnv('TINA4_REFERRER_POLICY', 'strict-origin-when-cross-origin')
-        );
-
-        $response->header('X-XSS-Protection', '0');
-
-        $response->header(
-            'Permissions-Policy',
-            DotEnv::getEnv('TINA4_PERMISSIONS_POLICY', 'camera=(), microphone=(), geolocation=()')
-        );
+        foreach (['Content-Security-Policy', 'Referrer-Policy', 'X-XSS-Protection', 'Permissions-Policy'] as $name) {
+            $response->header($name, $canonical[$name]);
+        }
 
         return [$request, $response];
+    }
+
+    /**
+     * The canonical security header set (SECHDR-DEC-01) with its environment
+     * overrides, WITHOUT Strict-Transport-Security, which depends on the
+     * request's scheme. Also used by Tina4\Server for a transport rejection,
+     * which is written before the scheme is known (ADR-0068 section 4).
+     *
+     * @return array<string, string>
+     */
+    public static function canonicalHeaders(): array
+    {
+        return [
+            'X-Frame-Options' => (string)DotEnv::getEnv('TINA4_FRAME_OPTIONS', 'SAMEORIGIN'),
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => (string)DotEnv::getEnv('TINA4_CSP', "default-src 'self'"),
+            'Referrer-Policy' => (string)DotEnv::getEnv('TINA4_REFERRER_POLICY', 'strict-origin-when-cross-origin'),
+            'X-XSS-Protection' => '0',
+            'Permissions-Policy' => (string)DotEnv::getEnv('TINA4_PERMISSIONS_POLICY', 'camera=(), microphone=(), geolocation=()'),
+        ];
     }
 
     /**
