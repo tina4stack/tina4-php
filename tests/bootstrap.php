@@ -31,6 +31,15 @@ putenv('TMPDIR=' . $tina4TestTmpRoot);
 $_ENV['TMPDIR'] = $tina4TestTmpRoot;
 $_SERVER['TMPDIR'] = $tina4TestTmpRoot;
 
+// A test run never opens a browser. Every server a test boots inherits this;
+// a test that needs the opener (BrowserOpenGateTest) clears it in the child's
+// environment on purpose. An explicit value from the caller is kept.
+if (getenv('TINA4_NO_BROWSER') === false) {
+    putenv('TINA4_NO_BROWSER=true');
+    $_ENV['TINA4_NO_BROWSER'] = 'true';
+    $_SERVER['TINA4_NO_BROWSER'] = 'true';
+}
+
 /**
  * Tina4 v3 test bootstrap.
  * Defines legacy constants before autoloader triggers Initialize.php,
