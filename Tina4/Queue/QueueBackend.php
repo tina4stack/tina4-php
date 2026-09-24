@@ -54,12 +54,19 @@ interface QueueBackend
     public function deadLetter(string $topic, array $message): void;
 
     /**
-     * Get the number of messages in a queue.
+     * Get the number of messages in a queue for a status.
      *
-     * @param string $topic The queue/topic name
+     * $status defaults to 'pending'. The dead aliases ('dead', 'failed',
+     * 'dead_letter') count the dead-letter store (== count(deadLetters())) —
+     * ADR-0022 decision 7: size() must never answer a different question than
+     * the one asked. Kafka is the named exception (ADR-0022 decision 5): a log
+     * has no depth, so it returns 0.
+     *
+     * @param string $topic  The queue/topic name
+     * @param string $status Job status to count (default 'pending')
      * @return int
      */
-    public function size(string $topic): int;
+    public function size(string $topic, string $status = 'pending'): int;
 
     /**
      * List the jobs that failed but have retries left.

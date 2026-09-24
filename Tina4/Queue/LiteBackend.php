@@ -388,6 +388,29 @@ class LiteBackend implements QueueBackend
     }
 
     /**
+     * Reject a job permanently — dead-letter it NOW, no retry (ADR-0023).
+     *
+     * Unlike failJob(), which requeues until maxRetries is spent, rejectJob()
+     * moves a known-poison job straight to the dead-letter store. Attempts is
+     * floored at maxRetries so deadLetters() (attempts >= maxRetries) returns it
+     * and count('dead') agrees.
+     *
+     * @param string $topic   The queue/topic name
+     * @param array  $jobData Job data
+     * @param string $reason  Rejection reason
+     * @return array The job data with attempts/error applied
+     */
+    public function rejectJob(string $topic, array $jobData, string $reason = ''): array
+    {
+        $this->clearReservation($topic, (string)($jobData['id'] ?? ''));
+        $jobData['attempts'] = max((int)($jobData['attempts'] ?? 0) + 1, $this->maxRetries);
+        $jobData['error'] = $reason;
+        $this->deadLetter($topic, $jobData);
+
+        return $jobData;
+    }
+
+    /**
      * Explicit re-queue requested by the caller (Job::retry()).
      *
      * Always re-enqueues regardless of the retry limit — this is a manual
@@ -432,9 +455,9 @@ class LiteBackend implements QueueBackend
      * @param string $topic The queue/topic name
      * @return int
      */
-    public function size(string $topic): int
+    public function size(string $topic, string $status = 'pending'): int
     {
-        return $this->count($topic, 'pending');
+        return $this->count($topic, $status);
     }
 
     /**
