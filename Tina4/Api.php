@@ -602,7 +602,7 @@ class Api
                     'status' => null,
                     'headers' => [],
                     'rawHeaders' => [],
-                    'error' => self::HTTPS_UNAVAILABLE . " (requested {$currentUrl})",
+                    'error' => self::HTTPS_UNAVAILABLE . ' (requested ' . DatabaseUrl::redact($currentUrl) . ')',
                 ];
             }
 
@@ -1121,7 +1121,7 @@ class Api
         $port = $parts['port'] ?? ($scheme === 'https' ? 443 : 80);
 
         if ($scheme === 'https' && !self::httpsAvailable()) {
-            throw new ApiStreamError(self::HTTPS_UNAVAILABLE . " (requested {$url})");
+            throw new ApiStreamError(self::HTTPS_UNAVAILABLE . ' (requested ' . DatabaseUrl::redact($url) . ')');
         }
 
         $contextOptions = [];
