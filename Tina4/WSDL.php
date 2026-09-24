@@ -330,7 +330,9 @@ abstract class WSDL
 
     /**
      * True when the raw body is a UTF-8 document: no byte-order mark, valid
-     * UTF-8, no NUL byte, and no XML declaration naming another encoding.
+     * UTF-8, no NUL byte, and an XML declaration that either names no encoding
+     * or names exactly "UTF-8" (any case). "UTF8" is refused too: the rule is
+     * byte-identical in all four frameworks.
      */
     private static function isUtf8Document(string $xmlBody): bool
     {
@@ -343,7 +345,7 @@ abstract class WSDL
             return false;
         }
         if (preg_match('/^\s*<\?xml\b[^>]*?\bencoding\s*=\s*["\']([^"\']*)["\']/i', $xmlBody, $declared)) {
-            return (bool)preg_match('/^utf-?8$/i', trim($declared[1]));
+            return strcasecmp($declared[1], 'UTF-8') === 0;
         }
         return true;
     }

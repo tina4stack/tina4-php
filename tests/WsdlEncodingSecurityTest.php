@@ -126,6 +126,20 @@ final class WsdlEncodingSecurityTest extends TestCase
         $this->assertRefusedAsMalformed('<?xml version="1.0" encoding="ISO-8859-1"?>' . $this->echoEnvelope("caf\xE9"));
     }
 
+    public function testOnlyTheExactUtf8EncodingNameIsAccepted(): void
+    {
+        foreach (['UTF8', 'ISO-8859-1', 'US-ASCII', 'UTF-16'] as $encoding) {
+            WsdlEncodingParityService::$invocations = 0;
+            $this->assertRefusedAsMalformed("<?xml version=\"1.0\" encoding=\"{$encoding}\"?>" . $this->echoEnvelope('ascii'));
+        }
+        [$faultCode, $result] = $this->send("<?xml version='1.0' encoding='Utf-8'?>" . $this->echoEnvelope('ascii'));
+        $this->assertSame('', $faultCode);
+        $this->assertSame('ascii', $result);
+        [$faultCode, $result] = $this->send('<?xml version="1.0"?>' . $this->echoEnvelope('no-encoding'));
+        $this->assertSame('', $faultCode);
+        $this->assertSame('no-encoding', $result);
+    }
+
     public function testUtf8BodyWithNonAsciiTextIsAccepted(): void
     {
         [$faultCode, $result] = $this->send('<?xml version="1.0" encoding="utf-8"?>' . $this->echoEnvelope('héllo ✓'));
