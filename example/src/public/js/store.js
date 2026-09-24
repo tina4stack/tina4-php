@@ -231,7 +231,7 @@ customElements.define("order-tracker", OrderTracker);
 
             debounceTimer = setTimeout(function() {
                 api.graphql("/api/graphql",
-                    '{ search_products(term: "' + term.replace(/"/g, '\\"') + '", limit: 8) { id name slug price image_url } }'
+                    '{ search_products(term: "' + term.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", limit: 8) { id name slug price image_url } }'
                 ).then(function(result) {
                     var data = result.data || result;
                     var errors = result.errors;

@@ -53,10 +53,22 @@ class GraphQL
      */
     public int $maxDepth = 50;
 
+    /**
+     * F2: maximum expanded selection nodes per query. The depth guard bounds
+     * NESTING but not WIDTH — a fragment bomb (fragments spreading fragments)
+     * stays shallow while expanding to millions of fields, and an alias
+     * explosion is not deep at all. This budget bounds the expanded selection
+     * tree (fragments expanded, each alias counted) so both are rejected before
+     * any resolver runs. TINA4_GRAPHQL_MAX_NODES, default 1000; <= 0 disables.
+     */
+    public int $maxNodes = 1000;
+
     public function __construct()
     {
         $envDepth = DotEnv::getEnv('TINA4_GRAPHQL_MAX_DEPTH', '50');
         $this->maxDepth = is_numeric($envDepth) ? (int) $envDepth : 50;
+        $envNodes = DotEnv::getEnv('TINA4_GRAPHQL_MAX_NODES', '1000');
+        $this->maxNodes = is_numeric($envNodes) ? (int) $envNodes : 1000;
 
         // Drain any resolvers registered via the class-level GraphQL::resolve()
         // BEFORE this instance was constructed.
@@ -182,6 +194,17 @@ class GraphQL
 
         $self = $this;
         Router::post($endpoint, function (Request $request, Response $response) use ($self) {
+            // F4 (CSRF): require an application/json content-type. A browser can
+            // only send a cross-site POST with text/plain, form-urlencoded or
+            // multipart bodies without a CORS preflight; demanding JSON forces
+            // the preflight (and its same-origin/allow-list check) for any
+            // cross-site caller, so a forged form cannot drive a mutation.
+            // Same-origin XHR/fetch and server clients set application/json.
+            if (!str_contains(strtolower($request->contentType), 'application/json')) {
+                return $response->json(['data' => null, 'errors' => [[
+                    'message' => 'GraphQL requires a Content-Type of application/json',
+                ]]], 415);
+            }
             $body = $request->body;
             if (is_string($body)) {
                 $decoded = json_decode($body, true);
@@ -298,6 +321,18 @@ class GraphQL
         }
 
         $op = $operations[0];
+
+        // F2: reject an over-complex query (fragment bomb / alias explosion)
+        // before any resolver runs.
+        if ($this->maxNodes > 0) {
+            $complexity = $this->queryComplexity($op['selections'], $fragments, 1, 0);
+            if ($complexity > $this->maxNodes) {
+                return ['data' => null, 'errors' => [[
+                    'message' => "Query exceeds maximum complexity of {$this->maxNodes} nodes",
+                ]]];
+            }
+        }
+
         $resolvers = ($op['operation'] === 'query') ? $this->queries : $this->mutations;
 
         // Apply variable defaults
@@ -470,6 +505,50 @@ class GraphQL
      * over-deep query or a circular fragment fails with a structured error
      * instead of recursing until the interpreter stack overflows.
      */
+    /**
+     * Count the expanded selection nodes for the complexity budget (F2).
+     *
+     * Fragment spreads are expanded (so a fragment bomb is counted, not the
+     * small unexpanded document) and every field — including each alias —
+     * counts once. The running count is returned so the walk stops as soon as
+     * it passes $maxNodes, capping the check's own cost; the depth cap keeps a
+     * circular fragment from looping (it trips the budget instead).
+     *
+     * @param array $selections Selection nodes to count.
+     * @param array $fragments  Fragment definitions by name.
+     * @param int   $depth      Current expansion depth.
+     * @param int   $count      Running node count carried through the walk.
+     * @return int  The node count, at most $maxNodes + 1.
+     */
+    private function queryComplexity(array $selections, array $fragments, int $depth, int $count): int
+    {
+        $depthCap = $this->maxDepth > 0 ? $this->maxDepth : 1000;
+        if ($depth > $depthCap) {
+            return $count;
+        }
+        foreach ($selections as $sel) {
+            $count++;
+            if ($count > $this->maxNodes) {
+                return $count;
+            }
+            $kind = $sel['kind'] ?? '';
+            if ($kind === 'fragment_spread') {
+                $frag = $fragments[$sel['name']] ?? null;
+                if ($frag !== null) {
+                    $count = $this->queryComplexity($frag['selections'], $fragments, $depth + 1, $count);
+                }
+            } elseif ($kind === 'inline_fragment') {
+                $count = $this->queryComplexity($sel['selections'] ?? [], $fragments, $depth + 1, $count);
+            } elseif (!empty($sel['selections'])) {
+                $count = $this->queryComplexity($sel['selections'], $fragments, $depth + 1, $count);
+            }
+            if ($count > $this->maxNodes) {
+                return $count;
+            }
+        }
+        return $count;
+    }
+
     private function resolveSelectionsInto(array $selections, array $resolvers, mixed $parent,
                                            array $variables, array $fragments, array &$target,
                                            array $context = [], int $depth = 1): array
@@ -944,10 +1023,18 @@ class GraphQLParser
 {
     private array $tokens;
     private int $pos = 0;
+    // F2: bound the parser's own recursion. A deeply nested query
+    // ("{a{a{a...}}}") otherwise recurses in parseSelectionSet until the process
+    // exhausts memory / the stack — BEFORE the execution-time depth guard can
+    // run. Reusing TINA4_GRAPHQL_MAX_DEPTH keeps parse and execution on one bound.
+    private int $depth = 0;
+    private int $maxDepth = 50;
 
     public function __construct(array $tokens)
     {
         $this->tokens = $tokens;
+        $envDepth = DotEnv::getEnv('TINA4_GRAPHQL_MAX_DEPTH', '50');
+        $this->maxDepth = is_numeric($envDepth) ? (int) $envDepth : 50;
     }
 
     public function parse(): array
@@ -1049,6 +1136,20 @@ class GraphQLParser
     }
 
     private function parseSelectionSet(): array
+    {
+        $this->depth++;
+        if ($this->maxDepth > 0 && $this->depth > $this->maxDepth) {
+            $this->depth--;
+            throw new \RuntimeException("Query exceeds maximum depth of {$this->maxDepth}");
+        }
+        try {
+            return $this->parseSelectionSetInner();
+        } finally {
+            $this->depth--;
+        }
+    }
+
+    private function parseSelectionSetInner(): array
     {
         $this->expect('LBRACE');
         $selections = [];

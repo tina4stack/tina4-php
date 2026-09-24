@@ -217,7 +217,16 @@ class Request
         $scheme = self::isSecureScheme((string)($this->headers['x-forwarded-proto'] ?? ''))
             ? 'https'
             : 'http';
-        $host = $this->headers['x-forwarded-host']
+        // X-Forwarded-Host is honoured ONLY when the raw socket peer is a
+        // trusted proxy (TINA4_TRUSTED_PROXIES, ADR-0019) — the same gate
+        // already applied to X-Forwarded-For. An untrusted client can otherwise
+        // forge the host and control the absolute request.url (password-reset
+        // links, cache keys, open-redirect base). Parity with Python/Ruby/Node.
+        $peer = $remoteIp ?? ($_SERVER['REMOTE_ADDR'] ?? '');
+        $forwardedHost = ($peer !== '' && TrustedProxy::isTrusted($peer))
+            ? ($this->headers['x-forwarded-host'] ?? null)
+            : null;
+        $host = $forwardedHost
             ?? ($this->headers['host'] ?? ($_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost')));
         $url = "{$scheme}://{$host}{$this->path}";
         if ($this->queryString !== '') {
