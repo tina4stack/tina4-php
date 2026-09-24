@@ -26,7 +26,7 @@ class SecretFilePermissionsTest extends TestCase
     #[DataProvider('cases')]
     public function testCredentialWriter(string $writer, string $kind): void
     {
-        if (PHP_OS_FAMILY === 'Windows') $this->markTestSkipped('POSIX file permissions');
+        if (PHP_OS_FAMILY === 'Windows') $this->markTestSkipped('[needs:os=posix] POSIX file permissions');
         $saved = getenv(); $savedEnv = $_ENV; $savedServer = $_SERVER;
         $cwd = getcwd();
         $dir = sys_get_temp_dir() . '/credential-files-' . bin2hex(random_bytes(8));
