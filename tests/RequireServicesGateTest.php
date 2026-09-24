@@ -7,10 +7,11 @@
  *
  * Contract tests for the TINA4_REQUIRE_SERVICES gate (Tina4\Testing\*).
  *
- * The gate guarantees NO GREEN SKIPS in CI: when the workflow has provisioned
- * PostgreSQL/MySQL/MSSQL/Redis/Valkey/Memcached/Mongo/RabbitMQ/Kafka and set
- * TINA4_REQUIRE_SERVICES=1, a test that skips because one of those services (or
- * its client library) is missing must FAIL the run instead of passing quietly.
+ * The gate guarantees NO GREEN SKIPS where TINA4_REQUIRE_SERVICES=1: a skip
+ * fails the run unless its reason carries an excusable [needs:X] tag (ADR-0069
+ * addendum F - optional engine only while its coordinate is unset, an
+ * always-provisioned service never, a platform exclusion always; untagged
+ * fails).
  *
  * It shipped with a hole: the gate subscribed only to PHPUnit's per-test
  * Test\Skipped event, but a skip declared in setUpBeforeClass() emits a SINGLE
@@ -231,12 +232,12 @@ class RequireServicesGateTest extends TestCase
         );
 
         $this->assertNotSame(0, $code, $output);
-        $this->assertStringContainsString('2 real-service test(s) SKIPPED', $output);
+        $this->assertStringContainsString('2 test(s) SKIPPED without an excusable [needs:...] tag', $output);
         $this->assertStringContainsString('Kafka not reachable', $output);
         $this->assertStringContainsString('Redis not reachable', $output);
     }
 
-    // ── Negative cases: the gate must NOT fire ──────────────────────────────
+    // ── Gate off: unchanged ─────────────────────────────────────────────────
 
     public function testProvisionedServiceSkipStaysGreenWhenTheGateIsNotArmed(): void
     {
@@ -252,260 +253,169 @@ class RequireServicesGateTest extends TestCase
         $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
     }
 
+    // ── ADR-0069 addendum F: only a [needs:X] tag can excuse a skip ─────────
+
     /**
-     * A skip for something genuinely NOT provisioned must still stay green, so
-     * the suite-level subscriber cannot over-reach.
-     *
-     * This used to use Firebird as its example of "not provisioned". That was
-     * false - a live Firebird 5.0.4 has been answering on 3050 the whole time -
-     * and while it stood, this test actively ENFORCED the hole: it asserted that
-     * Firebird skips must pass, so 17 of them did. Firebird is now provisioned
-     * and gated like every other service (see the case below); the over-reach
-     * guard uses a service Tina4 genuinely does not provision instead.
+     * An UNTAGGED skip fails the armed run, whatever it says. The phrase list
+     * this replaced missed "no reachable ..." (the wording 11 skip sites used),
+     * so those skipped green; wording can no longer decide anything.
      */
-    public function testGenuinelyUnprovisionedServiceSkipStaysGreenEvenWhenArmed(): void
+    public function testAnUntaggedSkipFailsTheArmedRunWhateverItsWording(): void
+    {
+        foreach ([
+            'GateFixtureNoReachable' => 'no reachable MongoDB at mongodb://192.168.88.99:27017',
+            'GateFixtureUnprovisioned' => 'Cassandra not reachable on localhost:9042',
+            'GateFixturePlain' => 'this test is slow, run it manually',
+        ] as $className => $reason) {
+            [$output, $code] = $this->runPhpunit(
+                [$className => $this->beforeClassFixture($className, $reason, 1)],
+                true,
+            );
+            $this->assertNotSame(0, $code, "an untagged skip ('{$reason}') exited 0 under the gate:\n" . $output);
+            $this->assertStringContainsString('TINA4_REQUIRE_SERVICES is set, but', $output);
+            $this->assertStringContainsString($reason, $output);
+        }
+    }
+
+    /**
+     * An OPTIONAL engine's tag excuses the skip only while the run has NOT
+     * published that engine's coordinate: the CI job that never promised a
+     * Firebird stays green, the lab (and the `firebird:` job) that did fail.
+     */
+    public function testAnOptionalEngineTagIsExcusedOnlyWhileItsCoordinateIsUnset(): void
+    {
+        $reason = '[needs:firebird] Firebird unreachable at localhost:3050';
+
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureNoFirebird' => $this->beforeClassFixture('GateFixtureNoFirebird', $reason, 1)],
+            true,
+            ['TINA4_TEST_FIREBIRD_URL' => null],
+        );
+        $this->assertSame(0, $code, "no Firebird promised: a [needs:firebird] skip must stay green.\n" . $output);
+        $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
+
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureFirebird' => $this->beforeClassFixture('GateFixtureFirebird', $reason, 1)],
+            true,
+            ['TINA4_TEST_FIREBIRD_URL' => 'firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb'],
+        );
+        $this->assertNotSame(0, $code, "a Firebird WAS promised: its skip must fail even when tagged.\n" . $output);
+        $this->assertStringContainsString($reason, $output);
+    }
+
+    /** postgres is promised by EITHER spelling of its coordinate. */
+    public function testThePostgresTagHonoursBothCoordinateSpellings(): void
+    {
+        $reason = '[needs:postgres] PostgreSQL unreachable at localhost:5432';
+        foreach ([
+            'GateFixturePgUrl' => ['TINA4_TEST_PG_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php', 'TINA4_TEST_POSTGRES_URL' => null],
+            'GateFixturePostgresUrl' => ['TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGRES_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php'],
+        ] as $className => $environment) {
+            [$output, $code] = $this->runPhpunit(
+                [$className => $this->beforeClassFixture($className, $reason, 1)],
+                true,
+                $environment,
+            );
+            $this->assertNotSame(0, $code, "{$className}: a promised PostgreSQL skip must fail.\n" . $output);
+        }
+
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureNoPostgres' => $this->beforeClassFixture('GateFixtureNoPostgres', $reason, 1)],
+            true,
+            ['TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGRES_URL' => null],
+        );
+        $this->assertSame(0, $code, "no PostgreSQL promised: the tagged skip must stay green.\n" . $output);
+    }
+
+    /** An ALWAYS-provisioned service is never excused, tagged or not. */
+    public function testAnAlwaysProvisionedServiceTagIsNeverExcused(): void
+    {
+        $reason = '[needs:mongo] MongoDB unreachable at localhost:27017';
+        [$output, $code] = $this->runPhpunit(
+            ['GateFixtureTaggedMongo' => $this->perTestFixture('GateFixtureTaggedMongo', $reason)],
+            true,
+        );
+        $this->assertNotSame(0, $code, $output);
+        $this->assertStringContainsString($reason, $output);
+    }
+
+    /** A platform exclusion tag is always excused. */
+    public function testAPlatformExclusionTagIsExcused(): void
     {
         [$output, $code] = $this->runPhpunit(
-            ['GateFixtureUnprovisioned' => $this->beforeClassFixture(
-                'GateFixtureUnprovisioned',
-                'Cassandra not reachable on localhost:9042',
-                1,
+            ['GateFixturePlatform' => $this->perTestFixture(
+                'GateFixturePlatform',
+                '[needs:absent-ext=pgsql] only meaningful where ext-pgsql is NOT loaded',
             )],
             true,
         );
-
         $this->assertSame(0, $code, $output);
         $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
     }
 
-    /**
-     * REGRESSION GUARD (positive half): where a Firebird WAS promised, a
-     * Firebird skip must FAIL the armed run.
-     *
-     * Until 2026-08-05 the gate excluded Firebird by keyword and this file
-     * asserted the exclusion, so every "ext-interbase not installed" /
-     * "Firebird not reachable" skip passed green and stayed invisible.
-     *
-     * Note this sets the coordinates for the CHILD rather than trusting the
-     * ambient ones. Firebird is gated per run, so a version of this test that
-     * inherited the environment would pass on the lab (which exports the URL)
-     * and fail in the CI `test:` job (which deliberately does not) -- asserting
-     * where it is running rather than what the gate does.
-     */
-    public function testFirebirdSkipFailsTheArmedRunWhenAFirebirdWasPromised(): void
-    {
-        [$output, $code] = $this->runPhpunit(
-            ['GateFixtureFirebird' => $this->beforeClassFixture(
-                'GateFixtureFirebird',
-                'Firebird not reachable on localhost:3050',
-                1,
-            )],
-            true,
-            ['TINA4_TEST_FIREBIRD_URL' => 'firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb'],
-        );
-
-        $this->assertNotSame(
-            0,
-            $code,
-            "a Firebird skip must fail the armed run when TINA4_TEST_FIREBIRD_URL promised one.\n" . $output,
-        );
-        $this->assertStringContainsString('TINA4_REQUIRE_SERVICES is set', $output);
-    }
+    // ── The predicate itself (pure function of the reason + this env) ───────
 
     /**
-     * REGRESSION GUARD (negative half): where NO Firebird was promised, the
-     * same skip must stay green.
-     *
-     * This is the half that keeps the main CI `test:` job honest. It runs this
-     * whole suite with the gate armed and deliberately provisions no Firebird
-     * (stacking that container onto an already 8-service job destabilised the
-     * runner), so listing Firebird unconditionally would fail that job for a
-     * service it never claimed to provide.
+     * @param array<string, string|null> $environment
      */
-    public function testFirebirdSkipStaysGreenWhenNoFirebirdWasPromised(): void
+    private function withEnvironment(array $environment, callable $body): void
     {
-        [$output, $code] = $this->runPhpunit(
-            ['GateFixtureNoFirebird' => $this->beforeClassFixture(
-                'GateFixtureNoFirebird',
-                'Firebird not reachable on localhost:3050',
-                1,
-            )],
-            true,
-            ['TINA4_TEST_FIREBIRD_URL' => null],
-        );
-
-        $this->assertSame(
-            0,
-            $code,
-            "with no Firebird promised, a Firebird skip must stay green.\n" . $output,
-        );
-        $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
-    }
-
-    /**
-     * The SQL engines are conditional for the same reason Firebird is, and this
-     * pair is the proof. POSITIVE half: where a PostgreSQL WAS promised, its
-     * skip is still a violation exactly as it was when 'postgres' sat in the
-     * unconditional list.
-     *
-     * This half is the one that matters for the environments that do the real
-     * work: the CI `test:` job, the CI `cache-driver:` job and the lab all set
-     * TINA4_TEST_PG_URL, so moving the keyword must not have quietly disarmed
-     * the gate for any of them.
-     */
-    public function testPostgresSkipFailsTheArmedRunWhenAPostgresWasPromised(): void
-    {
-        [$output, $code] = $this->runPhpunit(
-            ['GateFixturePostgres' => $this->beforeClassFixture(
-                'GateFixturePostgres',
-                'PostgreSQL not reachable at localhost:5432',
-                1,
-            )],
-            true,
-            ['TINA4_TEST_PG_URL' => 'postgres://tina4:tina4@127.0.0.1:55432/tina4_php'],
-        );
-
-        $this->assertNotSame(
-            0,
-            $code,
-            "a PostgreSQL skip must fail the armed run when TINA4_TEST_PG_URL promised one.\n" . $output,
-        );
-        $this->assertStringContainsString('TINA4_REQUIRE_SERVICES is set', $output);
-    }
-
-    /**
-     * NEGATIVE half, and the reason the SQL engines moved at all.
-     *
-     * The CI `firebird:` job provisions a real Firebird and NOTHING else, yet
-     * the files it runs carry nine PostgreSQL/mysqli skip sites - "PostgreSQL
-     * not reachable at %s:%d", "ext-mysqli not installed", "no PostgreSQL driver
-     * (pdo_pgsql / ext-pgsql) installed". While 'postgres' was unconditional,
-     * arming the gate there would have failed that job on every one of them, so
-     * the gate was simply left off and Firebird skips passed green in the one
-     * job that HAS a Firebird.
-     *
-     * Neither workaround was acceptable: dropping those files loses the Firebird
-     * cases they carry, which is why they are in that job's list, and rewording
-     * accurate skip reasons to dodge a keyword is gaming the gate.
-     */
-    public function testPostgresSkipStaysGreenWhenNoPostgresWasPromised(): void
-    {
-        [$output, $code] = $this->runPhpunit(
-            ['GateFixtureNoPostgres' => $this->beforeClassFixture(
-                'GateFixtureNoPostgres',
-                'PostgreSQL not reachable at localhost:5432',
-                1,
-            )],
-            true,
-            ['TINA4_TEST_PG_URL' => null],
-        );
-
-        $this->assertSame(
-            0,
-            $code,
-            "with no PostgreSQL promised, a PostgreSQL skip must stay green.\n" . $output,
-        );
-        $this->assertStringNotContainsString('TINA4_REQUIRE_SERVICES is set', $output);
-    }
-
-    /**
-     * The conditional matcher itself, with the environment controlled here so
-     * the assertion is about the code and not about the host.
-     */
-    public function testMatcherArmsFirebirdOnlyWhenItsCoordinatesArePublished(): void
-    {
-        $reason = 'Firebird not reachable on localhost:3050';
-        $original = getenv('TINA4_TEST_FIREBIRD_URL');
-
+        $original = [];
+        foreach ($environment as $name => $value) {
+            $original[$name] = getenv($name);
+            $value === null ? putenv($name) : putenv("{$name}={$value}");
+        }
         try {
-            putenv('TINA4_TEST_FIREBIRD_URL');
-            $this->assertFalse(
-                RequireServicesGate::isProvisionedServiceSkip($reason),
-                'with no coordinates published, this run was never promised a Firebird',
-            );
-            $this->assertNotContains('firebird', RequireServicesGate::activeServiceKeywords());
-
-            putenv('TINA4_TEST_FIREBIRD_URL=firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb');
-            $this->assertTrue(
-                RequireServicesGate::isProvisionedServiceSkip($reason),
-                'coordinates published means a Firebird WAS promised, so its skip is a violation',
-            );
-            $this->assertContains('firebird', RequireServicesGate::activeServiceKeywords());
-
-            // Blank is not a promise.
-            putenv('TINA4_TEST_FIREBIRD_URL=   ');
-            $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip($reason));
+            $body();
         } finally {
-            if ($original === false) {
-                putenv('TINA4_TEST_FIREBIRD_URL');
-            } else {
-                putenv('TINA4_TEST_FIREBIRD_URL=' . $original);
+            foreach ($original as $name => $value) {
+                $value === false ? putenv($name) : putenv("{$name}={$value}");
             }
         }
     }
 
-    // ── The keyword matcher itself (pure predicate, no dependency) ───────────
-
-    public function testMatcherAcceptsAProvisionedServicePlusAnUnavailableHint(): void
+    public function testThePredicateCoversAllFourBranches(): void
     {
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('Kafka not reachable on localhost:9092'));
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('rdkafka extension not installed'));
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('TINA4_TEST_KAFKA_URL not set'));
-        $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('MongoDB could not connect'));
-    }
-
-    public function testMatcherRejectsAnUnprovisionedServiceOrAPlainSkip(): void
-    {
-        $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip('Cassandra not reachable on localhost:9042'));
-        $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip('Kafka test is slow, run it manually'));
-        $this->assertFalse(RequireServicesGate::isProvisionedServiceSkip(''));
-    }
-
-    /**
-     * Firebird and its two clients are matched, and so are the hint phrases that
-     * used to leak. Every string here is a VERBATIM skip reason this suite
-     * produced while the gate looked the other way.
-     *
-     * Firebird and PostgreSQL are both CONDITIONAL keywords (armed only when
-     * their coordinates are published — see CONDITIONAL_SERVICE_KEYWORDS), so
-     * this test controls both env vars itself, exactly like
-     * testMatcherArmsFirebirdOnlyWhenItsCoordinatesArePublished above does for
-     * Firebird alone. Without that, the result depended on which CI job
-     * happened to run it: the firebird: job publishes TINA4_TEST_FIREBIRD_URL,
-     * the main test: job deliberately does not (that job builds ext-interbase
-     * for testFirebirdThrowsWithoutExtension but promises no live Firebird
-     * server), so the FIRST assertion here failed there — not because the
-     * matcher was wrong, but because this test asked "was Firebird promised?"
-     * of a run that never promised one. The fix is isolation, the same
-     * principle the sibling test's own docblock states: "the assertion is
-     * about the code and not about the host."
-     */
-    public function testMatcherAcceptsFirebirdAndThePreviouslyLeakingHints(): void
-    {
-        $originalFirebird = getenv('TINA4_TEST_FIREBIRD_URL');
-        $originalPg = getenv('TINA4_TEST_PG_URL');
-        putenv('TINA4_TEST_FIREBIRD_URL=firebird://SYSDBA:masterkey@127.0.0.1:3050//data/t.fdb');
-        putenv('TINA4_TEST_PG_URL=postgres://tina4:tina4@127.0.0.1:55432/tina4_php');
-        try {
-            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('ext-interbase not installed'));
-            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip('Firebird not reachable at localhost:53050'));
-            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
-                'pdo_firebird driver not present - PDO Firebird fallback UNVERIFIED here.'
-            ));
-            $this->assertTrue(RequireServicesGate::isProvisionedServiceSkip(
-                'live PostgreSQL not configured (TINA4_TEST_PG_URL)'
-            ));
-        } finally {
-            if ($originalFirebird === false) {
-                putenv('TINA4_TEST_FIREBIRD_URL');
-            } else {
-                putenv('TINA4_TEST_FIREBIRD_URL=' . $originalFirebird);
+        $unsetAll = [
+            'TINA4_TEST_FIREBIRD_URL' => null, 'TINA4_TEST_PG_URL' => null, 'TINA4_TEST_POSTGRES_URL' => null,
+            'TINA4_TEST_MYSQL_URL' => null, 'TINA4_TEST_MSSQL_URL' => null, 'TINA4_TEST_SWOOLE' => null,
+            'TINA4_TEST_OIDC_ISSUER' => null, 'TINA4_TEST_NEO4J_URL' => null, 'TINA4_TEST_MEMGRAPH_URL' => null,
+            'TINA4_TEST_ARANGO_URL' => null, 'TINA4_TEST_ULTIPA_URL' => null,
+        ];
+        $this->withEnvironment($unsetAll, function (): void {
+            // untagged -> never excused
+            $this->assertFalse(RequireServicesGate::isExcusedSkip('no reachable MongoDB at x'));
+            $this->assertFalse(RequireServicesGate::isExcusedSkip(''));
+            $this->assertFalse(RequireServicesGate::isExcusedSkip('needs:firebird without brackets'));
+            // optional engines, none promised -> excused
+            foreach (['firebird', 'postgres', 'mysql', 'mssql', 'swoole', 'oidc', 'neo4j', 'memgraph', 'arango', 'ultipa'] as $engine) {
+                $this->assertTrue(RequireServicesGate::isExcusedSkip("[needs:{$engine}] unavailable"), $engine);
             }
-            if ($originalPg === false) {
-                putenv('TINA4_TEST_PG_URL');
-            } else {
-                putenv('TINA4_TEST_PG_URL=' . $originalPg);
+            // always-provisioned -> never excused
+            foreach (['mongo', 'redis', 'valkey', 'memcached', 'rabbitmq', 'kafka', 'mqtt', 'smtp', 'imap', 's3'] as $service) {
+                $this->assertFalse(RequireServicesGate::isExcusedSkip("[needs:{$service}] unavailable"), $service);
             }
+            // platform exclusions -> excused
+            foreach (['absent-ext=pgsql', 'no-dac-override', 'os=windows', 'composer', 'runtime=php8.4'] as $platform) {
+                $this->assertTrue(RequireServicesGate::isExcusedSkip("[needs:{$platform}] n/a here"), $platform);
+            }
+            // every tag must be excusable
+            $this->assertFalse(RequireServicesGate::isExcusedSkip('[needs:composer] [needs:redis] both'));
+        });
+
+        foreach ([
+            'firebird' => 'TINA4_TEST_FIREBIRD_URL', 'postgres' => 'TINA4_TEST_PG_URL', 'mysql' => 'TINA4_TEST_MYSQL_URL',
+            'mssql' => 'TINA4_TEST_MSSQL_URL', 'swoole' => 'TINA4_TEST_SWOOLE', 'oidc' => 'TINA4_TEST_OIDC_ISSUER',
+            'neo4j' => 'TINA4_TEST_NEO4J_URL', 'memgraph' => 'TINA4_TEST_MEMGRAPH_URL',
+            'arango' => 'TINA4_TEST_ARANGO_URL', 'ultipa' => 'TINA4_TEST_ULTIPA_URL',
+        ] as $engine => $coordinate) {
+            $this->withEnvironment([$coordinate => 'promised'], function () use ($engine): void {
+                $this->assertFalse(RequireServicesGate::isExcusedSkip("[needs:{$engine}] unavailable"), "{$engine} promised");
+            });
+            // a blank coordinate is not a promise
+            $this->withEnvironment([$coordinate => '   '], function () use ($engine): void {
+                $this->assertTrue(RequireServicesGate::isExcusedSkip("[needs:{$engine}] unavailable"), "{$engine} blank");
+            });
         }
     }
 }
