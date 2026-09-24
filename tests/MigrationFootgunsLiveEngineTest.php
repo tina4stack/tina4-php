@@ -105,14 +105,14 @@ class MigrationFootgunsLiveEngineTest extends TestCase
     {
         if (!function_exists('sqlsrv_connect') && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
             );
         }
 
         $host = self::mssqlHost();
         $port = self::mssqlPort();
         if (!self::reachable($host, $port)) {
-            $this->markTestSkipped(sprintf('MSSQL not reachable at %s:%d — skip live migration footgun test', $host, $port));
+            $this->markTestSkipped('[needs:mssql] ' . sprintf('MSSQL not reachable at %s:%d — skip live migration footgun test', $host, $port));
         }
 
         $db = new Database(
@@ -267,13 +267,13 @@ class MigrationFootgunsLiveEngineTest extends TestCase
     private function firebirdOrSkip(): Database
     {
         if (!function_exists('ibase_connect') && !in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
+            $this->markTestSkipped('[needs:firebird] Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
         }
 
         $url = self::firebirdUrl();
         if ($url === '') {
             $this->markTestSkipped(
-                'TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run, '
+                '[needs:firebird] TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run, '
                 . 'so the live migration footgun cases cannot run'
             );
         }
@@ -289,7 +289,7 @@ class MigrationFootgunsLiveEngineTest extends TestCase
             $db = new Database($url);
             $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
         } catch (\Throwable $failure) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:firebird] ' . sprintf(
                 'Firebird cannot connect at %s — %s',
                 $url,
                 $failure->getMessage()

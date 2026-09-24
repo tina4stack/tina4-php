@@ -108,11 +108,11 @@ class DatabaseCredentialLeakTest extends TestCase
     private function requireLivePostgres(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql not installed — postgres tests cannot run');
+            $this->markTestSkipped('[needs:postgres] ext-pgsql not installed — postgres tests cannot run');
         }
         $socket = @fsockopen(self::pgHost(), self::pgPort(), $errNo, $errStr, 2.0);
         if ($socket === false) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:postgres] ' . sprintf(
                 'postgres not reachable at %s:%d',
                 self::pgHost(),
                 self::pgPort()

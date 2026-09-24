@@ -32,11 +32,11 @@ class PdoFirebirdAdapterTest extends TestCase
     private function adapter(): PdoFirebirdAdapter
     {
         if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_firebird driver not present — PDO Firebird fallback UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] pdo_firebird driver not present — PDO Firebird fallback UNVERIFIED here.');
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — UNVERIFIED.');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — UNVERIFIED.');
         }
         return new PdoFirebirdAdapter($url);
     }

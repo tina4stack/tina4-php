@@ -637,6 +637,7 @@ class Database implements DatabaseAdapter
 
         // Columns come from the first row; every row must share the same keys.
         $keys = array_keys($rows[0]);
+        ColumnName::assertAll($keys);
         $cols = implode(', ', $keys);
         // Generic ? placeholders — each engine's execute() handles its own
         // dialect (PostgreSQL's execute() rewrites ? -> $N via convertPlaceholders).
@@ -847,6 +848,7 @@ class Database implements DatabaseAdapter
             if ($filter === []) {
                 return ['', []];
             }
+            ColumnName::assertAll(array_keys($filter));
             $where = array_map(static fn(string $k): string => $k . ' = ?', array_keys($filter));
             return [implode(' AND ', $where), array_values($filter)];
         }
@@ -881,6 +883,21 @@ class Database implements DatabaseAdapter
      */
     public function delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
     {
+        // A list of filter maps deletes each listed row (the batch form the
+        // adapters already accept). Every map is checked before any row is
+        // deleted, so a bad key never leaves a partial delete behind.
+        if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            foreach ($filter as $rowFilter) {
+                ColumnName::assertAll(array_keys($rowFilter));
+            }
+            $affected = 0;
+            foreach ($filter as $rowFilter) {
+                $affected += $this->delete($table, $rowFilter)->affectedRows;
+            }
+            $this->affectedRows = $affected;
+            return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: $affected, lastId: null, error: null);
+        }
+
         [$filterSql, $whereParams] = $this->asWhere($filter, $whereParams);
         if ($filterSql === '') {
             throw new DatabaseException(sprintf(

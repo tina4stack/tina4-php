@@ -874,7 +874,7 @@ class AdapterConformanceTest extends TestCase
     public function testConfiguredProvidersRunWithoutSkipPostgresql(): void
     {
         if (!self::pgReachable()) {
-            $this->markTestSkipped('PostgreSQL not reachable (set TINA4_TEST_PG_*)');
+            $this->markTestSkipped('[needs:postgres] PostgreSQL not reachable (set TINA4_TEST_PG_*)');
         }
         $this->proveStructuralSliceOn(self::pgDb(), 'postgresql');
     }
@@ -882,7 +882,7 @@ class AdapterConformanceTest extends TestCase
     public function testConfiguredProvidersRunWithoutSkipMysql(): void
     {
         if (!self::mysqlReachable()) {
-            $this->markTestSkipped('MySQL not reachable (set TINA4_TEST_MYSQL_*)');
+            $this->markTestSkipped('[needs:mysql] MySQL not reachable (set TINA4_TEST_MYSQL_*)');
         }
         $this->proveStructuralSliceOn(self::mysqlDb(), 'mysql');
     }
@@ -890,7 +890,7 @@ class AdapterConformanceTest extends TestCase
     public function testConfiguredProvidersRunWithoutSkipMssql(): void
     {
         if (!self::mssqlReachable()) {
-            $this->markTestSkipped('MSSQL not reachable (set TINA4_TEST_MSSQL_*)');
+            $this->markTestSkipped('[needs:mssql] MSSQL not reachable (set TINA4_TEST_MSSQL_*)');
         }
         $this->proveStructuralSliceOn(self::mssqlDb(), 'mssql');
     }
@@ -898,7 +898,7 @@ class AdapterConformanceTest extends TestCase
     public function testConfiguredProvidersRunWithoutSkipFirebird(): void
     {
         if (self::firebirdUrl() === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
         }
         $this->proveStructuralSliceOn(self::firebirdDb(), 'firebird');
     }

@@ -39,11 +39,11 @@ class FirebirdOrmCountTest extends TestCase
     protected function setUp(): void
     {
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed');
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live Firebird ORM count() test (e.g. firebird://SYSDBA:masterkey@localhost:3050/path/to/test.fdb)');
+            $this->markTestSkipped('[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird ORM count() test (e.g. firebird://SYSDBA:masterkey@localhost:3050/path/to/test.fdb)');
         }
 
         $this->db = Database::create($url);

@@ -320,6 +320,7 @@ trait PdoAdapterTrait
         // List of rows -> batch (delegates to executeMany).
         if (isset($data[0]) && is_array($data[0])) {
             $keys = array_keys($data[0]);
+            ColumnName::assertAll($keys);
             $cols = implode(', ', $keys);
             $placeholders = implode(', ', array_fill(0, count($keys), '?'));
             $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
@@ -327,6 +328,7 @@ trait PdoAdapterTrait
             return $this->executeMany($sql, $paramsList) > 0;
         }
 
+        ColumnName::assertAll(array_keys($data));
         $cols = implode(', ', array_keys($data));
         $placeholders = implode(', ', array_fill(0, count($data), '?'));
         $returning = $this->insertReturningClause();
@@ -348,6 +350,7 @@ trait PdoAdapterTrait
 
     public function update(string $table, array $data, string $where = '', array $whereParams = []): bool
     {
+        ColumnName::assertAll(array_keys($data));
         $setParts = [];
         $params = [];
         foreach ($data as $col => $val) {
@@ -366,6 +369,10 @@ trait PdoAdapterTrait
     {
         // List of assoc arrays — delete each row.
         if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            // Every map is checked first, so a bad key never leaves a partial delete.
+            foreach ($filter as $row) {
+                ColumnName::assertAll(array_keys($row));
+            }
             foreach ($filter as $row) {
                 if (!$this->delete($table, $row)) {
                     return false;
@@ -375,6 +382,7 @@ trait PdoAdapterTrait
         }
         // Assoc array — build WHERE from keys.
         if (is_array($filter)) {
+            ColumnName::assertAll(array_keys($filter));
             $parts = [];
             $params = [];
             foreach ($filter as $col => $val) {

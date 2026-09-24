@@ -174,7 +174,7 @@ class FirebirdUrlTest extends TestCase
         if (!self::firebirdReachable()) {
             $t = self::liveTarget();
             $this->markTestSkipped(
-                sprintf(
+                '[needs:firebird] ' . sprintf(
                     'Firebird not reachable at %s:%d (set TINA4_TEST_FIREBIRD_URL to point at a live server)',
                     $t['host'],
                     $t['port']
@@ -183,7 +183,7 @@ class FirebirdUrlTest extends TestCase
         }
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
             $this->markTestSkipped(
-                'ext-interbase not available — host PHP cannot speak Firebird wire protocol'
+                '[needs:firebird] ext-interbase not available — host PHP cannot speak Firebird wire protocol'
             );
         }
     }
@@ -216,7 +216,7 @@ class FirebirdUrlTest extends TestCase
                 || str_contains($msg, 'unsupported')
             ) {
                 $this->markTestSkipped(
-                    'Host ext-interbase cannot speak to Firebird container: ' . $msg
+                    '[needs:firebird] Host ext-interbase cannot speak to Firebird container: ' . $msg
                 );
             }
             throw $e;

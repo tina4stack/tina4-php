@@ -189,22 +189,44 @@ class AutoCrud
             // reference behaviour Python/Ruby/Node were made to match.
             $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
 
-            // Build filter from query params
+            // ADR-0069: filter keys and sort fields resolve against the model's
+            // fields; anything else is a 400 before any SQL runs.
             $filter = [];
             if (isset($request->query['filter']) && is_array($request->query['filter'])) {
-                $filter = $request->query['filter'];
+                foreach ($request->query['filter'] as $key => $value) {
+                    $column = $model->resolveFieldColumn((string)$key);
+                    if ($column === null) {
+                        return $response->error('UNKNOWN_FIELD', "Unknown filter field '{$key}'", 400);
+                    }
+                    // filter[name][]=x / filter[name][x]=y arrive as arrays -
+                    // a filter value is one value, never a bound array.
+                    if (!is_scalar($value)) {
+                        return $response->error('INVALID_QUERY_PARAMETER', "Filter value for '{$key}' must be a single value", 400);
+                    }
+                    $filter[$column] = $value;
+                }
             }
 
-            // Build order by from sort param
             $orderBy = null;
             if (isset($request->query['sort'])) {
-                $orderBy = $this->parseSortParam($request->query['sort']);
+                if (!is_string($request->query['sort'])) {
+                    return $response->error('INVALID_QUERY_PARAMETER', "Query parameter 'sort' must be a single comma-separated string", 400);
+                }
+                [$orderBy, $unknownField] = $this->parseSortParam($model, $request->query['sort']);
+                if ($unknownField !== null) {
+                    return $response->error('UNKNOWN_FIELD', "Unknown sort field '{$unknownField}'", 400);
+                }
             }
 
-            if (!empty($filter)) {
-                $models = $model->find($filter, $limit, $offset, $orderBy);
+            // Both branches query through $model, which carries the connection
+            // this AutoCrud was constructed with - the static find() would
+            // resolve the GLOBAL default instead. The filter columns were
+            // resolved above, so only they and placeholders reach the WHERE.
+            if ($filter !== []) {
+                $conditions = implode(' AND ', array_map(static fn (string $column): string => "{$column} = ?", array_keys($filter)));
+                $models = $model->where($conditions, array_values($filter), $limit, $offset, null, $orderBy);
             } else {
-                $models = $model->all($limit, $offset);
+                $models = $model->all($limit, $offset, null, $orderBy);
             }
 
             // Dogfood ADR-0064: find()/all() return a ModelCollection that
@@ -226,9 +248,7 @@ class AutoCrud
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
-            $model->load($request->params['id']);
-
-            if (!$model->exists($request->params['id'])) {
+            if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -285,9 +305,7 @@ class AutoCrud
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
-            $model->load($request->params['id']);
-
-            if (!$model->exists($request->params['id'])) {
+            if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -317,28 +335,38 @@ class AutoCrud
     }
 
     /**
-     * Guard a write body's DANGEROUS keys before it reaches fill()/the
-     * constructor (CRUD-MASS-ASSIGNMENT).
+     * Load the row a GET/PUT/DELETE /{table}/{id} route addresses.
      *
-     * PHP models may declare columns as typed properties OR leave them
-     * fully dynamic - {@see ORM::getModelProperties()} explicitly merges in
-     * `__set()`-captured dynamic properties by design, and AutoCrudV3Test's
-     * own `CrudItem` fixture declares NO typed properties at all, relying
-     * entirely on dynamic assignment. So there is no closed "known columns"
-     * set to allow-list against without locking a dynamic-property model's
-     * create/update out of every column (measured: a strict allow-list on
-     * `getFieldDefinitions()` alone turns `testCreateItem` red - `name`
-     * never reaches the row, NOT NULL fails). This is a DENY-list of the two
-     * genuinely dangerous keys instead: `is_deleted` is never
-     * client-writable (soft-delete is mutated only by delete()/restore());
-     * the primary key is never taken from the body - insert() only drops a
-     * FALSY client PK (a truthy one can flip save() onto its update()
-     * branch, silently overwriting an unrelated existing row), and on a PUT
-     * a body PK would move update()'s own WHERE clause off the
-     * URL-addressed row (fill() assigns properties before save()/pkWhere()
-     * run) - so it is stripped on create AND update, except a genuinely
-     * natural (single-column, non-auto-increment) key on CREATE, where a
-     * caller-chosen key is the documented way to create a row
+     * tina4: ADR-0069 - the {id} URL segment is a VALUE bound against the
+     * primary-key column, never SQL. (load() takes its string argument as a
+     * WHERE fragment, so passing the segment straight through made the path
+     * part of the statement and addressed whichever row that fragment matched
+     * first.) Same key rule as ORM::findById()/exists(): the first key column.
+     */
+    private function loadByRouteId(ORM $model, string $id): bool
+    {
+        $pkColumn = $model->getDbColumn($model->getPrimaryKeys()[0]);
+        return $model->load("{$pkColumn} = ?", [$id]);
+    }
+
+    /**
+     * Allow-list a write body before it reaches fill()/the constructor
+     * (CRUD-MASS-ASSIGNMENT, ADR-0069 G1).
+     *
+     * A key is written only when it resolves to one of the model's fields
+     * through ORM::resolveFieldColumn() - the same resolver the list route's
+     * filter/sort use: a declared field (by property or by its column), or for
+     * a model that declares no fields, one of the table's real columns. Every
+     * other key is DROPPED (writes drop, reads 400 - CRUD-DEC-02).
+     *
+     * Two resolvable keys are still never client-writable: `is_deleted`
+     * (soft-delete is mutated only by delete()/restore()), and the primary key
+     * - insert() only drops a FALSY client PK (a truthy one can flip save()
+     * onto its update() branch, silently overwriting an unrelated existing
+     * row), and on a PUT a body PK would move update()'s own WHERE clause off
+     * the URL-addressed row. So the PK is stripped on create AND update, except
+     * a genuinely natural (single-column, non-auto-increment) key on CREATE,
+     * where a caller-chosen key is the documented way to create a row
      * (buildExample() keeps such a key in the sample body).
      *
      * @param array<string, mixed> $data
@@ -347,7 +375,7 @@ class AutoCrud
     {
         $pkProps = $probe->getPrimaryKeys();
         $defs = $probe->getFieldDefinitions();
-        $reverseMapping = array_flip($probe->fieldMapping);
+        $pkColumns = array_map(static fn (string $pk): string => strtolower($probe->getDbColumn($pk)), $pkProps);
 
         $singlePk = count($pkProps) === 1 ? $pkProps[0] : null;
         $autoIncrement = $singlePk !== null && ($defs[$singlePk]['auto_increment'] ?? false);
@@ -355,11 +383,15 @@ class AutoCrud
 
         $allowed = [];
         foreach ($data as $key => $value) {
-            $propName = $reverseMapping[$key] ?? $key;
-            if ($propName === 'is_deleted') {
+            $column = $probe->resolveFieldColumn((string)$key);
+            if ($column === null) {
                 continue;
             }
-            if ($stripPk && in_array($propName, $pkProps, true)) {
+            $column = strtolower($column);
+            if ($column === 'is_deleted') {
+                continue;
+            }
+            if ($stripPk && in_array($column, $pkColumns, true)) {
                 continue;
             }
             $allowed[$key] = $value;
@@ -376,9 +408,7 @@ class AutoCrud
 
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
-            $model->load($request->params['id']);
-
-            if (!$model->exists($request->params['id'])) {
+            if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
             }
 
@@ -436,28 +466,37 @@ class AutoCrud
     }
 
     /**
-     * Parse a sort parameter string into an ORDER BY clause.
+     * Parse a sort parameter into an ORDER BY clause built ONLY from resolved
+     * model columns and the literal words ASC / DESC (ADR-0069).
      *
-     * Format: "-name,created_at" means "name DESC, created_at ASC"
+     * Format: "-name,created_at" means "name DESC, created_at ASC"; empty parts
+     * are skipped.
+     *
+     * @return array{0: ?string, 1: ?string} [ORDER BY clause or null, the first field that did not resolve or null]
      */
-    private function parseSortParam(string $sort): string
+    private function parseSortParam(ORM $model, string $sort): array
     {
-        $parts = explode(',', $sort);
         $clauses = [];
 
-        foreach ($parts as $part) {
+        foreach (explode(',', $sort) as $part) {
             $part = trim($part);
             if ($part === '') {
                 continue;
             }
 
+            $direction = 'ASC';
             if (str_starts_with($part, '-')) {
-                $clauses[] = substr($part, 1) . ' DESC';
-            } else {
-                $clauses[] = $part . ' ASC';
+                $direction = 'DESC';
+                $part = substr($part, 1);
             }
+
+            $column = $model->resolveFieldColumn($part);
+            if ($column === null) {
+                return [null, $part];
+            }
+            $clauses[] = "{$column} {$direction}";
         }
 
-        return implode(', ', $clauses);
+        return [$clauses === [] ? null : implode(', ', $clauses), null];
     }
 }

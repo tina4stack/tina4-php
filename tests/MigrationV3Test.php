@@ -125,11 +125,11 @@ class MigrationV3Test extends TestCase
     public function testMigrationRunnerWorksOnLivePostgres(): void
     {
         if (!extension_loaded('pdo_pgsql') && !function_exists('pg_connect')) {
-            $this->markTestSkipped('no PostgreSQL driver (pdo_pgsql / ext-pgsql) installed');
+            $this->markTestSkipped('[needs:postgres] no PostgreSQL driver (pdo_pgsql / ext-pgsql) installed');
         }
         $url = getenv('TINA4_TEST_PG_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_PG_URL to run the live PostgreSQL migration test (e.g. postgres://tina4:tina4@localhost:55432/tina4_php)');
+            $this->markTestSkipped('[needs:postgres] Set TINA4_TEST_PG_URL to run the live PostgreSQL migration test (e.g. postgres://tina4:tina4@localhost:55432/tina4_php)');
         }
 
         // Construct via the Database facade -- exactly how apps wire migrations
@@ -184,11 +184,11 @@ class MigrationV3Test extends TestCase
     public function testV2ToV3UpgradeRecognisesLegacyMigrationsOnLiveFirebird(): void
     {
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed');
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live Firebird v2->v3 migration test (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
+            $this->markTestSkipped('[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird v2->v3 migration test (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
         }
 
         // This is the NATIVE ext-interbase regression test (issue #133: the
@@ -201,7 +201,7 @@ class MigrationV3Test extends TestCase
         try {
             $fb = \Tina4\Database\Database::create($ibaseUrl);
         } catch (\Throwable $e) {
-            $this->markTestSkipped('native ext-interbase connect failed (' . $e->getMessage() . ') — live v2->v3 upgrade test UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] native ext-interbase connect failed (' . $e->getMessage() . ') — live v2->v3 upgrade test UNVERIFIED here.');
         }
         foreach (['tina4_migration', 'mig_legacy_v2', 'mig_new_widget'] as $t) {
             try { $fb->execute("DROP TABLE {$t}"); } catch (\Throwable) {}
@@ -259,11 +259,11 @@ class MigrationV3Test extends TestCase
     public function testMigrationsWorkOnPdoFirebirdFallback(): void
     {
         if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_firebird driver not present — pdo migration path UNVERIFIED.');
+            $this->markTestSkipped('[needs:firebird] pdo_firebird driver not present — pdo migration path UNVERIFIED.');
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live pdo_firebird migration test.');
+            $this->markTestSkipped('[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live pdo_firebird migration test.');
         }
         $pdoUrl = $url . (str_contains($url, '?') ? '&' : '?') . 'driver=pdo';
         $fb = \Tina4\Database\Database::create($pdoUrl);

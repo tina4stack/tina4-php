@@ -63,7 +63,7 @@ class FirebirdWriteVisibilityTest extends TestCase
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
             $this->markTestSkipped(
-                'Set TINA4_TEST_FIREBIRD_URL to run the live Firebird write-visibility test '
+                '[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird write-visibility test '
                 . '(e.g. firebird://SYSDBA:masterkey@localhost:3050//tmp/test.fdb)'
             );
         }
@@ -88,10 +88,10 @@ class FirebirdWriteVisibilityTest extends TestCase
         // caught and re-wrapped as a connection failure below.
         $url = $this->urlFor($driver);
         if ($driver === 'pdo' && !in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_firebird driver not present — pdo write-visibility UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] pdo_firebird driver not present — pdo write-visibility UNVERIFIED here.');
         }
         if ($driver === 'interbase' && !function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed — native write-visibility UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed — native write-visibility UNVERIFIED here.');
         }
         try {
             $db = Database::create($url);
@@ -99,7 +99,7 @@ class FirebirdWriteVisibilityTest extends TestCase
             // FB5 clumplet) fails HERE and this leg skips instead of failing.
             $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
         } catch (\Throwable $e) {
-            $this->markTestSkipped("Firebird driver '{$driver}' cannot connect here ({$e->getMessage()}) — leg UNVERIFIED.");
+            $this->markTestSkipped("[needs:firebird] Firebird driver '{$driver}' cannot connect here ({$e->getMessage()}) — leg UNVERIFIED.");
         }
         $this->assertInstanceOf($expectedAdapter, $db->getAdapter(), "driver={$driver} must select {$expectedAdapter}");
         return $db;

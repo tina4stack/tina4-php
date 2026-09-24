@@ -63,7 +63,7 @@ class DatabaseUrlCredentialsTest extends TestCase
     {
         $url = trim((string) (getenv('TINA4_TEST_PG_URL') ?: ''));
         if ($url === '') {
-            $this->markTestSkipped('live PostgreSQL not configured (TINA4_TEST_PG_URL)');
+            $this->markTestSkipped('[needs:postgres] live PostgreSQL not configured (TINA4_TEST_PG_URL)');
         }
         $raw = trim((string) (getenv('TINA4_TEST_PG_PASSWORD') ?: 'tina4'));
         if (!str_contains($raw, 'a')) {

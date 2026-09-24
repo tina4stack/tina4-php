@@ -71,7 +71,7 @@ class MysqlProviderContractTest extends TestCase
         $host = getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_MYSQL_PORT') ?: 3306);
         if (!self::tcpReachable($host, $port)) {
-            $this->markTestSkipped("no reachable MySQL at {$host}:{$port} (set TINA4_TEST_MYSQL_*)");
+            $this->markTestSkipped("[needs:mysql] no reachable MySQL at {$host}:{$port} (set TINA4_TEST_MYSQL_*)");
         }
         $this->db = Database::create(self::mysqlUrl());
     }

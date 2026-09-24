@@ -387,7 +387,7 @@ final class DatabaseConnectTimeoutTest extends TestCase
     public function testUnsetUsesTenSecondsAndGarbageWarnsAndUsesTenSeconds(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('needs ext-pgsql to exercise a real bounded connect');
+            $this->markTestSkipped('[needs:postgres] needs ext-pgsql to exercise a real bounded connect');
         }
 
         $port = $this->blackHolePort();
@@ -429,7 +429,7 @@ final class DatabaseConnectTimeoutTest extends TestCase
     public function testZeroDisablesTheBoundAndWaitsIndefinitely(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('needs ext-pgsql to exercise a real unbounded connect');
+            $this->markTestSkipped('[needs:postgres] needs ext-pgsql to exercise a real unbounded connect');
         }
 
         $port = $this->blackHolePort();
@@ -463,10 +463,10 @@ final class DatabaseConnectTimeoutTest extends TestCase
     {
         $url = getenv('TINA4_TEST_PG_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('PostgreSQL test URL not set (TINA4_TEST_PG_URL)');
+            $this->markTestSkipped('[needs:postgres] PostgreSQL test URL not set (TINA4_TEST_PG_URL)');
         }
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('needs ext-pgsql');
+            $this->markTestSkipped('[needs:postgres] needs ext-pgsql');
         }
 
         $this->setTimeoutVar('2');
@@ -483,10 +483,10 @@ final class DatabaseConnectTimeoutTest extends TestCase
     {
         $url = getenv('TINA4_TEST_MYSQL_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('MySQL test URL not set (TINA4_TEST_MYSQL_URL)');
+            $this->markTestSkipped('[needs:mysql] MySQL test URL not set (TINA4_TEST_MYSQL_URL)');
         }
         if (!class_exists('mysqli')) {
-            $this->markTestSkipped('needs ext-mysqli');
+            $this->markTestSkipped('[needs:mysql] needs ext-mysqli');
         }
 
         $this->setTimeoutVar('2');
@@ -507,10 +507,10 @@ final class DatabaseConnectTimeoutTest extends TestCase
     {
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('Firebird test URL not set (TINA4_TEST_FIREBIRD_URL)');
+            $this->markTestSkipped('[needs:firebird] Firebird test URL not set (TINA4_TEST_FIREBIRD_URL)');
         }
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('needs ext-interbase');
+            $this->markTestSkipped('[needs:firebird] needs ext-interbase');
         }
 
         // Run in a CHILD process. ext-interbase shares ONE physical link across
@@ -566,10 +566,10 @@ final class DatabaseConnectTimeoutTest extends TestCase
     {
         $url = getenv('TINA4_TEST_MSSQL_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('SQL Server test URL not set (TINA4_TEST_MSSQL_URL)');
+            $this->markTestSkipped('[needs:mssql] SQL Server test URL not set (TINA4_TEST_MSSQL_URL)');
         }
         if (!in_array('dblib', \PDO::getAvailableDrivers(), true) && !function_exists('sqlsrv_connect')) {
-            $this->markTestSkipped('needs pdo_dblib or ext-sqlsrv');
+            $this->markTestSkipped('[needs:mssql] needs pdo_dblib or ext-sqlsrv');
         }
 
         $this->setTimeoutVar('2');
@@ -589,7 +589,7 @@ final class DatabaseConnectTimeoutTest extends TestCase
     public function testAnInstantRefusalIsNotReportedAsATimeout(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('needs ext-pgsql');
+            $this->markTestSkipped('[needs:postgres] needs ext-pgsql');
         }
 
         $this->setTimeoutVar('10');

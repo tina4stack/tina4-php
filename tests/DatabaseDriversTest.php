@@ -211,7 +211,7 @@ class DatabaseDriversTest extends TestCase
 
         if ($hasSqlsrv) {
             $this->markTestSkipped(
-                'ext-sqlsrv is installed — this host exercises the primary '
+                '[needs:absent-ext=sqlsrv] ext-sqlsrv is installed — this host exercises the primary '
                 . 'driver, not the pdo_dblib fallback selection path.'
             );
         }
@@ -448,12 +448,12 @@ class DatabaseDriversTest extends TestCase
     public function testPostgresLiveConnection(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql not installed');
+            $this->markTestSkipped('[needs:postgres] ext-pgsql not installed');
         }
 
         $url = getenv('TINA4_TEST_PG_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_PG_URL to run live PostgreSQL tests (e.g. postgres://user:pass@localhost:5432/testdb)');
+            $this->markTestSkipped('[needs:postgres] Set TINA4_TEST_PG_URL to run live PostgreSQL tests (e.g. postgres://user:pass@localhost:5432/testdb)');
         }
 
         $db = new PostgresAdapter($url);
@@ -480,12 +480,12 @@ class DatabaseDriversTest extends TestCase
     public function testMySQLLiveConnection(): void
     {
         if (!extension_loaded('mysqli')) {
-            $this->markTestSkipped('ext-mysqli not installed');
+            $this->markTestSkipped('[needs:mysql] ext-mysqli not installed');
         }
 
         $url = self::resolveMysqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mysql] ' . sprintf(
                 'MySQL not reachable at %s:%d — skip live MySQL test',
                 self::testHost('TINA4_TEST_MYSQL_HOST'),
                 self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
@@ -516,13 +516,13 @@ class DatabaseDriversTest extends TestCase
     {
         if (!self::mssqlClientAvailable()) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
             );
         }
 
         $url = self::resolveMssqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mssql] ' . sprintf(
                 'MSSQL not reachable at %s:%d — skip live MSSQL test',
                 self::testHost('TINA4_TEST_MSSQL_HOST'),
                 self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
@@ -548,12 +548,12 @@ class DatabaseDriversTest extends TestCase
     public function testFirebirdLiveConnection(): void
     {
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed');
         }
 
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run live Firebird tests (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
+            $this->markTestSkipped('[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run live Firebird tests (e.g. firebird://SYSDBA:masterkey@localhost/path/to/test.fdb)');
         }
 
         // ext-interbase can be present-but-broken (macOS + FB5 clumplet). Skip
@@ -562,7 +562,7 @@ class DatabaseDriversTest extends TestCase
         try {
             $db = new FirebirdAdapter($url);
         } catch (\Throwable $e) {
-            $this->markTestSkipped('ext-interbase present but cannot connect (' . $e->getMessage() . ') — native Firebird UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] ext-interbase present but cannot connect (' . $e->getMessage() . ') — native Firebird UNVERIFIED here.');
         }
         $this->assertNotNull($db->getConnection());
 
@@ -577,12 +577,12 @@ class DatabaseDriversTest extends TestCase
     public function testFactoryCreatesPostgresAdapter(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql not installed');
+            $this->markTestSkipped('[needs:postgres] ext-pgsql not installed');
         }
 
         $url = getenv('TINA4_TEST_PG_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_PG_URL for live factory test');
+            $this->markTestSkipped('[needs:postgres] Set TINA4_TEST_PG_URL for live factory test');
         }
 
         // Database::create() returns the Database facade (v3); the concrete
@@ -596,12 +596,12 @@ class DatabaseDriversTest extends TestCase
     public function testFactoryCreatesMySQLAdapter(): void
     {
         if (!extension_loaded('mysqli')) {
-            $this->markTestSkipped('ext-mysqli not installed');
+            $this->markTestSkipped('[needs:mysql] ext-mysqli not installed');
         }
 
         $url = self::resolveMysqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mysql] ' . sprintf(
                 'MySQL not reachable at %s:%d — skip live factory test',
                 self::testHost('TINA4_TEST_MYSQL_HOST'),
                 self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
@@ -618,13 +618,13 @@ class DatabaseDriversTest extends TestCase
     {
         if (!self::mssqlClientAvailable()) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
             );
         }
 
         $url = self::resolveMssqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mssql] ' . sprintf(
                 'MSSQL not reachable at %s:%d — skip live factory test',
                 self::testHost('TINA4_TEST_MSSQL_HOST'),
                 self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
@@ -640,12 +640,12 @@ class DatabaseDriversTest extends TestCase
     public function testFactoryCreatesFirebirdAdapter(): void
     {
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed');
         }
 
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL for live factory test');
+            $this->markTestSkipped('[needs:firebird] Set TINA4_TEST_FIREBIRD_URL for live factory test');
         }
 
         // Auto-mode prefers native ext-interbase but transparently falls back to

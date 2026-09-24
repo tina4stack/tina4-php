@@ -291,7 +291,7 @@ class GraphTest extends TestCase
     public function testGraphConnectTimeout(): void
     {
         if (!class_exists(self::ULTIPA_DRIVER_CLASS)) {
-            $this->markTestSkipped('tina4stack/ultipa driver not installed');
+            $this->markTestSkipped('[needs:ultipa] tina4stack/ultipa driver not installed');
         }
 
         putenv('TINA4_GRAPH_CONNECT_TIMEOUT=2');
@@ -329,10 +329,10 @@ class GraphTest extends TestCase
         $env = getenv($cfg['env']);
         $url = ($env === false || $env === '') ? null : $env;
         if ($url === null || !$this->reachable($url)) {
-            $this->markTestSkipped("live {$engine} not configured/reachable (set {$cfg['env']})");
+            $this->markTestSkipped("[needs:{$engine}] live {$engine} not configured/reachable (set {$cfg['env']})");
         }
         if (!class_exists($cfg['driver'])) {
-            $this->markTestSkipped("{$engine} driver not installed ({$cfg['driver']})");
+            $this->markTestSkipped("[needs:{$engine}] {$engine} driver not installed ({$cfg['driver']})");
         }
 
         $graph = GraphDatabase::create($url);

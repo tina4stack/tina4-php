@@ -1084,6 +1084,7 @@ abstract class ORM
      * @param string|null $orderBy ORDER BY clause (filter mode only)
      * @param array<string>|null $include Relationships to eager-load
      * @return ModelCollection<int, static>|static|null ModelCollection carrying the query total (filter mode, ADR-0064), single instance or null (PK mode)
+     * @throws \InvalidArgumentException When a filter key is not a field of the model (ADR-0069, see resolveFieldColumn()).
      */
     public static function find(array|int|string $filter = [], int $limit = 100, int $offset = 0, ?string $orderBy = null, ?array $include = null): ModelCollection|static|null
     {
@@ -1099,7 +1100,13 @@ abstract class ORM
         $params = [];
 
         foreach ($filter as $key => $value) {
-            $dbColumn = $instance->getDbColumn($key);
+            // ADR-0069: a filter-map key names a model field, never raw SQL.
+            $dbColumn = $instance->resolveFieldColumn((string)$key);
+            if ($dbColumn === null) {
+                throw new \InvalidArgumentException(
+                    "Unknown filter field '{$key}' for model " . (new \ReflectionClass($instance))->getShortName()
+                );
+            }
             $conditions[] = "{$dbColumn} = ?";
             $params[] = $value;
         }
@@ -1455,6 +1462,88 @@ abstract class ORM
     public function getDbColumn(string $property): string
     {
         return $this->fieldMapping[$property] ?? $property;
+    }
+
+    /**
+     * Introspected column names per connection, then per model class + table.
+     * A WeakMap so an entry dies with its connection and never answers for a
+     * different database that later reuses the object id.
+     *
+     * @var \WeakMap<DatabaseAdapter, array<string, array<int, string>>>|null
+     */
+    private static ?\WeakMap $introspectedColumnsByDb = null;
+
+    /**
+     * Resolve a caller-supplied field name to this model's DB column, or null
+     * when it is not one of the model's fields.
+     *
+     * tina4: ADR-0069 - the ONE resolver for identifiers that come from a
+     * request or a filter map (AutoCrud filter/sort, find(array)). A key
+     * resolves when it is a declared field's property name OR that field's
+     * column, where the column comes from the same property -> column rule
+     * INSERT/UPDATE use (fieldMapping, then autoMap, then the name), and is
+     * returned exactly as INSERT/UPDATE emit it. A model
+     * that declares NO fields resolves against the table's real columns
+     * (introspected once per model class, compared case-insensitively, returned
+     * in the introspected spelling). Anything else is null - the caller rejects
+     * it before any SQL is built.
+     */
+    public function resolveFieldColumn(string $key): ?string
+    {
+        if ($this->declaredColumnDefinitions() !== []) {
+            foreach ($this->getFieldDefinitions() as $property => $definition) {
+                if ($key === $property || $key === $definition['column']) {
+                    return $definition['column'];
+                }
+            }
+            return null;
+        }
+
+        // The key may be spelled as a property (mapped by the canonical rule)
+        // or as the column itself (e.g. an upper-case Firebird column name).
+        $candidates = [strtolower($this->columnNameFor($key)), strtolower($key)];
+        foreach ($this->introspectedColumns() as $column) {
+            if (in_array(strtolower($column), $candidates, true)) {
+                return $column;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The table's real column names, for a model that declares no fields.
+     * Cached per connection + model class; an empty answer (table not created
+     * yet, introspection failed) is not cached, so it is retried next time.
+     *
+     * @return array<int, string>
+     */
+    private function introspectedColumns(): array
+    {
+        $this->ensureDb();
+        self::$introspectedColumnsByDb ??= new \WeakMap();
+        $cacheKey = static::class . '|' . $this->tableName;
+        $perModel = self::$introspectedColumnsByDb[$this->_db] ?? [];
+        if (isset($perModel[$cacheKey])) {
+            return $perModel[$cacheKey];
+        }
+
+        try {
+            $rows = $this->_db->getColumns($this->tableName);
+        } catch (\Throwable) {
+            $rows = [];
+        }
+        $columns = [];
+        foreach ($rows as $row) {
+            $name = (string)($row['name'] ?? $row['column_name'] ?? '');
+            if ($name !== '') {
+                $columns[] = $name;
+            }
+        }
+        if ($columns !== []) {
+            $perModel[$cacheKey] = $columns;
+            self::$introspectedColumnsByDb[$this->_db] = $perModel;
+        }
+        return $columns;
     }
 
     /**
@@ -2265,13 +2354,26 @@ abstract class ORM
      */
     private function resolveDbColumn(string $name): string
     {
-        if ($this->autoMap && !isset($this->fieldMapping[$name])) {
-            $snaked = self::camelToSnake($name);
-            if ($snaked !== $name) {
-                $this->fieldMapping[$name] = $snaked;
-            }
+        $column = $this->columnNameFor($name);
+        if ($column !== $name && !isset($this->fieldMapping[$name])) {
+            $this->fieldMapping[$name] = $column;
         }
-        return $this->getDbColumn($name);
+        return $column;
+    }
+
+    /**
+     * The canonical property -> column rule, without side effects: the explicit
+     * fieldMapping entry, else autoMap's camelCase -> snake_case, else the name
+     * itself. resolveDbColumn() records the autoMap result in fieldMapping;
+     * resolveFieldColumn() uses this directly so a caller-supplied key never
+     * writes into the model's mapping.
+     */
+    private function columnNameFor(string $name): string
+    {
+        if (isset($this->fieldMapping[$name])) {
+            return $this->fieldMapping[$name];
+        }
+        return $this->autoMap ? self::camelToSnake($name) : $name;
     }
 
     /**
@@ -2285,6 +2387,26 @@ abstract class ORM
      * @return array<string, array{type: string, hasDefault: bool, default: mixed, nullable: bool}>
      */
     private function getColumnDefinitions(): array
+    {
+        $columns = $this->declaredColumnDefinitions();
+
+        // The primary key must always be a column even if undeclared. A PK is
+        // NOT NULL by definition.
+        if (!isset($columns[$this->getPrimaryKeys()[0]])) {
+            $columns = [$this->getPrimaryKeys()[0] => ['type' => 'int', 'hasDefault' => false, 'default' => null, 'nullable' => false]] + $columns;
+        }
+
+        return $columns;
+    }
+
+    /**
+     * The column definitions of the typed public properties the subclass
+     * actually DECLARES - getColumnDefinitions() without the implicit primary
+     * key. Empty for a fully dynamic model (one that declares no fields).
+     *
+     * @return array<string, array{type: string, hasDefault: bool, default: mixed, nullable: bool}>
+     */
+    private function declaredColumnDefinitions(): array
     {
         static $frameworkProps = [
             'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
@@ -2338,12 +2460,6 @@ abstract class ORM
                 'srid'       => $pointConfig['srid'] ?? null,
                 'spatialIndex' => $pointConfig['spatialIndex'] ?? null,
             ];
-        }
-
-        // The primary key must always be a column even if undeclared. A PK is
-        // NOT NULL by definition.
-        if (!isset($columns[$this->getPrimaryKeys()[0]])) {
-            $columns = [$this->getPrimaryKeys()[0] => ['type' => 'int', 'hasDefault' => false, 'default' => null, 'nullable' => false]] + $columns;
         }
 
         return $columns;
@@ -2811,7 +2927,21 @@ abstract class ORM
         $jsonColumns = $this->jsonColumns();
         $noDefault = $this->noDefaultColumns();
 
+        // ADR-0069 G2: only the model's own fields reach the column list. A model
+        // with declared fields writes those fields (and its primary key) only - an
+        // undeclared property picked up by fill() or plain assignment is not a
+        // column of this model. A model that declares no fields writes a dynamic
+        // property only when it resolves to one of the table's real columns.
+        $hasDeclaredFields = $this->declaredColumnDefinitions() !== [];
+        $fieldDefinitions = $hasDeclaredFields ? $this->getFieldDefinitions() : [];
+
         foreach ($props as $name => $value) {
+            $isField = $hasDeclaredFields
+                ? isset($fieldDefinitions[$name])
+                : $this->resolveFieldColumn((string)$name) !== null;
+            if (!$isField) {
+                continue;
+            }
             // Auto-generate fieldMapping for camelCase → snake_case
             if ($this->autoMap && !isset($this->fieldMapping[$name])) {
                 $snaked = self::camelToSnake($name);

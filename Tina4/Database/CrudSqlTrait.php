@@ -58,6 +58,7 @@ trait CrudSqlTrait
         // statement run per row through executeMany, not N round trips.
         if (isset($data[0]) && is_array($data[0])) {
             $keys = array_keys($data[0]);
+            ColumnName::assertAll($keys);
             $cols = implode(', ', $keys);
             $placeholders = implode(', ', array_fill(0, count($keys), '?'));
             $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
@@ -65,6 +66,7 @@ trait CrudSqlTrait
             return $this->executeMany($sql, $paramsList) > 0;
         }
 
+        ColumnName::assertAll(array_keys($data));
         $cols = implode(', ', array_keys($data));
         $placeholders = implode(', ', array_fill(0, count($data), '?'));
         $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})"
@@ -84,6 +86,7 @@ trait CrudSqlTrait
      */
     public function update(string $table, array $data, string $where = '', array $whereParams = []): bool|DatabaseResult
     {
+        ColumnName::assertAll(array_keys($data));
         $setParts = [];
         $params = [];
         foreach ($data as $col => $val) {
@@ -114,6 +117,10 @@ trait CrudSqlTrait
         // A list of assoc arrays deletes each row in turn, stopping on the
         // first failure so a partial delete is never reported as success.
         if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            // Every map is checked first, so a bad key never leaves a partial delete.
+            foreach ($filter as $row) {
+                ColumnName::assertAll(array_keys($row));
+            }
             foreach ($filter as $row) {
                 if (!$this->delete($table, $row)) {
                     return false;
@@ -125,6 +132,7 @@ trait CrudSqlTrait
         // An assoc array builds the WHERE from its keys, then falls through to
         // the string form below - one code path builds the statement.
         if (is_array($filter)) {
+            ColumnName::assertAll(array_keys($filter));
             $parts = [];
             $params = [];
             foreach ($filter as $col => $val) {

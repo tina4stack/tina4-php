@@ -119,10 +119,10 @@ class MigrationDialectFirebirdTest extends TestCase
     {
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird server) — UNVERIFIED.');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird server) — UNVERIFIED.');
         }
         if (!in_array('firebird', \PDO::getAvailableDrivers(), true) && !extension_loaded('interbase')) {
-            $this->markTestSkipped('No Firebird driver (pdo_firebird / ext-interbase) present — UNVERIFIED.');
+            $this->markTestSkipped('[needs:firebird] No Firebird driver (pdo_firebird / ext-interbase) present — UNVERIFIED.');
         }
 
         $createSql = $this->generatedCreateStatement();

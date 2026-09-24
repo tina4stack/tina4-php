@@ -83,13 +83,13 @@ class MssqlProviderContractTest extends TestCase
         // driver). The reason names "mssql" + "not installed" so the gate flags it.
         if (!function_exists('sqlsrv_connect') && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
             );
         }
         $host = getenv('TINA4_TEST_MSSQL_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_MSSQL_PORT') ?: 1433);
         if (!self::tcpReachable($host, $port)) {
-            $this->markTestSkipped("MSSQL not reachable at {$host}:{$port} (set TINA4_TEST_MSSQL_*)");
+            $this->markTestSkipped("[needs:mssql] MSSQL not reachable at {$host}:{$port} (set TINA4_TEST_MSSQL_*)");
         }
         $this->db = Database::create(self::mssqlUrl(), username: self::mssqlUser(), password: self::mssqlPass());
     }

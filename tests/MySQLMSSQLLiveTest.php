@@ -114,12 +114,12 @@ class MySQLMSSQLLiveTest extends TestCase
         if (!extension_loaded('mysqli')) {
             // "mysql" in the reason + "not installed" → gate violation under
             // TINA4_REQUIRE_SERVICES (mysql is provisioned in CI).
-            $this->markTestSkipped('MySQL client not installed — ext-mysqli is missing');
+            $this->markTestSkipped('[needs:mysql] MySQL client not installed — ext-mysqli is missing');
         }
         $host = self::mysqlHost();
         $port = self::mysqlPort();
         if (!self::reachable($host, $port)) {
-            $this->markTestSkipped(sprintf('MySQL not reachable at %s:%d — skip integration test', $host, $port));
+            $this->markTestSkipped('[needs:mysql] ' . sprintf('MySQL not reachable at %s:%d — skip integration test', $host, $port));
         }
 
         $db = new Database(
@@ -233,13 +233,13 @@ class MySQLMSSQLLiveTest extends TestCase
         if (!function_exists('sqlsrv_connect')
             && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
             );
         }
         $host = self::mssqlHost();
         $port = self::mssqlPort();
         if (!self::reachable($host, $port)) {
-            $this->markTestSkipped(sprintf('MSSQL not reachable at %s:%d — skip integration test', $host, $port));
+            $this->markTestSkipped('[needs:mssql] ' . sprintf('MSSQL not reachable at %s:%d — skip integration test', $host, $port));
         }
 
         $db = new Database(

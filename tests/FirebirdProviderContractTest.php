@@ -33,7 +33,7 @@ class FirebirdProviderContractTest extends TestCase
     {
         $this->url = getenv('TINA4_TEST_FIREBIRD_URL') ?: '';
         if ($this->url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
         }
     }
 
