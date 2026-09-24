@@ -382,9 +382,14 @@ class MigrationFootgunsLiveEngineTest extends TestCase
             $db->execute('CREATE TABLE "' . self::T_QUOTED . '" (id INTEGER)');
             $db->commit();
 
-            // The relation genuinely exists with its case preserved.
+            // The relation genuinely exists with its case preserved. Looked up
+            // by its exact (case-sensitive) name: listing every user relation
+            // through fetch() returns only the first page of 100 rows, so on a
+            // shared database holding 100+ tables the new one fell outside the
+            // page and this precondition failed although the table existed.
             $rows = $db->fetch(
-                "SELECT TRIM(RDB\$RELATION_NAME) AS TNAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0"
+                "SELECT TRIM(RDB\$RELATION_NAME) AS TNAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND TRIM(RDB\$RELATION_NAME) = ?",
+                [self::T_QUOTED]
             );
             $names = array_map(static fn (array $r) => trim((string) reset($r)), $rows->records);
             $this->assertContains(
