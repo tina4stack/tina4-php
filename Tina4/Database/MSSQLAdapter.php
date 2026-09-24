@@ -355,6 +355,16 @@ class MSSQLAdapter implements DatabaseAdapter
                 return true;
             }
 
+            // Capture the generated IDENTITY AT WRITE TIME, in the SAME batch as
+            // the INSERT - the Python master, Ruby and Node all do this. A
+            // parameterised sqlsrv_query runs as sp_executesql, a NESTED scope,
+            // so the later top-level `SELECT SCOPE_IDENTITY()` in lastInsertId()
+            // saw NULL and every getLastId() came back 0 on ext-sqlsrv.
+            $isInsert = stripos(ltrim($sql), 'INSERT') === 0;
+            if ($isInsert) {
+                $sql = rtrim($sql, " \t\r\n;") . '; SELECT SCOPE_IDENTITY() AS id';
+            }
+
             $stmt = empty($values)
                 ? @sqlsrv_query($this->db, $sql)
                 : @sqlsrv_query($this->db, $sql, $values);
@@ -371,6 +381,15 @@ class MSSQLAdapter implements DatabaseAdapter
             // clamp to 0 so the reported count is never negative.
             $rows = sqlsrv_rows_affected($stmt);
             $this->affectedRows = is_int($rows) && $rows > 0 ? $rows : 0;
+            if ($isInsert) {
+                $this->lastId = 0;
+                if (sqlsrv_next_result($stmt)) {
+                    $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
+                    if ($row && $row['id'] !== null) {
+                        $this->lastId = (int)$row['id'];
+                    }
+                }
+            }
             sqlsrv_free_stmt($stmt);
             return true;
         } catch (DatabaseException $e) {
