@@ -146,7 +146,7 @@ class FirebirdAdapter implements DatabaseAdapter
         } elseif (function_exists('fbird_connect')) {
             $this->fn = 'fbird_';
         } else {
-            throw new \RuntimeException(
+            throw new DatabaseDriverMissing(
                 'FirebirdAdapter requires the ext-interbase PHP extension (ibase_* or fbird_* functions). '
                 . 'Install it with: sudo apt-get install php-interbase (Debian/Ubuntu) '
                 . 'or sudo pecl install interbase (other platforms).'

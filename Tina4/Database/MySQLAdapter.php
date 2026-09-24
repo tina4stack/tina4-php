@@ -88,7 +88,7 @@ class MySQLAdapter implements DatabaseAdapter
         ?bool $autoCommit = null,
     ) {
         if (!extension_loaded('mysqli')) {
-            throw new \RuntimeException(
+            throw new DatabaseDriverMissing(
                 'MySQLAdapter requires the ext-mysqli PHP extension. '
                 . 'Install it with: sudo apt-get install php-mysql (Debian/Ubuntu) '
                 . 'or brew install php (macOS with mysqli enabled).'

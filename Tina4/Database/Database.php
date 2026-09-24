@@ -1823,10 +1823,10 @@ class Database implements DatabaseAdapter
         if (class_exists('SQLite3')) {
             return new SQLite3Adapter($path, $autoCommit);
         }
-        if (in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
+        if (class_exists('PDO') && in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
             return new PdoSqliteAdapter($path, $autoCommit);
         }
-        throw new \RuntimeException(
+        throw new DatabaseDriverMissing(
             'SQLite requires ext-sqlite3 (the SQLite3 class) or the pdo_sqlite PDO driver. '
             . 'Install one with: brew install php (macOS), or apt-get install php-sqlite3 (Debian/Ubuntu).'
         );
@@ -1843,10 +1843,12 @@ class Database implements DatabaseAdapter
         if (function_exists('pg_connect')) {
             return new PostgresAdapter($url, $autoCommit, username: $username, password: $password);
         }
-        if (in_array('pgsql', \PDO::getAvailableDrivers(), true)) {
+        // Guard the PDO class: under `php -n` or a build without ext-pdo an
+        // unguarded \PDO reference is a fatal Error instead of the message below.
+        if (class_exists('PDO') && in_array('pgsql', \PDO::getAvailableDrivers(), true)) {
             return new PdoPostgresAdapter($url, $autoCommit, username: $username, password: $password);
         }
-        throw new \RuntimeException(
+        throw new DatabaseDriverMissing(
             'PostgreSQL requires ext-pgsql (pg_connect) or the pdo_pgsql PDO driver. '
             . 'Install one with: apt-get install php-pgsql (Debian/Ubuntu) or brew install php (macOS).'
         );
@@ -1879,7 +1881,7 @@ class Database implements DatabaseAdapter
 
         if ($forced === 'pdo') {
             if (!$hasPdo) {
-                throw new \RuntimeException(
+                throw new DatabaseDriverMissing(
                     'Firebird driver forced to pdo (TINA4_FIREBIRD_DRIVER/?driver=pdo) but the '
                     . 'pdo_firebird PDO driver is not installed.'
                 );
@@ -1888,7 +1890,7 @@ class Database implements DatabaseAdapter
         }
         if ($forced === 'interbase') {
             if (!$hasInterbase) {
-                throw new \RuntimeException(
+                throw new DatabaseDriverMissing(
                     'Firebird driver forced to interbase (TINA4_FIREBIRD_DRIVER/?driver=interbase) but '
                     . 'ext-interbase (ibase_*/fbird_* functions) is not available.'
                 );
@@ -1921,7 +1923,7 @@ class Database implements DatabaseAdapter
         if ($hasPdo) {
             return new PdoFirebirdAdapter($url, username: $username, password: $password, autoCommit: $autoCommit);
         }
-        throw new \RuntimeException(
+        throw new DatabaseDriverMissing(
             'Firebird requires ext-interbase (ibase_*/fbird_* functions) or the pdo_firebird PDO driver. '
             . 'ext-interbase was removed from PHP core in 7.4 (PECL-only); enable pdo_firebird instead.'
         );

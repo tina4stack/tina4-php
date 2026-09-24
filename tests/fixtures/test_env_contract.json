@@ -58,7 +58,7 @@
     "ODBC": ["DSN", "AUTH_DSN", "USERNAME", "PASSWORD"],
     "OIDC": ["ISSUER"],
     "MONGO": ["URI", "HOST", "PORT"],
-    "REDIS": ["URL", "HOST", "PORT"],
+    "REDIS": ["URL", "AUTH_URL", "HOST", "PORT"],
     "VALKEY": ["URL", "HOST", "PORT"],
     "MEMCACHED": ["URL", "HOST", "PORT"],
     "KAFKA": ["URL", "HOST", "PORT", "CONTAINER"],

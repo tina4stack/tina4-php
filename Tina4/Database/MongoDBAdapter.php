@@ -86,7 +86,7 @@ class MongoDBAdapter implements DatabaseAdapter
         ?bool $autoCommit = null,
     ) {
         if (!extension_loaded('mongodb')) {
-            throw new \RuntimeException(
+            throw new DatabaseDriverMissing(
                 "The mongodb PHP extension is required for MongoDB connections. "
                 . "Install: pecl install mongodb && composer require mongodb/mongodb"
             );

@@ -90,7 +90,7 @@ class MSSQLAdapter implements DatabaseAdapter
         } elseif (in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->driver = 'pdo';
         } else {
-            throw new \RuntimeException(
+            throw new DatabaseDriverMissing(
                 'MSSQLAdapter requires either the ext-sqlsrv PHP extension '
                 . '(Microsoft driver: sudo pecl install sqlsrv on Linux/macOS, '
                 . 'or enable it in php.ini on Windows) '

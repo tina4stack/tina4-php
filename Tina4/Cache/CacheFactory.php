@@ -93,9 +93,11 @@ class CacheFactory
         if (!$be->isAvailable()) {
             if (class_exists('\Tina4\Log')) {
                 try {
+                    $missingDriver = $be->missingDriverMessage();
                     \Tina4\Log::warning(
                         "Cache backend '{$backend}' is unavailable "
                         . '(driver missing or service unreachable) — falling back to \'file\'.'
+                        . ($missingDriver !== null ? ' ' . $missingDriver : '')
                     );
                 } catch (\Throwable) {
                     // never let logging break cache creation

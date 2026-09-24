@@ -84,7 +84,7 @@ class PostgresAdapter implements DatabaseAdapter
         private readonly string $password = '',
     ) {
         if (!function_exists('pg_connect')) {
-            throw new \RuntimeException(
+            throw new DatabaseDriverMissing(
                 'PostgresAdapter requires the ext-pgsql PHP extension. '
                 . 'Install it with: sudo apt-get install php-pgsql (Debian/Ubuntu) '
                 . 'or brew install php (macOS with pgsql enabled).'

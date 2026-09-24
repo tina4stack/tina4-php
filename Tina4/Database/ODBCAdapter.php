@@ -79,7 +79,7 @@ class ODBCAdapter implements DatabaseAdapter
         }
 
         if (!extension_loaded('pdo_odbc')) {
-            throw new \RuntimeException(
+            throw new DatabaseDriverMissing(
                 'The pdo_odbc PHP extension is required for ODBC connections. '
                 . 'Enable it in php.ini: extension=pdo_odbc'
             );
