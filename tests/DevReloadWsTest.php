@@ -104,26 +104,37 @@ class DevReloadWsTest extends TestCase
     }
 
     /**
-     * Register a fake WebSocket client on the running server via reflection,
-     * backed by a real socket pair so broadcastWebSocket() actually writes a
-     * frame we can read back from the far end. Returns the far-end socket.
+     * Connect a REAL WebSocket client: a real socket pair goes through the
+     * server's own upgrade handshake (handleWebSocketUpgrade), so the client is
+     * registered exactly as production registers one. Returns the far end,
+     * with the 101 response already drained.
      *
      * @return resource
      */
-    private function attachFakeWsClient(Server $server, string $path)
+    private function attachWsClient(Server $server, string $path)
     {
+        // Server::start() registers /__dev_reload in debug mode; the test never
+        // starts the server, so register the route the same way here.
+        Router::websocket($path, function ($connection, $data, $event) {
+        });
         [$near, $far] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
-        stream_set_blocking($far, false);
 
-        $prop = (new \ReflectionClass(Server::class))->getProperty('wsClients');
-        $clients = $prop->getValue($server);
-        $clients['fake-' . bin2hex(random_bytes(4))] = [
-            'socket' => $near,
-            'path' => $path,
-            'buffer' => '',
-            'id' => 'fake',
-        ];
-        $prop->setValue($server, $clients);
+        (new \ReflectionMethod(Server::class, 'handleWebSocketUpgrade'))->invoke($server, $near, [
+            '_method' => 'GET',
+            '_path' => $path,
+            'upgrade' => 'websocket',
+            'connection' => 'Upgrade',
+            'sec-websocket-key' => 'dGhlIHNhbXBsZSBub25jZQ==',
+            'sec-websocket-version' => '13',
+        ]);
+
+        stream_set_blocking($far, false);
+        $handshake = '';
+        $deadline = microtime(true) + 1.0;
+        while (!str_contains($handshake, "\r\n\r\n") && microtime(true) < $deadline) {
+            $handshake .= (string)@fread($far, 1);
+        }
+        $this->assertStringContainsString('101 Switching Protocols', $handshake, 'the real upgrade handshake did not complete');
 
         return $far;
     }
@@ -179,7 +190,7 @@ class DevReloadWsTest extends TestCase
 
         $server = new Server('127.0.0.1', 0);
         $this->resetServerInstance($server);
-        $far = $this->attachFakeWsClient($server, '/__dev_reload');
+        $far = $this->attachWsClient($server, '/__dev_reload');
 
         $result = $this->callReloadPost(['type' => 'code', 'file' => 'src/routes/index.php']);
         $this->assertTrue($result['ok']);
@@ -200,7 +211,7 @@ class DevReloadWsTest extends TestCase
 
         $server = new Server('127.0.0.1', 0);
         $this->resetServerInstance($server);
-        $far = $this->attachFakeWsClient($server, '/__dev_reload');
+        $far = $this->attachWsClient($server, '/__dev_reload');
 
         $this->callReloadPost(['type' => 'css', 'file' => 'src/public/css/app.css']);
 
@@ -219,7 +230,7 @@ class DevReloadWsTest extends TestCase
 
         $server = new Server('127.0.0.1', 0);
         $this->resetServerInstance($server);
-        $other = $this->attachFakeWsClient($server, '/some/other/ws');
+        $other = $this->attachWsClient($server, '/some/other/ws');
 
         $this->callReloadPost(['type' => 'code', 'file' => 'src/routes/index.php']);
 
@@ -255,7 +266,7 @@ class DevReloadWsTest extends TestCase
 
         $server = new Server('127.0.0.1', 0);
         $this->resetServerInstance($server);
-        $far = $this->attachFakeWsClient($server, '/__dev_reload');
+        $far = $this->attachWsClient($server, '/__dev_reload');
 
         $this->callReloadPost(['type' => 'code', 'file' => 'src/routes/index.php']);
         $this->assertFalse(DevAdmin::$pendingReload, 'pendingReload must clear after a live broadcast');
