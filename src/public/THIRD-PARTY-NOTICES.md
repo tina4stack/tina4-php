@@ -36,11 +36,20 @@ does not claim they match that revision byte-for-byte.
 `js/tina4js.min.js` is the rebuilt Tina4 JS 1.5.4 bundle. The original published
 package declares MIT: https://registry.npmjs.org/tina4js/1.5.4 . Its package README
 also declares MIT. The local build differs from that npm minified artifact only
-by two redundant arrow-callback parentheses. The import is recorded at:
+by parentheses around two arrow callbacks. The import is recorded at:
 https://github.com/tina4stack/tina4-python/commit/2c764bfd445f9de7f862286e72c08e03f9603b0f
 The retained MIT grant is in `licenses/tina4-js-MIT.txt`; this prior browser bundle
 has not been relabelled MPL-2.0.
 
 `bundled-component-provenance.json` records the exact shipped asset hashes covered
-by these notices. This inventory does not classify unrelated dashboard bundles
-or remotely downloaded assets as dependencies of these components.
+by these notices. Remote assets are not classified as bundled dependencies.
+
+## Tina4 development dashboard — retained component licences
+
+`js/tina4-dev-admin.min.js` is byte-identical to `dist/tina4-dev-admin.js` at:
+https://github.com/tina4stack/tina4-dev-admin/tree/21700e0
+Its resolved production component inventory is preserved in
+`licenses/tina4-dev-admin-components.json`; upstream licence notices and terms are
+in `licenses/tina4-dev-admin-third-party.txt`. No dashboard code was rebuilt or
+relicensed by this notice update. The old Tina4 JS packages declare MIT but supply
+no copyright notice; no upstream copyright holder has been invented here.

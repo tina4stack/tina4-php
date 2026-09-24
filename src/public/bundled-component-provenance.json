@@ -35,6 +35,11 @@
       "path": "js/tina4js.min.js",
       "component": "tina4js-1.5.4-rebuilt",
       "sha256": "6ce41cbc3b13da87071d5b5d47045f45c6b578b24fc1e05edc8bd4906ff2c3b4"
+    },
+    {
+      "path": "js/tina4-dev-admin.min.js",
+      "component": "tina4-dev-admin-21700e0",
+      "sha256": "0ca84246c26afb6a3243aafd1c65fa9486c076039e5d721b6f44661b3a59d7c2"
     }
   ]
 }
