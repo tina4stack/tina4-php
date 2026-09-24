@@ -1816,7 +1816,8 @@ class DevAdmin
                     'size' => 0,
                 ], 403);
             }
-            if ($path === null || !is_file($path)) {
+            $content = $path === null ? null : self::readDevFile($path);
+            if ($content === null) {
                 return $response->json([
                     'error' => 'not found',
                     'path' => $requested,
@@ -1825,7 +1826,6 @@ class DevAdmin
                     'size' => 0,
                 ], 404);
             }
-            $content = @file_get_contents($path);
             if ($content === false) {
                 return $response->json([
                     'error' => 'unreadable',
@@ -1850,15 +1850,15 @@ class DevAdmin
                 || ($path !== null && self::isSecretPath((string) self::devAdminRel($path)))) {
                 return $response->json(['error' => 'Refused: secret file'], 403);
             }
-            if ($path === null || !is_file($path)) {
+            $content = $path === null ? null : self::readDevFile($path);
+            if ($content === false || $content === null) {
                 return $response->text('not found', 404);
             }
-            // Let the Response class pick the MIME from the extension;
-            // we just load the bytes and set Content-Type. Streaming
-            // large files is a later slice — for raster images on the
-            // order of tens of KB this is fine.
-            $mime = function_exists('mime_content_type') ? (mime_content_type($path) ?: 'application/octet-stream') : 'application/octet-stream';
-            return $response->header('Content-Type', $mime)->html(file_get_contents($path));
+            // Determine MIME from the captured bytes, never reopen the path.
+            $mime = class_exists(\finfo::class)
+                ? ((new \finfo(FILEINFO_MIME_TYPE))->buffer($content) ?: 'application/octet-stream')
+                : 'application/octet-stream';
+            return $response->header('Content-Type', $mime)->html($content);
         });
 
         Router::post('/__dev/api/file/save', function (Request $request, Response $response) {
@@ -2967,6 +2967,35 @@ class DevAdmin
             }
         }
         return [];
+    }
+
+    /**
+     * Read a regular file through the same descriptor whose identity is checked.
+     * PHP streams do not expose openat/O_NOFOLLOW/O_NONBLOCK flags. This check
+     * refuses detected replacement but does not make hostile parent-directory
+     * or FIFO replacement atomic; the local project directory remains trusted.
+     */
+    private static function readDevFile(string $path): string|false|null
+    {
+        clearstatcache(true, $path);
+        $before = @lstat($path);
+        if ($before === false || ($before['mode'] & 0170000) !== 0100000) {
+            return null;
+        }
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        try {
+            $opened = fstat($handle);
+            if ($opened === false || ($opened['mode'] & 0170000) !== 0100000
+                || $before['dev'] !== $opened['dev'] || $before['ino'] !== $opened['ino']) {
+                return null;
+            }
+            return stream_get_contents($handle);
+        } finally {
+            fclose($handle);
+        }
     }
 
     /**

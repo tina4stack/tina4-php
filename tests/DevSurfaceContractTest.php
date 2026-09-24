@@ -148,6 +148,18 @@ class DevSurfaceContractTest extends TestCase
         }
     }
 
+    public function testRegularFileReadsUseActualBytesAndMissingOrDirectoryTargetsAreRefused(): void
+    {
+        DevAdmin::register();
+        foreach (['/__dev/api/file', '/__dev/api/file/raw'] as $endpoint) {
+            $ok = $this->dispatch('GET', $endpoint . '?path=readme.txt');
+            $this->assertSame(200, $ok->getStatusCode());
+            $this->assertStringContainsString('public-readme', $ok->getBody());
+            $this->assertSame(404, $this->dispatch('GET', $endpoint . '?path=missing.txt')->getStatusCode());
+            $this->assertSame(404, $this->dispatch('GET', $endpoint . '?path=src')->getStatusCode());
+        }
+    }
+
     public function testASymlinkToDotenvIsRefused(): void
     {
         DevAdmin::register();
