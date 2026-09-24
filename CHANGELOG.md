@@ -8,6 +8,8 @@ https://tina4.com/php/36-releases
 
 ## 3.13.138
 
+- Persist generated secrets and dashboard credentials with owner-only permissions; reject symlink, hardlink, and non-regular targets. Preserve in-memory development secrets if persistence fails.
+
 This release is available under MPL-2.0, with separate commercial terms available from Code Infinity. Copyright Code Infinity. Previously published releases retain their original licences.
 
 Security and interoperability release, integrating the reviewed changes since 3.13.137.

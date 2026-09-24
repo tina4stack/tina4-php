@@ -156,24 +156,10 @@ class Auth
         $dir = $cwd ?? getcwd();
         $path = rtrim((string) $dir, '/\\') . DIRECTORY_SEPARATOR . '.env.local';
         try {
-            $prefix = '';
-            if (is_file($path)) {
-                $existing = file_get_contents($path);
-                if ($existing === false) {
-                    throw new \RuntimeException("could not read {$path}");
-                }
-                // If the file doesn't end in a newline, prepend one so the new
-                // key lands on its own line and we don't corrupt the last line.
-                if ($existing !== '' && !str_ends_with($existing, "\n")) {
-                    $prefix = "\n";
-                }
-            }
-            // Suppress the PHP warning a failed open emits — we detect the
-            // false return and throw our own clean exception (caught below).
-            $written = @file_put_contents($path, $prefix . "TINA4_SECRET={$newSecret}\n", FILE_APPEND);
-            if ($written === false) {
-                throw new \RuntimeException("could not write {$path}");
-            }
+            SecretFile::update($path, static function (string $existing) use ($newSecret): string {
+                $prefix = $existing !== '' && !str_ends_with($existing, "\n") ? "\n" : '';
+                return $existing . $prefix . "TINA4_SECRET={$newSecret}\n";
+            });
             self::logInfo('Auth: generated a development secret, saved to .env.local (gitignored)');
         } catch (\Throwable $e) {
             // Keep the in-memory secret for this run; just warn.

@@ -1609,36 +1609,38 @@ class DevAdmin
             }
             try {
                 $envPath = '.env';
-                $lines = file_exists($envPath) ? file($envPath, FILE_IGNORE_NEW_LINES) : [];
-                $keysFound = ['TINA4_DATABASE_URL' => false, 'TINA4_DATABASE_USERNAME' => false, 'TINA4_DATABASE_PASSWORD' => false];
-                $newLines = [];
-                foreach ($lines as $line) {
-                    $trimmed = trim($line);
-                    if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
-                        $newLines[] = $line;
-                        continue;
+                SecretFile::update($envPath, static function (string $content) use ($url, $username, $password): string {
+                    $lines = $content === '' ? [] : preg_split('/\\r\\n|\\n|\\r/', rtrim($content, "\r\n"));
+                    $keysFound = ['TINA4_DATABASE_URL' => false, 'TINA4_DATABASE_USERNAME' => false, 'TINA4_DATABASE_PASSWORD' => false];
+                    $newLines = [];
+                    foreach ($lines as $line) {
+                        $trimmed = trim($line);
+                        if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                            $newLines[] = $line;
+                            continue;
+                        }
+                        $key = trim(explode('=', $trimmed, 2)[0]);
+                        if ($key === 'TINA4_DATABASE_URL') {
+                            $newLines[] = "TINA4_DATABASE_URL={$url}";
+                            $keysFound['TINA4_DATABASE_URL'] = true;
+                        } elseif ($key === 'TINA4_DATABASE_USERNAME') {
+                            $newLines[] = "TINA4_DATABASE_USERNAME={$username}";
+                            $keysFound['TINA4_DATABASE_USERNAME'] = true;
+                        } elseif ($key === 'TINA4_DATABASE_PASSWORD') {
+                            $newLines[] = "TINA4_DATABASE_PASSWORD={$password}";
+                            $keysFound['TINA4_DATABASE_PASSWORD'] = true;
+                        } else {
+                            $newLines[] = $line;
+                        }
                     }
-                    $key = trim(explode('=', $trimmed, 2)[0]);
-                    if ($key === 'TINA4_DATABASE_URL') {
-                        $newLines[] = "TINA4_DATABASE_URL={$url}";
-                        $keysFound['TINA4_DATABASE_URL'] = true;
-                    } elseif ($key === 'TINA4_DATABASE_USERNAME') {
-                        $newLines[] = "TINA4_DATABASE_USERNAME={$username}";
-                        $keysFound['TINA4_DATABASE_USERNAME'] = true;
-                    } elseif ($key === 'TINA4_DATABASE_PASSWORD') {
-                        $newLines[] = "TINA4_DATABASE_PASSWORD={$password}";
-                        $keysFound['TINA4_DATABASE_PASSWORD'] = true;
-                    } else {
-                        $newLines[] = $line;
+                    $values = ['TINA4_DATABASE_URL' => $url, 'TINA4_DATABASE_USERNAME' => $username, 'TINA4_DATABASE_PASSWORD' => $password];
+                    foreach ($keysFound as $key => $found) {
+                        if (!$found) {
+                            $newLines[] = "{$key}={$values[$key]}";
+                        }
                     }
-                }
-                $values = ['TINA4_DATABASE_URL' => $url, 'TINA4_DATABASE_USERNAME' => $username, 'TINA4_DATABASE_PASSWORD' => $password];
-                foreach ($keysFound as $key => $found) {
-                    if (!$found) {
-                        $newLines[] = "{$key}={$values[$key]}";
-                    }
-                }
-                file_put_contents($envPath, implode("\n", $newLines) . "\n");
+                    return implode("\n", $newLines) . "\n";
+                });
                 return $response->json(['success' => true]);
             } catch (\Throwable $e) {
                 return $response->json(['success' => false, 'error' => $e->getMessage()]);
@@ -2537,26 +2539,28 @@ class DevAdmin
     private static function devAdminUpsertEnvVar(string $key, string $value): void
     {
         $envPath = self::devAdminEnvPath();
-        $lines = is_file($envPath) ? (file($envPath, FILE_IGNORE_NEW_LINES) ?: []) : [];
-        $newLines = [];
-        $found = false;
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-            if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
-                $newLines[] = $line;
-                continue;
+        SecretFile::update($envPath, static function (string $content) use ($key, $value): string {
+            $lines = $content === '' ? [] : preg_split('/\\r\\n|\\n|\\r/', rtrim($content, "\r\n"));
+            $newLines = [];
+            $found = false;
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                    $newLines[] = $line;
+                    continue;
+                }
+                if (trim(explode('=', $trimmed, 2)[0]) === $key) {
+                    $newLines[] = "{$key}={$value}";
+                    $found = true;
+                } else {
+                    $newLines[] = $line;
+                }
             }
-            if (trim(explode('=', $trimmed, 2)[0]) === $key) {
+            if (!$found) {
                 $newLines[] = "{$key}={$value}";
-                $found = true;
-            } else {
-                $newLines[] = $line;
             }
-        }
-        if (!$found) {
-            $newLines[] = "{$key}={$value}";
-        }
-        file_put_contents($envPath, implode("\n", $newLines) . "\n");
+            return implode("\n", $newLines) . "\n";
+        });
         // Keep the running process consistent with what we just wrote.
         putenv("{$key}={$value}");
         $_ENV[$key] = $value;
