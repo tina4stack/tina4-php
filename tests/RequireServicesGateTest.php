@@ -260,7 +260,7 @@ class RequireServicesGateTest extends TestCase
      * this replaced missed "no reachable ..." (the wording 11 skip sites used),
      * so those skipped green; wording can no longer decide anything.
      */
-    public function testAnUntaggedSkipFailsTheArmedRunWhateverItsWording(): void
+    public function testAnUntaggedSkipFailsUnderTheGate(): void
     {
         foreach ([
             'GateFixtureNoReachable' => 'no reachable MongoDB at mongodb://192.168.88.99:27017',
@@ -282,7 +282,7 @@ class RequireServicesGateTest extends TestCase
      * published that engine's coordinate: the CI job that never promised a
      * Firebird stays green, the lab (and the `firebird:` job) that did fail.
      */
-    public function testAnOptionalEngineTagIsExcusedOnlyWhileItsCoordinateIsUnset(): void
+    public function testAnOptionalEngineIsExcusedOnlyWhileItsCoordinateIsUnset(): void
     {
         $reason = '[needs:firebird] Firebird unreachable at localhost:3050';
 
@@ -324,7 +324,7 @@ class RequireServicesGateTest extends TestCase
     }
 
     /** An ALWAYS-provisioned service is never excused, tagged or not. */
-    public function testAnAlwaysProvisionedServiceTagIsNeverExcused(): void
+    public function testAnAlwaysProvisionedServiceIsNeverExcused(): void
     {
         $reason = '[needs:mongo] MongoDB unreachable at localhost:27017';
         [$output, $code] = $this->runPhpunit(
@@ -336,7 +336,7 @@ class RequireServicesGateTest extends TestCase
     }
 
     /** A platform exclusion tag is always excused. */
-    public function testAPlatformExclusionTagIsExcused(): void
+    public function testAPlatformTagIsAlwaysExcused(): void
     {
         [$output, $code] = $this->runPhpunit(
             ['GateFixturePlatform' => $this->perTestFixture(
