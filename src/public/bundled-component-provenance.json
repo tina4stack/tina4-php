@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "assets": [
+    {
+      "path": "swagger/oauth2-redirect.html",
+      "component": "swagger-ui-3.10.0-adapted",
+      "sha256": "f489ad4d94b7299f24f116557da4745bc79b3c23da47583f207dda05478fb78d"
+    },
+    {
+      "path": "js/frond.min.js",
+      "component": "tina4-css",
+      "sha256": "4cbaf2131492225d87205d8982c4af5035538e9812e704b43f217f4ac4a5dafc"
+    },
+    {
+      "path": "js/frond.js",
+      "component": "tina4-css",
+      "sha256": "77560a0800034d91f8ccb5d726b69ff763881b96e39c5d0b6ee7186060c2d27a"
+    },
+    {
+      "path": "js/tina4.min.js",
+      "component": "tina4-css",
+      "sha256": "01507266f2bb50aadf477f11c1f0f6e17d4c56a5c96e1815ae8580d3ebde06fc"
+    },
+    {
+      "path": "css/tina4.css",
+      "component": "tina4-css",
+      "sha256": "705605c317763e68ba3a4b8e589e29fb0416abbbf437a4627178008131b30c18"
+    },
+    {
+      "path": "css/tina4.min.css",
+      "component": "tina4-css",
+      "sha256": "db950f712bd47626c28abba14af083a6f4379ff4b41798a8e77295a554c491c8"
+    },
+    {
+      "path": "js/tina4js.min.js",
+      "component": "tina4js-1.5.4-rebuilt",
+      "sha256": "6ce41cbc3b13da87071d5b5d47045f45c6b578b24fc1e05edc8bd4906ff2c3b4"
+    }
+  ]
+}
