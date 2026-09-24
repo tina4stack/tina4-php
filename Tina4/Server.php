@@ -2031,6 +2031,14 @@ class Server
             return;
         }
 
+        // ADR-0082: the dev reload socket answers only a loopback / TINA4_HOST
+        // Host, the same rule the /__dev HTTP gate applies (DNS rebinding).
+        if (str_starts_with((string) preg_replace('#/+#', '/', (string) ($headers['_path'] ?? '/')), '/__dev')
+            && !DevAdmin::devHostAllowed($headers)) {
+            $this->sendHttpError($client, 403, 'Forbidden: Host not allowed');
+            return;
+        }
+
         // Origin allow-list (opt-in via TINA4_WS_ALLOWED_ORIGINS). Unset = allow
         // all so existing deployments are unaffected. Shared with the standalone
         // server via WebSocket::originAllowed().

@@ -416,6 +416,20 @@ class App
     }
 
     /**
+     * Build the `php -S` fallback command line. Every value that reaches the
+     * shell - the host (TINA4_HOST), the document root and the router file -
+     * is quoted with escapeshellarg (ADR-0082).
+     */
+    public static function builtinServerCommand(string $host, int $port, string $docRoot, ?string $indexFile = null, string $extraArgs = ''): string
+    {
+        $command = 'php' . $extraArgs . ' -S ' . escapeshellarg("{$host}:{$port}") . ' -t ' . escapeshellarg($docRoot);
+        if ($indexFile !== null) {
+            $command .= ' ' . escapeshellarg($indexFile);
+        }
+        return $command;
+    }
+
+    /**
      * Get the health check response data.
      *
      * @return array<string, mixed>
@@ -1496,11 +1510,7 @@ HTML;
             Log::warning('Custom server failed, falling back to php -S: ' . $e->getMessage());
             $docRoot = $this->basePath;
             $indexFile = $docRoot . DIRECTORY_SEPARATOR . 'index.php';
-            if (is_file($indexFile)) {
-                passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($indexFile));
-            } else {
-                passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot));
-            }
+            passthru(self::builtinServerCommand($host, (int) $port, $docRoot, is_file($indexFile) ? $indexFile : null));
         }
     }
 

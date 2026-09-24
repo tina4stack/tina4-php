@@ -99,9 +99,12 @@ jobs:
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
         run: |
           if [ -n "${PACKAGIST_TOKEN}" ]; then
-            curl --fail-with-body -s -XPOST "https://packagist.org/api/update-package?username=tina4stack&apiToken=${PACKAGIST_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d '{"repository":{"url":"https://github.com/tina4stack/tina4-php"}}'
+            curl --fail-with-body --silent --show-error --config - <<CURLCFG
+          url = "https://packagist.org/api/update-package?username=tina4stack&apiToken=${PACKAGIST_TOKEN}"
+          request = "POST"
+          header = "Content-Type: application/json"
+          data = "{\"repository\":{\"url\":\"https://github.com/tina4stack/tina4-php\"}}"
+          CURLCFG
           else
             echo "PACKAGIST_TOKEN not set; Packagist can discover the release tag."
           fi

@@ -289,8 +289,13 @@ class RouterAuthSourcesTest extends TestCase
         $this->assertEquals(['reloaded' => true], json_decode($response->getBody(), true));
     }
 
-    public function testGalleryWriteRouteBypassesAuthGate(): void
+    public function testGalleryWriteRouteBypassesAuthGateInDebug(): void
     {
+        $oldEnv = $_ENV['TINA4_DEBUG'] ?? null;
+        $oldValue = getenv('TINA4_DEBUG');
+        $_ENV['TINA4_DEBUG'] = 'true';
+        putenv('TINA4_DEBUG=true');
+        try {
         // Sibling prefix check in the same guard — /api/gallery/ and
         // /gallery/ must use $request->path too.
         Router::post('/api/gallery/deploy', fn($rq, $rs) => $rs->json(['ok' => true]));
@@ -300,6 +305,10 @@ class RouterAuthSourcesTest extends TestCase
 
         $this->assertNotEquals(401, $response->getStatusCode(), '/api/gallery write route must NOT be 401 by the auth gate');
         $this->assertEquals(200, $response->getStatusCode());
+        } finally {
+            if ($oldEnv === null) unset($_ENV['TINA4_DEBUG']); else $_ENV['TINA4_DEBUG'] = $oldEnv;
+            putenv($oldValue === false ? 'TINA4_DEBUG' : 'TINA4_DEBUG=' . $oldValue);
+        }
     }
 
     public function testNonDevWriteRouteStillRequiresAuth(): void

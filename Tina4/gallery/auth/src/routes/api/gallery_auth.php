@@ -113,7 +113,9 @@ HTML;
     $username = $body['username'] ?? '';
     $password = $body['password'] ?? '';
     if ($username !== '' && $password !== '') {
-        $secret = getenv('TINA4_SECRET') ?: 'tina4-gallery-secret';
+        // A demo: it signs with its own fixed demo key, NEVER the application's
+        // TINA4_SECRET, so a token minted here is worthless against real routes (ADR-0082).
+        $secret = 'tina4-gallery-demo-only';
         $token = \Tina4\Auth::getToken(['username' => $username, 'role' => 'user'], $secret);
         return $response->json(['token' => $token, 'message' => "Welcome {$username}!"]);
     }
@@ -122,7 +124,7 @@ HTML;
 
 \Tina4\Router::get('/api/gallery/auth/verify', function (\Tina4\Request $request, \Tina4\Response $response) {
     $token = $request->queryParam('token', '');
-    $secret = getenv('TINA4_SECRET') ?: 'tina4-gallery-secret';
+    $secret = 'tina4-gallery-demo-only';
     $valid = \Tina4\Auth::validToken($token, $secret);
     return $response->json(['valid' => $valid]);
 });

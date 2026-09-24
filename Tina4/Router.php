@@ -1894,7 +1894,12 @@ class Router
         // with "/__dev" so the bypass silently never fired and write routes
         // under /__dev returned 401). The trailing-slash redirect branch above
         // already uses $request->path; this aligns with it.
-        $isDevAdmin = str_starts_with($request->path, '/__dev') || str_starts_with($request->path, '/api/gallery/') || str_starts_with($request->path, '/gallery/');
+        // ADR-0082: the gallery demo routes skip auth ONLY in debug mode. In
+        // production a route under /gallery/ or /api/gallery/ is an ordinary
+        // route and takes the normal auth rules.
+        $isDebugMode = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
+        $isDevAdmin = str_starts_with($request->path, '/__dev')
+            || ($isDebugMode && (str_starts_with($request->path, '/api/gallery/') || str_starts_with($request->path, '/gallery/')));
         $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $requiresAuth = false;
 
@@ -2753,6 +2758,17 @@ class Router
         $cleanPath = trim($path, '/');
         if ($cleanPath === '') {
             $cleanPath = 'index';
+        }
+
+        // ADR-0082: a "." or ".." segment (or a backslash) could walk out of
+        // pages/ - the only directory that auto-routes. Refuse it outright.
+        if (str_contains($cleanPath, '\\')) {
+            return null;
+        }
+        foreach (explode('/', $cleanPath) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                return null;
+            }
         }
 
         $isDev = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
