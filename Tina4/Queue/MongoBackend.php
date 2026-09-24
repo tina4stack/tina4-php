@@ -340,9 +340,19 @@ class MongoBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
-    public function size(string $topic): int
+    public function size(string $topic, string $status = 'pending'): int
     {
         $this->ensureConnected();
+
+        // ADR-0022 dec 7: the dead aliases count the .dead_letter store
+        // (== count(deadLetters())); returning the pending count for
+        // size('dead') was a silent wrong answer.
+        if (in_array($status, ['dead', 'failed', 'dead_letter'], true)) {
+            return $this->collection->countDocuments(['topic' => $topic . '.dead_letter']);
+        }
+        if (in_array($status, ['reserved', 'completed'], true)) {
+            return $this->collection->countDocuments(['topic' => $topic, 'status' => $status]);
+        }
 
         return $this->collection->countDocuments([
             'topic' => $topic,
