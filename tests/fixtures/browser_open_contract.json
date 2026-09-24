@@ -1,0 +1,1100 @@
+{
+  "_comment": [
+    "Browser-open gate (ADR-0070). A launcher opens a browser only when every veto allows it: development only, never with a truthy TINA4_NO_BROWSER, never with --no-browser, never under CI.",
+    "decision_table: resolved mode + process env + .env + flags -> opens. mode_table: how tina4 serve resolves the mode. A runner feeds every row to its real gate with the environment set for real, no mocks.",
+    "Values are compared after trimming surrounding whitespace, case-insensitively. Process environment is resolved before .env."
+  ],
+  "version": 1,
+  "decided": "2026-09-24",
+  "adr": "ADR-0070",
+  "truthy": [
+    "true",
+    "1",
+    "yes",
+    "on"
+  ],
+  "ci_env_vars": [
+    "CI",
+    "CONTINUOUS_INTEGRATION",
+    "GITHUB_ACTIONS",
+    "GITLAB_CI",
+    "BUILDKITE",
+    "JENKINS_URL",
+    "TF_BUILD",
+    "TEAMCITY_VERSION"
+  ],
+  "ci_not_set_values": [
+    "false",
+    "0",
+    "no",
+    "off"
+  ],
+  "rules": {
+    "development": "framework: resolved debug mode on (TINA4_DEBUG truthy, unset is off, or an explicit debug argument). tina4 serve: --production -> production; else --dev -> development; else tina4-js -> development; else TINA4_DEBUG truthy -> development; else production.",
+    "no_browser_variable": "TINA4_NO_BROWSER in the truthy set vetoes",
+    "no_browser_flag": "--no-browser (or a programmatic no_browser=true) vetoes; no_browser=false never forces a browser open",
+    "ci": "Under CI when ANY variable in ci_env_vars is set to a value that, trimmed and lower-cased, is non-empty and not in ci_not_set_values (false, 0, no, off). Maintainer decision 2026-09-24. So CI=true, CI=1, CI=yes and CI=woodpecker are CI; unset, CI=, CI=' ', CI=false, CI=0, CI=no and CI=off are not (any case).",
+    "tabs": "at most one tab, the app URL; the CLI sets TINA4_NO_BROWSER=true for any framework server it spawns; only a primary process opens"
+  },
+  "decision_table": [
+    {
+      "name": "development-nothing-set",
+      "mode": "development",
+      "env": {},
+      "flags": [],
+      "opens": true,
+      "why": "the one case a browser helps: a person just started a dev server"
+    },
+    {
+      "name": "production-nothing-set",
+      "mode": "production",
+      "env": {},
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "production-no-browser-false",
+      "mode": "production",
+      "env": {
+        "TINA4_NO_BROWSER": "false"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "a falsy TINA4_NO_BROWSER never forces a browser open"
+    },
+    {
+      "name": "production-debug-flag-irrelevant",
+      "mode": "production",
+      "env": {},
+      "flags": [
+        "--production"
+      ],
+      "opens": false
+    },
+    {
+      "name": "flag-vetoes",
+      "mode": "development",
+      "env": {},
+      "flags": [
+        "--no-browser"
+      ],
+      "opens": false
+    },
+    {
+      "name": "flag-beats-a-falsy-variable",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "false"
+      },
+      "flags": [
+        "--no-browser"
+      ],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-true",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "true"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-1",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "1"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-yes",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "yes"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-on",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "on"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-TRUE",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "TRUE"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-Yes",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "Yes"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-ON",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "ON"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-on-padded",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": " on "
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-truthy-True",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "True"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "no-browser-not-truthy-false",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-not-truthy-0",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-not-truthy-no",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-not-truthy-off",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "off"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-not-truthy-empty",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-not-truthy-maybe",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "maybe"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-not-truthy-y",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "y"
+      },
+      "flags": [],
+      "opens": true,
+      "why": "y and t are outside the truthy set"
+    },
+    {
+      "name": "no-browser-not-truthy-t",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "t"
+      },
+      "flags": [],
+      "opens": true,
+      "why": "y and t are outside the truthy set"
+    },
+    {
+      "name": "no-browser-not-truthy-enabled",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "enabled"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "no-browser-from-dotenv",
+      "mode": "development",
+      "env": {},
+      "dotenv": {
+        "TINA4_NO_BROWSER": "on"
+      },
+      "flags": [],
+      "opens": false,
+      "why": ".env is read when the process environment does not set the variable"
+    },
+    {
+      "name": "process-env-beats-dotenv",
+      "mode": "development",
+      "env": {
+        "TINA4_NO_BROWSER": "false"
+      },
+      "dotenv": {
+        "TINA4_NO_BROWSER": "on"
+      },
+      "flags": [],
+      "opens": true,
+      "why": "the process environment is resolved first, like every framework's dotenv loader"
+    },
+    {
+      "name": "ci-var-CI-set",
+      "mode": "development",
+      "env": {
+        "CI": "true"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "CI as its CI system sets it"
+    },
+    {
+      "name": "ci-var-CONTINUOUS_INTEGRATION-set",
+      "mode": "development",
+      "env": {
+        "CONTINUOUS_INTEGRATION": "true"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "CONTINUOUS_INTEGRATION as its CI system sets it"
+    },
+    {
+      "name": "ci-var-GITHUB_ACTIONS-set",
+      "mode": "development",
+      "env": {
+        "GITHUB_ACTIONS": "true"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "GITHUB_ACTIONS as its CI system sets it"
+    },
+    {
+      "name": "ci-var-GITLAB_CI-set",
+      "mode": "development",
+      "env": {
+        "GITLAB_CI": "true"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "GITLAB_CI as its CI system sets it"
+    },
+    {
+      "name": "ci-var-BUILDKITE-set",
+      "mode": "development",
+      "env": {
+        "BUILDKITE": "true"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "BUILDKITE as its CI system sets it"
+    },
+    {
+      "name": "ci-var-JENKINS_URL-set",
+      "mode": "development",
+      "env": {
+        "JENKINS_URL": "http://jenkins.example:8080/"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "JENKINS_URL as its CI system sets it"
+    },
+    {
+      "name": "ci-var-TF_BUILD-set",
+      "mode": "development",
+      "env": {
+        "TF_BUILD": "True"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "TF_BUILD as its CI system sets it"
+    },
+    {
+      "name": "ci-var-TEAMCITY_VERSION-set",
+      "mode": "development",
+      "env": {
+        "TEAMCITY_VERSION": "2024.12"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "TEAMCITY_VERSION as its CI system sets it"
+    },
+    {
+      "name": "ci-var-CI-false",
+      "mode": "development",
+      "env": {
+        "CI": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CI-0",
+      "mode": "development",
+      "env": {
+        "CI": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CI-empty",
+      "mode": "development",
+      "env": {
+        "CI": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CI-no",
+      "mode": "development",
+      "env": {
+        "CI": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CI-off",
+      "mode": "development",
+      "env": {
+        "CI": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CONTINUOUS_INTEGRATION-false",
+      "mode": "development",
+      "env": {
+        "CONTINUOUS_INTEGRATION": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CONTINUOUS_INTEGRATION-0",
+      "mode": "development",
+      "env": {
+        "CONTINUOUS_INTEGRATION": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CONTINUOUS_INTEGRATION-empty",
+      "mode": "development",
+      "env": {
+        "CONTINUOUS_INTEGRATION": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CONTINUOUS_INTEGRATION-no",
+      "mode": "development",
+      "env": {
+        "CONTINUOUS_INTEGRATION": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-CONTINUOUS_INTEGRATION-off",
+      "mode": "development",
+      "env": {
+        "CONTINUOUS_INTEGRATION": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITHUB_ACTIONS-false",
+      "mode": "development",
+      "env": {
+        "GITHUB_ACTIONS": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITHUB_ACTIONS-0",
+      "mode": "development",
+      "env": {
+        "GITHUB_ACTIONS": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITHUB_ACTIONS-empty",
+      "mode": "development",
+      "env": {
+        "GITHUB_ACTIONS": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITHUB_ACTIONS-no",
+      "mode": "development",
+      "env": {
+        "GITHUB_ACTIONS": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITHUB_ACTIONS-off",
+      "mode": "development",
+      "env": {
+        "GITHUB_ACTIONS": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITLAB_CI-false",
+      "mode": "development",
+      "env": {
+        "GITLAB_CI": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITLAB_CI-0",
+      "mode": "development",
+      "env": {
+        "GITLAB_CI": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITLAB_CI-empty",
+      "mode": "development",
+      "env": {
+        "GITLAB_CI": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITLAB_CI-no",
+      "mode": "development",
+      "env": {
+        "GITLAB_CI": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-GITLAB_CI-off",
+      "mode": "development",
+      "env": {
+        "GITLAB_CI": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-BUILDKITE-false",
+      "mode": "development",
+      "env": {
+        "BUILDKITE": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-BUILDKITE-0",
+      "mode": "development",
+      "env": {
+        "BUILDKITE": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-BUILDKITE-empty",
+      "mode": "development",
+      "env": {
+        "BUILDKITE": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-BUILDKITE-no",
+      "mode": "development",
+      "env": {
+        "BUILDKITE": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-BUILDKITE-off",
+      "mode": "development",
+      "env": {
+        "BUILDKITE": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-JENKINS_URL-false",
+      "mode": "development",
+      "env": {
+        "JENKINS_URL": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-JENKINS_URL-0",
+      "mode": "development",
+      "env": {
+        "JENKINS_URL": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-JENKINS_URL-empty",
+      "mode": "development",
+      "env": {
+        "JENKINS_URL": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-JENKINS_URL-no",
+      "mode": "development",
+      "env": {
+        "JENKINS_URL": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-JENKINS_URL-off",
+      "mode": "development",
+      "env": {
+        "JENKINS_URL": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TF_BUILD-false",
+      "mode": "development",
+      "env": {
+        "TF_BUILD": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TF_BUILD-0",
+      "mode": "development",
+      "env": {
+        "TF_BUILD": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TF_BUILD-empty",
+      "mode": "development",
+      "env": {
+        "TF_BUILD": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TF_BUILD-no",
+      "mode": "development",
+      "env": {
+        "TF_BUILD": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TF_BUILD-off",
+      "mode": "development",
+      "env": {
+        "TF_BUILD": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TEAMCITY_VERSION-false",
+      "mode": "development",
+      "env": {
+        "TEAMCITY_VERSION": "false"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TEAMCITY_VERSION-0",
+      "mode": "development",
+      "env": {
+        "TEAMCITY_VERSION": "0"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TEAMCITY_VERSION-empty",
+      "mode": "development",
+      "env": {
+        "TEAMCITY_VERSION": ""
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TEAMCITY_VERSION-no",
+      "mode": "development",
+      "env": {
+        "TEAMCITY_VERSION": "no"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-var-TEAMCITY_VERSION-off",
+      "mode": "development",
+      "env": {
+        "TEAMCITY_VERSION": "OFF"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-1",
+      "mode": "development",
+      "env": {
+        "CI": "1"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "ci-TRUE",
+      "mode": "development",
+      "env": {
+        "CI": "TRUE"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "ci-yes",
+      "mode": "development",
+      "env": {
+        "CI": "yes"
+      },
+      "flags": [],
+      "opens": false
+    },
+    {
+      "name": "ci-not-no",
+      "mode": "development",
+      "env": {
+        "CI": "no"
+      },
+      "flags": [],
+      "opens": true,
+      "why": "'no' is in ci_not_set_values: not CI"
+    },
+    {
+      "name": "ci-not-off",
+      "mode": "development",
+      "env": {
+        "CI": "off"
+      },
+      "flags": [],
+      "opens": true,
+      "why": "'off' is in ci_not_set_values: not CI"
+    },
+    {
+      "name": "ci-woodpecker",
+      "mode": "development",
+      "env": {
+        "CI": "woodpecker"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "Woodpecker sets CI=woodpecker"
+    },
+    {
+      "name": "ci-not-blank",
+      "mode": "development",
+      "env": {
+        "CI": "  "
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-not-FALSE",
+      "mode": "development",
+      "env": {
+        "CI": "FALSE"
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-not-False-padded",
+      "mode": "development",
+      "env": {
+        "CI": " False "
+      },
+      "flags": [],
+      "opens": true
+    },
+    {
+      "name": "ci-one-var-set-among-cleared",
+      "mode": "development",
+      "env": {
+        "CI": "false",
+        "GITHUB_ACTIONS": "true"
+      },
+      "flags": [],
+      "opens": false,
+      "why": "any one variable in the list is enough"
+    },
+    {
+      "name": "every-veto-at-once",
+      "mode": "production",
+      "env": {
+        "CI": "true",
+        "TINA4_NO_BROWSER": "true"
+      },
+      "flags": [
+        "--no-browser"
+      ],
+      "opens": false
+    }
+  ],
+  "mode_table": [
+    {
+      "name": "production-flag-wins",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "true"
+      },
+      "flags": [
+        "--production"
+      ],
+      "mode": "production"
+    },
+    {
+      "name": "production-flag-beats-dev-flag",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "true"
+      },
+      "flags": [
+        "--dev",
+        "--production"
+      ],
+      "mode": "production"
+    },
+    {
+      "name": "dev-flag-beats-debug-off",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "false"
+      },
+      "flags": [
+        "--dev"
+      ],
+      "mode": "development"
+    },
+    {
+      "name": "frontend-is-development",
+      "project": "frontend",
+      "env": {},
+      "flags": [],
+      "mode": "development",
+      "why": "a tina4-js project has no TINA4_DEBUG; without --production it runs the Vite dev server"
+    },
+    {
+      "name": "frontend-production-flag",
+      "project": "frontend",
+      "env": {},
+      "flags": [
+        "--production"
+      ],
+      "mode": "production"
+    },
+    {
+      "name": "debug-true",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "true"
+      },
+      "flags": [],
+      "mode": "development"
+    },
+    {
+      "name": "debug-1",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "1"
+      },
+      "flags": [],
+      "mode": "development"
+    },
+    {
+      "name": "debug-yes",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "yes"
+      },
+      "flags": [],
+      "mode": "development"
+    },
+    {
+      "name": "debug-on",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "on"
+      },
+      "flags": [],
+      "mode": "development"
+    },
+    {
+      "name": "debug-TRUE",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "TRUE"
+      },
+      "flags": [],
+      "mode": "development"
+    },
+    {
+      "name": "debug-not-false",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "false"
+      },
+      "flags": [],
+      "mode": "production"
+    },
+    {
+      "name": "debug-not-0",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "0"
+      },
+      "flags": [],
+      "mode": "production"
+    },
+    {
+      "name": "debug-not-empty",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": ""
+      },
+      "flags": [],
+      "mode": "production"
+    },
+    {
+      "name": "debug-not-no",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "no"
+      },
+      "flags": [],
+      "mode": "production"
+    },
+    {
+      "name": "debug-not-off",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "off"
+      },
+      "flags": [],
+      "mode": "production"
+    },
+    {
+      "name": "debug-not-y",
+      "project": "backend",
+      "env": {
+        "TINA4_DEBUG": "y"
+      },
+      "flags": [],
+      "mode": "production"
+    },
+    {
+      "name": "debug-unset",
+      "project": "backend",
+      "env": {},
+      "flags": [],
+      "mode": "production",
+      "why": "the frameworks' own default is debug off"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "browser-open-development-only",
+      "adr": "ADR-0070",
+      "rule": "A launcher opens a browser only when the server it started is in development. Production never opens, and a falsy TINA4_NO_BROWSER does not change that.",
+      "why": "A tab helps only a person who just started a development server; anywhere else it is noise or a tab onto production.",
+      "suites": {
+        "native": "src/main.rs"
+      },
+      "cases": [
+        "browser_opens_in_development_with_nothing_set",
+        "browser_never_opens_in_production"
+      ]
+    },
+    {
+      "id": "browser-open-no-browser-flag",
+      "adr": "ADR-0070",
+      "rule": "--no-browser vetoes the browser, even when TINA4_NO_BROWSER is falsy.",
+      "why": "The flag is the operator's explicit answer for this run.",
+      "suites": {
+        "native": "src/main.rs"
+      },
+      "cases": [
+        "browser_never_opens_with_the_no_browser_flag"
+      ]
+    },
+    {
+      "id": "browser-open-truthy-set",
+      "adr": "ADR-0070",
+      "rule": "TINA4_NO_BROWSER vetoes when it is true, 1, yes or on after trimming, in any case, whether it comes from the process environment or .env. Every other value, y and t included, does not veto.",
+      "why": "One truthy set, the one every framework's is_truthy helper already uses; 'on' was silently ignored by the CLI, Python and PHP.",
+      "suites": {
+        "native": "src/main.rs"
+      },
+      "cases": [
+        "browser_never_opens_when_no_browser_env_is_truthy",
+        "browser_opens_when_no_browser_env_is_not_truthy",
+        "dotenv_bool_accepts_on"
+      ]
+    },
+    {
+      "id": "browser-open-ci",
+      "adr": "ADR-0070",
+      "rule": "Under CI no browser opens. CI means any variable in ci_env_vars (CI, CONTINUOUS_INTEGRATION, GITHUB_ACTIONS, GITLAB_CI, BUILDKITE, JENKINS_URL, TF_BUILD, TEAMCITY_VERSION) set to a value that, trimmed and lower-cased, is non-empty and neither 'false' nor '0'. An empty, blank, false or 0 value does not veto. A runner asserts its own list equals ci_env_vars, element for element.",
+      "why": "One explicit list, the union of what tina4-php (App::CI_ENVIRONMENT_VARIABLES) and tina4-ruby (Tina4::CI_ENV_VARS) already ship, so every launcher recognises the same CI systems.",
+      "suites": {
+        "native": "src/main.rs"
+      },
+      "cases": [
+        "browser_never_opens_under_ci",
+        "browser_opens_when_ci_is_empty_or_falsy",
+        "every_ci_variable_vetoes_on_its_own",
+        "ci_env_vars_match_the_contract_fixture"
+      ]
+    },
+    {
+      "id": "serve-mode-resolution",
+      "adr": "ADR-0070",
+      "rule": "tina4 serve resolves its mode before spawning: --production wins, then --dev, then a tina4-js project is development, then a backend project is development only when TINA4_DEBUG is truthy (unset is production).",
+      "why": "The CLI must agree with the framework it spawns about whether this is a development server.",
+      "suites": {
+        "native": "src/main.rs"
+      },
+      "cases": [
+        "development_needs_a_truthy_debug_flag",
+        "production_flag_beats_dev_flag_and_debug",
+        "a_frontend_only_project_serves_in_development_without_debug"
+      ]
+    },
+    {
+      "id": "cli-opens-one-tab-and-silences-its-child",
+      "adr": "ADR-0070",
+      "rule": "tina4 serve opens at most one tab (the app URL, never /__dev), resolves variables from the process environment before .env, and always sets TINA4_NO_BROWSER=true for the framework server it spawns.",
+      "why": "Two call sites opened the app and /__dev on every start. Verified end to end with PATH shims for open/xdg-open on fix/browser-open-gate, but no named test drives handle_serve yet.",
+      "owed_by": [
+        "native"
+      ]
+    },
+    {
+      "id": "framework-server-follows-the-gate",
+      "adr": "ADR-0070",
+      "rule": "Each framework's own server start (Python run(), PHP App::run() and bin/tina4php serve, Ruby Tina4.run!, Node startServer) applies all four vetoes with the ADR-0070 truthy and CI rules, and opens at most one tab.",
+      "why": "Python and Node open in production and ignore CI, PHP App::run() never reads TINA4_NO_BROWSER, Ruby opens unconditionally.",
+      "owed_by": [
+        "python",
+        "php",
+        "ruby",
+        "nodejs"
+      ]
+    },
+    {
+      "id": "framework-cli-honours-no-browser",
+      "adr": "ADR-0070",
+      "rule": "Every framework CLI that parses --no-browser passes it through to the server start.",
+      "why": "tina4ruby start and tina4nodejs serve parse the flag and drop it.",
+      "owed_by": [
+        "ruby",
+        "nodejs"
+      ]
+    },
+    {
+      "id": "cluster-worker-never-opens",
+      "adr": "ADR-0070",
+      "rule": "In a multi-process server only the primary may open the tab; a worker never does.",
+      "why": "Node's TINA4_PRODUCTION cluster reaches the open call once per worker.",
+      "owed_by": [
+        "nodejs"
+      ]
+    }
+  ]
+}

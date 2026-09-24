@@ -28,7 +28,7 @@ use PHPUnit\Framework\TestCase;
 final class BrowserOpenGateTest extends TestCase
 {
     /** The CI variables App::CI_ENVIRONMENT_VARIABLES lists, written out so the test does not trust the code it checks. */
-    private const CI_VARIABLES = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'JENKINS_URL', 'TF_BUILD'];
+    private const CI_VARIABLES = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'JENKINS_URL', 'TF_BUILD', 'TEAMCITY_VERSION'];
 
     /** Seconds to wait for an opener that should (or must not) run. */
     private const OPEN_WAIT_SECONDS = 4;

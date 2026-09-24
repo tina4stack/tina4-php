@@ -385,6 +385,29 @@ jobs:
           MQTT_REQUIRE_EMQX=false bash tests/mqtt-infra.sh "$RUNNER_TEMP/tina4-mqtt-infra"
           echo "TINA4_TEST_MQTT_CA_FILE=$RUNNER_TEMP/tina4-mqtt-infra/certs/ca.crt" >> "$GITHUB_ENV"
 
+      # MongoDB 8 as a single-node REPLICA SET, beside the mongo:7 STANDALONE
+      # service above. A replica-set member (7 and 8 alike) adds electionId
+      # (ObjectId), opTime / operationTime / $clusterTime (Timestamp) and a
+      # BinData signature to every write reply; a standalone never does. The
+      # zero-dependency wire clients mis-sized those types and failed every
+      # write against a replica set (Atlas, most production) while CI stayed
+      # green on the standalone. This leg keeps that from regressing.
+      - name: Start MongoDB 8 replica set (27018)
+        run: |
+          docker run -d --name tina4-mongo8-rs -p 27018:27018 mongo:8 \
+            mongod --replSet rs0 --bind_ip_all --port 27018
+          for i in $(seq 1 30); do
+            docker exec tina4-mongo8-rs mongosh --port 27018 --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break
+            sleep 2
+          done
+          docker exec tina4-mongo8-rs mongosh --port 27018 --quiet \
+            --eval "rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27018'}]})"
+          for i in $(seq 1 30); do
+            [ "$(docker exec tina4-mongo8-rs mongosh --port 27018 --quiet --eval 'db.hello().isWritablePrimary')" = "true" ] && exit 0
+            sleep 2
+          done
+          echo "::error::mongo:8 replica set never became primary"; exit 1
+
       - name: Install native Tina4 CLI 3.8.77
         run: |
           cli_dir="$(mktemp -d)"
@@ -402,6 +425,16 @@ jobs:
       # native engine above and proves that boundary instead of excluding it.
       - name: Run tests
         run: vendor/bin/phpunit
+
+      - name: Run the Mongo suites against the MongoDB 8 replica set
+        env:
+          TINA4_TEST_MONGO_URI: mongodb://127.0.0.1:27018
+          TINA4_TEST_MONGO_HOST: 127.0.0.1
+          TINA4_TEST_MONGO_PORT: '27018'
+          TINA4_MONGO_URI: mongodb://127.0.0.1:27018
+          TINA4_SESSION_MONGO_URI: mongodb://127.0.0.1:27018
+        run: |
+          vendor/bin/phpunit tests/MongoWireBsonTypesTest.php tests/SessionHandlerTest.php tests/SessionMongoCollectionEnvTest.php tests/SessionZeroDependencyFallbackTest.php tests/SessionTtlContractTest.php tests/SessionExpiryContractTest.php tests/CacheNullRoundTripTest.php tests/CacheBackendsTest.php tests/DocStoreSubstitutabilityTest.php tests/QueueMongoRetryAndPurgeTest.php tests/MongoQueueDeadLetterLiveTest.php tests/MongoSqlFailClosedTest.php
 
       - name: Report results
         if: always()

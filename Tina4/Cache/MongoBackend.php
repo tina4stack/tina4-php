@@ -249,7 +249,7 @@ class MongoBackend extends CacheBackend
         return (int)($result['n'] ?? 0);
     }
 
-    // ── Wire protocol (OP_MSG) + minimal BSON ──────────────────────
+    // ── Wire protocol (OP_MSG); BSON is Tina4\MongoBson ──────────────────────
 
     private function ensureConnected(): void
     {
@@ -266,7 +266,7 @@ class MongoBackend extends CacheBackend
     {
         $this->ensureConnected();
         $this->requestId++;
-        $bson = $this->encodeBson($command);
+        $bson = \Tina4\MongoBson::encode($command);
         $sections = pack('V', 0) . pack('C', 0) . $bson;
         $totalLength = 16 + strlen($sections);
         $header = pack('V', $totalLength)
@@ -283,9 +283,7 @@ class MongoBackend extends CacheBackend
         $header = unpack('VmsgLen/VrequestId/VresponseTo/Vopcode', $headerData);
         $remaining = $header['msgLen'] - 16;
         $payload = $this->readExact($remaining);
-        $bsonData = substr($payload, 5);
-        $pos = 0;
-        return $this->decodeBsonDocument($bsonData, $pos);
+        return \Tina4\MongoBson::decode(substr($payload, 5));
     }
 
     private function readExact(int $length): string
@@ -299,111 +297,5 @@ class MongoBackend extends CacheBackend
             $buf .= $chunk;
         }
         return $buf;
-    }
-
-    private function encodeBson(array $doc): string
-    {
-        $body = '';
-        foreach ($doc as $key => $value) {
-            $body .= $this->encodeBsonElement((string)$key, $value);
-        }
-        $body .= "\x00";
-        return pack('V', strlen($body) + 4) . $body;
-    }
-
-    private function encodeBsonElement(string $key, mixed $value): string
-    {
-        $ckey = $key . "\x00";
-        if ($value === null) {
-            return "\x0A" . $ckey;
-        }
-        if (is_bool($value)) {
-            return "\x08" . $ckey . ($value ? "\x01" : "\x00");
-        }
-        if (is_int($value)) {
-            if ($value >= -2147483648 && $value <= 2147483647) {
-                return "\x10" . $ckey . pack('V', $value);
-            }
-            return "\x12" . $ckey . pack('P', $value);
-        }
-        if (is_float($value)) {
-            return "\x01" . $ckey . pack('e', $value);
-        }
-        if (is_string($value)) {
-            return "\x02" . $ckey . pack('V', strlen($value) + 1) . $value . "\x00";
-        }
-        if (is_array($value)) {
-            if (array_is_list($value)) {
-                $indexed = [];
-                foreach ($value as $i => $v) {
-                    $indexed[(string)$i] = $v;
-                }
-                return "\x04" . $ckey . $this->encodeBson($indexed);
-            }
-            return "\x03" . $ckey . $this->encodeBson($value);
-        }
-        $s = (string)$value;
-        return "\x02" . $ckey . pack('V', strlen($s) + 1) . $s . "\x00";
-    }
-
-    private function decodeBsonDocument(string $data, int &$pos): array
-    {
-        $docLen = unpack('V', substr($data, $pos, 4))[1];
-        $pos += 4;
-        $end = $pos + $docLen - 5;
-        $doc = [];
-        while ($pos < $end) {
-            $type = ord($data[$pos]);
-            $pos++;
-            $keyEnd = strpos($data, "\x00", $pos);
-            $key = substr($data, $pos, $keyEnd - $pos);
-            $pos = $keyEnd + 1;
-            $doc[$key] = $this->decodeBsonValue($data, $pos, $type);
-        }
-        $pos++;
-        return $doc;
-    }
-
-    private function decodeBsonValue(string $data, int &$pos, int $type): mixed
-    {
-        switch ($type) {
-            case 0x01:
-                $val = unpack('e', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-            case 0x02:
-                $len = unpack('V', substr($data, $pos, 4))[1];
-                $pos += 4;
-                $val = substr($data, $pos, $len - 1);
-                $pos += $len;
-                return $val;
-            case 0x03:
-                return $this->decodeBsonDocument($data, $pos);
-            case 0x04:
-                return array_values($this->decodeBsonDocument($data, $pos));
-            case 0x08:
-                $val = ord($data[$pos]) !== 0;
-                $pos++;
-                return $val;
-            case 0x09: // UTC datetime (int64 ms)
-                $val = unpack('P', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-            case 0x0A:
-                return null;
-            case 0x10:
-                $val = unpack('V', substr($data, $pos, 4))[1];
-                $pos += 4;
-                if ($val >= 2147483648) {
-                    $val -= 4294967296;
-                }
-                return $val;
-            case 0x12:
-                $val = unpack('P', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-            default:
-                return null;
-        }
     }
 }

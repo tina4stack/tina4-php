@@ -200,6 +200,7 @@ class DualPortContractTest extends TestCase
         $environment = [
             'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
             'HOME' => getenv('HOME') ?: sys_get_temp_dir(),
+            'TINA4_NO_BROWSER' => 'true', // a hand-built env inherits nothing: never open a browser
             'TINA4_OVERRIDE_CLIENT' => 'true',
             'TINA4_SUPPRESS' => 'true',
             'TINA4_AUTO_MIGRATE' => 'false',

@@ -109,6 +109,7 @@ class BackgroundOverlapTest extends TestCase
         $environment = [
             'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
             'HOME' => getenv('HOME') ?: sys_get_temp_dir(),
+            'TINA4_NO_BROWSER' => 'true', // a hand-built env inherits nothing: never open a browser
             // Boot the server directly (no tina4 CLI in a test), keep it quiet,
             // and keep migrations out of the measured window. All real config.
             'TINA4_OVERRIDE_CLIENT' => 'true',
