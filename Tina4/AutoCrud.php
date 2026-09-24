@@ -189,22 +189,31 @@ class AutoCrud
             // reference behaviour Python/Ruby/Node were made to match.
             $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
 
-            // Build filter from query params
+            // ADR-0069: filter keys and sort fields resolve against the model's
+            // fields; anything else is a 400 before any SQL runs.
             $filter = [];
             if (isset($request->query['filter']) && is_array($request->query['filter'])) {
-                $filter = $request->query['filter'];
+                foreach ($request->query['filter'] as $key => $value) {
+                    $column = $model->resolveFieldColumn((string)$key);
+                    if ($column === null) {
+                        return $response->error('UNKNOWN_FIELD', "Unknown filter field '{$key}'", 400);
+                    }
+                    $filter[$column] = $value;
+                }
             }
 
-            // Build order by from sort param
             $orderBy = null;
             if (isset($request->query['sort'])) {
-                $orderBy = $this->parseSortParam($request->query['sort']);
+                [$orderBy, $unknownField] = $this->parseSortParam($model, $request->query['sort']);
+                if ($unknownField !== null) {
+                    return $response->error('UNKNOWN_FIELD', "Unknown sort field '{$unknownField}'", 400);
+                }
             }
 
             if (!empty($filter)) {
                 $models = $model->find($filter, $limit, $offset, $orderBy);
             } else {
-                $models = $model->all($limit, $offset);
+                $models = $model->all($limit, $offset, null, $orderBy);
             }
 
             // Dogfood ADR-0064: find()/all() return a ModelCollection that
@@ -436,28 +445,37 @@ class AutoCrud
     }
 
     /**
-     * Parse a sort parameter string into an ORDER BY clause.
+     * Parse a sort parameter into an ORDER BY clause built ONLY from resolved
+     * model columns and the literal words ASC / DESC (ADR-0069).
      *
-     * Format: "-name,created_at" means "name DESC, created_at ASC"
+     * Format: "-name,created_at" means "name DESC, created_at ASC"; empty parts
+     * are skipped.
+     *
+     * @return array{0: ?string, 1: ?string} [ORDER BY clause or null, the first field that did not resolve or null]
      */
-    private function parseSortParam(string $sort): string
+    private function parseSortParam(ORM $model, string $sort): array
     {
-        $parts = explode(',', $sort);
         $clauses = [];
 
-        foreach ($parts as $part) {
+        foreach (explode(',', $sort) as $part) {
             $part = trim($part);
             if ($part === '') {
                 continue;
             }
 
+            $direction = 'ASC';
             if (str_starts_with($part, '-')) {
-                $clauses[] = substr($part, 1) . ' DESC';
-            } else {
-                $clauses[] = $part . ' ASC';
+                $direction = 'DESC';
+                $part = substr($part, 1);
             }
+
+            $column = $model->resolveFieldColumn($part);
+            if ($column === null) {
+                return [null, $part];
+            }
+            $clauses[] = "{$column} {$direction}";
         }
 
-        return implode(', ', $clauses);
+        return [$clauses === [] ? null : implode(', ', $clauses), null];
     }
 }
