@@ -43,11 +43,11 @@ class AppInvokeSwooleTest extends TestCase
     {
         if (!extension_loaded('swoole') && !extension_loaded('openswoole')) {
             $this->markTestSkipped(
-                'swoole/openswoole is not installed, so a real Swoole\Http\Request cannot be built'
+                '[needs:swoole] swoole/openswoole is not installed, so a real Swoole\Http\Request cannot be built'
             );
         }
         if (!class_exists('Swoole\Http\Request')) {
-            $this->markTestSkipped('the swoole extension is loaded but exposes no Swoole\Http\Request');
+            $this->markTestSkipped('[needs:swoole] the swoole extension is loaded but exposes no Swoole\Http\Request');
         }
 
         $this->appDir = \TempPath::dir('tina4_swoole_');

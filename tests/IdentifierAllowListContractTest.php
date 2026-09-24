@@ -311,7 +311,7 @@ final class IdentifierAllowListContractTest extends TestCase
             $host = getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1';
             $port = (int)(getenv('TINA4_TEST_PG_PORT') ?: 55432);
             if (!$reach($host, $port)) {
-                $this->markTestSkipped("postgres unreachable at {$host}:{$port} (set TINA4_TEST_PG_*)");
+                $this->markTestSkipped("[needs:postgres] postgres unreachable at {$host}:{$port} (set TINA4_TEST_PG_*)");
             }
             $name = getenv('TINA4_TEST_PG_DB') ?: 'tina4_php';
             $user = getenv('TINA4_TEST_PG_USERNAME') ?: 'tina4';
@@ -322,7 +322,7 @@ final class IdentifierAllowListContractTest extends TestCase
             $host = getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1';
             $port = (int)(getenv('TINA4_TEST_MYSQL_PORT') ?: 3306);
             if (!$reach($host, $port)) {
-                $this->markTestSkipped("mysql unreachable at {$host}:{$port} (set TINA4_TEST_MYSQL_*)");
+                $this->markTestSkipped("[needs:mysql] mysql unreachable at {$host}:{$port} (set TINA4_TEST_MYSQL_*)");
             }
             $name = getenv('TINA4_TEST_MYSQL_DB') ?: 'tina4_test';
             $user = getenv('TINA4_TEST_MYSQL_USERNAME') ?: 'tina4';
@@ -333,7 +333,7 @@ final class IdentifierAllowListContractTest extends TestCase
             $host = getenv('TINA4_TEST_MSSQL_HOST') ?: '127.0.0.1';
             $port = (int)(getenv('TINA4_TEST_MSSQL_PORT') ?: 1433);
             if (!$reach($host, $port)) {
-                $this->markTestSkipped("mssql unreachable at {$host}:{$port} (set TINA4_TEST_MSSQL_*)");
+                $this->markTestSkipped("[needs:mssql] mssql unreachable at {$host}:{$port} (set TINA4_TEST_MSSQL_*)");
             }
             $name = getenv('TINA4_TEST_MSSQL_DB') ?: 'tina4_test';
             $user = getenv('TINA4_TEST_MSSQL_USERNAME') ?: 'sa';
@@ -342,7 +342,7 @@ final class IdentifierAllowListContractTest extends TestCase
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL') ?: '';
         if ($url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
         }
         return Database::create($url);
     }

@@ -291,7 +291,7 @@ class GraphTest extends TestCase
     public function testGraphConnectTimeout(): void
     {
         if (!class_exists(self::ULTIPA_DRIVER_CLASS)) {
-            $this->markTestSkipped('tina4stack/ultipa driver not installed');
+            $this->markTestSkipped('[needs:ultipa] tina4stack/ultipa driver not installed');
         }
 
         putenv('TINA4_GRAPH_CONNECT_TIMEOUT=2');

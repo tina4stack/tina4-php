@@ -83,7 +83,7 @@ final class SsoContractTest extends TestCase
     public function testRealOidcPkceSessionRefreshAndLogout(): void
     {
         if (!getenv('TINA4_REQUIRE_OIDC')) {
-            $this->markTestSkipped('real OIDC gate runs on the lab');
+            $this->markTestSkipped('[needs:oidc] real OIDC gate runs on the lab');
         }
         $sso = Sso::fromIssuer($this->options());
         $path = sys_get_temp_dir() . '/tina4-sso-' . bin2hex(random_bytes(5));

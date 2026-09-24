@@ -68,7 +68,7 @@ final class SoftDeleteContractTest extends TestCase
             $p = (int) (getenv('TINA4_TEST_PG_PORT') ?: 55432);
             $c = @fsockopen($h, $p, $e, $s, 2.0);
             if (!$c) {
-                $this->markTestSkipped("postgres unreachable at {$h}:{$p} (set TINA4_TEST_PG_*)");
+                $this->markTestSkipped("[needs:postgres] postgres unreachable at {$h}:{$p} (set TINA4_TEST_PG_*)");
             }
             fclose($c);
             $db = getenv('TINA4_TEST_PG_DB') ?: 'tina4_php';

@@ -90,12 +90,12 @@ class FirebirdStatementLeakTest extends TestCase
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
             $this->markTestSkipped(
-                'Set TINA4_TEST_FIREBIRD_URL to run the live Firebird statement-leak test '
+                '[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird statement-leak test '
                 . '(e.g. firebird://SYSDBA:masterkey@localhost:3050//tmp/test.fdb)'
             );
         }
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed — the statement leak is UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed — the statement leak is UNVERIFIED here.');
         }
         return $url . (str_contains($url, '?') ? '&' : '?') . 'driver=interbase';
     }
@@ -263,12 +263,12 @@ class FirebirdStatementLeakTest extends TestCase
 
         [$made, $out] = $this->runRole($script, 'creator', self::PROBE_TIMEOUT);
         if (!$made || !str_contains($out, 'CREATOR_DONE')) {
-            $this->markTestSkipped('Firebird is not usable from a worker here: ' . trim($out));
+            $this->markTestSkipped('[needs:firebird] Firebird is not usable from a worker here: ' . trim($out));
         }
 
         $ready = $this->startHolder($script, $holderRole);
         if (!str_contains($ready, 'HOLDER_READY')) {
-            $this->markTestSkipped('the Firebird holder could not complete its write: ' . trim($ready));
+            $this->markTestSkipped('[needs:firebird] the Firebird holder could not complete its write: ' . trim($ready));
         }
 
         [$finished, $probe] = $this->runRole($script, 'prober', self::PROBE_TIMEOUT);

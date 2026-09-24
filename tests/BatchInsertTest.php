@@ -180,11 +180,11 @@ class BatchInsertTest extends TestCase
     public function testMysqlBatchInsertsAllThreeRowsAndReportsLastId(): void
     {
         if (!extension_loaded('mysqli')) {
-            $this->markTestSkipped('MySQL client not installed — ext-mysqli is missing.');
+            $this->markTestSkipped('[needs:mysql] MySQL client not installed — ext-mysqli is missing.');
         }
         $url = self::resolveMysqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mysql] ' . sprintf(
                 'MySQL not reachable at %s:%d — skip batch-insert integration test',
                 self::testHost('TINA4_TEST_MYSQL_HOST'),
                 self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
@@ -230,12 +230,12 @@ class BatchInsertTest extends TestCase
         if (!function_exists('sqlsrv_connect')
             && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available.'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available.'
             );
         }
         $url = self::resolveMssqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mssql] ' . sprintf(
                 'MSSQL not reachable at %s:%d — skip batch-insert integration test',
                 self::testHost('TINA4_TEST_MSSQL_HOST'),
                 self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
@@ -389,11 +389,11 @@ class BatchInsertTest extends TestCase
     private function mysqlOrSkip(): Database
     {
         if (!extension_loaded('mysqli')) {
-            $this->markTestSkipped('MySQL client not installed — ext-mysqli is missing.');
+            $this->markTestSkipped('[needs:mysql] MySQL client not installed — ext-mysqli is missing.');
         }
         $url = self::resolveMysqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mysql] ' . sprintf(
                 'MySQL not reachable at %s:%d — skip batch-insert integration test',
                 self::testHost('TINA4_TEST_MYSQL_HOST'),
                 self::testPort('TINA4_TEST_MYSQL_PORT', 3306)
@@ -409,12 +409,12 @@ class BatchInsertTest extends TestCase
         if (!function_exists('sqlsrv_connect')
             && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available.'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available.'
             );
         }
         $url = self::resolveMssqlUrl();
         if ($url === null) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mssql] ' . sprintf(
                 'MSSQL not reachable at %s:%d — skip batch-insert integration test',
                 self::testHost('TINA4_TEST_MSSQL_HOST'),
                 self::testPort('TINA4_TEST_MSSQL_PORT', 1433)
@@ -488,11 +488,11 @@ class BatchInsertTest extends TestCase
     private function postgresOrSkip(): Database
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('PostgresAdapter requires the ext-pgsql PHP extension — postgres not reachable.');
+            $this->markTestSkipped('[needs:postgres] PostgresAdapter requires the ext-pgsql PHP extension — postgres not reachable.');
         }
         $pg = \PgTestEnv::resolve();
         if (!$pg->reachable()) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:postgres] ' . sprintf(
                 'PostgreSQL not reachable at %s:%d — skip batch-insert integration test',
                 $pg->host,
                 $pg->port

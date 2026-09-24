@@ -60,12 +60,12 @@ class FirebirdSharedLinkTest extends TestCase
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
             $this->markTestSkipped(
-                'Set TINA4_TEST_FIREBIRD_URL to run the live Firebird shared-link tests '
+                '[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird shared-link tests '
                 . '(e.g. firebird://SYSDBA:masterkey@localhost:3050//tmp/test.fdb)'
             );
         }
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed — native link sharing is UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed — native link sharing is UNVERIFIED here.');
         }
         return $url . (str_contains($url, '?') ? '&' : '?') . 'driver=interbase';
     }

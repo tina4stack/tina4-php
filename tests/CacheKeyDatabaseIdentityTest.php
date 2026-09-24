@@ -356,7 +356,7 @@ class CacheKeyDatabaseIdentityTest extends TestCase
         $postgres = PgTestEnv::resolve();
         if (!$postgres->reachable(2.0)) {
             $this->markTestSkipped(
-                "postgresql service not reachable at {$postgres->host}:{$postgres->port}"
+                "[needs:postgres] postgresql service not reachable at {$postgres->host}:{$postgres->port}"
             );
         }
         $this->ensurePostgresDatabases($postgres);

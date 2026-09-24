@@ -63,11 +63,11 @@ class CreateTablePostgresTest extends TestCase
     protected function setUp(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('PostgresAdapter requires the ext-pgsql PHP extension.');
+            $this->markTestSkipped('[needs:postgres] PostgresAdapter requires the ext-pgsql PHP extension.');
         }
         $pg = \PgTestEnv::resolve();
         if (!$pg->reachable()) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:postgres] ' . sprintf(
                 'PostgreSQL not reachable at %s:%d — skip integration test',
                 $pg->host, $pg->port
             ));
