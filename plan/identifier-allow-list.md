@@ -23,6 +23,13 @@ InvalidArgumentException in the library). Branch `fix/identifier-allow-list` off
 - [x] Unchanged by design: where(), load(), select(), QueryBuilder, the raw $orderBy
       string argument of find()/all()/where()
 
+### Addendum 2 (maintainer, fix on discovery)
+- [x] D: non-string sort / non-scalar filter value -> 400 INVALID_QUERY_PARAMETER (testOddTypedQueryValuesReturn400)
+- [x] E: AutoCrud list queries through the connection it was constructed with (testAutocrudListUsesTheRegisteredConnection)
+- [x] F: require-services gate - only an excusable [needs:X] tag lets a skip pass; engine skip sites tagged
+- [x] MSSQL: PDO::DBLIB_ATTR_CONNECTION_TIMEOUT (deprecated in PHP 8.5) -> Pdo\Dblib::ATTR_CONNECTION_TIMEOUT when available
+- [x] .gitignore the session files served test apps write under tests/fixtures/data
+
 ## Parity
 | Feature                               | Python | PHP | Ruby | Node |
 |---------------------------------------|--------|-----|------|------|
@@ -56,6 +63,23 @@ File: tests/IdentifierAllowListContractTest.php (+ fixture app tests/fixtures/id
 - 6f1b06f3  DocStore validates field paths in the SQLite fallback
 - 052d7c88  Test the ADR-0069 identifier allow-list contract
 
+- b7c8bfd4  AutoCrud rejects non-string sort and non-scalar filter values with 400
+- 0855cc57  AutoCrud list queries through the connection it was constructed with
+- dc9d9b79  MSSQL pdo_dblib: use Pdo\Dblib::ATTR_CONNECTION_TIMEOUT when available
+- 5ae0382d  Ignore session files written under tests/fixtures/data by served test apps
+- 4f08257f  Require-services gate: only an excusable [needs:X] tag lets a skip pass
+- 7899b004  Tag engine skip sites with [needs:<engine>]
+- 6742095e  Gate: postgres is promised by TINA4_TEST_PG_URL only; isolate the predicate test
+- 54b8a8d7  Tag the live graph-engine skips with [needs:<engine>]
+
+## Verification (lab, PHP 8.3.6 + every service, gate armed)
+- Full suite at 54b8a8d7: 5736 tests, 24502 assertions, 0 failures, 1 error, 42 skipped,
+  0 gate violations. The 42 skips are all tagged optional engines this run did not promise
+  (swoole, neo4j, memgraph, arango, ultipa, oidc). The error is PushTest::
+  testClassifiesDeadAndRetryableResponses ("no HTTP response received"), which passed in the
+  previous full run and 3/3 in isolation - intermittent, in code this change does not touch.
+- IdentifierAllowListContractTest 13/13 incl. real MongoDB and Firebird.
+
 ## Verification (local, macOS)
 - New file: PHP 8.5.10 green except Firebird (no ext-interbase/pdo_firebird in 8.5) and the
   real-Mongo case (no ext-mongodb); PHP 8.4.25 (ext-interbase): 10/10 incl. Firebird, Mongo case
@@ -65,4 +89,4 @@ File: tests/IdentifierAllowListContractTest.php (+ fixture app tests/fixtures/id
   that fail intermittently on BOTH trees in isolation (shared Mongo/memcached).
 - Mutation: each guard disabled -> its test red; restored -> green (logs in the session scratchpad).
 
-## Status: Complete (PHP, local) - lab run pending for Mongo + PHP-with-pdo_firebird
+## Status: Complete (PHP) - lab verified; lead runs the authoritative lab suites
