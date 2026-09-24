@@ -49,7 +49,7 @@ class AuthV3Test extends TestCase
         // Simulate a CI runner where $_ENV['TINA4_SECRET'] was set by .env load
         // (or a prior test) and a runtime putenv() then overrides it.
         $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value-0123';
-        putenv('TINA4_SECRET=runtime-override-value');
+        putenv('TINA4_SECRET=runtime-override-value-0123456789');
 
         // Sign with no-arg getToken (resolves from env) and verify the same way
         $token = Auth::getToken(['sub' => 'tester']);
@@ -65,9 +65,9 @@ class AuthV3Test extends TestCase
         // putenv() is set to the same value. validToken (no arg) must
         // resolve to the runtime putenv() value, not a stale $_ENV.
         $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value-0123';
-        putenv('TINA4_SECRET=explicit-runtime-secret');
+        putenv('TINA4_SECRET=explicit-runtime-secret-0123456789');
 
-        $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret');
+        $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret-0123456789');
         $this->assertNotNull(Auth::validToken($token));
 
         putenv('TINA4_SECRET');
@@ -78,9 +78,9 @@ class AuthV3Test extends TestCase
         // Direct probe: getenv and $_ENV disagree. The token is signed with
         // the getenv value; validation must accept it.
         $_ENV['TINA4_SECRET'] = 'env-superglobal-value-0123456789';
-        putenv('TINA4_SECRET=getenv-value');
+        putenv('TINA4_SECRET=getenv-value-0123456789abcdef0123');
 
-        $token = Auth::getToken(['sub' => 'tester'], 'getenv-value');
+        $token = Auth::getToken(['sub' => 'tester'], 'getenv-value-0123456789abcdef0123');
 
         // No-arg validation must use getenv() — same source getToken used
         $this->assertNotNull(Auth::validToken($token));
@@ -94,7 +94,7 @@ class AuthV3Test extends TestCase
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';            // stale
         putenv('TINA4_JWT_ALGORITHM=HS256');                // runtime override
         $_ENV['TINA4_SECRET'] = 'stale';
-        putenv('TINA4_SECRET=test-secret-key-for-jwt');
+        putenv('TINA4_SECRET=test-secret-key-for-jwt-0123456789');
 
         $token = Auth::getToken(['sub' => 'tester']);
 
@@ -724,7 +724,7 @@ class AuthV3Test extends TestCase
 
     public function testGetTokenWithExplicitSecret(): void
     {
-        $token = Auth::getToken(['sub' => 'custom'], 'custom-secret', 3600);
+        $token = Auth::getToken(['sub' => 'custom'], 'custom-secret-0123456789abcdef01', 3600);
         $this->assertIsString($token);
         $this->assertStringContainsString('.', $token);
     }

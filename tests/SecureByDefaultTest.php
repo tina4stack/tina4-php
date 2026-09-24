@@ -35,7 +35,7 @@ use Tina4\Router;
 
 class SecureByDefaultTest extends TestCase
 {
-    private string $secret = 'test-secure-default-secret';
+    private string $secret = 'test-secure-default-secret-01234';
 
     protected function setUp(): void
     {

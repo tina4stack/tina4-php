@@ -52,7 +52,7 @@ class SecureRouteSessionHandoffTest extends TestCase
     protected function setUp(): void
     {
         Router::clear();
-        putenv('TINA4_SECRET=secure-handoff-secret');
+        putenv('TINA4_SECRET=secure-handoff-secret-0123456789');
         $_ENV['TINA4_SECRET'] = 'secure-handoff-secret-0123456789';
         putenv('TINA4_SESSION_BACKEND=file');
         $this->sessionPath = sys_get_temp_dir() . '/tina4_handoff_' . uniqid();

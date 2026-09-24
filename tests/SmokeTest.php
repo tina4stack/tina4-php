@@ -295,32 +295,49 @@ class SmokeTest extends TestCase
     public function testAuthJwtAndPasswordHash(): void
     {
         $secret = 'smoke-test-secret-key-0123456789';
+        // resolveSecret() reads getenv() first, then $_ENV — the suite bootstrap
+        // sets a getenv secret, so drive BOTH channels here (and restore them)
+        // or the $_ENV swaps below are shadowed by the bootstrap value.
+        $savedGetenv = getenv('TINA4_SECRET');
+        $savedEnv = $_ENV['TINA4_SECRET'] ?? null;
+        putenv("TINA4_SECRET={$secret}");
         $_ENV['TINA4_SECRET'] = $secret;
 
-        // Create token (expiresIn is in MINUTES — parity with Python/Ruby)
-        $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], expiresIn: 60);
-        $parts = explode('.', $token);
-        $this->assertCount(3, $parts);
+        try {
+            // Create token (expiresIn is in MINUTES — parity with Python/Ruby)
+            $token = Auth::getToken(['sub' => 'user-1', 'role' => 'admin'], expiresIn: 60);
+            $parts = explode('.', $token);
+            $this->assertCount(3, $parts);
 
-        // Validate token
-        $this->assertNotNull(Auth::validToken($token));
-        $payload = Auth::getPayload($token);
-        $this->assertSame('user-1', $payload['sub']);
-        $this->assertSame('admin', $payload['role']);
+            // Validate token
+            $this->assertNotNull(Auth::validToken($token));
+            $payload = Auth::getPayload($token);
+            $this->assertSame('user-1', $payload['sub']);
+            $this->assertSame('admin', $payload['role']);
 
-        // Expired token rejected
-        $expired = Auth::getToken(['sub' => 'x', 'exp' => time() - 10], expiresIn: 0);
-        $this->assertNull(Auth::validToken($expired));
+            // Expired token rejected
+            $expired = Auth::getToken(['sub' => 'x', 'exp' => time() - 10], expiresIn: 0);
+            $this->assertNull(Auth::validToken($expired));
 
-        // Wrong secret rejected
-        $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
-        $this->assertNull(Auth::validToken($token));
-        $_ENV['TINA4_SECRET'] = $secret;
+            // Wrong secret rejected
+            putenv('TINA4_SECRET=wrong-secret-0123456789abcdef012');
+            $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
+            $this->assertNull(Auth::validToken($token));
+            putenv("TINA4_SECRET={$secret}");
+            $_ENV['TINA4_SECRET'] = $secret;
 
-        // Password hashing
-        $hash = Auth::hashPassword('my-password');
-        $this->assertTrue(Auth::checkPassword('my-password', $hash));
-        $this->assertFalse(Auth::checkPassword('wrong-password', $hash));
+            // Password hashing
+            $hash = Auth::hashPassword('my-password');
+            $this->assertTrue(Auth::checkPassword('my-password', $hash));
+            $this->assertFalse(Auth::checkPassword('wrong-password', $hash));
+        } finally {
+            $savedGetenv === false ? putenv('TINA4_SECRET') : putenv("TINA4_SECRET={$savedGetenv}");
+            if ($savedEnv === null) {
+                unset($_ENV['TINA4_SECRET']);
+            } else {
+                $_ENV['TINA4_SECRET'] = $savedEnv;
+            }
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════

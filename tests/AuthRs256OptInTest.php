@@ -379,8 +379,8 @@ class AuthRs256OptInTest extends TestCase
                 // Loading the class is not "use". Neither is the HMAC path.
                 class_exists(\Tina4\Auth::class) || exit(1);
                 for ($i = 0; $i < 3; $i++) {
-                    $token = \Tina4\Auth::getToken(['user_id' => $i], 'a-secret', 60, 'HS256');
-                    \Tina4\Auth::validToken($token, 'a-secret', 'HS256') ?? exit(1);
+                    $token = \Tina4\Auth::getToken(['user_id' => $i], 'a-secret-0123456789abcdef01234567', 60, 'HS256');
+                    \Tina4\Auth::validToken($token, 'a-secret-0123456789abcdef01234567', 'HS256') ?? exit(1);
                 }
                 echo 'LAZY-OK';
                 PHP,
