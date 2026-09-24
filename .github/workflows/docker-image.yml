@@ -59,7 +59,7 @@ jobs:
     name: Image boots, binds 0.0.0.0, and reports its real version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Build image (native arch; arm64 is cross-built below)
         run: docker build -t "$IMAGE:ci" .
