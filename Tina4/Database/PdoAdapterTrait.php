@@ -217,6 +217,11 @@ trait PdoAdapterTrait
         $this->lastError = null;
         $sql = self::stripTrailingSemicolons($sql);
 
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
+
         // Count probe is BEST-EFFORT: it runs on its own statement and its
         // failure only defaults total to 0 — it must never mask a real
         // main-query failure (parity with the MySQL/Firebird native fetch()).

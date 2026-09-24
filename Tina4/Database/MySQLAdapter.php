@@ -191,8 +191,17 @@ class MySQLAdapter implements DatabaseAdapter
                 }
 
                 $this->bindParams($stmt, $params);
-                $stmt->execute();
+                if ($stmt->execute() === false) {
+                    $this->lastError = $stmt->error ?: $this->db->error;
+                    $stmt->close();
+                    return [];
+                }
                 $result = $stmt->get_result();
+                if ($result === false && $stmt->errno === 0) {
+                    // A statement with no result set (a write) succeeded.
+                    $stmt->close();
+                    return [];
+                }
             }
 
             if ($result === false) {
@@ -229,6 +238,11 @@ class MySQLAdapter implements DatabaseAdapter
         $this->lastError = null;
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
         $sql = self::stripTrailingSemicolons($sql);
+
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
 
         // v3.13.37 (DB-contract A): the MAIN query must FAIL LOUD — a bad
         // statement RAISES instead of being swallowed into an empty result set

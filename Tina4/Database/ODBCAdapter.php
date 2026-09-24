@@ -33,6 +33,7 @@ class ODBCAdapter implements DatabaseAdapter
     // Shared SQL normalisation: the row-cap detectors (scrub + anchor) and the
     // newline-safe COUNT wrapper / clause append used by fetch().
     use SqlNormalizerTrait;
+    use FetchOneTrait;
 
     /**
      * The SQL dialect this adapter speaks.
@@ -132,7 +133,8 @@ class ODBCAdapter implements DatabaseAdapter
             $stmt = $this->pdo->prepare($sql);
             $this->bindParams($stmt, $params);
             $stmt->execute();
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            // A statement with no result set yields no rows.
+            return $stmt->columnCount() > 0 ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
         } catch (\PDOException $e) {
             $this->lastError = $e->getMessage();
             return [];
@@ -143,6 +145,12 @@ class ODBCAdapter implements DatabaseAdapter
     {
         $this->ensureOpen();
         $this->lastError = null;
+        $sql = self::stripTrailingSemicolons($sql);
+
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
 
         // FAIL LOUD (parity with PostgresAdapter + the Python master): query()
         // records the driver error on error() and returns []. fetch() must RAISE
@@ -196,19 +204,9 @@ class ODBCAdapter implements DatabaseAdapter
         ];
     }
 
-    public function fetchOne(string $sql, array $params = []): ?array
+    protected function engineLabel(): string
     {
-        $this->ensureOpen();
-        // FAIL LOUD (parity with PostgresAdapter + the Python master): query()
-        // clears lastError on entry and records the driver error on failure
-        // (returning []), so a non-null lastError after the call means the
-        // statement failed — RAISE it instead of returning null (which a caller
-        // reads as "no row").
-        $rows = $this->query($sql, $params);
-        if ($this->lastError !== null) {
-            throw new DatabaseException('ODBC fetchOne() failed: ' . $this->lastError);
-        }
-        return $rows[0] ?? null;
+        return 'ODBC';
     }
 
     public function execute(string $sql, array $params = []): bool|DatabaseResult

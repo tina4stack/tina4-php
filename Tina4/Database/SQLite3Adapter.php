@@ -150,24 +150,56 @@ class SQLite3Adapter implements DatabaseAdapter
             }
 
             $this->bindParams($stmt, $params);
-            $result = $stmt->execute();
+
+            // ext-sqlite3's SQLite3Stmt::execute() steps the statement once and
+            // then RESETS it, so the first fetchArray() steps it a second time.
+            // For a read that is invisible; for a write it applies the write
+            // TWICE (MEASURED on PHP 8.3.6 and 8.5.10: fetchOne() of an
+            // INSERT ... RETURNING inserted two rows, an UPDATE ran twice).
+            // A write with no result columns has already run once inside
+            // execute(), so it is never fetched. A write that returns rows
+            // (RETURNING) runs inside a savepoint that is rolled back after
+            // execute(), so the only run that survives is the one fetchArray()
+            // performs - the run whose rows the caller receives.
+            // tina4: a RETURNING write costs one extra, rolled-back run on SQLite (ext-sqlite3
+            // steps once in execute() and again on the first fetch); drop the savepoint if
+            // ext-sqlite3 ever stops re-stepping after execute().
+            $writes = !$stmt->readOnly();
+            $returning = $writes && preg_match('/\bRETURNING\b/i', $sql) === 1;
+            if ($returning) {
+                $this->db->exec('SAVEPOINT tina4_returning');
+            }
+            try {
+                $result = $stmt->execute();
+            } catch (\Exception $e) {
+                if ($returning) {
+                    $this->db->exec('ROLLBACK TO tina4_returning');
+                    $this->db->exec('RELEASE tina4_returning');
+                }
+                throw $e;
+            }
+
+            if ($returning) {
+                $this->db->exec('ROLLBACK TO tina4_returning');
+                $this->db->exec('RELEASE tina4_returning');
+            }
 
             if ($result === false) {
                 $this->lastError = $this->db->lastErrorMsg();
                 return [];
             }
 
+            // A rolled-back RETURNING write must be fetched even when it yields
+            // no columns (the word sat in a literal): fetchArray() is its run.
             $rows = [];
-            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                $rows[] = $row;
+            if (!$writes || $returning || $result->numColumns() > 0) {
+                while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                    $rows[] = $row;
+                }
             }
 
             $result->finalize();
             $stmt->close();
-
-            if ($this->autoCommit && $this->isWriteQuery($sql)) {
-                // Auto-commit is handled by SQLite's default autocommit mode
-            }
 
             return $rows;
         } catch (\Exception $e) {
@@ -182,6 +214,11 @@ class SQLite3Adapter implements DatabaseAdapter
         $this->lastError = null;
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
         $sql = self::stripTrailingSemicolons($sql);
+
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
 
         // FAIL LOUD: query() records the driver error in error() and returns
         // []. fetch() must RAISE that instead of returning an empty result set
@@ -504,15 +541,5 @@ class SQLite3Adapter implements DatabaseAdapter
             };
             $stmt->bindValue($paramKey, $value, $type);
         }
-    }
-
-    /**
-     * Check if a SQL query is a write operation.
-     */
-    private function isWriteQuery(string $sql): bool
-    {
-        $sql = ltrim($sql);
-        $firstWord = strtoupper(strtok($sql, " \t\n\r"));
-        return in_array($firstWord, ['INSERT', 'UPDATE', 'DELETE', 'REPLACE'], true);
     }
 }

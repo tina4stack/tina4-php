@@ -352,6 +352,11 @@ class CachedDatabase implements DatabaseAdapter
 
     public function query(string $sql, array $params = []): array
     {
+        // query() is the raw path execute() uses for a statement that returns
+        // rows; a write through it flushes the cache exactly as execute() does.
+        if ($this->enabled && SqlStatement::isWrite($sql)) {
+            $this->cacheInvalidate();
+        }
         return $this->adapter->query($sql, $params);
     }
 
@@ -360,6 +365,12 @@ class CachedDatabase implements DatabaseAdapter
         // $noCache=true bypasses the query cache for this one call — no lookup,
         // no store — and runs straight against the adapter. Works in either
         // cache mode. Parity with Python Database.fetch(no_cache=True).
+        // A write (INSERT ... RETURNING through fetch) is never served from or
+        // stored in the cache, and flushes it exactly as execute() does.
+        if ($this->enabled && SqlStatement::isWrite($sql)) {
+            $this->cacheInvalidate();
+            $noCache = true;
+        }
         if ($this->enabled && !$noCache) {
             $key = $this->cacheKey($sql . ":L{$limit}:O{$offset}", $params);
             $cached = $this->cacheGet($key);
@@ -378,6 +389,11 @@ class CachedDatabase implements DatabaseAdapter
     public function fetchOne(string $sql, array $params = [], bool $noCache = false): ?array
     {
         // $noCache=true bypasses the query cache for this one call (see fetch()).
+        // A write bypasses it and flushes it, as in fetch().
+        if ($this->enabled && SqlStatement::isWrite($sql)) {
+            $this->cacheInvalidate();
+            $noCache = true;
+        }
         if ($this->enabled && !$noCache) {
             $key = $this->cacheKey($sql . ':ONE', $params);
             $cached = $this->cacheGet($key);

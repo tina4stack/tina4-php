@@ -411,23 +411,144 @@ class SQLTranslator
     // ── Placeholder Translation ─────────────────────────────────────
 
     /**
+     * Apply a transform to every stretch of SQL CODE, leaving everything the
+     * engine reads as data or as a name untouched.
+     *
+     * Protected (passed through byte for byte): string literals '...' with the
+     * doubled-quote escape (and backslash escapes when $backslashEscapes is
+     * true, and always inside a PostgreSQL E'...'), PostgreSQL dollar quotes
+     * $$...$$ and $tag$...$tag$, quoted identifiers "..." and `...` (doubled
+     * quote escape), -- line comments and slash-star block comments. An
+     * unterminated one runs to the end of the input, exactly as the engine
+     * reads it. This is the one scanner every placeholder rewrite shares, so a
+     * `?` or `:name` inside any of them is never mistaken for a placeholder.
+     *
+     * @param string   $sql              The statement
+     * @param callable $transform        fn(string $code): string, called once per code stretch
+     * @param bool     $backslashEscapes Whether a backslash escapes the next character inside '...' (MySQL)
+     * @return string The statement with only its code stretches transformed
+     */
+    public static function mapSqlCode(string $sql, callable $transform, bool $backslashEscapes = false): string
+    {
+        $out = '';
+        $code = '';
+        $length = strlen($sql);
+        $position = 0;
+        while ($position < $length) {
+            $end = self::protectedSpanEnd($sql, $position, $backslashEscapes);
+            if ($end === null) {
+                $code .= $sql[$position];
+                $position++;
+                continue;
+            }
+            if ($code !== '') {
+                $out .= $transform($code);
+                $code = '';
+            }
+            $out .= substr($sql, $position, $end - $position);
+            $position = $end;
+        }
+        return $code === '' ? $out : $out . $transform($code);
+    }
+
+    /**
+     * Where the literal, quoted identifier or comment starting at $position
+     * ends, or null when $position starts ordinary code.
+     */
+    private static function protectedSpanEnd(string $sql, int $position, bool $backslashEscapes): ?int
+    {
+        $char = $sql[$position];
+        $next = $sql[$position + 1] ?? '';
+        $previous = $position > 0 ? $sql[$position - 1] : '';
+        $afterWord = $previous !== '' && (ctype_alnum($previous) || $previous === '_');
+
+        if ($char === '-' && $next === '-') {
+            $newline = strpos($sql, "\n", $position);
+            return $newline === false ? strlen($sql) : $newline;
+        }
+        if ($char === '/' && $next === '*') {
+            $close = strpos($sql, '*/', $position + 2);
+            return $close === false ? strlen($sql) : $close + 2;
+        }
+        if (($char === 'E' || $char === 'e') && $next === "'" && !$afterWord) {
+            return self::quotedEnd($sql, $position + 1, "'", true);
+        }
+        if ($char === "'") {
+            return self::quotedEnd($sql, $position, "'", $backslashEscapes);
+        }
+        if ($char === '"' || $char === '`') {
+            return self::quotedEnd($sql, $position, $char, false);
+        }
+        if ($char === '$' && !$afterWord && preg_match('/\G\$([A-Za-z_][A-Za-z0-9_]*)?\$/', $sql, $tag, 0, $position) === 1) {
+            $close = strpos($sql, $tag[0], $position + strlen($tag[0]));
+            return $close === false ? strlen($sql) : $close + strlen($tag[0]);
+        }
+        return null;
+    }
+
+    /** The offset just past the quote that closes the one opening at $open. */
+    private static function quotedEnd(string $sql, int $open, string $quote, bool $backslashEscapes): int
+    {
+        $length = strlen($sql);
+        for ($position = $open + 1; $position < $length; $position++) {
+            $char = $sql[$position];
+            if ($backslashEscapes && $char === '\\') {
+                $position++;
+                continue;
+            }
+            if ($char === $quote) {
+                if (($sql[$position + 1] ?? '') === $quote) {
+                    $position++;
+                    continue;
+                }
+                return $position + 1;
+            }
+        }
+        return $length;
+    }
+
+    /**
+     * Replace every positional ? placeholder in SQL code - never one inside a
+     * literal, quoted identifier or comment ({@see mapSqlCode()}).
+     *
+     * @param string   $sql              The statement
+     * @param callable $replacement      fn(int $ordinal): string, ordinal counting from 0
+     * @param bool     $backslashEscapes Whether a backslash escapes inside '...' (MySQL)
+     * @return string The statement with its placeholders replaced
+     */
+    public static function replacePlaceholders(string $sql, callable $replacement, bool $backslashEscapes = false): string
+    {
+        $ordinal = 0;
+        return self::mapSqlCode(
+            $sql,
+            static function (string $code) use ($replacement, &$ordinal): string {
+                return (string) preg_replace_callback('/\?/', static function () use ($replacement, &$ordinal): string {
+                    return $replacement($ordinal++);
+                }, $code);
+            },
+            $backslashEscapes
+        );
+    }
+
+    /**
      * Translate ? placeholders to a target style.
+     *
+     * Only placeholders in SQL code are translated ({@see mapSqlCode()}). For
+     * '%s' (the psycopg / MySQLdb style, where the driver reads every % when
+     * parameters are passed) each literal % is doubled to %% as well.
      *
      * @param string $sql   SQL with ? placeholders
      * @param string $style Target style: '%s' for sprintf-style, ':' for numbered (:1, :2, ...)
+     * @return string The translated SQL; unchanged for an unknown style
      */
     public static function placeholderStyle(string $sql, string $style): string
     {
         if ($style === '%s') {
-            return str_replace('?', '%s', $sql);
+            return self::replacePlaceholders(str_replace('%', '%%', $sql), static fn(): string => '%s');
         }
 
         if ($style === ':') {
-            $counter = 0;
-            return preg_replace_callback('/\?/', function () use (&$counter) {
-                $counter++;
-                return ':' . $counter;
-            }, $sql);
+            return self::replacePlaceholders($sql, static fn(int $ordinal): string => ':' . ($ordinal + 1));
         }
 
         return $sql;
@@ -600,9 +721,9 @@ class SQLTranslator
      * :named because that is what PDO would accept.
      *
      * Behaviour:
-     *   - Skips string literals ('…' and "…") and SQL comments
-     *     (-- … line comments and / * … * / block comments) so a literal
-     *     :colon inside a string is never touched.
+     *   - Skips string literals, dollar quotes, quoted identifiers and
+     *     comments ({@see mapSqlCode()}) so a :colon inside any of them is
+     *     never touched.
      *   - Duplicate names bind one value per occurrence — `WHERE id = :id
      *     AND parent_id = :id` adds the value to the output array twice.
      *   - Accepts both ':name' and 'name' as keys in $params (PDO-style
@@ -614,9 +735,11 @@ class SQLTranslator
      *
      * @param string $sql    SQL that may contain :named placeholders.
      * @param array  $params Associative array keyed by :name or name.
+     * @param bool   $backslashEscapes Whether a backslash escapes inside '...'
+     *               (true for MySQL; PostgreSQL passes false)
      * @return array{0: string, 1: array} [translatedSql, orderedValues]
      */
-    public static function namedToPositional(string $sql, array $params): array
+    public static function namedToPositional(string $sql, array $params, bool $backslashEscapes = true): array
     {
         if (!str_contains($sql, ':')) {
             return [$sql, array_values($params)];
@@ -624,26 +747,27 @@ class SQLTranslator
 
         $reordered = [];
         $didReplace = false;
-        $out = preg_replace_callback(
-            // Match a string literal, a line comment, or a block comment
-            // first (preserved as-is); else match :name.
-            "/(?:'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"|--[^\n]*|\\/\\*.*?\\*\\/)|(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)/s",
-            function ($m) use ($params, &$reordered, &$didReplace) {
-                if (!isset($m[1]) || $m[1] === '') {
-                    return $m[0]; // string or comment, preserved
-                }
-                $name = $m[1];
-                if (array_key_exists(':' . $name, $params)) {
-                    $reordered[] = $params[':' . $name];
-                } elseif (array_key_exists($name, $params)) {
-                    $reordered[] = $params[$name];
-                } else {
-                    return ':' . $name; // unknown — leave it for the driver to complain
-                }
-                $didReplace = true;
-                return '?';
+        $out = self::mapSqlCode(
+            $sql,
+            static function (string $code) use ($params, &$reordered, &$didReplace): string {
+                return (string) preg_replace_callback(
+                    '/(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)/',
+                    static function (array $m) use ($params, &$reordered, &$didReplace): string {
+                        $name = $m[1];
+                        if (array_key_exists(':' . $name, $params)) {
+                            $reordered[] = $params[':' . $name];
+                        } elseif (array_key_exists($name, $params)) {
+                            $reordered[] = $params[$name];
+                        } else {
+                            return ':' . $name; // unknown — leave it for the driver to complain
+                        }
+                        $didReplace = true;
+                        return '?';
+                    },
+                    $code
+                );
             },
-            $sql
+            $backslashEscapes
         );
 
         // PostgreSQL casts (`value::geography`) contain a colon but are not

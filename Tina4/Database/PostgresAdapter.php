@@ -165,10 +165,12 @@ class PostgresAdapter implements DatabaseAdapter
             // pg_query_params binds positionally by $1, $2…; named placeholders
             // emitted by ORM/QueryBuilder must be translated to ? first
             // (then convertPlaceholders rewrites ? to $N).
+            // With no parameters the SQL goes to the server untouched, so a `?`
+            // (the jsonb operator, or one in a literal) is never rewritten.
             if (!empty($params)) {
-                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params, backslashEscapes: false);
             }
-            $pgSql = $this->convertPlaceholders($sql);
+            $pgSql = empty($params) ? $sql : $this->convertPlaceholders($sql);
 
             if (empty($params)) {
                 $result = @pg_query($this->db, $pgSql);
@@ -224,6 +226,11 @@ class PostgresAdapter implements DatabaseAdapter
         // v3.13.12: strip trailing `;` before COUNT(*) wrap + LIMIT/OFFSET append.
         $sql = self::stripTrailingSemicolons($sql);
 
+        // A write runs once: no COUNT probe, no pagination (SqlStatement::isWrite).
+        if (SqlStatement::isWrite($sql)) {
+            return $this->fetchWriteOnce($sql, $params, $limit, $offset);
+        }
+
         // FAIL LOUD: query() records the driver error in error() and returns
         // []. fetch() must RAISE that instead of returning an empty result set
         // (parity with execute() and the Python master). query() clears
@@ -277,10 +284,12 @@ class PostgresAdapter implements DatabaseAdapter
             // pg_query_params binds positionally by $1, $2…; named placeholders
             // emitted by ORM/QueryBuilder must be translated to ? first
             // (then convertPlaceholders rewrites ? to $N).
+            // With no parameters the SQL goes to the server untouched, so a `?`
+            // (the jsonb operator, or one in a literal) is never rewritten.
             if (!empty($params)) {
-                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
+                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params, backslashEscapes: false);
             }
-            $pgSql = $this->convertPlaceholders($sql);
+            $pgSql = empty($params) ? $sql : $this->convertPlaceholders($sql);
 
             if (empty($params)) {
                 $result = @pg_query($this->db, $pgSql);
@@ -594,32 +603,25 @@ class PostgresAdapter implements DatabaseAdapter
     }
 
     /**
-     * Convert ? placeholders to $1, $2, ... PostgreSQL style.
+     * Rewrite `?` placeholders to PostgreSQL's `$1, $2, ...`.
+     *
+     * Only placeholders in SQL code are rewritten - never a `?` inside a string
+     * literal (including E'...' and $$...$$), a quoted identifier or a comment
+     * ({@see \Tina4\SQLTranslator::mapSqlCode()}). SQL that already uses `$N`
+     * placeholders in its code is returned unchanged.
      */
     private function convertPlaceholders(string $sql): string
     {
-        // If already using $N placeholders or named params, return as-is
-        if (preg_match('/\$\d+/', $sql)) {
+        $hasDollarPlaceholders = false;
+        \Tina4\SQLTranslator::mapSqlCode($sql, static function (string $code) use (&$hasDollarPlaceholders): string {
+            $hasDollarPlaceholders = $hasDollarPlaceholders || preg_match('/\$\d+/', $code) === 1;
+            return $code;
+        });
+        if ($hasDollarPlaceholders) {
             return $sql;
         }
 
-        $counter = 0;
-        return preg_replace_callback('/\?/', function () use (&$counter) {
-            $counter++;
-            return '$' . $counter;
-        }, $sql);
-    }
-
-    /**
-     * Re-index ? or $N placeholders starting from a given index.
-     */
-    private function reindexPlaceholders(string $sql, int $startIndex): string
-    {
-        $counter = $startIndex - 1;
-        return preg_replace_callback('/\?|\$\d+/', function () use (&$counter) {
-            $counter++;
-            return '$' . $counter;
-        }, $sql);
+        return \Tina4\SQLTranslator::replacePlaceholders($sql, static fn(int $ordinal): string => '$' . ($ordinal + 1));
     }
 
     /**
