@@ -10,8 +10,9 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 - [x] Item 1 sweep: Mqtt::parseUrl errors and Api HTTPS-unavailable errors redact the URL
 - [x] Item 2: S3Storage missing-SDK message names package + `composer require aws/aws-sdk-php`
 - [x] Item 2: Mongo/Redis/Valkey/Memcached caches are zero-dep wire clients (no driver case); the database cache backend CAN miss a driver - its fallback warning now appends the driver + install command (DatabaseDriverMissing)
-- [ ] Item 6: WSDL refuses non-UTF-8 / BOM bodies with the Malformed XML Client fault, before any parse
-- [ ] Item 7: SOAP parity table (10 payloads)
+- [x] Item 6: WSDL refuses BOM / non-UTF-8 / NUL / non-UTF-8-declared bodies with the Malformed XML Client fault, before any parse
+- [x] Item 6 (found): operation + params matched by local name in any namespace (Python parity)
+- [x] Item 7: SOAP parity table (10 payloads) - matches Python after the fixes
 - [ ] Item 8: ADR-0071 SMTP transport table, STARTTLS required, unknown value raises, certs verified (SMTP + IMAP)
 
 ## Parity
@@ -20,12 +21,14 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 | 1 backplane AUTH | ❌ never AUTHs | ✅ |
 | 1 URL redaction sweep | ⚠️ Mqtt/Api leak | ✅ |
 | 2 driver messages | ⚠️ S3 no command; db-cache swallowed | ✅ |
-| 6 WSDL UTF-16 | ❌ | |
+| 6 WSDL UTF-16 / UTF-7 | ❌ entity expanded | ✅ |
+| 7 SOAP parity | ❌ 5/10 differ (namespace) | ✅ 10/10 |
 | 8 ADR-0071 | ❌ | |
 
 ## Tests (written first, real - no mocks, positive + negative)
 - [x] WebSocketBackplaneAuthTest (real password Redis, real child-process log output)
 - [x] ConnectionUrlRedactionSweepTest (Mqtt pure logic; Api in a child with no https wrapper)
+- [x] WsdlEncodingSecurityTest (real UTF-16 BOM payload, UTF-16 no BOM, UTF-7, UTF-8 BOM, invalid UTF-8; namespace resolution)
 - [x] DriverMissingMessageTest (child processes: composer autoloader without aws; `php -n` without pgsql; negative control with pgsql loaded + unreachable server)
 
 ## Bugs
@@ -33,6 +36,9 @@ refuses a UTF-16/BOM body before parsing; the Messenger implements ADR-0071 sect
 - [x] Mqtt::parseUrl error messages echoed the raw URL with its password
 - [x] Api HTTPS-unavailable error echoed the requested URL with its userinfo password
 - [x] Database::makePostgres/makeSqlite referenced \PDO unguarded: without ext-pdo a fatal Error replaced the install message
+
+- [x] WSDL: UTF-16 (BOM or not) and UTF-7 bodies hid the DOCTYPE from the byte regex; libxml expanded the entity
+- [x] WSDL: an operation in a client namespace (not urn:<ServiceName>) got "Empty SOAP Body"
 
 ## Commits
 - (filled per commit)
