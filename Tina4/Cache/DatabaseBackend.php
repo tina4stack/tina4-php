@@ -34,6 +34,7 @@ class DatabaseBackend extends CacheBackend
     private int $hits = 0;
     private int $misses = 0;
     private bool $available = false;
+    private ?string $missingDriver = null;
 
     public function __construct(?string $url = null, int $maxEntries = 1000)
     {
@@ -57,6 +58,9 @@ class DatabaseBackend extends CacheBackend
                 . '(cache_key VARCHAR(255) PRIMARY KEY, value TEXT, expires_at DOUBLE PRECISION)'
             );
             $this->available = true;
+        } catch (\Tina4\Database\DatabaseDriverMissing $missing) {
+            $this->available = false;
+            $this->missingDriver = $missing->getMessage();
         } catch (\Throwable) {
             $this->available = false;
         }
@@ -65,6 +69,11 @@ class DatabaseBackend extends CacheBackend
     public function isAvailable(): bool
     {
         return $this->available;
+    }
+
+    public function missingDriverMessage(): ?string
+    {
+        return $this->missingDriver;
     }
 
     public function get(string $key): mixed

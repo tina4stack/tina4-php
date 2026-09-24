@@ -2856,7 +2856,7 @@ abstract class ORM
     private function adoptGeneratedId(string $pkColumn, mixed $execResult, bool $usingReturning): void
     {
         $newId = null;
-        if ($usingReturning && $execResult instanceof DatabaseResult) {
+        if ($usingReturning && $execResult instanceof \Tina4\Database\DatabaseResult) {
             $records = $execResult->records;
             if (!empty($records)) {
                 $newId = $records[0][$pkColumn] ?? reset($records[0]);

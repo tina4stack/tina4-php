@@ -291,16 +291,23 @@ class WsdlTest extends TestCase
     {
         $calc = $this->makeCalculator('POST', '/calculator', [], '');
         $response = $calc->handle();
+        // Parity with the Python master: an empty body is malformed XML and
+        // gets the same Client fault, never a Server "Internal server error".
         $this->assertStringContainsString('soap:Fault', $response->getBody());
-        $this->assertStringContainsString('Empty request body', $response->getBody());
+        $this->assertStringContainsString('<faultcode>Client</faultcode>', $response->getBody());
+        $this->assertStringContainsString('<faultstring>Malformed XML</faultstring>', $response->getBody());
+        $this->assertStringNotContainsString('Internal server error', $response->getBody());
     }
 
     public function testMalformedXmlReturnsFault(): void
     {
-        $calc = $this->makeCalculator('POST', '/calculator', [], '<broken');
-        $response = $calc->handle();
-        $this->assertStringContainsString('soap:Fault', $response->getBody());
-        $this->assertStringContainsString('Malformed XML', $response->getBody());
+        foreach (['<broken', '<?xml version="1.0"?><soap:Envelope>', 'not xml at all', '<a><b></a>'] as $body) {
+            $calc = $this->makeCalculator('POST', '/calculator', [], $body);
+            $response = $calc->handle();
+            $this->assertStringContainsString('<faultcode>Client</faultcode>', $response->getBody(), $body);
+            $this->assertStringContainsString('<faultstring>Malformed XML</faultstring>', $response->getBody(), $body);
+            $this->assertStringNotContainsString('Internal server error', $response->getBody(), $body);
+        }
     }
 
     public function testUnknownOperationReturnsFault(): void

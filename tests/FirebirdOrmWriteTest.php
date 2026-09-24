@@ -80,6 +80,23 @@ class FirebirdOrmWriteTest extends TestCase
         return $row === null ? null : (array_change_key_case($row)['name'] ?? null);
     }
 
+    /**
+     * execute() of a write with RETURNING hands back the row AND keeps
+     * lastInsertId() answering with that key. On the #133-#139 branch
+     * RETURNING moved to the adapter's query(), which records no last id, and
+     * the ORM's own read of the returned row looked for a class that does not
+     * exist (an unqualified DatabaseResult inside namespace Tina4), so save()
+     * back-filled 0.
+     */
+    public function testExecuteReturningKeepsTheLastInsertId(): void
+    {
+        $result = $this->db->execute("insert into t_orm_write_test (name) values (?) returning id", ["via execute"]);
+        $this->assertInstanceOf(\Tina4\Database\DatabaseResult::class, $result);
+        $returned = (int) reset($result->records[0]);
+        $this->assertGreaterThan(0, $returned);
+        $this->assertSame($returned, (int) $this->db->lastInsertId(), "lastInsertId() must answer the key RETURNING handed back");
+    }
+
     public function testSaveBackfillsGeneratedIdentity(): void
     {
         $a = new FbOrmWriteWidget();

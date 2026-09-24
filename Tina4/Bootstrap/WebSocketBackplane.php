@@ -94,6 +94,12 @@ class RedisBackplane implements WebSocketBackplaneInterface
 
     private string $host = '127.0.0.1';
     private int $port = 6379;
+    /** Redis ACL user (Redis 6+), null for the classic password-only AUTH. */
+    private ?string $username = null;
+    /** requirepass / ACL password from the URL, null when the server has none. */
+    private ?string $password = null;
+    /** Logical database from the URL path (/3). Pub/sub ignores it; kept for parity with the cache. */
+    private int $database = 0;
 
     /** True when running the zero-dependency raw RESP path. */
     private bool $useRaw = false;
@@ -113,17 +119,29 @@ class RedisBackplane implements WebSocketBackplaneInterface
             ?: 'tcp://127.0.0.1:6379');
 
         // parse_url needs a scheme; accept bare "host:port" too.
+        // scheme://[user[:password]@]host[:port][/db], the same form the Redis
+        // cache backend reads. The password never appears in a message: every
+        // error below names host:port only.
         $parsed = parse_url(str_contains($url, '://') ? $url : 'tcp://' . $url);
+        if (!is_array($parsed)) {
+            throw new \InvalidArgumentException(
+                'Invalid TINA4_WS_BACKPLANE_URL ' . DatabaseUrl::redact($url)
+            );
+        }
         $this->host = $parsed['host'] ?? '127.0.0.1';
         $this->port = (int)($parsed['port'] ?? 6379);
+        $user = isset($parsed['user']) ? urldecode($parsed['user']) : '';
+        $pass = isset($parsed['pass']) ? urldecode($parsed['pass']) : '';
+        $this->username = $user !== '' ? $user : null;
+        $this->password = $pass !== '' ? $pass : null;
+        $path = ltrim($parsed['path'] ?? '', '/');
+        $this->database = ctype_digit($path) ? (int)$path : 0;
 
         // Prefer ext-redis when present (parity with the cache backend), else
         // speak raw RESP over a real socket so the backplane is never dead.
         if (extension_loaded('redis')) {
-            $this->redis = new \Redis();
-            $this->redis->connect($this->host, $this->port);
-            $this->subscriber = new \Redis();
-            $this->subscriber->connect($this->host, $this->port);
+            $this->redis = $this->connectExtension();
+            $this->subscriber = $this->connectExtension();
             return;
         }
 
@@ -143,9 +161,11 @@ class RedisBackplane implements WebSocketBackplaneInterface
                 "RedisBackplane could not connect to {$this->host}:{$this->port}: {$errstr}"
             );
         }
+        stream_set_timeout($sock, 5);
+        $this->authenticateRaw($sock);
         // Real handshake — a non-PONG means this is not a usable Redis/Valkey.
         fwrite($sock, "*1\r\n\$4\r\nPING\r\n");
-        $pong = fread($sock, 64);
+        $pong = fgets($sock);
         if ($pong === false || !str_starts_with($pong, '+PONG')) {
             fclose($sock);
             throw new \RuntimeException(
@@ -155,6 +175,59 @@ class RedisBackplane implements WebSocketBackplaneInterface
         // Non-blocking so poll() never stalls the single-threaded event loop.
         stream_set_blocking($sock, false);
         $this->rawSocket = $sock;
+    }
+
+    /** Connect one phpredis client, authenticated and on the URL's database. */
+    private function connectExtension(): \Redis
+    {
+        $client = new \Redis();
+        $client->connect($this->host, $this->port, 5.0);
+        try {
+            if ($this->password !== null) {
+                $client->auth($this->username !== null ? [$this->username, $this->password] : $this->password);
+            }
+            if ($this->database !== 0) {
+                $client->select($this->database);
+            }
+        } catch (\RedisException $e) {
+            throw new \RuntimeException(
+                "RedisBackplane AUTH to {$this->host}:{$this->port} failed: " . $e->getMessage()
+            );
+        }
+        return $client;
+    }
+
+    /**
+     * Send AUTH (and SELECT) on a fresh blocking raw socket. Raises naming
+     * host:port only - never the password - when the server refuses.
+     *
+     * @param resource $sock
+     */
+    private function authenticateRaw($sock): void
+    {
+        if ($this->password !== null) {
+            fwrite($sock, $this->username !== null
+                ? self::respEncode('AUTH', $this->username, $this->password)
+                : self::respEncode('AUTH', $this->password));
+            $reply = fgets($sock);
+            if ($reply === false || !str_starts_with($reply, '+OK')) {
+                fclose($sock);
+                throw new \RuntimeException(
+                    "RedisBackplane AUTH to {$this->host}:{$this->port} failed: "
+                    . ($reply === false ? 'no reply' : trim(substr($reply, 1)))
+                );
+            }
+        }
+        if ($this->database !== 0) {
+            fwrite($sock, self::respEncode('SELECT', (string)$this->database));
+            $reply = fgets($sock);
+            if ($reply === false || !str_starts_with($reply, '+OK')) {
+                fclose($sock);
+                throw new \RuntimeException(
+                    "RedisBackplane SELECT {$this->database} on {$this->host}:{$this->port} failed"
+                );
+            }
+        }
     }
 
     /** Encode a RESP array command (e.g. PUBLISH chan msg). */
@@ -182,6 +255,7 @@ class RedisBackplane implements WebSocketBackplaneInterface
             );
         }
         stream_set_timeout($sock, 5);
+        $this->authenticateRaw($sock);
         $written = @fwrite($sock, self::respEncode('PUBLISH', $channel, $message));
         // Consume the integer reply (number of subscribers that received it).
         @fread($sock, 64);

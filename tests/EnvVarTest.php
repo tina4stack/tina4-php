@@ -643,11 +643,13 @@ class EnvVarTest extends TestCase
         $this->assertSame('starttls', $msg->getImapEncryption());
     }
 
-    public function testTina4MailImapEncryptionInvalidFallsBackToTls(): void
+    public function testTina4MailImapEncryptionInvalidRaises(): void
     {
+        // ADR-0071: an unknown value raises; it used to fall back to 'tls'.
         $this->setEnv(['TINA4_MAIL_IMAP_ENCRYPTION' => 'bogus']);
-        $msg = new Messenger();
-        $this->assertSame('tls', $msg->getImapEncryption());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Unknown IMAP encryption 'bogus'. Valid values: ssl, tls, starttls, none.");
+        new Messenger();
     }
 
     // ─────────────────────────────────────────────────────────────────

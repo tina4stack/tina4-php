@@ -20,8 +20,12 @@
  *
  * Mutation-proved: revert parseMultipartBody to last-wins and the two-files case
  * goes RED; drop the basename strip in Request::saveUpload and the traversal case
- * goes RED (the escaped file appears); remove the maxUploadSize branch in
- * Server::enforceRequestLimits and the over-limit case is accepted (RED).
+ * goes RED (the escaped file appears); remove the TINA4_MAX_UPLOAD_SIZE check
+ * in Server::frameHttpRequest and the over-limit case is accepted (RED).
+ *
+ * Since ADR-0068 a DECLARED Content-Length over TINA4_MAX_UPLOAD_SIZE is refused
+ * on the declared value, before a body byte is read; the running count applies
+ * to chunked bodies (HttpHardeningContractTest carries those cases).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -193,9 +197,8 @@ PHP);
         $sock = @stream_socket_client("tcp://127.0.0.1:{$this->port}", $errno, $errstr, 5);
         $this->assertIsResource($sock, "could not connect: {$errstr}");
 
-        // ACTUAL body 8x the cap, but the DECLARED Content-Length is honest and
-        // well under TINA4_MAX_REQUEST_BODY (10MB), so the declared-length guard
-        // passes and only the running per-chunk counter can refuse it.
+        // Body 8x TINA4_MAX_UPLOAD_SIZE, declared honestly and well under
+        // TINA4_MAX_REQUEST_BODY (10MB), so only the upload cap can refuse it.
         $payload = str_repeat('a', self::MAX_UPLOAD * 8);
         $request = "POST /upload HTTP/1.1\r\n"
             . "Host: 127.0.0.1\r\n"
@@ -212,7 +215,7 @@ PHP);
         $this->assertMatchesRegularExpression(
             '/ 413 /',
             (string)$read,
-            'an over-limit body must be refused 413 by the running counter, got: ' . substr((string)$read, 0, 160)
+            'an over-limit body must be refused 413 by TINA4_MAX_UPLOAD_SIZE, got: ' . substr((string)$read, 0, 160)
         );
     }
 

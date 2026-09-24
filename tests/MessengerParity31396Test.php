@@ -152,10 +152,12 @@ class MessengerParity31396Test extends TestCase
         $this->assertSame('none', $plain->getImapEncryption());
     }
 
-    public function testInvalidImapEncryptionFallsBackToTls(): void
+    public function testInvalidImapEncryptionRaises(): void
     {
-        $m = new Messenger(imapHost: 'imap.example.com', imapEncryption: 'rot13');
-        $this->assertSame('tls', $m->getImapEncryption());
+        // ADR-0071: an unknown value raises; it used to fall back to 'tls'.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Unknown IMAP encryption 'rot13'. Valid values: ssl, tls, starttls, none.");
+        new Messenger(imapHost: 'imap.example.com', imapEncryption: 'rot13');
     }
 
     // ── G10: send() returns a result and never raises on failure ──

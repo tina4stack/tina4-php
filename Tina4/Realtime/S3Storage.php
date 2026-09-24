@@ -25,7 +25,10 @@ class S3Storage implements StorageBackend
     ) {
         $clientClass = 'Aws\\S3\\S3Client';
         if (!class_exists($clientClass)) {
-            throw new \RuntimeException('S3Storage requires aws/aws-sdk-php');
+            throw new \RuntimeException(
+                "The 'aws/aws-sdk-php' package is required for S3Storage. "
+                . 'Install it with: composer require aws/aws-sdk-php'
+            );
         }
         $this->bucket = $bucket ?: (getenv('TINA4_STORAGE_BUCKET') ?: '');
         if ($this->bucket === '') {

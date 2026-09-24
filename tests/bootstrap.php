@@ -41,6 +41,20 @@ if (getenv('TINA4_NO_BROWSER') === false) {
 }
 
 /**
+ * A test run must never open the developer's browser. `tina4php serve` opens a
+ * tab unless TINA4_NO_BROWSER is set, and not every test that spawns a server
+ * sets it. Set it ONCE here, before any child exists, so every spawn that
+ * inherits the environment inherits it too. Only when unset: a test that checks
+ * the browser-opening path still overrides it for its own child.
+ * Guarded by tests/NoBrowserDefaultTest.php.
+ */
+if (getenv('TINA4_NO_BROWSER') === false) {
+    putenv('TINA4_NO_BROWSER=true');
+    $_ENV['TINA4_NO_BROWSER'] = 'true';
+    $_SERVER['TINA4_NO_BROWSER'] = 'true';
+}
+
+/**
  * Tina4 v3 test bootstrap.
  * Defines legacy constants before autoloader triggers Initialize.php,
  * then loads the Composer autoloader.

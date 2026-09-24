@@ -218,6 +218,8 @@ final class Mqtt
     public static function parseUrl(string $url): array
     {
         $raw = trim($url);
+        // Every error below names the url; a url may carry a password.
+        $safe = DatabaseUrl::redact($raw);
         if ($raw === '') {
             throw new \InvalidArgumentException('MQTT url is empty -- set TINA4_MQTT_URL (e.g. ' . self::DEFAULT_URL . ')');
         }
@@ -227,7 +229,7 @@ final class Mqtt
             $scheme = strtolower($m[1]);
             if (!in_array($scheme, ['mqtt', 'tcp', 'mqtts'], true)) {
                 throw new \InvalidArgumentException(
-                    "unsupported MQTT url scheme '{$scheme}' in '{$raw}' -- this client speaks " .
+                    "unsupported MQTT url scheme '{$scheme}' in '{$safe}' -- this client speaks " .
                     'mqtt://, tcp:// or mqtts:// (TLS). WebSocket transports are not implemented.'
                 );
             }
@@ -262,7 +264,7 @@ final class Mqtt
         if (str_starts_with($hostPort, '[')) {
             $close = strpos($hostPort, ']');
             if ($close === false) {
-                throw new \InvalidArgumentException("malformed MQTT url '{$raw}' -- unclosed IPv6 bracket");
+                throw new \InvalidArgumentException("malformed MQTT url '{$safe}' -- unclosed IPv6 bracket");
             }
             $host = substr($hostPort, 1, $close - 1);
             $after = substr($hostPort, $close + 1);
@@ -278,10 +280,10 @@ final class Mqtt
         }
 
         if ($host === '') {
-            throw new \InvalidArgumentException("malformed MQTT url '{$raw}' -- expected mqtt://host:port");
+            throw new \InvalidArgumentException("malformed MQTT url '{$safe}' -- expected mqtt://host:port");
         }
         if ($portStr !== null && $portStr !== '' && !ctype_digit($portStr)) {
-            throw new \InvalidArgumentException("malformed MQTT url '{$raw}' -- port must be numeric");
+            throw new \InvalidArgumentException("malformed MQTT url '{$safe}' -- port must be numeric");
         }
 
         return [

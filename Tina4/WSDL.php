@@ -108,12 +108,9 @@ abstract class WSDL
         }
 
         // POST — handle SOAP request
+        // An empty body is malformed XML like any other unparseable body:
+        // the same Client fault Python returns (handleSOAP answers it).
         $xmlBody = $this->request->rawBody;
-        if (empty($xmlBody)) {
-            $fault = $this->soapFault('Client', 'Empty request body');
-            return $response($fault, 400, 'text/xml; charset=UTF-8');
-        }
-
         $soapResponse = $this->handleSOAP($xmlBody);
         return $response($soapResponse, 200, 'text/xml; charset=UTF-8');
     }
@@ -230,6 +227,16 @@ abstract class WSDL
     {
         $this->onRequest($this->request);
 
+        // Only UTF-8 is accepted, and that is decided on the raw bytes BEFORE
+        // any parse. The DOCTYPE guard below is a byte regex: a UTF-16 body
+        // (with or without a BOM) or a UTF-7 one hides "<!DOCTYPE" from it while
+        // libxml still decodes the body and expands its entities. Refused: a
+        // byte-order mark, bytes that are not UTF-8, a NUL (XML forbids it; it is
+        // how UTF-16/32 look as bytes) and a declared encoding other than UTF-8.
+        if (!self::isUtf8Document($xmlBody)) {
+            return $this->soapFault('Client', 'Malformed XML');
+        }
+
         // SOAP 1.1 (§3) forbids a Document Type Declaration in a SOAP message.
         // Rejecting any DOCTYPE/DTD up front also closes the XML entity-expansion
         // (billion-laughs) and external-entity (XXE) attack surface for every XML
@@ -263,15 +270,10 @@ abstract class WSDL
 
         $body = $bodyElements[0];
 
-        // First child of Body is the operation element
-        $children = $body->children();
-        if ($children->count() === 0) {
-            // Try with the target namespace
-            $tns = "urn:{$this->serviceName}";
-            $children = $body->children($tns);
-        }
-
-        if ($children->count() === 0) {
+        // First child element of Body is the operation, in whatever namespace
+        // the client used (matched by local name, as the Python master does).
+        $children = $body->xpath('*');
+        if (empty($children)) {
             return $this->soapFault('Client', 'Empty SOAP Body');
         }
 
@@ -292,23 +294,11 @@ abstract class WSDL
             $paramName = $param->getName();
             $value = null;
 
-            // Try child elements (with and without namespace)
-            foreach ($opElement->children() as $child) {
-                if ($child->getName() === $paramName) {
-                    $value = (string)$child;
-                    break;
-                }
-            }
-
-            if ($value === null) {
-                // Try with target namespace
-                $tns = "urn:{$this->serviceName}";
-                foreach ($opElement->children($tns) as $child) {
-                    if ($child->getName() === $paramName) {
-                        $value = (string)$child;
-                        break;
-                    }
-                }
+            // Parameter element by local name, in any namespace. $paramName is
+            // a PHP identifier, so it is safe inside the XPath string literal.
+            $matches = $opElement->xpath("*[local-name()='{$paramName}']");
+            if (!empty($matches)) {
+                $value = (string)$matches[0];
             }
 
             if ($value !== null) {
@@ -333,6 +323,28 @@ abstract class WSDL
         }
 
         return $this->soapResponse($opName, $result);
+    }
+
+    /**
+     * True when the raw body is a UTF-8 document: no byte-order mark, valid
+     * UTF-8, no NUL byte, and an XML declaration that either names no encoding
+     * or names exactly "UTF-8" (any case). "UTF8" is refused too: the rule is
+     * byte-identical in all four frameworks.
+     */
+    private static function isUtf8Document(string $xmlBody): bool
+    {
+        if (str_starts_with($xmlBody, "\xEF\xBB\xBF")
+            || str_starts_with($xmlBody, "\xFE\xFF")
+            || str_starts_with($xmlBody, "\xFF\xFE")
+            || str_contains($xmlBody, "\0")
+            || !Str::isUtf8($xmlBody)
+        ) {
+            return false;
+        }
+        if (preg_match('/^\s*<\?xml\b[^>]*?\bencoding\s*=\s*["\']([^"\']*)["\']/i', $xmlBody, $declared)) {
+            return strcasecmp($declared[1], 'UTF-8') === 0;
+        }
+        return true;
     }
 
     /**

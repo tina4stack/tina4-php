@@ -82,6 +82,9 @@ class WebSocketHardeningTest extends TestCase
     private function requireRedis(): void
     {
         $sock = @fsockopen(self::REDIS_HOST, self::REDIS_PORT, $errno, $errstr, 2);
+        if (!$sock && getenv('TINA4_REQUIRE_SERVICES')) {
+            $this->fail(sprintf('TINA4_REQUIRE_SERVICES is set but Redis/Valkey is not reachable at %s:%d', self::REDIS_HOST, self::REDIS_PORT));
+        }
         if (!$sock) {
             $this->markTestSkipped(
                 sprintf('Redis/Valkey not reachable at %s:%d (%s) — backplane test needs a real service',
@@ -684,31 +687,38 @@ class WebSocketHardeningTest extends TestCase
             $received[] = $msg;
         });
 
-        // Drive the private frame loop directly via reflection on a fake client.
-        $pair = $this->makePair();
-        $rp = new \ReflectionProperty($ws, 'clients');
-        $rp->setValue($ws, [
-            'frag' => [
-                'socket' => $pair[0],
-                'ip' => 'test',
-                'connected_at' => time(),
-                'lastActivity' => microtime(true),
-                'buffer' => '',
-                'path' => '/',
-                'rooms' => [],
-                'fragments' => '',
-                'fragmentOpcode' => 0,
-            ],
-        ]);
+        // A REAL connection: a real TCP client completes the real handshake
+        // through handleNewConnection, then sends real masked frames that the
+        // server reads off its own accepted socket. No hand-built client record.
+        $listener = @stream_socket_server('tcp://127.0.0.1:' . \FreePort::get(), $errno, $errstr);
+        $this->assertNotFalse($listener, "could not listen: {$errstr}");
+        $peer = @stream_socket_client('tcp://' . stream_socket_get_name($listener, false), $errno, $errstr, 2.0);
+        $this->assertNotFalse($peer, "client could not connect: {$errstr}");
+        fwrite($peer, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            . "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+        $serverEnd = @stream_socket_accept($listener, 2.0);
+        $this->assertNotFalse($serverEnd, 'the listener never accepted the connection');
+        $this->pairs[] = [$peer, $serverEnd];
+        fclose($listener);
 
-        // Two client→server frames (masked, as RFC requires from clients).
+        (new \ReflectionMethod($ws, 'handleNewConnection'))->invoke($ws, $serverEnd);
+        stream_set_timeout($peer, 2);
+        $handshake = '';
+        while (!str_contains($handshake, "\r\n\r\n") && ($line = fgets($peer)) !== false) {
+            $handshake .= $line;
+        }
+        $this->assertStringContainsString('101 Switching Protocols', $handshake);
+        $clientIds = array_column($ws->getClients(), 'id');
+        $this->assertCount(1, $clientIds, 'the real handshake did not register the client');
+
+        // Two client->server frames (masked, as RFC requires from clients).
         $frame1 = $this->clientFrame(WebSocket::OP_TEXT, 'Hello', false);
         $frame2 = $this->clientFrame(WebSocket::OP_CONTINUATION, 'World', true);
-        // Feed them through the peer end so handleClientData reads them.
-        fwrite($pair[1], $frame1 . $frame2);
+        fwrite($peer, $frame1 . $frame2);
+        usleep(50000);
 
         $rm = new \ReflectionMethod($ws, 'handleClientData');
-        $rm->invoke($ws, 'frag');
+        $rm->invoke($ws, $clientIds[0]);
 
         $this->assertSame(['HelloWorld'], $received);
     }

@@ -25,8 +25,24 @@ class MongoSessionHandler
     private string $collection;
     private int $ttl;
 
-    /** @var resource|null TCP socket */
+    /** @var resource|null TCP socket - the process's shared connection to this server */
     private $socket = null;
+
+    /**
+     * One live connection per process and server, shared by every handler.
+     *
+     * Session builds a handler per request, so a connection owned by the
+     * handler meant a NEW TCP connection to MongoDB for every request a
+     * long-lived process served. Keyed by pid as well as host:port, so a
+     * process forked after a connection was opened never writes into its
+     * parent's socket.
+     *
+     * @var array<string, resource>
+     */
+    private static array $connections = [];
+
+    /** @var bool Whether the current connection was opened by an EARLIER call (a candidate for having gone stale) */
+    private bool $reusedConnection = false;
 
     /** @var int Request ID counter */
     private int $requestId = 0;
@@ -148,44 +164,104 @@ class MongoSessionHandler
     }
 
     /**
-     * Close the connection.
+     * Close this process's shared connection to the server.
+     *
+     * Every handler in the process shares the connection, so the next read or
+     * write from any of them opens a fresh one.
+     *
+     * @return void
      */
     public function close(): void
     {
-        if ($this->socket) {
-            fclose($this->socket);
-            $this->socket = null;
+        $key = $this->connectionKey();
+        if (isset(self::$connections[$key])) {
+            @fclose(self::$connections[$key]);
+            unset(self::$connections[$key]);
         }
+        $this->socket = null;
     }
 
     // ── MongoDB Wire Protocol (OP_MSG) ──────────────────────────
 
+    private function connectionKey(): string
+    {
+        return getmypid() . '|' . $this->host . ':' . $this->port;
+    }
+
+    /**
+     * Point this handler at the process's live connection, opening one only
+     * when there is none or the one there has been closed by the peer.
+     */
     private function ensureConnected(): void
     {
-        if ($this->socket === null) {
+        $key = $this->connectionKey();
+        $shared = self::$connections[$key] ?? null;
+        if (!is_resource($shared) || feof($shared)) {
+            $this->close();
             $this->connect();
+            $this->reusedConnection = false;
+            return;
         }
+        $this->socket = $shared;
+        $this->reusedConnection = true;
     }
 
     private function connect(): void
     {
-        $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
-        if (!$this->socket) {
+        $socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
+        if (!$socket) {
             throw new \RuntimeException("MongoDB connection failed: [{$errno}] {$errstr}");
         }
-        stream_set_timeout($this->socket, 30);
+        stream_set_timeout($socket, 30);
+        self::$connections[$this->connectionKey()] = $socket;
+        $this->socket = $socket;
     }
 
     /**
      * Send an OP_MSG command and read the response.
+     *
+     * A shared connection can die between requests (a MongoDB restart, an idle
+     * timeout) in a way feof() only sees once it is used. A failure on a
+     * REUSED connection therefore drops it and retries once on a fresh one;
+     * every command this handler sends (find, upsert, delete by _id) is
+     * idempotent, so the retry cannot apply a change twice. A failure on a
+     * connection opened for this very call is the server's answer and raises.
      *
      * @param array $command The command document
      * @return array Response document
      */
     private function command(array $command): array
     {
+        try {
+            return $this->sendCommand($command);
+        } catch (\RuntimeException $failure) {
+            if (!$this->reusedConnection) {
+                $this->close();
+                throw $failure;
+            }
+            $this->reusedConnection = false;
+            $this->close();
+            $this->connect();
+            try {
+                return $this->sendCommand($command);
+            } catch (\RuntimeException $retryFailure) {
+                // Never leave a half-read connection behind for the next caller.
+                $this->close();
+                throw $retryFailure;
+            }
+        }
+    }
+
+    /**
+     * One OP_MSG round trip on the current connection.
+     *
+     * @param array $command The command document
+     * @return array Response document
+     */
+    private function sendCommand(array $command): array
+    {
         $this->requestId++;
-        $bsonCmd = $this->encodeBson($command);
+        $bsonCmd = \Tina4\MongoBson::encode($command);
 
         // OP_MSG body section: flagBits(4) + sectionKind(1) + BSON
         $sections = pack('V', 0)         // flagBits = 0
@@ -199,7 +275,10 @@ class MongoSessionHandler
             . pack('V', 0)               // responseTo
             . pack('V', 2013);           // OP_MSG opcode
 
-        fwrite($this->socket, $header . $sections);
+        $message = $header . $sections;
+        if (@fwrite($this->socket, $message) !== strlen($message)) {
+            throw new \RuntimeException('Failed to send MongoDB command');
+        }
 
         // Read response
         return $this->readResponse();
@@ -207,7 +286,7 @@ class MongoSessionHandler
 
     private function readResponse(): array
     {
-        $headerData = fread($this->socket, 16);
+        $headerData = (string) @fread($this->socket, 16);
         if (strlen($headerData) < 16) {
             throw new \RuntimeException('Failed to read MongoDB response header');
         }
@@ -217,7 +296,7 @@ class MongoSessionHandler
 
         $payload = '';
         while ($remaining > 0) {
-            $chunk = fread($this->socket, min($remaining, 8192));
+            $chunk = @fread($this->socket, min($remaining, 8192));
             if ($chunk === false || $chunk === '') {
                 throw new \RuntimeException('Failed to read MongoDB response');
             }
@@ -227,7 +306,7 @@ class MongoSessionHandler
 
         // OP_MSG: skip flagBits(4) + sectionKind(1), then BSON
         $bsonData = substr($payload, 5);
-        return $this->decodeBson($bsonData);
+        return \Tina4\MongoBson::decode($bsonData);
     }
 
     private function findOne(string $namespace, array $filter): ?array
@@ -273,154 +352,5 @@ class MongoSessionHandler
             ],
             '$db' => $parts[0],
         ]);
-    }
-
-    // ── Minimal BSON Encoder/Decoder ────────────────────────────
-
-    /**
-     * Encode a PHP array/object as BSON.
-     * Supports: string, int, float, bool, null, array (document/array).
-     */
-    private function encodeBson(array $doc): string
-    {
-        $body = '';
-
-        foreach ($doc as $key => $value) {
-            $body .= $this->encodeBsonElement((string)$key, $value);
-        }
-
-        $body .= "\x00"; // document terminator
-        return pack('V', strlen($body) + 4) . $body;
-    }
-
-    private function encodeBsonElement(string $key, mixed $value): string
-    {
-        $ckey = $key . "\x00";
-
-        if ($value === null) {
-            return "\x0A" . $ckey;
-        }
-
-        if (is_bool($value)) {
-            return "\x08" . $ckey . ($value ? "\x01" : "\x00");
-        }
-
-        if (is_int($value)) {
-            if ($value >= -2147483648 && $value <= 2147483647) {
-                return "\x10" . $ckey . pack('V', $value); // int32
-            }
-            return "\x12" . $ckey . pack('P', $value); // int64
-        }
-
-        if (is_float($value)) {
-            return "\x01" . $ckey . pack('e', $value); // double
-        }
-
-        if (is_string($value)) {
-            return "\x02" . $ckey . pack('V', strlen($value) + 1) . $value . "\x00";
-        }
-
-        if (is_array($value)) {
-            // Check if it's a sequential array or associative
-            if (array_is_list($value)) {
-                // BSON array
-                $indexed = [];
-                foreach ($value as $i => $v) {
-                    $indexed[(string)$i] = $v;
-                }
-                $encoded = $this->encodeBson($indexed);
-                return "\x04" . $ckey . $encoded;
-            }
-
-            // BSON document
-            $encoded = $this->encodeBson($value);
-            return "\x03" . $ckey . $encoded;
-        }
-
-        // Fallback: convert to string
-        $s = (string)$value;
-        return "\x02" . $ckey . pack('V', strlen($s) + 1) . $s . "\x00";
-    }
-
-    /**
-     * Decode BSON into a PHP array.
-     */
-    private function decodeBson(string $data): array
-    {
-        $pos = 0;
-        return $this->decodeBsonDocument($data, $pos);
-    }
-
-    private function decodeBsonDocument(string $data, int &$pos): array
-    {
-        $docLen = unpack('V', substr($data, $pos, 4))[1];
-        $pos += 4;
-        $end = $pos + $docLen - 5; // -4 for length, -1 for terminator
-
-        $doc = [];
-        while ($pos < $end) {
-            $type = ord($data[$pos]);
-            $pos++;
-
-            // Read C-string key
-            $keyEnd = strpos($data, "\x00", $pos);
-            $key = substr($data, $pos, $keyEnd - $pos);
-            $pos = $keyEnd + 1;
-
-            $doc[$key] = $this->decodeBsonValue($data, $pos, $type);
-        }
-
-        $pos++; // skip terminator byte
-
-        return $doc;
-    }
-
-    private function decodeBsonValue(string $data, int &$pos, int $type): mixed
-    {
-        switch ($type) {
-            case 0x01: // double
-                $val = unpack('e', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-
-            case 0x02: // string
-                $len = unpack('V', substr($data, $pos, 4))[1];
-                $pos += 4;
-                $val = substr($data, $pos, $len - 1);
-                $pos += $len;
-                return $val;
-
-            case 0x03: // document
-                return $this->decodeBsonDocument($data, $pos);
-
-            case 0x04: // array
-                return array_values($this->decodeBsonDocument($data, $pos));
-
-            case 0x08: // boolean
-                $val = ord($data[$pos]) !== 0;
-                $pos++;
-                return $val;
-
-            case 0x0A: // null
-                return null;
-
-            case 0x10: // int32
-                $val = unpack('V', substr($data, $pos, 4))[1];
-                $pos += 4;
-                // Handle signed int32
-                if ($val >= 2147483648) {
-                    $val -= 4294967296;
-                }
-                return $val;
-
-            case 0x12: // int64
-                $val = unpack('P', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-
-            default:
-                // Skip unknown types by returning null
-                return null;
-        }
     }
 }

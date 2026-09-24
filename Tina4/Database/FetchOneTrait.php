@@ -9,7 +9,7 @@
 namespace Tina4\Database;
 
 /**
- * Shared fetchOne() for the native database adapters.
+ * Shared fetchOne() - and the write branch of fetch() - for the database adapters.
  *
  * Every adapter implemented the same body: strip trailing semicolons, run the
  * query, FAIL LOUD if the driver reported an error, otherwise return the first
@@ -37,5 +37,31 @@ trait FetchOneTrait
             throw new DatabaseException($this->engineLabel() . ' fetchOne() failed: ' . $this->lastError);
         }
         return $rows[0] ?? null;
+    }
+
+    /**
+     * Run a write that fetch() received, exactly once.
+     *
+     * A write ({@see SqlStatement::isWrite()}) gets no COUNT probe - wrapping
+     * an INSERT in a subquery is a syntax error on every engine - and no
+     * LIMIT/OFFSET/ROWS/TOP clause, which is either a syntax error or, worse,
+     * silently limits how many rows the write touches. It runs once through
+     * query(), which commits like execute() outside a transaction, and total is
+     * the number of rows it returned.
+     *
+     * @param string $sql The write, trailing semicolons already stripped
+     * @param array $params Bound parameters
+     * @param int $limit Echoed back unchanged
+     * @param int $offset Echoed back unchanged
+     * @return array{data: array, total: int, limit: int, offset: int}
+     * @throws DatabaseException When the statement fails
+     */
+    protected function fetchWriteOnce(string $sql, array $params, int $limit, int $offset): array
+    {
+        $rows = $this->query($sql, $params);
+        if ($this->lastError !== null) {
+            throw new DatabaseException($this->engineLabel() . ' fetch() failed: ' . $this->lastError);
+        }
+        return ['data' => $rows, 'total' => count($rows), 'limit' => $limit, 'offset' => $offset];
     }
 }

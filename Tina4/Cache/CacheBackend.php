@@ -71,6 +71,18 @@ abstract class CacheBackend
     }
 
     /**
+     * When the backend is unavailable because a driver is NOT INSTALLED (as
+     * opposed to a service that is unreachable), the message naming the driver
+     * and its install command; otherwise null. Only the database backend can
+     * miss a driver: redis/valkey/memcached/mongodb speak their wire protocol
+     * over plain sockets.
+     */
+    public function missingDriverMessage(): ?string
+    {
+        return null;
+    }
+
+    /**
      * Remove expired entries and return the count removed.
      *
      * Network/driver backends (redis/valkey/memcached/mongo/database) expire

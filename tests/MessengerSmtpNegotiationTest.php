@@ -184,17 +184,20 @@ class MessengerSmtpNegotiationTest extends TestCase
         self::assertStringContainsString('STARTTLS', $result['message']);
     }
 
-    public function testStartTlsIsSkippedWhenTheServerDoesNotOfferIt(): void
+    public function testTlsFailsBeforeAuthWhenTheServerDoesNotOfferStartTls(): void
     {
         $port = $this->startServer('AUTH');
 
-        $result = $this->send($this->messenger($port, '', 'tls'));
+        $result = $this->send($this->messenger($port, 'tina4', 'tls'));
 
-        // 'tls' is opportunistic: upgrade where possible, deliver where not.
-        // Failing here would break every application already pointed at a plain
-        // local MTA, which is the setup this change exists to enable.
-        self::assertTrue($result['success'], $result['message']);
-        self::assertStringNotContainsString('STARTTLS', $this->transcript());
+        // ADR-0071: 'tls' is no longer opportunistic. STARTTLS is required, so
+        // a server that does not offer it fails the send BEFORE the credentials
+        // or the envelope are written. (It used to deliver in clear.) An app
+        // that talks to a plain local MTA on purpose sets encryption 'none'.
+        self::assertFalse($result['success'], 'mail was sent unencrypted after tls was asked for');
+        self::assertSame("SMTP error: STARTTLS was requested but 127.0.0.1:{$port} does not offer it", $result['message']);
+        self::assertStringNotContainsString('AUTH', $this->transcript());
+        self::assertStringNotContainsString('MAIL FROM', $this->transcript());
     }
 
     public function testExplicitStarttlsFailsLoudlyWhenNotOffered(): void

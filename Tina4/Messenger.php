@@ -54,11 +54,14 @@ class Messenger
     /** @var string|null Sender display name */
     private ?string $fromName;
 
+    /** The SMTP and IMAP encryption values (ADR-0071). Anything else raises at construction. */
+    private const ENCRYPTIONS = ['ssl', 'tls', 'starttls', 'none'];
+
+    /** Port 465 is implicit-TLS submission (RFC 8314): always TLS, whatever the setting. */
+    private const IMPLICIT_TLS_PORT = 465;
+
     /** @var string Encryption mode: tls, ssl, starttls, none */
     private string $encryption;
-
-    /** @var bool Whether to use STARTTLS (derived from encryption) */
-    private bool $useTls;
 
     /** @var string|null IMAP host */
     private ?string $imapHost;
@@ -72,7 +75,7 @@ class Messenger
     /** @var string IMAP password — may differ from the SMTP password */
     private string $imapPassword;
 
-    /** @var string IMAP encryption mode: 'tls', 'starttls', or 'none' */
+    /** @var string IMAP encryption mode: 'tls' / 'ssl' (implicit TLS), 'starttls', or 'none' */
     private string $imapEncryption;
 
     /** @var int Socket timeout in seconds */
@@ -141,17 +144,18 @@ class Messenger
         $this->fromName = $fromName
             ?? $this->env('TINA4_MAIL_FROM_NAME');
 
-        // Encryption: constructor > .env > backward-compat useTls > default "tls"
+        // Encryption: constructor > .env > backward-compat useTls > default "tls".
+        // ADR-0071: trimmed, compared without case, and an unknown value RAISES
+        // here -- a typo must never downgrade the send to cleartext.
         $envEncryption = $encryption
             ?? $this->env('TINA4_MAIL_ENCRYPTION');
         if ($envEncryption !== null) {
-            $this->encryption = strtolower($envEncryption);
+            $this->encryption = self::normaliseEncryption($envEncryption, 'mail');
         } elseif ($useTls !== null) {
             $this->encryption = $useTls ? 'tls' : 'none';
         } else {
             $this->encryption = 'tls';
         }
-        $this->useTls = in_array($this->encryption, ['tls', 'starttls'], true);
 
         // IMAP
         $this->imapHost = $imapHost
@@ -178,13 +182,31 @@ class Messenger
         // reproduces the historical port-based flag selection, so a caller that
         // never sets it keeps today's exact connection behaviour; an explicit
         // value now wins (ADR-0041) and is honoured by imapMailbox().
+        // An unknown value raises exactly like the SMTP one (ADR-0071): 'tls'
+        // and 'ssl' are implicit TLS, 'starttls' is STARTTLS required, 'none'
+        // is plaintext.
         $explicitImapEnc = $imapEncryption ?? $this->env('TINA4_MAIL_IMAP_ENCRYPTION');
-        if ($explicitImapEnc !== null && $explicitImapEnc !== '') {
-            $enc = strtolower($explicitImapEnc);
-            $this->imapEncryption = in_array($enc, ['tls', 'starttls', 'none'], true) ? $enc : 'tls';
+        if ($explicitImapEnc !== null) {
+            $this->imapEncryption = self::normaliseEncryption($explicitImapEnc, 'IMAP');
         } else {
             $this->imapEncryption = $this->imapPort === 993 ? 'tls' : 'none';
         }
+    }
+
+    /**
+     * Trim and lowercase an encryption setting, or raise naming the value as
+     * given and the valid ones (ADR-0071 section 2). A typo must never
+     * downgrade a connection to cleartext.
+     */
+    private static function normaliseEncryption(string $value, string $label): string
+    {
+        $normalised = strtolower(trim($value));
+        if (!in_array($normalised, self::ENCRYPTIONS, true)) {
+            throw new \InvalidArgumentException(
+                "Unknown {$label} encryption '{$value}'. Valid values: ssl, tls, starttls, none."
+            );
+        }
+        return $normalised;
     }
 
     /**
@@ -278,7 +300,7 @@ class Messenger
             // EHLO
             $ehlo = $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
 
-            // STARTTLS where the server offers it, not where the port suggests it
+            // STARTTLS for tls/starttls on a plain connection; required, never opportunistic
             $ehlo = $this->startTls($socket, $ehlo);
 
             // AUTH LOGIN
@@ -903,57 +925,57 @@ class Messenger
     }
 
     /**
+     * True when the connection is implicit TLS from the first byte (ADR-0071):
+     * encryption 'ssl' on any port, and every setting on port 465.
+     */
+    private function usesImplicitTls(): bool
+    {
+        return $this->encryption === 'ssl' || $this->port === self::IMPLICIT_TLS_PORT;
+    }
+
+    /**
      * Upgrade the connection with STARTTLS, and return the EHLO response that
      * is valid from here on.
      *
-     * The capability list is re-read after a successful upgrade because a
-     * server may advertise different capabilities once the channel is
-     * encrypted -- AUTH in particular is commonly withheld until then.
+     * ADR-0071: 'tls' and 'starttls' mean the same thing, and STARTTLS is
+     * REQUIRED. If the server's EHLO does not offer it the send fails here,
+     * before AUTH or MAIL FROM is written, so neither the credentials nor the
+     * message ever cross a clear channel. 'none' never upgrades. An implicit-TLS
+     * connection (ssl, or port 465) is already encrypted and never gets here.
      *
-     * This USED TO BE gated on `$this->port === 587`. A caller who asked for
-     * encryption on any other port silently got none: the connection was made
-     * in clear, the credentials went out in clear, and send() still returned
-     * success. Submission on 25 and 2525 is ordinary, so that was not a corner
-     * case, and nothing in the result told the caller their mail had been sent
-     * unencrypted. Whether the channel can be encrypted is a property of the
-     * server, not of the port number, so ask the server.
+     * The capability list is re-read after the upgrade because a server may
+     * advertise different capabilities once the channel is encrypted -- AUTH
+     * in particular is commonly withheld until then.
      *
-     * The two encryption modes are deliberately not equivalent:
-     *   'starttls'  the caller demanded encryption -- fail loudly if it is not
-     *               on offer, rather than quietly downgrading them
-     *   'tls'       the default, and opportunistic -- upgrade where possible,
-     *               warn where not. Failing here would break every app already
-     *               pointed at a plain local MTA, which is the setup this
-     *               change is meant to enable.
-     * 'ssl' and 'none' never reach this: 465 is already wrapped by connect().
+     * History: this was once gated on port 587 (other ports got no
+     * encryption at all), then made opportunistic for 'tls' (a server that did
+     * not offer STARTTLS got the mail in clear). Both sent cleartext when the
+     * caller asked for encryption.
      */
     private function startTls($socket, string $ehloResponse): string
     {
-        if (!$this->useTls) {
+        if ($this->encryption === 'none' || $this->usesImplicitTls()) {
             return $ehloResponse;
         }
 
         if (!$this->serverSupports($ehloResponse, 'STARTTLS')) {
-            if ($this->encryption === 'starttls') {
-                fclose($socket);
-                throw new \RuntimeException(
-                    "STARTTLS was requested but {$this->host}:{$this->port} does not offer it"
-                );
-            }
-
-            Debug::message(
-                "SMTP server {$this->host}:{$this->port} does not offer STARTTLS, continuing unencrypted",
-                Debug::LEVEL_WARNING
+            fclose($socket);
+            throw new \RuntimeException(
+                "STARTTLS was requested but {$this->host}:{$this->port} does not offer it"
             );
-
-            return $ehloResponse;
         }
 
         $this->sendCommand($socket, 'STARTTLS', 220);
 
-        if (stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT) !== true) {
+        // The context's ssl options (verify_peer, verify_peer_name, peer_name)
+        // were set in connect() and apply to this handshake.
+        [$upgraded, $warnings] = self::collectWarnings(
+            fn() => stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)
+        );
+        if ($upgraded !== true) {
+            $reason = $warnings !== '' ? $warnings : 'unknown error';
             fclose($socket);
-            throw new \RuntimeException('STARTTLS handshake failed');
+            throw new \RuntimeException("STARTTLS handshake with {$this->host}:{$this->port} failed: {$reason}");
         }
 
         return $this->sendCommand($socket, 'EHLO ' . gethostname(), 250);
@@ -982,37 +1004,67 @@ class Messenger
 
     private function connect()
     {
-        $address = $this->host . ':' . $this->port;
+        $address = ($this->usesImplicitTls() ? 'ssl://' : 'tcp://') . $this->host . ':' . $this->port;
 
-        // Use SSL wrapper for port 465
-        if ($this->port === 465) {
-            $address = 'ssl://' . $address;
-        }
-
+        // ADR-0071 section 3: every TLS connection verifies the certificate
+        // against the runtime's trust store AND checks it names this host. There
+        // is no switch to turn it off. A private CA is trusted the PHP way:
+        // openssl.cafile in php.ini (or the SSL_CERT_FILE OpenSSL reads).
         $context = stream_context_create([
             'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-                'allow_self_signed' => true,
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+                'allow_self_signed' => false,
+                'peer_name' => $this->host,
+                'SNI_enabled' => true,
             ],
         ]);
 
-        $socket = @stream_socket_client(
+        $errno = 0;
+        $errstr = '';
+        [$socket, $warnings] = self::collectWarnings(fn() => stream_socket_client(
             $address,
             $errno,
             $errstr,
             $this->timeout,
             STREAM_CLIENT_CONNECT,
             $context
-        );
+        ));
 
         if ($socket === false) {
-            throw new \RuntimeException("Cannot connect to SMTP server {$address}: [{$errno}] {$errstr}");
+            // A failed TLS handshake leaves errno 0 and a vague errstr; the real
+            // reason ("certificate verify failed", a host-name mismatch) is in
+            // the OpenSSL warnings PHP raised on the way.
+            $reason = $warnings !== '' ? $warnings : ($errstr !== '' ? $errstr : 'unknown error');
+            throw new \RuntimeException("Cannot connect to SMTP server {$address}: [{$errno}] {$reason}");
         }
 
         stream_set_timeout($socket, $this->timeout);
 
         return $socket;
+    }
+
+    /**
+     * Run $operation and return [its result, every PHP warning it raised joined
+     * by "; "]. PHP reports a TLS failure as a chain of warnings (the OpenSSL
+     * reason first, then "Failed to enable crypto", then "Unable to connect"),
+     * and error_get_last() keeps only the last, least useful one.
+     *
+     * @return array{0: mixed, 1: string}
+     */
+    private static function collectWarnings(callable $operation): array
+    {
+        $warnings = [];
+        set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+            return true;
+        });
+        try {
+            $result = $operation();
+        } finally {
+            restore_error_handler();
+        }
+        return [$result, implode('; ', $warnings)];
     }
 
     /**
@@ -1302,9 +1354,20 @@ class Messenger
 
     /**
      * The imap_open connection flags for the resolved encryption mode:
-     *   tls (default) -> /imap/ssl (implicit TLS / IMAPS)
-     *   starttls      -> /imap/tls (negotiate STARTTLS)
-     *   none          -> /imap     (plain, no TLS)
+     *   tls / ssl     -> /imap/ssl          implicit TLS (IMAPS)
+     *   starttls      -> /imap/tls-sslv23   STARTTLS, required
+     *   none          -> /imap/notls        plaintext, never upgraded
+     *
+     * c-client verifies the certificate and the host name on every TLS
+     * connection unless /novalidate-cert is given, and Tina4 never gives it
+     * (ADR-0071 section 3). It trusts OpenSSL's default store, so a private CA
+     * is added with SSL_CERT_FILE. It matches the host name against the
+     * certificate's DNS names only: connect by name, not by IP address.
+     *
+     * /tls alone makes c-client negotiate STARTTLS with a TLSv1-only method
+     * that current servers refuse; /tls-sslv23 negotiates the highest version
+     * both sides support. Plain /imap would try STARTTLS whenever the server
+     * offered it, so 'none' says /notls.
      *
      * The port-aware default set in the constructor makes the no-explicit-value
      * case reproduce the historical port-based selection exactly.
@@ -1312,8 +1375,8 @@ class Messenger
     private function imapFlags(): string
     {
         return match ($this->imapEncryption) {
-            'starttls' => '/imap/tls',
-            'none'     => '/imap',
+            'starttls' => '/imap/tls-sslv23',
+            'none'     => '/imap/notls',
             default    => '/imap/ssl',
         };
     }

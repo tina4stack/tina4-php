@@ -1,0 +1,172 @@
+{
+  "_comment": [
+    "Database statement semantics. ADR-0065. Issues tina4-python #133 and #138,",
+    "fixed at parity in all four frameworks.",
+    "",
+    "Five rules, one fixture:",
+    "  1. WRITE DETECTION. A statement is a write when, after string literals,",
+    "     quoted identifiers and comments are scrubbed, its first word is INSERT,",
+    "     UPDATE, DELETE, MERGE, UPSERT or REPLACE, or it is a WITH whose body",
+    "     holds a DML verb. When unsure, it is a write: a read misread as a write",
+    "     only loses its pagination and cache for that one call.",
+    "  2. FETCH OF A WRITE. fetch() / fetch_one() of a write runs it exactly once,",
+    "     as written - no COUNT probe, no LIMIT / OFFSET / ROWS / TOP - is never",
+    "     served from or stored in the query cache (it flushes the cache, like",
+    "     execute()), and commits like execute() outside an explicit transaction.",
+    "  3. EXECUTE RETURNS ROWS. execute() of a statement that produces rows",
+    "     (SELECT, WITH ... SELECT, RETURNING, OUTPUT, CALL, EXEC) returns them in",
+    "     the same result type fetch() returns. A plain write keeps the return",
+    "     value it always had.",
+    "  4. PLACEHOLDER TRANSLATION. Only a ? in SQL code is a placeholder. A ? inside",
+    "     '...', E'...', $$...$$, $tag$...$tag$, \"...\", `...`, -- ... or /* ... */",
+    "     is text and is left alone.",
+    "  5. NO PARAMETERS, NO REWRITE. SQL with no parameters is sent exactly as",
+    "     written, so PostgreSQL's jsonb ?, ?| and ?& operators work. With",
+    "     parameters, use jsonb_exists(), jsonb_exists_any(), jsonb_exists_all().",
+    "     A literal % is doubled only for psycopg2 (Python) when parameters are",
+    "     passed, because only there does the driver read every %.",
+    "",
+    "THE VECTORS BELOW ARE DATA, NOT DOCUMENTATION. Each framework copies this",
+    "file byte-for-byte into its own test fixtures directory and its runner walks",
+    "write_detection_vectors and placeholder_vectors through the framework's own",
+    "function. A vector added here is a vector all four must answer identically.",
+    "",
+    "The translation primitive differs by framework, so every runner maps the",
+    "placeholders to the SAME numbered form (:1, :2, ...) before comparing:",
+    "  python  SQLTranslator.placeholder_style(sql, ':')",
+    "  php     SQLTranslator::placeholderStyle($sql, ':')",
+    "  ruby    Tina4::SQLTranslator.replace_placeholders(sql) { |i| \":#{i + 1}\" }",
+    "  nodejs  SQLTranslator.placeholderStyle(sql, ':')",
+    "The write detector is the one fetch() and the query cache already consult:",
+    "  python  DatabaseAdapter._is_write_statement(sql)",
+    "  php     Tina4\\Database\\SqlStatement::isWrite($sql)",
+    "  ruby    Tina4::Database.write_statement?(sql)",
+    "  nodejs  SQLTranslator.isWriteStatement(sql)",
+    "",
+    "Behaviour cases run against REAL engines, no mocks: SQLite for fetch-of-write",
+    "and execute rows (every framework ships it), PostgreSQL for the",
+    "no-parameters rule, SQL Server for OUTPUT and EXEC. Durability is read back on",
+    "a SECOND, fresh connection, never on the connection that did the write."
+  ],
+  "version": 1,
+  "decided": "2026-09-24",
+  "feature": "Database statement semantics (tina4-python #133, #138)",
+  "write_detection_vectors": [
+    {"sql": "INSERT INTO t (a) VALUES (1)", "write": true},
+    {"sql": "   insert into t (a) values (1)", "write": true},
+    {"sql": "UPDATE t SET a = 1 WHERE id = ?", "write": true},
+    {"sql": "DELETE FROM t WHERE id = ?", "write": true},
+    {"sql": "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET a = s.a", "write": true},
+    {"sql": "UPSERT INTO t (id, a) VALUES (1, 2)", "write": true},
+    {"sql": "REPLACE INTO t (id, a) VALUES (1, 2)", "write": true},
+    {"sql": "INSERT INTO t (a) VALUES (?) RETURNING id", "write": true},
+    {"sql": "WITH x AS (INSERT INTO t (a) VALUES (1) RETURNING id) SELECT id FROM x", "write": true},
+    {"sql": "WITH moved AS (DELETE FROM a RETURNING *) INSERT INTO b SELECT * FROM moved", "write": true},
+    {"sql": "WITH x AS (SELECT id FROM t) UPDATE t SET a = 1 WHERE id IN (SELECT id FROM x)", "write": true},
+    {"sql": "SELECT * FROM t", "write": false},
+    {"sql": "select a from t where b = ?", "write": false},
+    {"sql": "SELECT * FROM t WHERE note = 'DELETE'", "write": false},
+    {"sql": "SELECT \"insert\" FROM t", "write": false},
+    {"sql": "-- INSERT INTO t VALUES (1)\nSELECT 1", "write": false},
+    {"sql": "/* UPDATE t SET a = 1 */ SELECT 1", "write": false},
+    {"sql": "WITH x AS (SELECT 1 AS n) SELECT n FROM x", "write": false},
+    {"sql": "WITH x AS (SELECT 'UPDATE' AS s) SELECT s FROM x", "write": false},
+    {"sql": "SELECT create_user('a')", "write": false, "note": "known ceiling: only the SQL text is read, never a function body - wrap such a call in start_transaction() / commit()"}
+  ],
+  "placeholder_vectors": [
+    {"sql": "SELECT * FROM t WHERE a = ? AND b = ?", "numbered": "SELECT * FROM t WHERE a = :1 AND b = :2"},
+    {"sql": "SELECT 'why?', ? FROM t", "numbered": "SELECT 'why?', :1 FROM t"},
+    {"sql": "SELECT 'it''s ?', ? FROM t", "numbered": "SELECT 'it''s ?', :1 FROM t"},
+    {"sql": "SELECT E'a\\'?', ? FROM t", "numbered": "SELECT E'a\\'?', :1 FROM t"},
+    {"sql": "SELECT $$a ? b$$, ? FROM t", "numbered": "SELECT $$a ? b$$, :1 FROM t"},
+    {"sql": "SELECT $body$ ? $body$, ? FROM t", "numbered": "SELECT $body$ ? $body$, :1 FROM t"},
+    {"sql": "SELECT \"col?\" FROM t WHERE a = ?", "numbered": "SELECT \"col?\" FROM t WHERE a = :1"},
+    {"sql": "SELECT `col?` FROM t WHERE a = ?", "numbered": "SELECT `col?` FROM t WHERE a = :1"},
+    {"sql": "SELECT a -- why?\nFROM t WHERE b = ?", "numbered": "SELECT a -- why?\nFROM t WHERE b = :1"},
+    {"sql": "SELECT /* ? */ a FROM t WHERE b = ?", "numbered": "SELECT /* ? */ a FROM t WHERE b = :1"},
+    {"sql": "SELECT a FROM t WHERE b LIKE 'x%' AND c = ?", "numbered": "SELECT a FROM t WHERE b LIKE 'x%' AND c = :1"},
+    {"sql": "SELECT a FROM t", "numbered": "SELECT a FROM t"}
+  ],
+  "invariants": [
+    {
+      "id": "write-detection-is-one-shared-rule",
+      "adr": "ADR-0065",
+      "rule": "The write detector answers every write_detection_vectors entry with its 'write' value. A write is a statement whose first word, after literals, quoted identifiers and comments are scrubbed and leading whitespace and parentheses are dropped, is INSERT, UPDATE, DELETE, MERGE, UPSERT or REPLACE, or a WITH whose scrubbed body contains INSERT, UPDATE, DELETE or MERGE.",
+      "why": "fetch(), fetch_one() and the query cache all branch on this one answer. Four detectors that disagree on a single statement give four different commit, pagination and cache behaviours for the same SQL.",
+      "suites": {
+        "python": "tests/test_statement_semantics_contract.py",
+        "php": "tests/StatementSemanticsContractTest.php",
+        "ruby": "spec/statement_semantics_contract_spec.rb",
+        "nodejs": "test/statementSemanticsContract.test.ts"
+      },
+      "cases": [
+        "write detection answers every fixture vector"
+      ]
+    },
+    {
+      "id": "fetch-of-a-write-runs-once-and-commits",
+      "adr": "ADR-0065",
+      "rule": "fetch() and fetch_one() of INSERT ... RETURNING run the statement exactly once (one row lands), with no COUNT probe and no LIMIT / OFFSET appended, and commit it outside an explicit transaction, so a second, fresh connection sees the row. With the query cache on, the same fetched write run twice inserts two rows and a cached read taken before it is flushed.",
+      "why": "Issue #133: fetch() wrapped a write in a COUNT probe and a LIMIT, ran it twice on some engines, never committed it on others, and could hand back a cached id for a row that did not exist. The caller got an id for a row no other connection could see.",
+      "suites": {
+        "python": "tests/test_statement_semantics_contract.py",
+        "php": "tests/StatementSemanticsContractTest.php",
+        "ruby": "spec/statement_semantics_contract_spec.rb",
+        "nodejs": "test/statementSemanticsContract.test.ts"
+      },
+      "cases": [
+        "fetch of an insert returning runs once and commits",
+        "fetch one of an insert returning runs once and commits",
+        "a fetched write is never cached and flushes the cache"
+      ]
+    },
+    {
+      "id": "execute-returns-rows-when-the-statement-produces-them",
+      "adr": "ADR-0065",
+      "rule": "execute() of SELECT, WITH ... SELECT and INSERT ... RETURNING returns the same result type fetch() returns, carrying the rows. On SQL Server, execute() of INSERT ... OUTPUT inserted.id and of EXEC of a procedure that selects rows returns those rows. execute() of a plain INSERT with no RETURNING keeps the framework's existing plain-write return value.",
+      "why": "execute() used to return a bare success flag for a row-producing statement on some adapters, so the RETURNING id was silently thrown away and a SELECT through execute() answered 'true'.",
+      "suites": {
+        "python": "tests/test_statement_semantics_contract.py",
+        "php": "tests/StatementSemanticsContractTest.php",
+        "ruby": "spec/statement_semantics_contract_spec.rb",
+        "nodejs": "test/statementSemanticsContract.test.ts"
+      },
+      "cases": [
+        "execute returns rows for select with select and returning",
+        "execute of a plain write keeps its return value",
+        "execute returns rows for output and exec on sql server"
+      ]
+    },
+    {
+      "id": "only-a-placeholder-in-sql-code-is-translated",
+      "adr": "ADR-0065",
+      "rule": "Numbered placeholder translation answers every placeholder_vectors entry with its 'numbered' value: a ? inside '...', E'...' (backslash escapes), $$...$$, $tag$...$tag$, \"...\", `...`, -- comments and /* */ comments is left alone, and a literal % is never touched by the numbered form.",
+      "why": "Issue #138: translation was a plain text replace, so SELECT 'why?', ? gained a second placeholder and failed with an index error, and a ? in a comment or identifier shifted every later parameter by one.",
+      "suites": {
+        "python": "tests/test_statement_semantics_contract.py",
+        "php": "tests/StatementSemanticsContractTest.php",
+        "ruby": "spec/statement_semantics_contract_spec.rb",
+        "nodejs": "test/statementSemanticsContract.test.ts"
+      },
+      "cases": [
+        "placeholder translation answers every fixture vector"
+      ]
+    },
+    {
+      "id": "sql-with-no-parameters-is-sent-as-written",
+      "adr": "ADR-0065",
+      "rule": "Against a real PostgreSQL: fetch() with no parameters of SELECT '{\"a\":1}'::jsonb ? 'a', ?| array['a','z'] and ?& array['a'] returns true for all three, and SELECT 'a%' returns the two characters a%. With parameters, jsonb_exists('{\"a\":1}'::jsonb, ?) with ['a'] returns true and SELECT 'a%' || ? with ['b'] returns a%b.",
+      "why": "Issue #138 follow-up: SQL with no parameters was still run through the ? translator (turning jsonb ? into a placeholder) and through psycopg2's % doubling (turning a% into a%%). No parameters means nothing to bind, so nothing may be rewritten.",
+      "suites": {
+        "python": "tests/test_statement_semantics_contract.py",
+        "php": "tests/StatementSemanticsContractTest.php",
+        "ruby": "spec/statement_semantics_contract_spec.rb",
+        "nodejs": "test/statementSemanticsContract.test.ts"
+      },
+      "cases": [
+        "sql with no parameters is sent exactly as written on postgresql",
+        "jsonb exists functions and literal percent work with parameters on postgresql"
+      ]
+    }
+  ]
+}
