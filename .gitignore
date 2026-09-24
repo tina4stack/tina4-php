@@ -136,3 +136,8 @@ tmp/
 # Ignore it so it can never return; Database::create() already normalises the
 # documented "sqlite::memory:" URL to ":memory:" before the adapter sees it.
 /sqlite::memory:
+
+# Session files the router writes under the served app's data/ when a test
+# boots tests/fixtures/*_app.php with `php -S` (cwd = tests/fixtures).
+/tests/fixtures/data/sessions/
+/tests/fixtures/data/sessions-php/
