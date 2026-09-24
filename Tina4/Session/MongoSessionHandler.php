@@ -185,7 +185,7 @@ class MongoSessionHandler
     private function command(array $command): array
     {
         $this->requestId++;
-        $bsonCmd = $this->encodeBson($command);
+        $bsonCmd = \Tina4\MongoBson::encode($command);
 
         // OP_MSG body section: flagBits(4) + sectionKind(1) + BSON
         $sections = pack('V', 0)         // flagBits = 0
@@ -227,7 +227,7 @@ class MongoSessionHandler
 
         // OP_MSG: skip flagBits(4) + sectionKind(1), then BSON
         $bsonData = substr($payload, 5);
-        return $this->decodeBson($bsonData);
+        return \Tina4\MongoBson::decode($bsonData);
     }
 
     private function findOne(string $namespace, array $filter): ?array
@@ -273,154 +273,5 @@ class MongoSessionHandler
             ],
             '$db' => $parts[0],
         ]);
-    }
-
-    // ── Minimal BSON Encoder/Decoder ────────────────────────────
-
-    /**
-     * Encode a PHP array/object as BSON.
-     * Supports: string, int, float, bool, null, array (document/array).
-     */
-    private function encodeBson(array $doc): string
-    {
-        $body = '';
-
-        foreach ($doc as $key => $value) {
-            $body .= $this->encodeBsonElement((string)$key, $value);
-        }
-
-        $body .= "\x00"; // document terminator
-        return pack('V', strlen($body) + 4) . $body;
-    }
-
-    private function encodeBsonElement(string $key, mixed $value): string
-    {
-        $ckey = $key . "\x00";
-
-        if ($value === null) {
-            return "\x0A" . $ckey;
-        }
-
-        if (is_bool($value)) {
-            return "\x08" . $ckey . ($value ? "\x01" : "\x00");
-        }
-
-        if (is_int($value)) {
-            if ($value >= -2147483648 && $value <= 2147483647) {
-                return "\x10" . $ckey . pack('V', $value); // int32
-            }
-            return "\x12" . $ckey . pack('P', $value); // int64
-        }
-
-        if (is_float($value)) {
-            return "\x01" . $ckey . pack('e', $value); // double
-        }
-
-        if (is_string($value)) {
-            return "\x02" . $ckey . pack('V', strlen($value) + 1) . $value . "\x00";
-        }
-
-        if (is_array($value)) {
-            // Check if it's a sequential array or associative
-            if (array_is_list($value)) {
-                // BSON array
-                $indexed = [];
-                foreach ($value as $i => $v) {
-                    $indexed[(string)$i] = $v;
-                }
-                $encoded = $this->encodeBson($indexed);
-                return "\x04" . $ckey . $encoded;
-            }
-
-            // BSON document
-            $encoded = $this->encodeBson($value);
-            return "\x03" . $ckey . $encoded;
-        }
-
-        // Fallback: convert to string
-        $s = (string)$value;
-        return "\x02" . $ckey . pack('V', strlen($s) + 1) . $s . "\x00";
-    }
-
-    /**
-     * Decode BSON into a PHP array.
-     */
-    private function decodeBson(string $data): array
-    {
-        $pos = 0;
-        return $this->decodeBsonDocument($data, $pos);
-    }
-
-    private function decodeBsonDocument(string $data, int &$pos): array
-    {
-        $docLen = unpack('V', substr($data, $pos, 4))[1];
-        $pos += 4;
-        $end = $pos + $docLen - 5; // -4 for length, -1 for terminator
-
-        $doc = [];
-        while ($pos < $end) {
-            $type = ord($data[$pos]);
-            $pos++;
-
-            // Read C-string key
-            $keyEnd = strpos($data, "\x00", $pos);
-            $key = substr($data, $pos, $keyEnd - $pos);
-            $pos = $keyEnd + 1;
-
-            $doc[$key] = $this->decodeBsonValue($data, $pos, $type);
-        }
-
-        $pos++; // skip terminator byte
-
-        return $doc;
-    }
-
-    private function decodeBsonValue(string $data, int &$pos, int $type): mixed
-    {
-        switch ($type) {
-            case 0x01: // double
-                $val = unpack('e', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-
-            case 0x02: // string
-                $len = unpack('V', substr($data, $pos, 4))[1];
-                $pos += 4;
-                $val = substr($data, $pos, $len - 1);
-                $pos += $len;
-                return $val;
-
-            case 0x03: // document
-                return $this->decodeBsonDocument($data, $pos);
-
-            case 0x04: // array
-                return array_values($this->decodeBsonDocument($data, $pos));
-
-            case 0x08: // boolean
-                $val = ord($data[$pos]) !== 0;
-                $pos++;
-                return $val;
-
-            case 0x0A: // null
-                return null;
-
-            case 0x10: // int32
-                $val = unpack('V', substr($data, $pos, 4))[1];
-                $pos += 4;
-                // Handle signed int32
-                if ($val >= 2147483648) {
-                    $val -= 4294967296;
-                }
-                return $val;
-
-            case 0x12: // int64
-                $val = unpack('P', substr($data, $pos, 8))[1];
-                $pos += 8;
-                return $val;
-
-            default:
-                // Skip unknown types by returning null
-                return null;
-        }
     }
 }
