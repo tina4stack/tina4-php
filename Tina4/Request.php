@@ -187,8 +187,11 @@ class Request
         }
         $this->cookies = $parsedCookies;
 
-        // Check upload size limit (default 10 MB)
-        $maxUploadSize = (int)($_ENV['TINA4_MAX_UPLOAD_SIZE'] ?? getenv('TINA4_MAX_UPLOAD_SIZE') ?: 10485760);
+        // Check upload size limit (default 10 MB). A value that is not a
+        // positive whole number uses the default (ADR-0068): the (int) cast
+        // used to turn "abc" into 0, which refused every request with a body.
+        $rawUploadLimit = trim((string)($_ENV['TINA4_MAX_UPLOAD_SIZE'] ?? getenv('TINA4_MAX_UPLOAD_SIZE') ?: ''));
+        $maxUploadSize = ctype_digit($rawUploadLimit) && (int)$rawUploadLimit > 0 ? (int)$rawUploadLimit : 10485760;
         $contentLength = (int)($this->headers['content-length'] ?? 0);
         if ($contentLength > $maxUploadSize) {
             http_response_code(413);
