@@ -218,8 +218,13 @@ class AutoCrud
                 }
             }
 
-            if (!empty($filter)) {
-                $models = $model->find($filter, $limit, $offset, $orderBy);
+            // Both branches query through $model, which carries the connection
+            // this AutoCrud was constructed with - the static find() would
+            // resolve the GLOBAL default instead. The filter columns were
+            // resolved above, so only they and placeholders reach the WHERE.
+            if ($filter !== []) {
+                $conditions = implode(' AND ', array_map(static fn (string $column): string => "{$column} = ?", array_keys($filter)));
+                $models = $model->where($conditions, array_values($filter), $limit, $offset, null, $orderBy);
             } else {
                 $models = $model->all($limit, $offset, null, $orderBy);
             }

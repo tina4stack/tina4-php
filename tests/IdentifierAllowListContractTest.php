@@ -10,7 +10,11 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\Database\Database;
 use Tina4\Database\DatabaseAdapter;
+use Tina4\AutoCrud;
 use Tina4\ORM;
+use Tina4\Request;
+use Tina4\Response;
+use Tina4\Router;
 use function Tina4\getCollection;
 use function Tina4\resetDefaultStore;
 
@@ -21,7 +25,8 @@ use function Tina4\resetDefaultStore;
  * Shared case names (verbatim across the four frameworks, gated by the contract
  * fixture auditor):
  *   AutoCrud  - unknown_filter_field_returns_400, unknown_sort_field_returns_400,
- *               declared_filter_and_sort_still_work, odd_typed_query_values_return_400
+ *               declared_filter_and_sort_still_work, odd_typed_query_values_return_400,
+ *               autocrud_list_uses_the_registered_connection
  *   ORM       - orm_find_rejects_undeclared_filter_key (SQLite, PostgreSQL, MySQL,
  *               MSSQL, Firebird)
  *   DocStore  - docstore_rejects_unsafe_field_path, docstore_accepts_safe_field_paths,
@@ -56,6 +61,15 @@ class AllowListOrmDynamic extends ORM
     public string $tableName = 'ala_php_item';
     public string $primaryKey = 'id';
     public DatabaseAdapter|string|null $_db = 'identifier_allow_list';
+}
+
+/** A declared model registered with a NON-global connection (autocrud_list_uses_the_registered_connection). */
+class AllowListConnItem extends ORM
+{
+    public string $tableName = 'allow_list_conn';
+    public string $primaryKey = 'id';
+    public int $id = 0;
+    public ?string $name = null;
 }
 
 final class IdentifierAllowListContractTest extends TestCase
@@ -216,6 +230,53 @@ final class IdentifierAllowListContractTest extends TestCase
 
         // the plain forms still work
         $this->assertSame([1], $this->listIds('/api/allow_list_item?filter[name]=alpha&sort=name'));
+    }
+
+    // ── AutoCrud uses the connection it was constructed with ────────────────
+
+    public function testAutocrudListUsesTheRegisteredConnection(): void
+    {
+        $globalPath = sys_get_temp_dir() . '/ala_global_' . bin2hex(random_bytes(5)) . '.db';
+        $registeredPath = sys_get_temp_dir() . '/ala_registered_' . bin2hex(random_bytes(5)) . '.db';
+        $global = Database::create('sqlite:///' . $globalPath);
+        $registered = Database::create('sqlite:///' . $registeredPath);
+        foreach ([$global, $registered] as $db) {
+            $db->execute('CREATE TABLE allow_list_conn (id INTEGER PRIMARY KEY, name TEXT)');
+        }
+        $global->execute("INSERT INTO allow_list_conn (id, name) VALUES (1, 'global-row')");
+        $registered->execute("INSERT INTO allow_list_conn (id, name) VALUES (7, 'registered-row')");
+        $registered->execute("INSERT INTO allow_list_conn (id, name) VALUES (8, 'other-row')");
+
+        $globalProperty = new \ReflectionProperty(ORM::class, '_globalDb');
+        $previousGlobal = $globalProperty->getValue();
+        ORM::bindDatabase($global);
+        Router::clear();
+        try {
+            $crud = new AutoCrud($registered);
+            $crud->register(AllowListConnItem::class);
+            $crud->generateRoutes();
+
+            $ids = static function (array $query): array {
+                $response = Router::dispatch(
+                    Request::create(method: 'GET', path: '/api/allow_list_conn', query: $query),
+                    new Response(testing: true),
+                );
+                return array_map(static fn (array $record): int => (int)$record['id'], $response->getJsonBody()['records']);
+            };
+
+            // filtered, sorted and unfiltered lists all read the REGISTERED database
+            $this->assertSame([7], $ids(['filter' => ['name' => 'registered-row']]));
+            $this->assertSame([8, 7], $ids(['sort' => '-id']));
+            $this->assertSame([7, 8], $ids([]));
+            $this->assertSame([], $ids(['filter' => ['name' => 'global-row']]));
+        } finally {
+            Router::clear();
+            $globalProperty->setValue(null, $previousGlobal);
+            $global->close();
+            $registered->close();
+            @unlink($globalPath);
+            @unlink($registeredPath);
+        }
     }
 
     // ── ORM::find(filter-map) on every engine ───────────────────────────────
