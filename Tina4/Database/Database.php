@@ -881,6 +881,17 @@ class Database implements DatabaseAdapter
      */
     public function delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
     {
+        // A list of filter maps deletes each listed row (the batch form the
+        // adapters already accept).
+        if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+            $affected = 0;
+            foreach ($filter as $rowFilter) {
+                $affected += $this->delete($table, $rowFilter)->affectedRows;
+            }
+            $this->affectedRows = $affected;
+            return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: $affected, lastId: null, error: null);
+        }
+
         [$filterSql, $whereParams] = $this->asWhere($filter, $whereParams);
         if ($filterSql === '') {
             throw new DatabaseException(sprintf(
