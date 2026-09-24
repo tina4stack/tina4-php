@@ -25,7 +25,7 @@ use Tina4\Session;
 
 class RouterAuthSourcesTest extends TestCase
 {
-    private string $secret = 'test-auth-sources-secret';
+    private string $secret = 'test-auth-sources-secret-0123456';
 
     protected function setUp(): void
     {

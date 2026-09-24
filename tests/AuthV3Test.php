@@ -11,7 +11,7 @@ use Tina4\Auth;
 
 class AuthV3Test extends TestCase
 {
-    private string $secret = 'test-secret-key-for-jwt';
+    private string $secret = 'test-secret-key-for-jwt-01234567';
 
     protected function setUp(): void
     {
@@ -39,7 +39,7 @@ class AuthV3Test extends TestCase
     {
         // Simulate a CI runner where $_ENV['TINA4_SECRET'] was set by .env load
         // (or a prior test) and a runtime putenv() then overrides it.
-        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value';
+        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value-0123';
         putenv('TINA4_SECRET=runtime-override-value');
 
         // Sign with no-arg getToken (resolves from env) and verify the same way
@@ -55,7 +55,7 @@ class AuthV3Test extends TestCase
         // SmokeTest pattern: getToken receives an explicit secret AND
         // putenv() is set to the same value. validToken (no arg) must
         // resolve to the runtime putenv() value, not a stale $_ENV.
-        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value';
+        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value-0123';
         putenv('TINA4_SECRET=explicit-runtime-secret');
 
         $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret');
@@ -68,7 +68,7 @@ class AuthV3Test extends TestCase
     {
         // Direct probe: getenv and $_ENV disagree. The token is signed with
         // the getenv value; validation must accept it.
-        $_ENV['TINA4_SECRET'] = 'env-superglobal-value';
+        $_ENV['TINA4_SECRET'] = 'env-superglobal-value-0123456789';
         putenv('TINA4_SECRET=getenv-value');
 
         $token = Auth::getToken(['sub' => 'tester'], 'getenv-value');
@@ -164,7 +164,7 @@ class AuthV3Test extends TestCase
     {
         // Generate token with correct secret, then switch env to wrong secret for validation
         $token = Auth::getToken(['sub' => '123']);
-        $_ENV['TINA4_SECRET'] = 'wrong-secret';
+        $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
         $result = Auth::validToken($token);
         $_ENV['TINA4_SECRET'] = $this->secret;
 

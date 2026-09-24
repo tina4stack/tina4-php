@@ -47,7 +47,7 @@ use Tina4\MqttError;
 
 class AuthRs256OptInTest extends TestCase
 {
-    private const SECRET = 'rs256-optin-regression-secret';
+    private const SECRET = 'rs256-optin-regression-secret-01';
 
     /** The ini that genuinely removes every openssl function RS256 calls. */
     private const NO_RSA_FUNCTIONS =

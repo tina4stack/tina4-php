@@ -28,7 +28,7 @@ use Tina4\ServiceRunner;
 
 class CLIScaffoldingSecureTest extends TestCase
 {
-    private const SECRET = 'scaffold-test-secret';
+    private const SECRET = 'scaffold-test-secret-0123456789a';
     private static string $bin;
     private string $origCwd;
     private string $tempDir;

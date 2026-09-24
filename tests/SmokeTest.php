@@ -285,7 +285,7 @@ class SmokeTest extends TestCase
 
     public function testAuthJwtAndPasswordHash(): void
     {
-        $secret = 'smoke-test-secret-key';
+        $secret = 'smoke-test-secret-key-0123456789';
         $_ENV['TINA4_SECRET'] = $secret;
 
         // Create token (expiresIn is in MINUTES — parity with Python/Ruby)
@@ -304,7 +304,7 @@ class SmokeTest extends TestCase
         $this->assertNull(Auth::validToken($expired));
 
         // Wrong secret rejected
-        $_ENV['TINA4_SECRET'] = 'wrong-secret';
+        $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
         $this->assertNull(Auth::validToken($token));
         $_ENV['TINA4_SECRET'] = $secret;
 
@@ -956,7 +956,7 @@ class SmokeTest extends TestCase
     public function testRouterSecureRouteWithBearerAllowed(): void
     {
         Router::clear();
-        $secret = 'smoke-test-secret';
+        $secret = 'smoke-test-secret-0123456789abcd';
         putenv("TINA4_SECRET={$secret}");
         Router::get('/smoke/secret', fn(Request $req, Response $res) =>
             $res->json(['secret' => 'data'])
@@ -1323,7 +1323,7 @@ class SmokeTest extends TestCase
 
     public function testAuthGetPayloadWithoutVerification(): void
     {
-        $secret = 'test-secret';
+        $secret = 'test-secret-0123456789abcdef0123';
         $_ENV['TINA4_SECRET'] = $secret;
         $token = Auth::getToken(['user' => 'bob']);
         $payload = Auth::getPayload($token);
@@ -1341,7 +1341,7 @@ class SmokeTest extends TestCase
 
     public function testAuthRefreshToken(): void
     {
-        $secret = 'refresh-secret';
+        $secret = 'refresh-secret-0123456789abcdef0';
         $_ENV['TINA4_SECRET'] = $secret;
         // expiresIn is in MINUTES (parity with Python/Ruby)
         $token = Auth::getToken(['sub' => 'user-1'], expiresIn: 60);
@@ -1357,13 +1357,13 @@ class SmokeTest extends TestCase
 
     public function testAuthRefreshTokenInvalid(): void
     {
-        $_ENV['TINA4_SECRET'] = 'some-secret';
+        $_ENV['TINA4_SECRET'] = 'some-secret-0123456789abcdef0123';
         $this->assertNull(Auth::refreshToken('invalid'));
     }
 
     public function testAuthAuthenticateRequest(): void
     {
-        $secret = 'auth-secret';
+        $secret = 'auth-secret-0123456789abcdef0123';
         $_ENV['TINA4_SECRET'] = $secret;
         $token = Auth::getToken(['role' => 'admin']);
 
@@ -1377,7 +1377,7 @@ class SmokeTest extends TestCase
 
     public function testAuthAuthenticateRequestNoBearer(): void
     {
-        $_ENV['TINA4_SECRET'] = 'some-secret';
+        $_ENV['TINA4_SECRET'] = 'some-secret-0123456789abcdef0123';
         $this->assertNull(Auth::authenticateRequest([]));
     }
 
@@ -1390,7 +1390,7 @@ class SmokeTest extends TestCase
 
     public function testAuthMiddleware(): void
     {
-        $secret = 'mw-secret';
+        $secret = 'mw-secret-0123456789abcdef012345';
         $_ENV['TINA4_SECRET'] = $secret;
         $mw = Auth::middleware();
         $this->assertIsCallable($mw);
@@ -1409,7 +1409,7 @@ class SmokeTest extends TestCase
 
     public function testAuthMiddlewareNoToken(): void
     {
-        $_ENV['TINA4_SECRET'] = 'some-secret';
+        $_ENV['TINA4_SECRET'] = 'some-secret-0123456789abcdef0123';
         $mw = Auth::middleware();
         $req = Request::create(method: 'GET', path: '/api');
         $this->assertNull($mw($req));

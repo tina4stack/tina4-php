@@ -22,7 +22,7 @@ use Tina4\Router;
 
 class RouterAuthPayloadTest extends TestCase
 {
-    private string $secret = 'test-router-auth-secret';
+    private string $secret = 'test-router-auth-secret-01234567';
 
     protected function setUp(): void
     {

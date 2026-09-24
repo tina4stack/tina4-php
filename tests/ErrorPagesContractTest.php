@@ -71,7 +71,7 @@ class ErrorPagesContractTest extends TestCase
         Router::clear();
         Middleware::reset();
         putenv('TINA4_SECRET=error-pages-feature-42-secret');
-        $_ENV['TINA4_SECRET'] = 'error-pages-feature-42-secret';
+        $_ENV['TINA4_SECRET'] = 'error-pages-feature-42-secret-01';
         putenv('TINA4_DEBUG');
         unset($_ENV['TINA4_DEBUG'], $_SERVER['TINA4_DEBUG']);
         // A fresh Frond singleton pointed at the real src/templates - undoes any

@@ -36,7 +36,7 @@ class TestClientFrontControllerTest extends TestCase
     {
         Router::clear();
         putenv('TINA4_SECRET=d6-front-controller-secret');
-        $_ENV['TINA4_SECRET'] = 'd6-front-controller-secret';
+        $_ENV['TINA4_SECRET'] = 'd6-front-controller-secret-01234';
         Router::get('/d6-open', function ($request, $response) {
             return $response(['ok' => true]);
         });

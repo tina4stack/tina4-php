@@ -36,7 +36,7 @@ class RequestIdTest extends TestCase
     {
         Router::clear();
         putenv('TINA4_SECRET=rid-feature-43-secret');
-        $_ENV['TINA4_SECRET'] = 'rid-feature-43-secret';
+        $_ENV['TINA4_SECRET'] = 'rid-feature-43-secret-0123456789';
 
         // Write logs to a throwaway dir so the correlation case can read a REAL
         // file the framework wrote (TINA4_DEBUG truthy => the file sink is on).

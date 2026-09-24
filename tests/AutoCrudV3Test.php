@@ -27,7 +27,7 @@ class CrudItem extends ORM
 class AutoCrudV3Test extends TestCase
 {
     private SQLite3Adapter $db;
-    private string $secret = 'autocrud-test-secret';
+    private string $secret = 'autocrud-test-secret-0123456789a';
 
     protected function setUp(): void
     {

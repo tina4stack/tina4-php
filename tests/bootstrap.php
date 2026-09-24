@@ -79,6 +79,14 @@ if (!defined('TINA4_LOG_CRITICAL')) {
 
 require __DIR__ . '/../vendor/autoload.php';
 
+// A usable signing secret for the suite (ADR-0079 s2). Auth refuses to sign
+// with a blank or short TINA4_SECRET and App::start() refuses one outside dev.
+// A test that needs a blank secret unsets it itself.
+if (strlen((string)(getenv('TINA4_SECRET') ?: '')) < 32) {
+    putenv('TINA4_SECRET=tina4-php-test-suite-secret-0123456789abcdef');
+    $_ENV['TINA4_SECRET'] = 'tina4-php-test-suite-secret-0123456789abcdef';
+}
+
 // Shared test helpers (plain helpers, not mocks). Loaded here so every test
 // file can use them without a per-file require — e.g. PgTestEnv resolves the
 // live PostgreSQL host/port from TINA4_TEST_PG_URL, and AppTestSupport

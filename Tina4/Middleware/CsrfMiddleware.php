@@ -97,7 +97,9 @@ class CsrfMiddleware
             ?? '';
         if (str_starts_with($authHeader, 'Bearer ')) {
             $bearerToken = trim(substr($authHeader, 7));
-            if ($bearerToken !== '' && Auth::validToken($bearerToken, $secret)) {
+            // Only an IDENTITY token marks an API client; a form token in the
+            // Bearer slot is not one and does not skip the check (ADR-0079 s1).
+            if ($bearerToken !== '' && Auth::isIdentityPayload(Auth::validToken($bearerToken, $secret))) {
                 return [$request, $response];
             }
         }

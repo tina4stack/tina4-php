@@ -510,6 +510,11 @@ class App
         // See self::LEGACY_ENV_VARS / self::checkLegacyEnvVars().
         self::checkLegacyEnvVars();
 
+        // Refuse to serve with a secret anyone can reproduce: blank outside
+        // dev, or set but shorter than 32 bytes in any mode (ADR-0079 s2).
+        // Throws the actionable message naming TINA4_SECRET.
+        Auth::requireBootSecret();
+
         $this->running = true;
 
         // In debug mode, wipe opcache on server boot so stale bytecode
@@ -1548,6 +1553,9 @@ HTML;
                 body: $request['body'] ?? '',
                 query: $request['query'] ?? [],
                 ip: $request['ip'] ?? '127.0.0.1',
+                // An array request is synthetic: its peer is whatever the caller
+                // states, and unknown ('') when it states nothing (ADR-0079 s4).
+                remoteIp: (string)($request['remote_ip'] ?? ''),
             );
         } elseif (is_object($request) && property_exists($request, 'server') && method_exists($request, 'rawContent')) {
             // Swoole / OpenSwoole \Swoole\Http\Request.
@@ -1580,6 +1588,10 @@ HTML;
                 body: $request->rawContent() ?: '',
                 query: $request->get ?? [],
                 ip: $request->server['remote_addr'] ?? '127.0.0.1',
+                // The worker's real socket peer. A Swoole worker runs under the
+                // CLI SAPI, where $_SERVER['REMOTE_ADDR'] is never set, so without
+                // this the peer read as '' (ADR-0079 s4).
+                remoteIp: (string)($request->server['remote_addr'] ?? ''),
             );
         } elseif (is_object($request) && method_exists($request, 'getUri') && method_exists($request, 'getMethod')) {
             // PSR-7 ServerRequestInterface. Probed structurally rather than with
@@ -1592,6 +1604,8 @@ HTML;
                 body: (string) $request->getBody(),
                 query: $request->getQueryParams(),
                 ip: $request->getServerParams()['REMOTE_ADDR'] ?? '127.0.0.1',
+                // The PSR-7 runtime's socket peer (RoadRunner, FrankenPHP worker).
+                remoteIp: (string)($request->getServerParams()['REMOTE_ADDR'] ?? ''),
             );
         } else {
             // Read from PHP globals (php -S, PHP-FPM, Apache)
