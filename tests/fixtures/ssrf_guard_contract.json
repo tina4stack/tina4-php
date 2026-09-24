@@ -1,0 +1,118 @@
+{
+  "_comment": [
+    "SSRF guard for outbound HTTP (ADR-0084). Feature F7.",
+    "",
+    "The Api client and Web Push refuse, by default, to connect to a private or",
+    "internal address. Before each connection - the initial URL AND every redirect",
+    "hop the Api client follows - the host is resolved to its IP address(es) and the",
+    "request is refused if ANY resolved address is loopback, private, link-local",
+    "(including the cloud metadata address 169.254.169.254), unspecified or CGNAT.",
+    "A non-http(s) scheme is refused. The operator opt-out is TINA4_ALLOW_PRIVATE_REQUESTS",
+    "(truthy = allow), off by default, with the same truthiness in all four frameworks;",
+    "an app may also pass an explicit allow-list of hosts / host:port / CIDRs.",
+    "",
+    "The guard does NOT apply to the built-in dev/test servers that bind 0.0.0.0",
+    "(that is inbound), only to the outbound Api client and Web Push.",
+    "",
+    "Residual TOCTOU: the guard resolves-then-connects; the language HTTP clients",
+    "re-resolve on connect, so a validated public address could in theory be rebound",
+    "to a private one in the window between the two lookups. It is narrowed by",
+    "blocking when ANY resolved address is private and by re-validating on every",
+    "redirect hop; it is not fully closed because none of the four stock HTTP clients",
+    "lets Tina4 pin the exact validated IP for the socket while keeping TLS SNI and",
+    "the Host header. See ADR-0084.",
+    "",
+    "addresses[]: each is fed to the real classifier. blocked=true means the guard",
+    "must refuse it by default. category is documentation only.",
+    "truthy_opt_out[]: values that, trimmed and lower-cased, turn TINA4_ALLOW_PRIVATE_REQUESTS on.",
+    "",
+    "Shared suite names: Python tests/test_ssrf_guard_contract.py, PHP",
+    "tests/SsrfGuardContractTest.php, Ruby spec/ssrf_guard_contract_spec.rb, Node",
+    "test/ssrfGuardContract.test.ts. Each keeps a copy of this file under its own",
+    "fixtures dir and drives the real classifier + a real loopback listener - no mocks."
+  ],
+  "version": 1,
+  "decided": "2026-09-24",
+  "adr": "ADR-0084",
+  "feature": "F7 - outbound SSRF guard for the Api client and Web Push",
+  "opt_out_env": "TINA4_ALLOW_PRIVATE_REQUESTS",
+  "truthy_opt_out": ["1", "true", "yes", "on"],
+  "error_message_contains": ["TINA4_ALLOW_PRIVATE_REQUESTS"],
+  "addresses": [
+    { "ip": "127.0.0.1", "blocked": true, "category": "loopback" },
+    { "ip": "127.1.2.3", "blocked": true, "category": "loopback" },
+    { "ip": "10.0.0.1", "blocked": true, "category": "private-10/8" },
+    { "ip": "10.255.255.255", "blocked": true, "category": "private-10/8" },
+    { "ip": "172.16.0.1", "blocked": true, "category": "private-172.16/12" },
+    { "ip": "172.31.255.255", "blocked": true, "category": "private-172.16/12" },
+    { "ip": "192.168.1.1", "blocked": true, "category": "private-192.168/16" },
+    { "ip": "169.254.1.1", "blocked": true, "category": "link-local" },
+    { "ip": "169.254.169.254", "blocked": true, "category": "cloud-metadata" },
+    { "ip": "100.64.0.1", "blocked": true, "category": "cgnat-100.64/10" },
+    { "ip": "100.127.255.255", "blocked": true, "category": "cgnat-100.64/10" },
+    { "ip": "0.0.0.0", "blocked": true, "category": "unspecified" },
+    { "ip": "::1", "blocked": true, "category": "loopback-v6" },
+    { "ip": "::", "blocked": true, "category": "unspecified-v6" },
+    { "ip": "fc00::1", "blocked": true, "category": "unique-local-fc00/7" },
+    { "ip": "fd00::1", "blocked": true, "category": "unique-local-fc00/7" },
+    { "ip": "fe80::1", "blocked": true, "category": "link-local-v6" },
+    { "ip": "::ffff:127.0.0.1", "blocked": true, "category": "v4-mapped-loopback" },
+    { "ip": "::ffff:10.0.0.1", "blocked": true, "category": "v4-mapped-private" },
+    { "ip": "8.8.8.8", "blocked": false, "category": "public" },
+    { "ip": "1.1.1.1", "blocked": false, "category": "public" },
+    { "ip": "172.32.0.1", "blocked": false, "category": "public-outside-172.16/12" },
+    { "ip": "100.63.255.255", "blocked": false, "category": "public-below-cgnat" },
+    { "ip": "100.128.0.0", "blocked": false, "category": "public-above-cgnat" },
+    { "ip": "2606:4700:4700::1111", "blocked": false, "category": "public-v6" }
+  ],
+  "schemes": [
+    { "scheme": "http", "allowed": true },
+    { "scheme": "https", "allowed": true },
+    { "scheme": "ftp", "allowed": false },
+    { "scheme": "file", "allowed": false },
+    { "scheme": "gopher", "allowed": false }
+  ],
+  "redirect_hops": [
+    {
+      "name": "public-listener-302s-to-metadata",
+      "hop_target": "http://169.254.169.254/latest/meta-data/",
+      "blocked_at_hop": true,
+      "note": "the initial loopback listener is reached via an explicit allow-list entry; the 302 target is not on the allow-list and is refused at the hop"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "SSRF-CLASSIFY",
+      "rule": "The address classifier refuses loopback, private (10/8, 172.16/12, 192.168/16, fc00::/7), link-local (169.254/16, fe80::/10) including 169.254.169.254, unspecified (0.0.0.0, ::) and CGNAT (100.64/10), including IPv4-mapped IPv6; it allows public addresses. A non-http(s) scheme is refused.",
+      "cases": [
+        "blocks loopback by default",
+        "blocks cloud metadata address",
+        "blocks private and cgnat ranges",
+        "allows a public address",
+        "rejects a non http scheme"
+      ],
+      "suites": {
+        "python": "tests/test_ssrf_guard_contract.py",
+        "php": "tests/SsrfGuardContractTest.php",
+        "ruby": "spec/ssrf_guard_contract_spec.rb",
+        "nodejs": "test/ssrfGuardContract.test.ts"
+      }
+    },
+    {
+      "id": "SSRF-REQUEST",
+      "rule": "By default the Api client refuses a request to a private/internal address and refuses a redirect hop to one; with TINA4_ALLOW_PRIVATE_REQUESTS truthy the same requests succeed; the block error names the opt-out env var. Web Push refuses a private endpoint unless opted in.",
+      "cases": [
+        "api blocks request to loopback by default",
+        "api allows request with opt out",
+        "api blocks redirect hop to private",
+        "web push blocked to private endpoint unless opted in"
+      ],
+      "suites": {
+        "python": "tests/test_ssrf_guard_contract.py",
+        "php": "tests/SsrfGuardContractTest.php",
+        "ruby": "spec/ssrf_guard_contract_spec.rb",
+        "nodejs": "test/ssrfGuardContract.test.ts"
+      }
+    }
+  ]
+}
