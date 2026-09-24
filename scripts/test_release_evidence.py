@@ -27,6 +27,20 @@ class ReleaseEvidenceTests(unittest.TestCase):
     def emit(self):
         generate(self.root, self.output, 'example', '1.0.0', 'MIT', 'example/project')
 
+    def test_bundled_browser_bytes_must_match_reviewed_provenance(self):
+        (self.output / 'example-1.0.0.tgz').write_bytes(b'package bytes')
+        public = self.root / 'src/public'
+        public.mkdir(parents=True)
+        asset = public / 'browser.js'
+        asset.write_bytes(b'approved browser build')
+        (public / 'bundled-component-provenance.json').write_text(json.dumps({'assets': [
+            {'path': 'browser.js', 'sha256': hashlib.sha256(asset.read_bytes()).hexdigest()}
+        ]}))
+        self.emit()
+        asset.write_bytes(b'older unreviewed browser build')
+        with self.assertRaisesRegex(ValueError, 'Bundled asset differs'):
+            self.emit()
+
     def test_empty_release_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'No built release artifacts'):
             self.emit()

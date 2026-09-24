@@ -74,7 +74,22 @@ def locked_components(root):
                 yield 'gem', match[1], version, 'NOASSERTION', platform
 
 
+def verify_bundled_assets(root):
+    for relative in ('tina4_python/public', 'src/public', 'lib/tina4/public', 'packages/core/public'):
+        public = root / relative
+        record = public / 'bundled-component-provenance.json'
+        if not record.exists():
+            continue
+        for asset in json.loads(record.read_text())['assets']:
+            path = public / asset['path']
+            if not path.resolve().is_relative_to(public.resolve()) or not path.is_file():
+                raise ValueError('Unsafe or missing bundled asset: ' + asset['path'])
+            if digest(path) != asset['sha256']:
+                raise ValueError('Bundled asset differs from reviewed source: ' + asset['path'])
+
+
 def generate(root, output, name, version, licence, repository):
+    verify_bundled_assets(root)
     artifacts = sorted(p for p in output.iterdir() if p.is_file() and p.name not in {'SHA256SUMS', 'sbom.spdx.json', '.gitignore'})
     if not artifacts:
         raise ValueError('No built release artifacts; refusing an empty SBOM')

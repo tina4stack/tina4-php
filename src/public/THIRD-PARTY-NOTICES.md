@@ -1,8 +1,8 @@
 # Bundled browser component notices
 
 These components retain their stated licences; the repository's MPL-2.0 licence
-for first-party source does not replace these grants. Generated browser files are
-preserved unchanged by the licence migration.
+for first-party source does not replace these grants. The standalone Tina4 JS bundle is updated as noted below; other generated browser
+files are preserved unchanged by the licence migration.
 
 ## Swagger UI — Apache-2.0
 
@@ -31,15 +31,15 @@ https://github.com/tina4stack/tina4-css/tree/fab8e670b0c84c44b6e4c657aa87951bbed
 The other CSS/legacy helper files are earlier generated snapshots; this reference
 does not claim they match that revision byte-for-byte.
 
-## Tina4 JS bundled prior release — MIT
+## Tina4 JS 1.7.2 — MPL-2.0
 
-`js/tina4js.min.js` is the rebuilt Tina4 JS 1.5.4 bundle. The original published
-package declares MIT: https://registry.npmjs.org/tina4js/1.5.4 . Its package README
-also declares MIT. The local build differs from that npm minified artifact only
-by parentheses around two arrow callbacks. The import is recorded at:
-https://github.com/tina4stack/tina4-python/commit/2c764bfd445f9de7f862286e72c08e03f9603b0f
-The retained MIT grant is in `licenses/tina4-js-MIT.txt`; this prior browser bundle
-has not been relabelled MPL-2.0.
+`js/tina4js.min.js` is the verified browser build from Tina4 JS 1.7.2,
+including the rendering and request-origin security corrections. Source:
+https://github.com/tina4stack/tina4-js/tree/bb426862b062db0dd6d89577cae997efcba86116
+Copyright (c) 2026 Code Infinity. The full licence and source-disclosure notice
+are included in the package's LICENSE and NOTICE. Previously published Tina4 JS
+releases retain their original licences; the retained MIT text is also used by
+the dashboard's conservative dependency inventory.
 
 `bundled-component-provenance.json` records the exact shipped asset hashes covered
 by these notices. Remote assets are not classified as bundled dependencies.

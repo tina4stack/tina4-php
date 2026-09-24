@@ -33,8 +33,11 @@
     },
     {
       "path": "js/tina4js.min.js",
-      "component": "tina4js-1.5.4-rebuilt",
-      "sha256": "6ce41cbc3b13da87071d5b5d47045f45c6b578b24fc1e05edc8bd4906ff2c3b4"
+      "component": "tina4js-1.7.2",
+      "sha256": "45f4e93341450cb7e14a5f87e3981a8e696419e90016511a02b88cee26a8ca0f",
+      "source_commit": "bb426862b062db0dd6d89577cae997efcba86116",
+      "source_repository": "https://github.com/tina4stack/tina4-js",
+      "license": "MPL-2.0"
     },
     {
       "path": "js/tina4-dev-admin.min.js",
