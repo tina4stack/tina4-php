@@ -160,6 +160,7 @@ jobs:
       TINA4_TEST_PG_PASSWORD: tina4
       TINA4_TEST_PG_DB: tina4_php
       TINA4_TEST_RABBITMQ_URL: amqp://guest:guest@localhost:5672
+      TINA4_TEST_REDIS_AUTH_URL: redis://:s3cret@127.0.0.1:6381/0
       TINA4_MONGO_URI: mongodb://localhost:27017
       TINA4_TEST_MONGO_URI: mongodb://localhost:27017
       TINA4_KAFKA_BROKERS: localhost:9092
@@ -351,6 +352,15 @@ jobs:
             fi
             sleep 1
           done
+
+      # Real SMTP/SMTPS/STARTTLS and IMAP/IMAPS/STARTTLS endpoints for ADR-0071.
+      # Trust is passed only to positive-case child processes; negative cases
+      # continue to prove that unknown certificates are refused.
+      - name: Start TLS mail servers (GreenMail / Mailpit / Dovecot)
+        run: |
+          bash tests/mail-infra.sh "$RUNNER_TEMP/tina4-mail-infra" tina4-php-mail
+          echo "TINA4_TEST_MAIL_TLS_HOST=127.0.0.1" >> "$GITHUB_ENV"
+          echo "TINA4_TEST_MAIL_TLS_CA_FILE=$RUNNER_TEMP/tina4-mail-infra/certs/ca.crt" >> "$GITHUB_ENV"
 
       # Kafka in KRaft mode (single node, no ZooKeeper). GitHub service containers
       # can't express the KRaft listener config cleanly, so run it as a plain
