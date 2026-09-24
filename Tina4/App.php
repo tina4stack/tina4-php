@@ -1473,7 +1473,7 @@ HTML;
                 echo "\n  Press Ctrl+C to stop.\n\n";
             }
 
-            if (!$suppressBanner) {
+            if (!$suppressBanner && self::shouldOpenBrowser($this->isDevelopment())) {
                 self::openBrowser("http://localhost:{$port}");
             }
             $server->start();
@@ -1751,6 +1751,32 @@ HTML;
             }
         }
         return $start; // Fall back to original port and let Server handle the error
+    }
+
+    /**
+     * Environment variables that mark a CI run. Any of them set (and not
+     * "false"/"0") keeps the browser closed.
+     */
+    public const CI_ENVIRONMENT_VARIABLES = ['CI', 'CONTINUOUS_INTEGRATION', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'JENKINS_URL', 'TF_BUILD'];
+
+    /**
+     * Whether `tina4 serve` should open a browser: only for a developer at a
+     * desk. ALL of these must hold - development mode is on, TINA4_NO_BROWSER is
+     * not truthy, and no CI variable is set. A production boot, a test harness
+     * or a CI runner never opens one.
+     */
+    public static function shouldOpenBrowser(bool $development): bool
+    {
+        if (!$development || DotEnv::isTruthy(DotEnv::getEnv('TINA4_NO_BROWSER', 'false'))) {
+            return false;
+        }
+        foreach (self::CI_ENVIRONMENT_VARIABLES as $name) {
+            $value = strtolower(trim((string)DotEnv::getEnv($name, '')));
+            if ($value !== '' && $value !== 'false' && $value !== '0') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
