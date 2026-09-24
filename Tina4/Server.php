@@ -123,6 +123,15 @@ class Server
     private const DEFAULT_MAX_REQUEST_BODY = 10485760;
 
     /**
+     * Seconds a rejected connection is drained (read and discarded) after its
+     * answer, so closing it does not reset the answer away (ADR-0068).
+     */
+    private const DRAIN_SECONDS = 2.0;
+
+    /** Longest chunk-size line accepted in a chunked body before it is 400. */
+    private const MAX_CHUNK_SIZE_LINE = 4096;
+
+    /**
      * Seconds a graceful shutdown may take before whatever is still in flight
      * is force-closed, when TINA4_SHUTDOWN_TIMEOUT says nothing usable.
      *
@@ -254,16 +263,19 @@ class Server
     /** @var int Header bytes accepted before 431. */
     private int $maxRequestHeader = self::DEFAULT_MAX_REQUEST_HEADER;
 
-    /** @var int Body bytes accepted before 413. */
+    /** @var int PHP's extra ceiling on a DECLARED Content-Length (TINA4_MAX_REQUEST_BODY), 413 past it. */
     private int $maxRequestBody = self::DEFAULT_MAX_REQUEST_BODY;
 
     /**
-     * @var int Running per-chunk upload cap (TINA4_MAX_UPLOAD_SIZE). Enforced on
-     * the ACTUAL bytes received as they arrive, so a chunked or under-declared
-     * over-size body is refused before it is buffered whole - the declared
-     * Content-Length guard above cannot see that case.
+     * @var int The body cap (TINA4_MAX_UPLOAD_SIZE), the same one in all four
+     * frameworks (ADR-0068). A declared Content-Length over it is 413 before a
+     * body byte is read; a chunked body is 413 the moment its running count
+     * passes it, so neither is ever buffered whole.
      */
     private int $maxUploadSize = self::DEFAULT_MAX_REQUEST_BODY;
+
+    /** @var array<int, float> Rejected connections being drained: resource id => close deadline. */
+    private array $draining = [];
 
     /** @var int Seconds the current drain may take, resolved from TINA4_SHUTDOWN_TIMEOUT */
     private int $shutdownTimeout = self::DEFAULT_SHUTDOWN_TIMEOUT;
@@ -775,8 +787,14 @@ class Server
                     } elseif ($this->isWebSocketClient($socket)) {
                         // WebSocket data
                         $this->handleWebSocketFrame($socket);
+                    } elseif (isset($this->draining[(int)$socket])) {
+                        // Already answered with a transport rejection; discard
+                        // whatever the client is still sending.
+                        $this->drainRejected($socket);
                     } else {
-                        // HTTP request data
+                        // HTTP request data. Reads are bounded at 64KiB, and
+                        // processHttpBuffer() refuses a head or body past its
+                        // cap before buffering any more of it.
                         $data = @fread($socket, 65536);
                         if ($data === '' || $data === false) {
                             $this->removeClient($socket);
@@ -784,9 +802,6 @@ class Server
                             $resourceId = (int)$socket;
                             $this->buffers[$resourceId] = ($this->buffers[$resourceId] ?? '') . $data;
                             $this->httpActivity[$resourceId] = microtime(true);
-                            if (!$this->enforceRequestLimits($socket)) {
-                                continue;   // over the cap: answered and closed
-                            }
                             $this->processHttpBuffer($socket);
                         }
                     }
@@ -984,33 +999,205 @@ class Server
     private function processHttpBuffer($client): void
     {
         $resourceId = (int)$client;
-        $buffer = $this->buffers[$resourceId] ?? '';
+        $frame = $this->frameHttpRequest($this->buffers[$resourceId] ?? '');
 
-        // Check if we have a complete HTTP request (headers end with \r\n\r\n)
-        $headerEnd = strpos($buffer, "\r\n\r\n");
-        if ($headerEnd === false) {
-            return; // Not enough data yet
+        if ($frame[0] === 'reject') {
+            $this->rejectRequest($client, $frame[1], $frame[2]);
+            return;
         }
-
-        $headerSection = substr($buffer, 0, $headerEnd);
-        $bodyStart = $headerEnd + 4;
-
-        // Check Content-Length for body
-        $contentLength = 0;
-        if (preg_match('/content-length:\s*(\d+)/i', $headerSection, $m)) {
-            $contentLength = (int)$m[1];
-        }
-
-        $totalExpected = $bodyStart + $contentLength;
-        if (strlen($buffer) < $totalExpected) {
-            return; // Body not fully received yet
+        if ($frame[0] === 'incomplete') {
+            return;
         }
 
         // Extract this request and keep any remaining data in buffer
-        $rawRequest = substr($buffer, 0, $totalExpected);
-        $this->buffers[$resourceId] = substr($buffer, $totalExpected);
+        [, $rawRequest, $consumed] = $frame;
+        $this->buffers[$resourceId] = substr($this->buffers[$resourceId], $consumed);
 
         $this->handleHttp($client, $rawRequest);
+    }
+
+    /**
+     * Decide what the bytes buffered on one connection are (ADR-0068 section 3).
+     *
+     * Returns one of:
+     *   ['incomplete']                              wait for more bytes
+     *   ['reject', int $status, string $message]    answer with a transport rejection
+     *   ['request', string $rawRequest, int $consumed]
+     *
+     * The limits are checked on what has arrived so far, never after the whole
+     * request is buffered: a head past TINA4_MAX_REQUEST_HEADER is 431 whether
+     * or not its blank line has turned up, a declared Content-Length over the
+     * cap is 413 before a body byte is read, and a chunked body is 413 the
+     * moment its running count passes the cap. A chunked request reaches the
+     * router as an ordinary one: the decoded body with a Content-Length.
+     *
+     * @return array{0: string, 1?: mixed, 2?: mixed}
+     */
+    private function frameHttpRequest(string $buffer): array
+    {
+        $headerEnd = strpos($buffer, "\r\n\r\n");
+        $headBytes = $headerEnd === false ? strlen($buffer) : $headerEnd + 4;
+        if ($headBytes > $this->maxRequestHeader) {
+            return ['reject', 431, sprintf(
+                'Request header fields exceed TINA4_MAX_REQUEST_HEADER (%d bytes)',
+                $this->maxRequestHeader
+            )];
+        }
+
+        // A bare CR, a bare LF or a NUL in the head: a proxy in front may split
+        // the lines differently from us, so the request means two things.
+        // A partial head may legitimately end on the CR of a CRLF.
+        if ($headerEnd !== false) {
+            $head = substr($buffer, 0, $headerEnd);
+        } else {
+            $head = str_ends_with($buffer, "\r") ? substr($buffer, 0, -1) : $buffer;
+        }
+        if (preg_match('/\x00|\r(?!\n)|(?<!\r)\n/', $head) === 1) {
+            return ['reject', 400, 'Malformed request head'];
+        }
+        if ($headerEnd === false) {
+            return ['incomplete'];
+        }
+
+        $contentLengths = [];
+        $transferEncodings = [];
+        foreach (array_slice(explode("\r\n", $head), 1) as $line) {
+            $colon = strpos($line, ':');
+            if ($colon === false) {
+                continue;
+            }
+            $fieldName = strtolower(trim(substr($line, 0, $colon)));
+            $fieldValue = trim(substr($line, $colon + 1), " \t");
+            if ($fieldName === 'content-length') {
+                $contentLengths[] = $fieldValue;
+            } elseif ($fieldName === 'transfer-encoding') {
+                $transferEncodings[] = $fieldValue;
+            }
+        }
+
+        if ($transferEncodings !== []) {
+            if ($contentLengths !== [] || strtolower(implode(', ', $transferEncodings)) !== 'chunked') {
+                return ['reject', 400, 'Invalid Transfer-Encoding'];
+            }
+            return $this->frameChunkedRequest($buffer, $head, $headerEnd + 4);
+        }
+
+        // Exactly one Content-Length of ASCII digits. A second one is refused
+        // even when it agrees (maintainer ruling on ADR-0068, the same in all
+        // four frameworks - node:http's parser refuses any pair): two framing
+        // headers are how a request is smuggled past a proxy that reads the
+        // other one.
+        $declared = '0';
+        if ($contentLengths !== []) {
+            if (count($contentLengths) > 1 || preg_match('/^[0-9]+$/D', $contentLengths[0]) !== 1) {
+                return ['reject', 400, 'Invalid Content-Length'];
+            }
+            $declared = ltrim($contentLengths[0], '0') ?: '0';
+        }
+        // More than 18 digits cannot fit an int; it is over any cap either way.
+        $declaredBytes = strlen($declared) > 18 ? PHP_INT_MAX : (int)$declared;
+
+        if ($declaredBytes > $this->maxUploadSize) {
+            return ['reject', 413, self::bodyTooLargeMessage($declared, 'TINA4_MAX_UPLOAD_SIZE', $this->maxUploadSize)];
+        }
+        // PHP's extra ceiling on the declared length (ADR-0068 section 3).
+        if ($this->maxRequestBody > 0 && $declaredBytes > $this->maxRequestBody) {
+            return ['reject', 413, self::bodyTooLargeMessage($declared, 'TINA4_MAX_REQUEST_BODY', $this->maxRequestBody)];
+        }
+
+        $total = $headerEnd + 4 + $declaredBytes;
+        if (strlen($buffer) < $total) {
+            return ['incomplete'];
+        }
+        return ['request', substr($buffer, 0, $total), $total];
+    }
+
+    /**
+     * Frame a `Transfer-Encoding: chunked` body (RFC 9112 section 7.1).
+     *
+     * Re-walks the chunks already buffered on every read: that is O(chunks),
+     * not O(bytes), because each step jumps over the chunk's data. A chunk that
+     * would take the running count past TINA4_MAX_UPLOAD_SIZE is refused on its
+     * size line, before its data is buffered.
+     *
+     * @return array{0: string, 1?: mixed, 2?: mixed}
+     */
+    private function frameChunkedRequest(string $buffer, string $head, int $bodyStart): array
+    {
+        $length = strlen($buffer);
+        $position = $bodyStart;
+        $received = 0;
+        $pieces = [];
+
+        while (true) {
+            $lineEnd = strpos($buffer, "\r\n", $position);
+            if ($lineEnd === false) {
+                return ($length - $position) > self::MAX_CHUNK_SIZE_LINE
+                    ? ['reject', 400, 'Invalid Transfer-Encoding']
+                    : ['incomplete'];
+            }
+            // chunk-size [ ; chunk-ext ] - extensions are allowed and ignored.
+            $sizeField = trim(explode(';', substr($buffer, $position, $lineEnd - $position), 2)[0], " \t");
+            if (preg_match('/^[0-9A-Fa-f]{1,15}$/D', $sizeField) !== 1) {
+                return ['reject', 400, 'Invalid Transfer-Encoding'];
+            }
+            $size = (int)hexdec($sizeField);
+
+            if ($size === 0) {
+                // Optional trailer fields, then the blank line that ends the body.
+                $trailerStart = $lineEnd + 2;
+                if (substr($buffer, $trailerStart, 2) === "\r\n") {
+                    $end = $trailerStart + 2;
+                    break;
+                }
+                $trailerEnd = strpos($buffer, "\r\n\r\n", $trailerStart);
+                if ($trailerEnd === false) {
+                    return ($length - $trailerStart) > $this->maxRequestHeader
+                        ? ['reject', 400, 'Invalid Transfer-Encoding']
+                        : ['incomplete'];
+                }
+                $end = $trailerEnd + 4;
+                break;
+            }
+
+            if ($received + $size > $this->maxUploadSize) {
+                return ['reject', 413, self::bodyTooLargeMessage(
+                    (string)($received + $size),
+                    'TINA4_MAX_UPLOAD_SIZE',
+                    $this->maxUploadSize
+                )];
+            }
+            $dataStart = $lineEnd + 2;
+            if ($length < $dataStart + $size + 2) {
+                return ['incomplete'];
+            }
+            if (substr($buffer, $dataStart + $size, 2) !== "\r\n") {
+                return ['reject', 400, 'Invalid Transfer-Encoding'];
+            }
+            $pieces[] = substr($buffer, $dataStart, $size);
+            $received += $size;
+            $position = $dataStart + $size + 2;
+        }
+
+        // Hand the router an ordinary request: the decoded body, its length,
+        // and no Transfer-Encoding left to misread.
+        $body = implode('', $pieces);
+        $lines = [];
+        foreach (explode("\r\n", $head) as $index => $line) {
+            $colon = strpos($line, ':');
+            if ($index > 0 && $colon !== false && strtolower(trim(substr($line, 0, $colon))) === 'transfer-encoding') {
+                continue;
+            }
+            $lines[] = $line;
+        }
+        $lines[] = 'Content-Length: ' . strlen($body);
+        return ['request', implode("\r\n", $lines) . "\r\n\r\n" . $body, $end];
+    }
+
+    /** The one 413 wording (ADR-0068 section 4): it names the variable that fixes it. */
+    private static function bodyTooLargeMessage(string $bytes, string $variable, int $limit): string
+    {
+        return "Request body ({$bytes} bytes) exceeds {$variable} ({$limit} bytes)";
     }
 
     /**
@@ -1197,14 +1384,17 @@ class Server
         $keepAlive = strtolower($headers['connection'] ?? '') === 'keep-alive';
         $responseHeaders['Connection'] = $keepAlive ? 'keep-alive' : 'close';
 
-        // Build raw response
-        $httpResponse = "HTTP/1.1 {$statusCode} {$statusText}\r\n";
-        foreach ($responseHeaders as $name => $value) {
-            $httpResponse .= "{$name}: {$value}\r\n";
+        // Build raw response. The header block is checked again here, just
+        // before it is written (ADR-0068 section 2): Response refuses an unsafe
+        // header at the call site, but a header can reach this list by another
+        // path, and this is the last point it can be stopped.
+        $headerBlock = $this->renderHeaderBlock($responseHeaders, $response);
+        if ($headerBlock === null) {
+            $this->refuseUnsafeResponse($client);
+            $this->endRequestChild();
+            return;
         }
-        // Emit cookies set via $response->cookie()
-        $httpResponse .= self::cookieHeaderLines($response);
-        $httpResponse .= "\r\n";
+        $httpResponse = "HTTP/1.1 {$statusCode} {$statusText}\r\n" . $headerBlock . "\r\n";
         $httpResponse .= $responseBody;
 
         // Write the full payload, tolerating a non-blocking send buffer.
@@ -1509,6 +1699,21 @@ class Server
      */
     private function reapIdleHttpClients(): void
     {
+        // A rejected connection that neither closed nor went past its drain
+        // window while sending is closed here once the window is over.
+        $now = microtime(true);
+        foreach ($this->draining as $resourceId => $deadline) {
+            if ($now < $deadline) {
+                continue;
+            }
+            $socket = $this->clients[$resourceId] ?? null;
+            if (is_resource($socket)) {
+                $this->removeClient($socket);
+            } else {
+                unset($this->draining[$resourceId]);
+            }
+        }
+
         if ($this->requestTimeout <= 0) {
             return;
         }
@@ -1525,68 +1730,75 @@ class Server
                 unset($this->httpActivity[$resourceId]);
                 continue;
             }
+            // sendHttpError() closes the socket itself. Closing it a second
+            // time here threw a TypeError (fclose on a closed resource) out of
+            // the accept loop and took the whole server down: one stalled
+            // request stopped `tina4 serve` for everyone.
             if (($this->buffers[$resourceId] ?? '') !== '') {
                 $this->sendHttpError($socket, 408, 'Request timed out before it was complete');
+            } else {
+                $this->removeClient($socket);
             }
+        }
+    }
+
+    /**
+     * Answer a request with a transport rejection and stop reading it.
+     *
+     * The client may still be sending (a 413 is answered on the first packet
+     * of an upload). Closing with unread bytes in the kernel buffer sends a
+     * reset, and the client would never see the answer, so the write side is
+     * half-closed and the connection is drained - its bytes discarded - for at
+     * most DRAIN_SECONDS before it is closed (ADR-0068 section 4). The drain
+     * rides the accept loop, so it never blocks another connection.
+     */
+    private function rejectRequest($client, int $status, string $message): void
+    {
+        $this->writeFully($client, $this->transportRejection($status, $message));
+        $resourceId = (int)$client;
+        if ($this->inRequestChild) {
+            $this->removeClient($client);
+            return;
+        }
+        @stream_socket_shutdown($client, STREAM_SHUT_WR);
+        $this->buffers[$resourceId] = '';
+        unset($this->httpActivity[$resourceId]);
+        $this->draining[$resourceId] = microtime(true) + self::DRAIN_SECONDS;
+    }
+
+    /**
+     * Read and discard from a rejected connection; close it at EOF or once its
+     * drain window has passed.
+     */
+    private function drainRejected($socket): void
+    {
+        $resourceId = (int)$socket;
+        $data = @fread($socket, 65536);
+        if ($data === '' || $data === false || microtime(true) >= ($this->draining[$resourceId] ?? 0)) {
             $this->removeClient($socket);
         }
     }
 
     /**
-     * Refuse a request that is growing past what we agreed to read.
-     *
-     * The read path appends to $buffers with no ceiling of its own, and
-     * processHttpBuffer() returns "not enough data yet" without looking at the
-     * size, so between them a client could grow one string until the process
-     * died. This is the ceiling.
-     *
-     * Headers are capped before they are complete (431) and the body is capped
-     * from the declared Content-Length as soon as the headers ARE complete
-     * (413), so an oversized upload is refused on its first packet rather than
-     * after we have buffered all of it.
-     *
-     * @return bool False when the connection was answered and closed.
+     * The one shape of every transport rejection (ADR-0068 section 4): the
+     * exact JSON body, Content-Type, Content-Length, Connection: close and the
+     * canonical security headers. No Strict-Transport-Security: a rejection is
+     * written before the request's scheme is known.
      */
-    private function enforceRequestLimits($client): bool
+    private function transportRejection(int $code, string $message): string
     {
-        $resourceId = (int)$client;
-        $buffer = $this->buffers[$resourceId] ?? '';
-        $headerEnd = strpos($buffer, "\r\n\r\n");
-
-        if ($headerEnd === false) {
-            if (strlen($buffer) > $this->maxRequestHeader) {
-                $this->sendHttpError($client, 431, 'Request header fields too large');
-                $this->removeClient($client);
-                return false;
+        $body = (string)json_encode(['error' => $message], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $head = "HTTP/1.1 {$code} {$this->getStatusText($code)}\r\n"
+            . "Content-Type: application/json\r\n"
+            . 'Content-Length: ' . strlen($body) . "\r\n"
+            . "Connection: close\r\n";
+        foreach (Middleware\SecurityHeadersMiddleware::canonicalHeaders() as $name => $value) {
+            // A broken environment override must not break the rejection itself.
+            if (!Response::hasLineBreakOrNul($value)) {
+                $head .= "{$name}: {$value}\r\n";
             }
-            return true;
         }
-
-        if ($this->maxRequestBody > 0
-            && preg_match('/content-length:\s*(\d+)/i', substr($buffer, 0, $headerEnd), $m)
-            && (int)$m[1] > $this->maxRequestBody
-        ) {
-            $this->sendHttpError($client, 413, 'Request body too large');
-            $this->removeClient($client);
-            return false;
-        }
-
-        // Running per-chunk counter: refuse the moment the ACTUAL body bytes
-        // received exceed TINA4_MAX_UPLOAD_SIZE, regardless of - or in the
-        // absence of - a declared Content-Length. This closes the chunked /
-        // under-declared over-size bypass the declared-length check above
-        // cannot see, and it fires as the bytes arrive rather than after the
-        // whole body is buffered. Parity with Python/Node, which run the same
-        // running counter in their body readers.
-        if ($this->maxUploadSize > 0
-            && (strlen($buffer) - ($headerEnd + 4)) > $this->maxUploadSize
-        ) {
-            $this->sendHttpError($client, 413, 'Request body too large');
-            $this->removeClient($client);
-            return false;
-        }
-
-        return true;
+        return $head . "\r\n" . $body;
     }
 
     /**
@@ -1650,23 +1862,47 @@ class Server
     }
 
     /**
-     * Render the Set-Cookie header lines for a response.
+     * Render the header lines of a response, Set-Cookie lines included, or
+     * return null when any of them is unsafe to write (ADR-0068 section 2): a
+     * name that is not an HTTP token, or a value carrying CR, LF or NUL. The
+     * offending header is logged by name; none of the response is written.
      *
-     * setcookie() writes into the SAPI header list, which is never sent on a
-     * raw socket, so the socket server serialises $response->cookie() itself
-     * — via the one shared value-builder, Response::cookieHeaderLines(), so a
-     * cookie set twice renders identically here and through TestClient
+     * Cookies: setcookie() writes into the SAPI header list, which is never
+     * sent on a raw socket, so the socket server serialises $response->cookie()
+     * itself - via the one shared value-builder, Response::cookieHeaderLines(),
+     * so a cookie set twice renders identically here and through TestClient
      * (feature 131, TC-DEC-02).
      *
-     * @return string Zero or more "Set-Cookie: ...\r\n" lines.
+     * @param array<string, mixed> $headers
+     * @return string|null "Name: value\r\n" lines, or null when one is unsafe.
      */
-    private static function cookieHeaderLines(Response $response): string
+    private function renderHeaderBlock(array $headers, Response $response): ?string
     {
-        $lines = '';
-        foreach ($response->cookieHeaderLines() as $cookie) {
-            $lines .= "Set-Cookie: {$cookie}\r\n";
+        $lines = [];
+        foreach ($headers as $name => $value) {
+            $lines[] = [(string)$name, is_scalar($value) ? (string)$value : "\0"];
         }
-        return $lines;
+        foreach ($response->cookieHeaderLines() as $cookie) {
+            $lines[] = ['Set-Cookie', $cookie];
+        }
+
+        $block = '';
+        foreach ($lines as [$name, $value]) {
+            if (!Response::isHeaderToken($name) || Response::hasLineBreakOrNul($value)) {
+                Log::error('Refusing to write an unsafe response header ' . Response::quoteHeaderName($name)
+                    . ': the name is not an HTTP token or the value contains CR, LF or NUL');
+                return null;
+            }
+            $block .= "{$name}: {$value}\r\n";
+        }
+        return $block;
+    }
+
+    /** Answer 500 instead of writing a response whose headers are unsafe. */
+    private function refuseUnsafeResponse($client): void
+    {
+        $this->writeFully($client, $this->transportRejection(500, 'Invalid response header'));
+        $this->removeClient($client);
     }
 
     /**
@@ -1691,12 +1927,12 @@ class Server
         unset($headers['Content-Length']);
         $headers['Connection'] = 'close';
 
-        $head = "HTTP/1.1 {$statusCode} {$this->getStatusText($statusCode)}\r\n";
-        foreach ($headers as $name => $value) {
-            $head .= "{$name}: {$value}\r\n";
+        $headerBlock = $this->renderHeaderBlock($headers, $response);
+        if ($headerBlock === null) {
+            $this->refuseUnsafeResponse($client);
+            return;
         }
-        $head .= self::cookieHeaderLines($response);
-        $head .= "\r\n";
+        $head = "HTTP/1.1 {$statusCode} {$this->getStatusText($statusCode)}\r\n" . $headerBlock . "\r\n";
 
         if ($this->writeFully($client, $head) === strlen($head)) {
             foreach ($response->streamChunks() as $chunk) {
@@ -2309,23 +2545,23 @@ class Server
         unset($this->aiPortConnections[$resourceId]);
         unset($this->peerNames[$resourceId]);
         unset($this->httpActivity[$resourceId]);
-        @fclose($socket);
+        unset($this->draining[$resourceId]);
+        // Idempotent: in PHP 8 fclose() on an already-closed resource throws a
+        // TypeError that @ does not suppress.
+        if (is_resource($socket)) {
+            @fclose($socket);
+        }
     }
 
     /**
-     * Send a simple HTTP error response and close the connection.
+     * Send a transport rejection and close the connection at once. For a
+     * client that has finished sending (a stalled request, a WebSocket
+     * upgrade); a request that may still be arriving goes through
+     * rejectRequest(), which drains before it closes.
      */
     private function sendHttpError($client, int $code, string $message): void
     {
-        $statusText = $this->getStatusText($code);
-        $body = json_encode(['error' => $message]);
-        $response = "HTTP/1.1 {$code} {$statusText}\r\n"
-            . "Content-Type: application/json\r\n"
-            . "Content-Length: " . strlen($body) . "\r\n"
-            . "Connection: close\r\n"
-            . "\r\n"
-            . $body;
-        $this->writeFully($client, $response);
+        $this->writeFully($client, $this->transportRejection($code, $message));
         $this->removeClient($client);
     }
 

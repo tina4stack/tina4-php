@@ -168,6 +168,18 @@ PHP);
         if ($read !== '' && $read !== false) {
             $this->assertStringContainsString('408', $read, 'if the server answers, it should say 408');
         }
+
+        // And the server must survive answering it. The reaper used to close the
+        // socket twice (sendHttpError() closes it, then removeClient() again);
+        // in PHP 8 the second fclose() throws a TypeError that took the whole
+        // server down, so this test passed while every later request was
+        // refused. The closed connection above cannot tell those apart.
+        usleep(300000);
+        $this->assertSame(
+            'ok',
+            @file_get_contents("http://127.0.0.1:{$this->port}/ok"),
+            'the server stopped serving after timing out one stalled request'
+        );
     }
 
     // ── HEADER FLOOD ────────────────────────────────────────────────────────

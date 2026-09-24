@@ -127,6 +127,9 @@ class Response
      */
     public function __invoke(mixed $data = null, int $statusCode = 200, ?string $contentType = null): self
     {
+        if ($contentType !== null) {
+            self::assertSafeHeader('Content-Type', $contentType);
+        }
         $this->statusCode = $statusCode;
 
         // Normalise ORM models / collections / query results so handlers can
@@ -177,12 +180,88 @@ class Response
     /**
      * Set a response header.
      *
+     * The name must be an HTTP token and the value may not contain CR, LF or
+     * NUL (ADR-0068). Tina4\Server writes header lines to the socket itself, so
+     * a line break in a value would end the header and start another one; the
+     * value is refused here, where the stack trace points at the code that
+     * built it, and is never quietly stripped.
+     *
      * @return $this
+     * @throws \InvalidArgumentException when the name or value is unsafe
      */
     public function header(string $name, string $value): self
     {
+        self::assertSafeHeader($name, $value);
         $this->headers[$name] = $value;
         return $this;
+    }
+
+    /** RFC 9110 `token`: one or more `tchar`. */
+    private const HEADER_TOKEN_PATTERN = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/D';
+
+    /**
+     * Whether $name is a valid HTTP header (or cookie) name: an RFC 9110 token.
+     */
+    public static function isHeaderToken(string $name): bool
+    {
+        return preg_match(self::HEADER_TOKEN_PATTERN, $name) === 1;
+    }
+
+    /**
+     * Whether $value carries a character that can end a header line: CR, LF or NUL.
+     */
+    public static function hasLineBreakOrNul(string $value): bool
+    {
+        return strpbrk($value, "\r\n\0") !== false;
+    }
+
+    /**
+     * The caller's name as a JSON string literal, so a name that is itself
+     * broken cannot break the error message or the log line that carries it.
+     * Byte-identical to Python's json.dumps() for every string PHP can hold.
+     */
+    public static function quoteHeaderName(string $name): string
+    {
+        // json_encode leaves DEL (0x7F) raw where json.dumps escapes it.
+        return str_replace("\x7f", '\\u007f', (string)json_encode($name, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    /**
+     * Refuse a header whose name is not a token or whose value carries CR, LF
+     * or NUL, with the exact ADR-0068 message.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public static function assertSafeHeader(string $name, string $value): void
+    {
+        if (!self::isHeaderToken($name)) {
+            throw new \InvalidArgumentException('Header name must be a valid HTTP token [' . self::quoteHeaderName($name) . ']');
+        }
+        if (self::hasLineBreakOrNul($value)) {
+            throw new \InvalidArgumentException('Invalid character in header content [' . self::quoteHeaderName($name) . ']');
+        }
+    }
+
+    /**
+     * Refuse a cookie whose name is not a token, or whose value or any
+     * attribute value carries CR, LF, NUL or ';' (ADR-0068). A ';' would add
+     * cookie attributes the application never set.
+     *
+     * @param array<string, mixed> $options
+     * @throws \InvalidArgumentException
+     */
+    private static function assertSafeCookie(string $name, string $value, array $options): void
+    {
+        if (!self::isHeaderToken($name)) {
+            throw new \InvalidArgumentException('Cookie name must be a valid HTTP token [' . self::quoteHeaderName($name) . ']');
+        }
+        foreach ([$value, ...array_values($options)] as $content) {
+            if ((is_string($content) || is_int($content) || is_float($content))
+                && strpbrk((string)$content, "\r\n\0;") !== false
+            ) {
+                throw new \InvalidArgumentException('Invalid character in cookie content [' . self::quoteHeaderName($name) . ']');
+            }
+        }
     }
 
     /**
@@ -203,6 +282,11 @@ class Response
      */
     public function withHeaders(array $headers): self
     {
+        // Check every entry before storing any, so a refused set leaves the
+        // response exactly as it was.
+        foreach ($headers as $name => $value) {
+            self::assertSafeHeader((string)$name, (string)$value);
+        }
         foreach ($headers as $name => $value) {
             $this->headers[$name] = $value;
         }
@@ -297,6 +381,7 @@ class Response
      */
     public function redirect(string $url, int $status = 302): self
     {
+        self::assertSafeHeader('Location', $url);
         $this->statusCode = $status;
         $this->headers['Location'] = $url;
         return $this;
@@ -305,11 +390,17 @@ class Response
     /**
      * Set a cookie on the response.
      *
+     * The name must be an HTTP token; the value and every attribute value may
+     * not contain CR, LF, NUL or ';' (ADR-0068). The value is refused, never
+     * repaired: encode structured data (base64, percent-encoding) yourself.
+     *
      * @param array<string, mixed> $options Cookie options: path, domain, secure, httponly, samesite, expires
      * @return $this
+     * @throws \InvalidArgumentException when the name, value or an attribute is unsafe
      */
     public function cookie(string $name, string $value, array $options = []): self
     {
+        self::assertSafeCookie($name, $value, $options);
         $this->cookies[$name] = [
             'value' => $value,
             'expires' => $options['expires'] ?? 0,
@@ -367,6 +458,7 @@ class Response
                 return $this->json($data, $statusCode ?? 200);
             }
             if ($contentType !== null) {
+                self::assertSafeHeader('Content-Type', $contentType);
                 $this->headers['content-type'] = $contentType;
             }
             $this->body = (string) $data;
@@ -449,6 +541,7 @@ class Response
      */
     public function stream(callable $source, string $contentType = 'text/event-stream'): self
     {
+        self::assertSafeHeader('Content-Type', $contentType);
         $this->streamSource = $source;
         $this->headers['Content-Type'] = $contentType;
         $this->headers['Cache-Control'] = 'no-cache';
@@ -587,6 +680,10 @@ class Response
      */
     public function file(string $path, ?string $contentType = null, bool $download = false, ?string $root = null): self
     {
+        if ($contentType !== null) {
+            self::assertSafeHeader('Content-Type', $contentType);
+        }
+
         // SECURITY: confine the read. See tina4-python's Response.file() for the
         // full reasoning; the short version is that the natural spelling
         //
@@ -672,8 +769,10 @@ class Response
         $this->headers['Content-Length'] = (string)filesize($path);
 
         if ($download) {
-            $filename = basename($path);
-            $this->headers['Content-Disposition'] = "attachment; filename=\"{$filename}\"";
+            // A filename on disk can carry a line break (POSIX allows it).
+            $disposition = 'attachment; filename="' . basename($path) . '"';
+            self::assertSafeHeader('Content-Disposition', $disposition);
+            $this->headers['Content-Disposition'] = $disposition;
         }
 
         $this->body = file_get_contents($path);
