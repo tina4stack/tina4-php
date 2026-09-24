@@ -2927,7 +2927,21 @@ abstract class ORM
         $jsonColumns = $this->jsonColumns();
         $noDefault = $this->noDefaultColumns();
 
+        // ADR-0069 G2: only the model's own fields reach the column list. A model
+        // with declared fields writes those fields (and its primary key) only - an
+        // undeclared property picked up by fill() or plain assignment is not a
+        // column of this model. A model that declares no fields writes a dynamic
+        // property only when it resolves to one of the table's real columns.
+        $hasDeclaredFields = $this->declaredColumnDefinitions() !== [];
+        $fieldDefinitions = $hasDeclaredFields ? $this->getFieldDefinitions() : [];
+
         foreach ($props as $name => $value) {
+            $isField = $hasDeclaredFields
+                ? isset($fieldDefinitions[$name])
+                : $this->resolveFieldColumn((string)$name) !== null;
+            if (!$isField) {
+                continue;
+            }
             // Auto-generate fieldMapping for camelCase → snake_case
             if ($this->autoMap && !isset($this->fieldMapping[$name])) {
                 $snaked = self::camelToSnake($name);
