@@ -66,6 +66,7 @@
     "MQTT": ["URL", "AUTH_URL", "TLS_URL", "EMQX_URL", "USERNAME", "PASSWORD", "CA_FILE"],
     "SMTP": ["HOST", "PORT"],
     "IMAP": ["HOST", "PORT"],
+    "MAIL_TLS": ["HOST", "CA_FILE"],
     "ULTIPA": ["URL"],
     "NEO4J": ["URL"],
     "MEMGRAPH": ["URL"],
