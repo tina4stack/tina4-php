@@ -383,8 +383,11 @@ class MigrationFootgunsLiveEngineTest extends TestCase
             $db->commit();
 
             // The relation genuinely exists with its case preserved.
+            // Filtered by name: fetch() pages at 100 rows, and a shared lab
+            // database with more than 100 user tables cut this list short.
             $rows = $db->fetch(
-                "SELECT TRIM(RDB\$RELATION_NAME) AS TNAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0"
+                "SELECT TRIM(RDB\$RELATION_NAME) AS TNAME FROM RDB\$RELATIONS WHERE RDB\$SYSTEM_FLAG = 0 AND TRIM(RDB\$RELATION_NAME) = ?",
+                [self::T_QUOTED]
             );
             $names = array_map(static fn (array $r) => trim((string) reset($r)), $rows->records);
             $this->assertContains(
