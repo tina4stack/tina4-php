@@ -419,12 +419,13 @@ class GraphQL
             'EQUALS'   => '=',
             'AT'       => '@',
             'DOLLAR'   => '\$',
-            'COMMA'    => ',',
             'STRING'   => '"(?:[^"\\\\]|\\\\.)*"',
             'NUMBER'   => '-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?',
             'BOOL'     => '\b(?:true|false)\b',
             'NULL_VAL' => '\bnull\b',
             'NAME'     => '[_a-zA-Z]\w*',
+            // Commas are insignificant (GraphQL spec 2.1.7), like whitespace:
+            // between arguments, selected fields and list values alike.
             'SKIP'     => '[\s,]+',
             'COMMENT'  => '#[^\n]*',
         ];
@@ -1133,7 +1134,6 @@ class GraphQLParser
             $name = $this->expect('NAME')['value'];
             $this->expect('COLON');
             $args[$name] = $this->parseValue();
-            $this->match('COMMA');
         }
         return $args;
     }
@@ -1227,7 +1227,6 @@ class GraphQLParser
                 $default = $this->parseValue();
             }
             $defs[] = ['name' => $name, 'type' => $typeName, 'default' => $default];
-            $this->match('COMMA');
         }
         return $defs;
     }
