@@ -660,7 +660,11 @@ class WebSocket
             return [null, false];
         }
         $payload = Auth::validToken($token);
-        return [$payload, $payload !== null];
+        // A form token is not an identity (ADR-0079 s1).
+        if (!Auth::isIdentityPayload($payload)) {
+            return [null, false];
+        }
+        return [$payload, true];
     }
 
     /**

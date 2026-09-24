@@ -72,7 +72,7 @@ final class Tc131Marker
 
 class TestClientContractTest extends TestCase
 {
-    private const SECRET = 'tc131-contract-secret';
+    private const SECRET = 'tc131-contract-secret-0123456789';
 
     protected function setUp(): void
     {

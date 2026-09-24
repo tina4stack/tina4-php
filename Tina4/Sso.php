@@ -305,19 +305,54 @@ class Sso
         $session->set(self::SESSION_KEY, [
             'version' => 1, 'identity' => $identity, 'access_token' => $tokens['access_token'],
             'refresh_token' => $tokens['refresh_token'] ?? null, 'id_token' => $tokens['id_token'],
-            'expires_at' => time() + (int)($tokens['expires_in'] ?? 0),
+            'expires_at' => self::expiresAt($tokens),
         ]);
         return ['identity' => $identity, 'return_to' => self::safeReturn($pending['return_to'] ?? '/')];
     }
 
     public function identity(mixed $requestOrSession): ?array
     {
-        $stored = $this->session($requestOrSession)?->get(self::SESSION_KEY);
-        $identity = is_array($stored) ? ($stored['identity'] ?? null) : null;
-        if (is_array($identity) && !($requestOrSession instanceof Session)) {
+        $identity = self::liveSessionIdentity($this->session($requestOrSession)?->get(self::SESSION_KEY));
+        if ($identity !== null && !($requestOrSession instanceof Session)) {
             $requestOrSession->user = $identity;
         }
-        return is_array($identity) ? $identity : null;
+        return $identity;
+    }
+
+    /**
+     * The stored SSO identity, only while it is live (ADR-0079 s5).
+     *
+     * $stored is the reserved _tina4_sso session value. The identity needs an
+     * issuer and a subject, and a numeric expires_at that is 0 (the provider
+     * gave no lifetime) or still in the future.
+     */
+    public static function liveSessionIdentity(mixed $stored): ?array
+    {
+        if (!is_array($stored)) {
+            return null;
+        }
+        $identity = $stored['identity'] ?? null;
+        if (!is_array($identity) || empty($identity['issuer']) || empty($identity['subject'])) {
+            return null;
+        }
+        $expiresAt = $stored['expires_at'] ?? 0;
+        if (!is_int($expiresAt) && !is_float($expiresAt)) {
+            return null;
+        }
+        if ($expiresAt > 0 && time() >= $expiresAt) {
+            return null;
+        }
+        return $identity;
+    }
+
+    /**
+     * When the provider's access token lapses; 0 when it gave no lifetime.
+     * Never "now", which is already in the past by the next request.
+     */
+    private static function expiresAt(array $tokens): int
+    {
+        $lifetime = (int)($tokens['expires_in'] ?? 0);
+        return $lifetime > 0 ? time() + $lifetime : 0;
     }
 
     public function refresh(mixed $requestOrSession): array
@@ -346,7 +381,7 @@ class Sso
                 'identity' => $identity, 'access_token' => $tokens['access_token'],
                 'refresh_token' => $tokens['refresh_token'] ?? $stored['refresh_token'],
                 'id_token' => $tokens['id_token'] ?? ($stored['id_token'] ?? null),
-                'expires_at' => time() + (int)($tokens['expires_in'] ?? 0),
+                'expires_at' => self::expiresAt($tokens),
             ]));
             return $identity;
         } catch (\Throwable $e) {

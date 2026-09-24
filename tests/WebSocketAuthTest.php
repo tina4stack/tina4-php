@@ -33,7 +33,7 @@ use Tina4\WebSocketConnection;
 
 class WebSocketAuthTest extends TestCase
 {
-    private string $secret = 'ws-auth-test-secret-0123456789';
+    private string $secret = 'ws-auth-test-secret-0123456789-0';
 
     protected function setUp(): void
     {

@@ -2658,12 +2658,11 @@ class Server
         $_SERVER['SERVER_NAME'] = $host;
         $_SERVER['SERVER_PORT'] = (string)$port;
         $_SERVER['HTTP_HOST'] = $headers['host'] ?? "{$host}:{$port}";
-        // Real TCP peer captured at accept() (falls back to loopback only when
-        // unknown). Previously hardcoded to 127.0.0.1, which made every client
-        // look local — a security hazard for the MCP loopback gate on a
-        // 0.0.0.0 bind. User code reading $_SERVER['REMOTE_ADDR'] now sees the
-        // true client too.
-        $_SERVER['REMOTE_ADDR'] = $remoteIp !== '' ? $remoteIp : '127.0.0.1';
+        // Real TCP peer captured at accept(). Empty when unknown - never a
+        // made-up loopback address, which would make an unknown client look
+        // local to every loopback gate (ADR-0079 s4). User code reading
+        // $_SERVER['REMOTE_ADDR'] sees the true client too.
+        $_SERVER['REMOTE_ADDR'] = $remoteIp;
         foreach ($headers as $hk => $hv) {
             if ($hk === '' || $hk[0] === '_') {
                 continue;

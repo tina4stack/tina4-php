@@ -52,7 +52,7 @@ use Tina4\Session;
 
 class CsrfMiddlewareTest extends TestCase
 {
-    private string $secret = 'test-csrf-secret-key';
+    private string $secret = 'test-csrf-secret-key-0123456789a';
 
     protected function setUp(): void
     {

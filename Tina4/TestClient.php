@@ -126,6 +126,9 @@ class TestClient
             body: $rawBody ?: null,
             headers: $reqHeaders,
             ip: '127.0.0.1',
+            // The in-process client is a local caller and says so explicitly;
+            // an unknown peer is not loopback (ADR-0079 s4).
+            remoteIp: '127.0.0.1',
         );
 
         // Dispatch through the router. testing: true marks the Response as

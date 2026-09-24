@@ -33,7 +33,7 @@ use Tina4\Router;
 
 class RbacTest extends TestCase
 {
-    private string $secret = 'rbac-contract-secret';
+    private string $secret = 'rbac-contract-secret-0123456789a';
 
     protected function setUp(): void
     {
