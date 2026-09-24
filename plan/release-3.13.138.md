@@ -21,3 +21,6 @@ Signed release-preparation commit recorded by git history.
 
 ## Status
 Local preparation; do not push until the parent coordinates the final PR.
+
+## Integrity evidence
+Read-only PR/tag package build produces source archive (PHP) or both gems (Ruby), SPDX 2.3 inventory and SHA256SUMS. Tag-only publication downloads the immutable same-run artifact, verifies checksums, attests provenance and package SBOM, then publishes release assets and registry artifacts. Pinned actions; PR build has no publishing or OIDC permissions. Local packages/evidence/checksums verified; shared helper tests and YAML/shell syntax pass.
