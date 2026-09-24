@@ -1,3 +1,9 @@
+# Copyright (c) 2026 Code Infinity
+# SPDX-License-Identifier: MPL-2.0
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 # Build the base image, prove it actually boots and serves the version it claims,
 # and only then publish it.
 #
@@ -59,7 +65,7 @@ jobs:
     name: Image boots, binds 0.0.0.0, and reports its real version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Build image (native arch; arm64 is cross-built below)
         run: docker build -t "$IMAGE:ci" .

@@ -1,7 +1,7 @@
 {
     "name": "tina4stack/tina4php",
     "description": "Tina4 for PHP \u2014 native PHP conventions and shared Tina4 contracts",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "autoload": {
         "psr-4": {
             "Tina4\\": "Tina4/",
@@ -35,7 +35,7 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10 || ^11",
-        "mongodb/mongodb": "^2.3",
+        "mongodb/mongodb": "^2.4.1",
         "cebe/php-openapi": "^1.8"
     },
     "bin": [

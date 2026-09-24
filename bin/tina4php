@@ -1,5 +1,14 @@
 #!/usr/bin/env php
 <?php
+
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
 /**
  * Tina4 PHP CLI — v3
  *
@@ -2235,7 +2244,7 @@ DOCKERFILE;
                     $extraArgs = ' -d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.jit=1255 -d opcache.jit_buffer_size=128M';
                 }
 
-                passthru("php{$extraArgs} -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($docRoot . '/index.php'));
+                passthru(\Tina4\App::builtinServerCommand($host, (int) $port, $docRoot, $docRoot . '/index.php', $extraArgs));
             }
         }
         break;

@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  */
 
 namespace Tina4;
@@ -34,7 +43,7 @@ class App
      *
      * @var string
      */
-    public static string $VERSION = '3.13.137';
+    public static string $VERSION = '3.13.138';
 
     /**
      * The health path that is registered no matter what TINA4_HEALTH_PATH says.
@@ -404,6 +413,20 @@ class App
     {
         $this->shutdownCallbacks[] = $callback;
         return $this;
+    }
+
+    /**
+     * Build the `php -S` fallback command line. Every value that reaches the
+     * shell - the host (TINA4_HOST), the document root and the router file -
+     * is quoted with escapeshellarg (ADR-0082).
+     */
+    public static function builtinServerCommand(string $host, int $port, string $docRoot, ?string $indexFile = null, string $extraArgs = ''): string
+    {
+        $command = 'php' . $extraArgs . ' -S ' . escapeshellarg("{$host}:{$port}") . ' -t ' . escapeshellarg($docRoot);
+        if ($indexFile !== null) {
+            $command .= ' ' . escapeshellarg($indexFile);
+        }
+        return $command;
     }
 
     /**
@@ -1487,11 +1510,7 @@ HTML;
             Log::warning('Custom server failed, falling back to php -S: ' . $e->getMessage());
             $docRoot = $this->basePath;
             $indexFile = $docRoot . DIRECTORY_SEPARATOR . 'index.php';
-            if (is_file($indexFile)) {
-                passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot) . " " . escapeshellarg($indexFile));
-            } else {
-                passthru("php -S {$host}:{$port} -t " . escapeshellarg($docRoot));
-            }
+            passthru(self::builtinServerCommand($host, (int) $port, $docRoot, is_file($indexFile) ? $indexFile : null));
         }
     }
 

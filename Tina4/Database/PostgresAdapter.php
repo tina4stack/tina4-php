@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  */
 
 namespace Tina4\Database;
@@ -444,19 +453,31 @@ class PostgresAdapter implements DatabaseAdapter
     public function startTransaction(): void
     {
         $this->ensureOpen();
-        @pg_query($this->db, 'BEGIN');
+        if (@pg_query($this->db, 'BEGIN') === false) {
+            $this->lastError = pg_last_error($this->db);
+            throw new DatabaseException('PostgreSQL BEGIN failed: ' . $this->lastError);
+        }
+        $this->lastError = null;
     }
 
     public function commit(): void
     {
         $this->ensureOpen();
-        @pg_query($this->db, 'COMMIT');
+        if (@pg_query($this->db, 'COMMIT') === false) {
+            $this->lastError = pg_last_error($this->db);
+            throw new DatabaseException('PostgreSQL COMMIT failed: ' . $this->lastError);
+        }
+        $this->lastError = null;
     }
 
     public function rollback(): void
     {
         $this->ensureOpen();
-        @pg_query($this->db, 'ROLLBACK');
+        if (@pg_query($this->db, 'ROLLBACK') === false) {
+            $this->lastError = pg_last_error($this->db);
+            throw new DatabaseException('PostgreSQL ROLLBACK failed: ' . $this->lastError);
+        }
+        $this->lastError = null;
     }
 
     public function error(): ?string

@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  *
  * Tests for the three-source auth check in Router::dispatchInner():
  *   Priority 1: Authorization Bearer header
@@ -280,8 +289,13 @@ class RouterAuthSourcesTest extends TestCase
         $this->assertEquals(['reloaded' => true], json_decode($response->getBody(), true));
     }
 
-    public function testGalleryWriteRouteBypassesAuthGate(): void
+    public function testGalleryWriteRouteBypassesAuthGateInDebug(): void
     {
+        $oldEnv = $_ENV['TINA4_DEBUG'] ?? null;
+        $oldValue = getenv('TINA4_DEBUG');
+        $_ENV['TINA4_DEBUG'] = 'true';
+        putenv('TINA4_DEBUG=true');
+        try {
         // Sibling prefix check in the same guard — /api/gallery/ and
         // /gallery/ must use $request->path too.
         Router::post('/api/gallery/deploy', fn($rq, $rs) => $rs->json(['ok' => true]));
@@ -291,6 +305,10 @@ class RouterAuthSourcesTest extends TestCase
 
         $this->assertNotEquals(401, $response->getStatusCode(), '/api/gallery write route must NOT be 401 by the auth gate');
         $this->assertEquals(200, $response->getStatusCode());
+        } finally {
+            if ($oldEnv === null) unset($_ENV['TINA4_DEBUG']); else $_ENV['TINA4_DEBUG'] = $oldEnv;
+            putenv($oldValue === false ? 'TINA4_DEBUG' : 'TINA4_DEBUG=' . $oldValue);
+        }
     }
 
     public function testNonDevWriteRouteStillRequiresAuth(): void

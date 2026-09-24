@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  *
  * Server — Custom HTTP server with WebSocket support, for development.
  * Replaces `php -S`. Uses stream_socket_server + stream_select. Zero external
@@ -2019,6 +2028,14 @@ class Server
         $wsKey = $headers['sec-websocket-key'] ?? null;
         if (!$wsKey) {
             $this->sendHttpError($client, 400, 'Bad Request: Missing Sec-WebSocket-Key');
+            return;
+        }
+
+        // ADR-0082: the dev reload socket answers only a loopback / TINA4_HOST
+        // Host, the same rule the /__dev HTTP gate applies (DNS rebinding).
+        if (str_starts_with((string) preg_replace('#/+#', '/', (string) ($headers['_path'] ?? '/')), '/__dev')
+            && !DevAdmin::devHostAllowed($headers)) {
+            $this->sendHttpError($client, 403, 'Forbidden: Host not allowed');
             return;
         }
 

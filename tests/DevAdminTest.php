@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 // MessageLog and RequestInspector are defined in DevAdmin.php alongside DevAdmin
 // but PSR-4 cannot autoload them individually, so we force-include the file.
 require_once __DIR__ . '/../Tina4/DevAdmin.php';

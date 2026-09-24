@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  */
 
 namespace Tina4;
@@ -668,9 +677,17 @@ class DevAdmin
                 if ($db === null) {
                     return $response->json(['error' => 'No database configured'], 400);
                 }
+                // ADR-0082: only a name the database itself reports is accepted,
+                // and it is quoted as an identifier - never spliced raw into SQL.
+                if (!in_array($name, $db->getTables(), true)) {
+                    return $response->json(['error' => 'unknown table'], 404);
+                }
+                $quoted = str_contains(strtolower((string) DotEnv::getEnv('TINA4_DATABASE_URL', '')), 'mysql')
+                    ? '`' . str_replace('`', '``', $name) . '`'
+                    : '"' . str_replace('"', '""', $name) . '"';
                 $columns = $db->getColumns($name);
-                $sample = $db->query("SELECT * FROM {$name} LIMIT 10");
-                $countResult = $db->query("SELECT COUNT(*) as total FROM {$name}");
+                $sample = $db->query("SELECT * FROM {$quoted} LIMIT 10");
+                $countResult = $db->query("SELECT COUNT(*) as total FROM {$quoted}");
                 $total = (int) ($countResult[0]['total'] ?? 0);
                 return $response->json([
                     'table' => $name,
@@ -1600,36 +1617,38 @@ class DevAdmin
             }
             try {
                 $envPath = '.env';
-                $lines = file_exists($envPath) ? file($envPath, FILE_IGNORE_NEW_LINES) : [];
-                $keysFound = ['TINA4_DATABASE_URL' => false, 'TINA4_DATABASE_USERNAME' => false, 'TINA4_DATABASE_PASSWORD' => false];
-                $newLines = [];
-                foreach ($lines as $line) {
-                    $trimmed = trim($line);
-                    if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
-                        $newLines[] = $line;
-                        continue;
+                SecretFile::update($envPath, static function (string $content) use ($url, $username, $password): string {
+                    $lines = $content === '' ? [] : preg_split('/\\r\\n|\\n|\\r/', rtrim($content, "\r\n"));
+                    $keysFound = ['TINA4_DATABASE_URL' => false, 'TINA4_DATABASE_USERNAME' => false, 'TINA4_DATABASE_PASSWORD' => false];
+                    $newLines = [];
+                    foreach ($lines as $line) {
+                        $trimmed = trim($line);
+                        if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                            $newLines[] = $line;
+                            continue;
+                        }
+                        $key = trim(explode('=', $trimmed, 2)[0]);
+                        if ($key === 'TINA4_DATABASE_URL') {
+                            $newLines[] = "TINA4_DATABASE_URL={$url}";
+                            $keysFound['TINA4_DATABASE_URL'] = true;
+                        } elseif ($key === 'TINA4_DATABASE_USERNAME') {
+                            $newLines[] = "TINA4_DATABASE_USERNAME={$username}";
+                            $keysFound['TINA4_DATABASE_USERNAME'] = true;
+                        } elseif ($key === 'TINA4_DATABASE_PASSWORD') {
+                            $newLines[] = "TINA4_DATABASE_PASSWORD={$password}";
+                            $keysFound['TINA4_DATABASE_PASSWORD'] = true;
+                        } else {
+                            $newLines[] = $line;
+                        }
                     }
-                    $key = trim(explode('=', $trimmed, 2)[0]);
-                    if ($key === 'TINA4_DATABASE_URL') {
-                        $newLines[] = "TINA4_DATABASE_URL={$url}";
-                        $keysFound['TINA4_DATABASE_URL'] = true;
-                    } elseif ($key === 'TINA4_DATABASE_USERNAME') {
-                        $newLines[] = "TINA4_DATABASE_USERNAME={$username}";
-                        $keysFound['TINA4_DATABASE_USERNAME'] = true;
-                    } elseif ($key === 'TINA4_DATABASE_PASSWORD') {
-                        $newLines[] = "TINA4_DATABASE_PASSWORD={$password}";
-                        $keysFound['TINA4_DATABASE_PASSWORD'] = true;
-                    } else {
-                        $newLines[] = $line;
+                    $values = ['TINA4_DATABASE_URL' => $url, 'TINA4_DATABASE_USERNAME' => $username, 'TINA4_DATABASE_PASSWORD' => $password];
+                    foreach ($keysFound as $key => $found) {
+                        if (!$found) {
+                            $newLines[] = "{$key}={$values[$key]}";
+                        }
                     }
-                }
-                $values = ['TINA4_DATABASE_URL' => $url, 'TINA4_DATABASE_USERNAME' => $username, 'TINA4_DATABASE_PASSWORD' => $password];
-                foreach ($keysFound as $key => $found) {
-                    if (!$found) {
-                        $newLines[] = "{$key}={$values[$key]}";
-                    }
-                }
-                file_put_contents($envPath, implode("\n", $newLines) . "\n");
+                    return implode("\n", $newLines) . "\n";
+                });
                 return $response->json(['success' => true]);
             } catch (\Throwable $e) {
                 return $response->json(['success' => false, 'error' => $e->getMessage()]);
@@ -1785,8 +1804,10 @@ class DevAdmin
             // after the SPA restores previously-open tabs from
             // localStorage that no longer exist on disk.
             $requested = (string) ($request->query['path'] ?? '');
-            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/).
-            if (self::isSecretPath($requested)) {
+            $path = self::devAdminSafePath($requested);
+            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/),
+            // judged on the RESOLVED path so `.env/.` or a symlink cannot slip past (ADR-0082).
+            if (self::isSecretPath($requested) || ($path !== null && self::isSecretPath((string) self::devAdminRel($path)))) {
                 return $response->json([
                     'error' => 'Refused: secret file',
                     'path' => $requested,
@@ -1795,8 +1816,8 @@ class DevAdmin
                     'size' => 0,
                 ], 403);
             }
-            $path = self::devAdminSafePath($requested);
-            if ($path === null || !is_file($path)) {
+            $content = $path === null ? null : self::readDevFile($path);
+            if ($content === null) {
                 return $response->json([
                     'error' => 'not found',
                     'path' => $requested,
@@ -1805,7 +1826,6 @@ class DevAdmin
                     'size' => 0,
                 ], 404);
             }
-            $content = @file_get_contents($path);
             if ($content === false) {
                 return $response->json([
                     'error' => 'unreadable',
@@ -1824,20 +1844,21 @@ class DevAdmin
         });
 
         Router::get('/__dev/api/file/raw', function (Request $request, Response $response) {
-            // DEVADMIN-DEC-03: never serve secret material (.env, keys, .git/, secrets/).
-            if (self::isSecretPath((string) ($request->query['path'] ?? ''))) {
+            $path = self::devAdminSafePath((string) ($request->query['path'] ?? ''));
+            // DEVADMIN-DEC-03: never serve secret material, judged on the RESOLVED path (ADR-0082).
+            if (self::isSecretPath((string) ($request->query['path'] ?? ''))
+                || ($path !== null && self::isSecretPath((string) self::devAdminRel($path)))) {
                 return $response->json(['error' => 'Refused: secret file'], 403);
             }
-            $path = self::devAdminSafePath($request->query['path'] ?? '');
-            if ($path === null || !is_file($path)) {
+            $content = $path === null ? null : self::readDevFile($path);
+            if ($content === false || $content === null) {
                 return $response->text('not found', 404);
             }
-            // Let the Response class pick the MIME from the extension;
-            // we just load the bytes and set Content-Type. Streaming
-            // large files is a later slice — for raster images on the
-            // order of tens of KB this is fine.
-            $mime = function_exists('mime_content_type') ? (mime_content_type($path) ?: 'application/octet-stream') : 'application/octet-stream';
-            return $response->header('Content-Type', $mime)->html(file_get_contents($path));
+            // Determine MIME from the captured bytes, never reopen the path.
+            $mime = class_exists(\finfo::class)
+                ? ((new \finfo(FILEINFO_MIME_TYPE))->buffer($content) ?: 'application/octet-stream')
+                : 'application/octet-stream';
+            return $response->header('Content-Type', $mime)->html($content);
         });
 
         Router::post('/__dev/api/file/save', function (Request $request, Response $response) {
@@ -2528,26 +2549,28 @@ class DevAdmin
     private static function devAdminUpsertEnvVar(string $key, string $value): void
     {
         $envPath = self::devAdminEnvPath();
-        $lines = is_file($envPath) ? (file($envPath, FILE_IGNORE_NEW_LINES) ?: []) : [];
-        $newLines = [];
-        $found = false;
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-            if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
-                $newLines[] = $line;
-                continue;
+        SecretFile::update($envPath, static function (string $content) use ($key, $value): string {
+            $lines = $content === '' ? [] : preg_split('/\\r\\n|\\n|\\r/', rtrim($content, "\r\n"));
+            $newLines = [];
+            $found = false;
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+                    $newLines[] = $line;
+                    continue;
+                }
+                if (trim(explode('=', $trimmed, 2)[0]) === $key) {
+                    $newLines[] = "{$key}={$value}";
+                    $found = true;
+                } else {
+                    $newLines[] = $line;
+                }
             }
-            if (trim(explode('=', $trimmed, 2)[0]) === $key) {
+            if (!$found) {
                 $newLines[] = "{$key}={$value}";
-                $found = true;
-            } else {
-                $newLines[] = $line;
             }
-        }
-        if (!$found) {
-            $newLines[] = "{$key}={$value}";
-        }
-        file_put_contents($envPath, implode("\n", $newLines) . "\n");
+            return implode("\n", $newLines) . "\n";
+        });
         // Keep the running process consistent with what we just wrote.
         putenv("{$key}={$value}");
         $_ENV[$key] = $value;
@@ -2714,13 +2737,35 @@ class DevAdmin
             $absolute = '/' . implode('/', $parts);
         }
 
-        // Must live under the project root — string-prefix check,
-        // both sides already in `/` form.
+        // Must live under the project root — string-prefix check with a
+        // trailing separator, both sides already in `/` form.
         if ($absolute !== $root
             && !str_starts_with($absolute . '/', $root . '/')) {
             return null;
         }
-        return $absolute;
+        // ADR-0082: follow symlinks the way the OS will when it opens the
+        // file. Resolve the deepest part that exists (a save may name a new
+        // file) and re-check containment on that real path.
+        $existing = $absolute;
+        $tail = '';
+        while ($existing !== $root && !file_exists($existing) && !is_link($existing)) {
+            $slash = strrpos($existing, '/');
+            if ($slash === false || $slash === 0) {
+                break;
+            }
+            $tail = substr($existing, $slash) . $tail;
+            $existing = substr($existing, 0, $slash);
+        }
+        $real = realpath($existing);
+        if ($real === false) {
+            return null;
+        }
+        $resolved = str_replace('\\', '/', $real) . $tail;
+        if ($resolved !== $root
+            && !str_starts_with($resolved . '/', $root . '/')) {
+            return null;
+        }
+        return $resolved;
     }
 
     /**
@@ -2732,7 +2777,7 @@ class DevAdmin
     {
         $absolute = str_replace('\\', '/', $absolute);
         $root = self::devAdminProjectRoot();
-        if (!str_starts_with($absolute, $root)) {
+        if ($absolute !== $root && !str_starts_with($absolute, $root . '/')) {
             return null;
         }
         return ltrim(substr($absolute, strlen($root)), '/');
@@ -2925,18 +2970,48 @@ class DevAdmin
     }
 
     /**
+     * Read a regular file through the same descriptor whose identity is checked.
+     * PHP streams do not expose openat/O_NOFOLLOW/O_NONBLOCK flags. This check
+     * refuses detected replacement but does not make hostile parent-directory
+     * or FIFO replacement atomic; the local project directory remains trusted.
+     */
+    private static function readDevFile(string $path): string|false|null
+    {
+        clearstatcache(true, $path);
+        $before = @lstat($path);
+        if ($before === false || ($before['mode'] & 0170000) !== 0100000) {
+            return null;
+        }
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        try {
+            $opened = fstat($handle);
+            if ($opened === false || ($opened['mode'] & 0170000) !== 0100000
+                || $before['dev'] !== $opened['dev'] || $before['ino'] !== $opened['ino']) {
+                return null;
+            }
+            return stream_get_contents($handle);
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
      * Whether the request carried a token matching TINA4_MCP_TOKEN.
      *
-     * The token may arrive as `Authorization: Bearer <t>`, `X-MCP-Token`, or
-     * `X-Api-Key`. Compared timing-safe against TINA4_MCP_TOKEN (falling back
-     * to TINA4_API_KEY). With NO configured token this returns false, so a
+     * The token may arrive as `Authorization: Bearer <t>` or `X-MCP-Token`.
+     * MCP transport retains the documented API-key fallback; non-MCP dev
+     * callers pass dedicated=true to require TINA4_MCP_TOKEN (ADR-0082).
+     * With no configured token this returns false, so a
      * remote caller can never present a "valid" token by accident. Mirrors
      * the Python dev_admin `_mcp_token_ok` helper.
      */
-    private static function mcpTokenOk(Request $request): bool
+    private static function mcpTokenOk(Request $request, bool $dedicated = false): bool
     {
         $expected = DotEnv::getEnv('TINA4_MCP_TOKEN');
-        if ($expected === null || $expected === '') {
+        if (!$dedicated && ($expected === null || $expected === '')) {
             $expected = DotEnv::getEnv('TINA4_API_KEY');
         }
         if ($expected === null || $expected === '') {
@@ -2950,7 +3025,7 @@ class DevAdmin
         if ($provided === '') {
             $provided = (string) ($request->headers['x-mcp-token'] ?? '');
         }
-        if ($provided === '') {
+        if (!$dedicated && $provided === '') {
             $provided = (string) ($request->headers['x-api-key'] ?? '');
         }
         if ($provided === '') {
@@ -2990,13 +3065,25 @@ class DevAdmin
     {
         $sfs = strtolower(trim((string) ($request->headers['sec-fetch-site'] ?? '')));
         if ($sfs !== '') {
-            return in_array($sfs, ['same-origin', 'same-site', 'none'], true);
+            // ADR-0082: same-site is a DIFFERENT origin (a sibling subdomain);
+            // only the dashboard itself (same-origin) or a typed URL (none) pass.
+            if (!in_array($sfs, ['same-origin', 'none'], true)) { return false; }
         }
         $origin = trim((string) ($request->headers['origin'] ?? ''));
         if ($origin !== '') {
-            $netloc = str_contains($origin, '://') ? explode('://', $origin, 2)[1] : $origin;
             $host = trim((string) ($request->headers['host'] ?? ''));
-            return $host !== '' && strtolower($netloc) === strtolower($host);
+            $scheme = parse_url($request->url, PHP_URL_SCHEME) ?: 'http';
+            $supplied = parse_url($origin);
+            $expected = parse_url($scheme . '://' . $host);
+            if ($host === '' || !is_array($supplied) || !is_array($expected)
+                || !in_array(strtolower($supplied['scheme'] ?? ''), ['http', 'https'], true)
+                || isset($supplied['user'], $supplied['pass']) || isset($supplied['user'])
+                || isset($supplied['query']) || isset($supplied['fragment'])
+                || !in_array($supplied['path'] ?? '', ['', '/'], true)) { return false; }
+            return strtolower($supplied['scheme']) === strtolower($scheme)
+                && strtolower($supplied['host'] ?? '') === strtolower($expected['host'] ?? '')
+                && ($supplied['port'] ?? ($supplied['scheme'] === 'https' ? 443 : 80))
+                    === ($expected['port'] ?? ($scheme === 'https' ? 443 : 80));
         }
         return true;
     }
@@ -3012,13 +3099,61 @@ class DevAdmin
      */
     public static function guardMutation(Request $request): ?array
     {
+        return self::guardRequest($request);
+    }
+
+    /**
+     * True when the Host header names the loopback machine or the configured
+     * TINA4_HOST (ADR-0082). A rebound DNS name is refused. A missing Host is
+     * not a browser request (every browser sends one); the peer gate governs it.
+     *
+     * @param array<string, mixed> $headers
+     */
+    public static function devHostAllowed(array|\ArrayAccess $headers): bool
+    {
+        $host = strtolower(trim((string) ($headers['host'] ?? $headers['Host'] ?? '')));
+        if ($host === '') {
+            return true;
+        }
+        if (str_starts_with($host, '[')) {
+            $end = strpos($host, ']');
+            $name = $end === false ? $host : substr($host, 1, $end - 1);
+        } elseif (substr_count($host, ':') === 1) {
+            $name = explode(':', $host, 2)[0];
+        } else {
+            $name = $host;
+        }
+        $allowed = ['localhost', '127.0.0.1', '::1'];
+        $configured = strtolower(trim((string) DotEnv::getEnv('TINA4_HOST', ''), " []"));
+        if ($configured !== '') {
+            $allowed[] = $configured;
+        }
+        return in_array($name, $allowed, true);
+    }
+
+    /**
+     * Return [status, error] to REFUSE any /__dev request (read or write), or
+     * null to allow (ADR-0082): Host allow-list, then same-origin, then the
+     * loopback peer (the MCP surface keeps its own 404 gate for the peer).
+     *
+     * @return array{0:int,1:string}|null
+     */
+    public static function guardRequest(Request $request): ?array
+    {
+        // Host and origin remain mandatory even with a valid token.
+        // Remote dashboards explicitly configure TINA4_HOST.
+        $path = (string) preg_replace('#/+#', '/', (string) ($request->path ?? ''));
+        $isMcp = $path === '/__dev/api/mcp' || str_starts_with($path, '/__dev/api/mcp/')
+            || $path === '/__dev/mcp' || str_starts_with($path, '/__dev/mcp/');
+        if (!self::devHostAllowed($request->headers ?? [])) {
+            return [403, 'dev-admin: refused (host not allowed)'];
+        }
         if (!self::devSameOriginOk($request)) {
             return [403, 'dev-admin: refused (cross-origin request)'];
         }
-        $path = (string) ($request->path ?? '');
-        if (!str_starts_with($path, '/__dev/api/mcp') && !str_starts_with($path, '/__dev/mcp')) {
+        if (!$isMcp) {
             $remoteIp = (string) ($request->remoteIp ?? '');
-            if (!(McpServer::isLoopback($remoteIp) || self::mcpTokenOk($request))) {
+            if (!(McpServer::isLoopback($remoteIp) || self::mcpTokenOk($request, true))) {
                 return [403, 'dev-admin: refused (non-loopback peer)'];
             }
         }

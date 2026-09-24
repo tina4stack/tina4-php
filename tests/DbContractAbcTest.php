@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  *
  * DB-contract A + B + C (v3.13.37) — parity with the Python master's
  * tina4-python/tests/test_db_contract_abc.py.
@@ -436,11 +445,11 @@ class DbContractAbcTest extends TestCase
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    /** Read the private pinnedAdapter to assert pin state. */
+    /** Read the active execution context to assert its private transaction pin. */
     private function pinIsRetained(Database $db): bool
     {
         $ref = new \ReflectionClass($db);
-        $prop = $ref->getProperty('pinnedAdapter');
-        return $prop->getValue($db) !== null;
+        $context = $ref->getMethod('executionContext')->invoke($db);
+        return $context->pinnedAdapter !== null;
     }
 }

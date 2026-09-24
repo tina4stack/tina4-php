@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  */
 
 namespace Tina4\Middleware;
@@ -24,13 +33,16 @@ use Tina4\Response;
  *   - DEC-02 loopback: a non-loopback socket peer is refused 403 (raw peer,
  *     XFF-proof), except on the MCP surface which carries its own 404 gate.
  *
- * Scoped to /__dev writes only — the deliberately cross-origin /__feedback
- * widget and the /ai proxy are untouched. Safe methods (GET/HEAD/OPTIONS) skip.
+ * ADR-0082: every /__dev request, reads included, also passes a Host
+ * allow-list (loopback names + TINA4_HOST) against DNS rebinding. The path is
+ * normalised first, so `//__dev/...` cannot slip past the prefix match.
+ * The deliberately cross-origin /__feedback widget and the /ai proxy are untouched.
  * Registered only on the dev path (DevAdmin::register), so production never
  * carries the middleware at all.
  */
 class DevAdminSecurityMiddleware
 {
+    public static bool $preMatch = true;
     /**
      * Standardized middleware hook — gates a /__dev mutation before the handler.
      *
@@ -41,12 +53,11 @@ class DevAdminSecurityMiddleware
      */
     public static function beforeDevAdmin(Request $request, Response $response): Response|array
     {
-        $method = strtoupper($request->method ?? 'GET');
-        $path = (string) ($request->path ?? '');
-        if (in_array($method, ['GET', 'HEAD', 'OPTIONS'], true) || !str_starts_with($path, '/__dev')) {
+        $path = (string) preg_replace('#/+#', '/', (string) ($request->path ?? ''));
+        if (!str_starts_with($path, '/__dev')) {
             return [$request, $response];
         }
-        $denial = DevAdmin::guardMutation($request);
+        $denial = DevAdmin::guardRequest($request);
         if ($denial !== null) {
             return $response->json(['ok' => false, 'error' => $denial[1]], $denial[0]);
         }

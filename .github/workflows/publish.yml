@@ -1,65 +1,110 @@
-name: Publish Release
+# Copyright (c) 2026 Code Infinity
+# SPDX-License-Identifier: MPL-2.0
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+name: Release packages and publication
 
 on:
+  pull_request:
+    branches: [v3]
   push:
-    tags:
-      - '[0-9]*.*.*'
+    tags: ['[0-9]*.*.*']
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
+  release-package:
     runs-on: ubuntu-latest
-    # softprops/action-gh-release calls the GitHub REST API with the
-    # default GITHUB_TOKEN. That token only writes to the repository if
-    # the job declares contents:write. Make it explicit so we don't
-    # depend on the repo-level Workflow permissions setting.
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0  # need full history for git log on the tagged commit
-
-      - uses: shivammathur/setup-php@v2
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.2'
-
-      - name: Verify tag matches source version
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Check inbound dependency licence policy
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          SOURCE_VERSION="$(php -r "require 'Tina4/App.php'; echo \\Tina4\\App::\$VERSION;")"
-          test "$SOURCE_VERSION" = "$VERSION" || {
-            echo "::error::Tag $VERSION does not match Tina4/App.php $SOURCE_VERSION"
-            exit 1
-          }
-          echo "Publishing verified version $VERSION"
-
-      - name: Extract release notes from commit body
+          python3 scripts/check_dependency_licenses.py
+          python3 -m unittest discover -s scripts -p test_dependency_licenses.py
+      - name: Build release packages and integrity evidence
         run: |
-          # Pull the tagged commit body (sans Co-Authored-By trailers and
-          # trailing blank lines). The body is the narrative the maintainer
-          # already writes for each release — piping it straight into the
-          # GitHub release beats a bare "Full Changelog" link.
-          git log -1 "${GITHUB_REF_NAME}" --pretty=%B \
-            | awk '/^Co-Authored-By:/ { skip=1 } !skip { print }' \
-            | sed -e :a -e '/^[[:space:]]*$/{$d;N;ba' -e '}' \
-            > /tmp/release-notes.md
-          echo "── /tmp/release-notes.md ──"
-          cat /tmp/release-notes.md
+          version=$(php -r 'require "Tina4/App.php"; echo \Tina4\App::$VERSION;')
+          php scripts/check-version-consistency.php "$version"
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="tina4php-$version/" --output="dist/tina4php-$version.tar.gz" HEAD
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            test "$version" = "$GITHUB_REF_NAME" || { echo "Tag/source version mismatch"; exit 1; }
+          fi
+          python3 scripts/test_release_evidence.py
+          python3 scripts/release_evidence.py --output dist --name tina4php --version "$version" --license MPL-2.0 --repository tina4stack/tina4-php
+          (cd dist && sha256sum --check SHA256SUMS)
+          python3 -c 'import json,hashlib; from pathlib import Path; s=json.load(open("dist/sbom.spdx.json")); assert s["spdxVersion"] == "SPDX-2.3"; a=[p for p in s["packages"] if "packageFileName" in p]; assert len(a)==1; assert all(p["checksums"]==[{"algorithm":"SHA256","checksumValue":hashlib.sha256(Path("dist",p["packageFileName"]).read_bytes()).hexdigest()}] for p in a)'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-package-php
+          path: dist/*
+          if-no-files-found: error
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+  publish:
+    needs: release-package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-package-php
+          path: dist
+      - name: Verify immutable build artifact checksums
+        run: cd dist && sha256sum --check SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: dist/*
+      - name: Attest package SBOM
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+        with:
+          subject-path: dist/*.tar.gz
+          sbom-path: dist/sbom.spdx.json
+      - name: Extract this version's changelog
+        run: |
+          python3 - <<'PYNOTES'
+          import os
+          from pathlib import Path
+          text = Path('CHANGELOG.md').read_text()
+          marker = '## ' + os.environ['GITHUB_REF_NAME'] + '\n'
+          notes = text.split(marker, 1)[1].split('\n## ', 1)[0].strip()
+          if not notes:
+              raise SystemExit('Release changelog is empty')
+          Path('/tmp/release-notes.md').write_text(notes + '\n')
+          PYNOTES
+      - name: Create GitHub Release with integrity evidence
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           body_path: /tmp/release-notes.md
-
+          files: dist/*
+          fail_on_unmatched_files: true
       - name: Notify Packagist
         env:
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
         run: |
           if [ -n "${PACKAGIST_TOKEN}" ]; then
-            curl -s -XPOST "https://packagist.org/api/update-package?username=tina4stack&apiToken=${PACKAGIST_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d '{"repository":{"url":"https://github.com/tina4stack/tina4-php"}}'
-            echo "Packagist notified."
+            curl --fail-with-body --silent --show-error --config - <<CURLCFG
+          url = "https://packagist.org/api/update-package?username=tina4stack&apiToken=${PACKAGIST_TOKEN}"
+          request = "POST"
+          header = "Content-Type: application/json"
+          data = "{\"repository\":{\"url\":\"https://github.com/tina4stack/tina4-php\"}}"
+          CURLCFG
           else
-            echo "PACKAGIST_TOKEN not set — skipping Packagist notification."
+            echo "PACKAGIST_TOKEN not set; Packagist can discover the release tag."
           fi

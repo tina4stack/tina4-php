@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 // Global namespace, like PgTestEnv, AppTestSupport, FreePort, TestServer and
 // PhpChild: this repo maps PSR-4 Tina4\ -> Tina4/, so a Tina4\Tests\... symbol
 // here would never autoload. Required from tests/bootstrap.php.

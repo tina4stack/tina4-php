@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 /**
  * Tina4 — The Intelligent Native Application 4ramework
- * Copyright 2007 - current Tina4
- * License: MIT https://opensource.org/licenses/MIT
+ * Copyright (c) 2026 Code Infinity
+ * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  */
 
 namespace Tina4;
@@ -214,10 +223,13 @@ class Request
         // Reconstruct the full absolute URL (scheme://host[:port]/path[?query]).
         // Honours x-forwarded-proto / x-forwarded-host so apps behind a proxy
         // still see the URL the client actually used. Matches Python/Ruby/Node parity.
-        $scheme = self::isSecureScheme((string)($this->headers['x-forwarded-proto'] ?? ''))
+        $peer = $remoteIp ?? ($_SERVER['REMOTE_ADDR'] ?? '');
+        $trustedPeer = $peer !== '' && TrustedProxy::isTrusted($peer);
+        $forwardedProto = $trustedPeer ? ($this->headers['x-forwarded-proto'] ?? '') : '';
+        $scheme = self::isSecureScheme((string)$forwardedProto)
             ? 'https'
             : 'http';
-        $host = $this->headers['x-forwarded-host']
+        $host = ($trustedPeer ? ($this->headers['x-forwarded-host'] ?? null) : null)
             ?? ($this->headers['host'] ?? ($_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost')));
         $url = "{$scheme}://{$host}{$this->path}";
         if ($this->queryString !== '') {

@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * Copyright (c) 2026 Code Infinity
+ * SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+
 namespace Tina4;
 
 /**
@@ -331,7 +340,7 @@ class Api
         $bodyStr = $this->buildMultipartBody($boundary, $fieldName, $uploadName, $content, $partContentType, $extraFields);
 
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
-        $reqHeaders = $this->baseHeaders();
+        $reqHeaders = $this->baseHeaders($url);
         $reqHeaders['Content-Type'] = "multipart/form-data; boundary={$boundary}";
         if (!empty($headers)) {
             $reqHeaders = array_merge($reqHeaders, $headers);
@@ -365,7 +374,7 @@ class Api
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
         }
-        $headers = $this->baseHeaders();
+        $headers = $this->baseHeaders($url);
 
         // An injected transport can't stream (it returns a buffered result), so
         // write its body out; only the real path streams chunk-by-chunk.
@@ -500,7 +509,7 @@ class Api
     protected function attempt(string $method = 'GET', string $path = '', mixed $body = null, string $contentType = 'application/json'): array
     {
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
-        $headers = $this->baseHeaders();
+        $headers = $this->baseHeaders($url);
         $content = $this->prepareBody($body, $contentType, $headers);
         return $this->dispatch(strtoupper($method), $url, $headers, $content);
     }
@@ -513,6 +522,9 @@ class Api
      */
     private function dispatch(string $method, string $url, array $headers, ?string $content): array
     {
+        if (!$this->sameOrigin($url, $this->baseUrl)) {
+            $headers = $this->stripHeaders($headers, self::STRIP_ON_CROSS_ORIGIN);
+        }
         if ($this->transport !== null) {
             return $this->callTransport($method, $url, $headers, $content);
         }
@@ -703,7 +715,7 @@ class Api
      *
      * @return array<string,string>
      */
-    private function baseHeaders(): array
+    private function baseHeaders(?string $targetUrl = null): array
     {
         $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->headers);
         if ($this->authHeader !== '') {
@@ -715,7 +727,8 @@ class Api
                 $headers['Cookie'] = $cookieHeader;
             }
         }
-        return $headers;
+        return $targetUrl !== null && !$this->sameOrigin($targetUrl, $this->baseUrl)
+            ? $this->stripHeaders($headers, self::STRIP_ON_CROSS_ORIGIN) : $headers;
     }
 
     /**
@@ -951,9 +964,12 @@ class Api
         }
 
         $url = str_starts_with($path, 'http') ? $path : $this->buildUrl($path);
-        $requestHeaders = $this->baseHeaders();
+        $requestHeaders = $this->baseHeaders($url);
         foreach ($extraHeaders as $name => $value) {
             $requestHeaders[$name] = $value;
+        }
+        if (!$this->sameOrigin($url, $this->baseUrl)) {
+            $requestHeaders = $this->stripHeaders($requestHeaders, self::STRIP_ON_CROSS_ORIGIN);
         }
         $content = $this->prepareBody($body, $contentType, $requestHeaders);
 
