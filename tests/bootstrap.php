@@ -37,6 +37,17 @@ if (!is_dir($tina4TestTmpRoot)) {
     @mkdir($tina4TestTmpRoot, 0700, true);
 }
 putenv('TMPDIR=' . $tina4TestTmpRoot);
+
+// ── SSRF guard opt-out for local-listener tests (ADR-0084) ──────────────────
+// The Api client and Web Push refuse private/internal addresses by default, so
+// every suite that points them at a 127.0.0.1 test server would now be refused.
+// The suite legitimately talks to loopback (the internal-service case
+// TINA4_ALLOW_PRIVATE_REQUESTS exists for), so it opts in by default. The
+// dedicated guard suite (tests/SsrfGuardContractTest.php) clears this in its own
+// setUp(), so it still proves the default-blocked behaviour.
+if (getenv('TINA4_ALLOW_PRIVATE_REQUESTS') === false) {
+    putenv('TINA4_ALLOW_PRIVATE_REQUESTS=true');
+}
 $_ENV['TMPDIR'] = $tina4TestTmpRoot;
 $_SERVER['TMPDIR'] = $tina4TestTmpRoot;
 
