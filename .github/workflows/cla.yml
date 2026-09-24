@@ -1,0 +1,38 @@
+name: CLA
+
+# A first-time contributor agrees to the Tina4 Contributor Licence Agreement by
+# commenting on the pull request:
+#   I have read the Tina4 Contributor Licence Agreement and I agree to it.
+# After commenting, re-run this check. The agreement is a draft pending legal
+# review (ADR-0075), so this check is informational and not yet required.
+# Shell and the preinstalled gh CLI only; no third-party action.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  agreement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Author has agreed to the CLA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          case "$AUTHOR" in
+            tina4stack|andrevanzuydam|*'[bot]') echo "$AUTHOR is covered without a comment"; exit 0 ;;
+          esac
+          phrase="I have read the Tina4 Contributor Licence Agreement and I agree to it."
+          if gh api "repos/$REPO/issues/$PR/comments" --paginate \
+               --jq ".[] | select(.user.login == \"$AUTHOR\") | .body" | grep -qF "$phrase"; then
+            echo "$AUTHOR has agreed to the CLA on this pull request"
+          else
+            echo "::error::$AUTHOR has not agreed to the CLA yet. Comment on this pull request: $phrase - then re-run this check."
+            exit 1
+          fi
