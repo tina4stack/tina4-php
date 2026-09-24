@@ -30,11 +30,11 @@ class ExecuteFailurePostgresTest extends TestCase
     protected function setUp(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('PostgresAdapter requires ext-pgsql.');
+            $this->markTestSkipped('[needs:postgres] PostgresAdapter requires ext-pgsql.');
         }
         $pg = \PgTestEnv::resolve();
         if (!$pg->reachable()) {
-            $this->markTestSkipped(sprintf('PostgreSQL not reachable at %s:%d — skip', $pg->host, $pg->port));
+            $this->markTestSkipped('[needs:postgres] ' . sprintf('PostgreSQL not reachable at %s:%d — skip', $pg->host, $pg->port));
         }
         $this->db = Database::create($pg->url(self::PG_DB), username: $pg->user, password: $pg->pass);
         $this->db->execute('DROP TABLE IF EXISTS t4_exec_fail');

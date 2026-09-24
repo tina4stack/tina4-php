@@ -71,13 +71,13 @@ class MigrationFirebirdLedgerIdTest extends TestCase
     private function firebirdOrSkip(): Database
     {
         if (!function_exists('ibase_connect') && !in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
+            $this->markTestSkipped('[needs:firebird] Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
         }
 
         $url = self::firebirdUrl();
         if ($url === '') {
             $this->markTestSkipped(
-                'TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run, '
+                '[needs:firebird] TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run, '
                 . 'so the ledger id case cannot run'
             );
         }
@@ -89,7 +89,7 @@ class MigrationFirebirdLedgerIdTest extends TestCase
             $db = new Database($url);
             $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
         } catch (\Throwable $failure) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:firebird] ' . sprintf(
                 'Firebird cannot connect at %s — %s',
                 $url,
                 $failure->getMessage()

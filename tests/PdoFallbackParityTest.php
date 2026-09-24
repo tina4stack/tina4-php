@@ -168,14 +168,14 @@ class PdoFallbackParityTest extends TestCase
     private function postgresPair(): array
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql (pg_connect) is not available.');
+            $this->markTestSkipped('[needs:postgres] ext-pgsql (pg_connect) is not available.');
         }
         if (!in_array('pgsql', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_pgsql driver is not available.');
+            $this->markTestSkipped('[needs:postgres] pdo_pgsql driver is not available.');
         }
         $pg = \PgTestEnv::resolve();
         if (!$pg->reachable()) {
-            $this->markTestSkipped(sprintf('PostgreSQL not reachable at %s:%d', $pg->host, $pg->port));
+            $this->markTestSkipped('[needs:postgres] ' . sprintf('PostgreSQL not reachable at %s:%d', $pg->host, $pg->port));
         }
         $url = $pg->url('tina4');
         return [
@@ -280,17 +280,17 @@ class PdoFallbackParityTest extends TestCase
     {
         if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'pdo_firebird driver is not available — Firebird PDO fallback is UNVERIFIED in this environment.'
+                '[needs:firebird] pdo_firebird driver is not available — Firebird PDO fallback is UNVERIFIED in this environment.'
             );
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
             $this->markTestSkipped(
-                'TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — Firebird PDO fallback UNVERIFIED.'
+                '[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — Firebird PDO fallback UNVERIFIED.'
             );
         }
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not available to compare against — native-vs-PDO parity UNVERIFIED (PdoFirebirdAdapterTest covers the PDO-only contract).');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not available to compare against — native-vs-PDO parity UNVERIFIED (PdoFirebirdAdapterTest covers the PDO-only contract).');
         }
         // ext-interbase can be PRESENT-but-BROKEN (the macOS + FB5 clumplet case
         // this whole fallback exists for). If native cannot connect there is
@@ -300,7 +300,7 @@ class PdoFallbackParityTest extends TestCase
             $native = new FirebirdAdapter($url);
         } catch (\Throwable $e) {
             $this->markTestSkipped(
-                'ext-interbase present but cannot connect (' . $e->getMessage()
+                '[needs:firebird] ext-interbase present but cannot connect (' . $e->getMessage()
                 . ') — native-vs-PDO parity UNVERIFIED here; PdoFirebirdAdapterTest covers the PDO path.'
             );
         }

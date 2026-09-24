@@ -127,7 +127,7 @@ class MigrationContractTest extends TestCase
     private function mysqlOrSkip(): Database
     {
         if (!self::reachable(self::mysqlHost(), self::mysqlPort())) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:mysql] ' . sprintf(
                 'MySQL not reachable at %s:%d (set TINA4_TEST_MYSQL_*)',
                 self::mysqlHost(),
                 self::mysqlPort()
@@ -154,7 +154,7 @@ class MigrationContractTest extends TestCase
     private function pgOrSkip(): Database
     {
         if (!self::reachable(self::pgHost(), self::pgPort())) {
-            $this->markTestSkipped(sprintf(
+            $this->markTestSkipped('[needs:postgres] ' . sprintf(
                 'PostgreSQL not reachable at %s:%d (set TINA4_TEST_PG_*)',
                 self::pgHost(),
                 self::pgPort()
@@ -181,10 +181,10 @@ class MigrationContractTest extends TestCase
     private function mssqlOrSkip(): Database
     {
         if (!function_exists('sqlsrv_connect') && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available');
+            $this->markTestSkipped('[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available');
         }
         if (!self::reachable(self::mssqlHost(), self::mssqlPort())) {
-            $this->markTestSkipped(sprintf('MSSQL not reachable at %s:%d', self::mssqlHost(), self::mssqlPort()));
+            $this->markTestSkipped('[needs:mssql] ' . sprintf('MSSQL not reachable at %s:%d', self::mssqlHost(), self::mssqlPort()));
         }
         return new Database(
             sprintf('mssql://%s:%d/%s', self::mssqlHost(), self::mssqlPort(), getenv('TINA4_TEST_MSSQL_DB') ?: 'tina4_test'),
@@ -203,17 +203,17 @@ class MigrationContractTest extends TestCase
     private function firebirdOrSkip(): Database
     {
         if (!function_exists('ibase_connect') && !in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
+            $this->markTestSkipped('[needs:firebird] Firebird client not installed — neither ext-interbase nor pdo_firebird is available');
         }
         $url = self::firebirdUrl();
         if ($url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL is not set — no live Firebird was promised to this run');
         }
         try {
             $db = new Database($url);
             $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
         } catch (\Throwable $failure) {
-            $this->markTestSkipped(sprintf('Firebird cannot connect at %s — %s', $url, $failure->getMessage()));
+            $this->markTestSkipped('[needs:firebird] ' . sprintf('Firebird cannot connect at %s — %s', $url, $failure->getMessage()));
         }
         return $db;
     }

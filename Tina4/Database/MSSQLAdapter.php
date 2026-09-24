@@ -135,7 +135,11 @@ class MSSQLAdapter implements DatabaseAdapter
             $options = [];
             if ($timeout > 0) {
                 $options[\PDO::ATTR_TIMEOUT] = $timeout;
-                $options[\PDO::DBLIB_ATTR_CONNECTION_TIMEOUT] = $timeout;
+                // PHP 8.4 added Pdo\Dblib; PHP 8.5 deprecates the PDO:: alias.
+                $connectionTimeoutAttribute = class_exists(\Pdo\Dblib::class)
+                    ? \Pdo\Dblib::ATTR_CONNECTION_TIMEOUT
+                    : \PDO::DBLIB_ATTR_CONNECTION_TIMEOUT;
+                $options[$connectionTimeoutAttribute] = $timeout;
             }
 
             try {

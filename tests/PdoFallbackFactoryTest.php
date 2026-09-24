@@ -51,11 +51,11 @@ class PdoFallbackFactoryTest extends TestCase
     public function testNativePostgresIsDefaultWhenExtPresent(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('ext-pgsql not present — cannot assert native default.');
+            $this->markTestSkipped('[needs:postgres] ext-pgsql not present — cannot assert native default.');
         }
         $pg = \PgTestEnv::resolve();
         if (!$pg->reachable()) {
-            $this->markTestSkipped(sprintf('PostgreSQL not reachable at %s:%d', $pg->host, $pg->port));
+            $this->markTestSkipped('[needs:postgres] ' . sprintf('PostgreSQL not reachable at %s:%d', $pg->host, $pg->port));
         }
         $db = Database::create($pg->url('tina4'), username: $pg->user, password: $pg->pass);
         $this->assertInstanceOf(
@@ -137,7 +137,7 @@ PHP;
 
         if ($data['ibase'] || $data['fbird'] || $data['pdo_fb']) {
             $this->markTestSkipped(
-                'Subprocess still has a Firebird driver — cannot exercise the no-driver error path here.'
+                '[needs:absent-ext=firebird] Subprocess still has a Firebird driver — cannot exercise the no-driver error path here.'
             );
         }
 
@@ -211,11 +211,11 @@ PHP;
     private function firebirdTarget(): array
     {
         if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_firebird driver not present — driver override UNVERIFIED.');
+            $this->markTestSkipped('[needs:firebird] pdo_firebird driver not present — driver override UNVERIFIED.');
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — UNVERIFIED.');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a real Firebird server) — UNVERIFIED.');
         }
         return [$url, 'SYSDBA', 'masterkey'];
     }

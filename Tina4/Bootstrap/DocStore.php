@@ -285,10 +285,26 @@ class DocStoreCodec
 
     /**
      * Field name -> a JSON path. Dotted names address nested keys.
+     *
+     * tina4: ADR-0069 - this is the single chokepoint every field path passes
+     * through on its way into SQL (extract / jsonType / each: filter keys at any
+     * depth, operator fields, sort keys). Every dot-separated segment must match
+     * [A-Za-z0-9_-]+ (so no empty segment); anything else is rejected before any
+     * SQL is built.
+     *
+     * @throws \InvalidArgumentException When a segment is not a safe field name.
      */
     public static function path(string $field): string
     {
         $segments = explode('.', $field);
+        foreach ($segments as $s) {
+            // \z, not $: `$` would also accept a trailing newline.
+            if (!preg_match('/^[A-Za-z0-9_-]+\z/', $s)) {
+                throw new \InvalidArgumentException(
+                    "DocStore: invalid field path '{$field}' - each dot-separated segment must match [A-Za-z0-9_-]+"
+                );
+            }
+        }
         $parts = [];
         foreach ($segments as $s) {
             // quote segments that are not bare identifiers

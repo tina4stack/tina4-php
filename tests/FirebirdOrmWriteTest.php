@@ -38,11 +38,11 @@ class FirebirdOrmWriteTest extends TestCase
     protected function setUp(): void
     {
         if (!function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed');
         }
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if (!$url) {
-            $this->markTestSkipped('Set TINA4_TEST_FIREBIRD_URL to run the live Firebird ORM write test');
+            $this->markTestSkipped('[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird ORM write test');
         }
 
         $this->db = Database::create($url);

@@ -37,14 +37,14 @@ class FirebirdColumnCaseTest extends TestCase
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
             $this->markTestSkipped(
-                'Set TINA4_TEST_FIREBIRD_URL to run the live Firebird column-case test'
+                '[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird column-case test'
             );
         }
         if ($driver === 'pdo' && !in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_firebird not present — that leg is UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] pdo_firebird not present — that leg is UNVERIFIED here.');
         }
         if ($driver === 'interbase' && !function_exists('ibase_connect') && !function_exists('fbird_connect')) {
-            $this->markTestSkipped('ext-interbase not installed — that leg is UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] ext-interbase not installed — that leg is UNVERIFIED here.');
         }
         return $url . (str_contains($url, '?') ? '&' : '?') . 'driver=' . $driver;
     }
@@ -57,7 +57,7 @@ class FirebirdColumnCaseTest extends TestCase
             $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE');
             return $db;
         } catch (\Throwable $e) {
-            $this->markTestSkipped("Firebird driver '{$driver}' cannot connect here ({$e->getMessage()})");
+            $this->markTestSkipped("[needs:firebird] Firebird driver '{$driver}' cannot connect here ({$e->getMessage()})");
         }
     }
 

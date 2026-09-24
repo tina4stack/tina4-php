@@ -366,6 +366,31 @@ controls mandatory. Follow them on every change, without being asked:
 - **Shared machines:** set `TINA4_NO_BROWSER=true` for local runs, kill only the processes you
   started, and use your own ports and lab directory.
 
+## Estimating time - measure, never guess
+
+An ETA is a claim like any other: base it on measured durations, qualify it, and never give a
+number you cannot explain. Human-pace estimates are wrong for agent work in both directions.
+
+- **Estimate from measured agent durations, not human effort.** Reference points measured on
+  2026-09-24 (Opus workers, four frameworks, lab + CI): a focused one-framework fix with tests
+  15-30 min; a four-framework parity fix with real-engine tests 45-90 min; a large subsystem
+  (a new HTTP server, a multipart parser) 90-120 min; one full framework suite on the lab
+  15-25 min; a CI run 8-20 min; review + merge of a green PR under 2 min. Update these figures
+  from the timestamps of completed work; do not reuse them blindly.
+- **Build the ETA from the critical path, not the sum.** Parallel work finishes with its slowest
+  item; sequential work (a queue run one at a time, a merge order, a rebase chain) adds up. Say
+  which applies. Waits count: CI queues, required checks, lab contention between workers, rate
+  limits and worker-slot limits are often longer than the work itself.
+- **Give a range and name its biggest driver.** "2-3 h, driven by the four queued groups running
+  one at a time" - never a single clock time with false precision.
+- **Prefer milestones over clock times** when the path has many external waits: list the
+  milestones in order and report each as it lands.
+- **Re-estimate after the first milestone** using its real duration, and say what changed.
+- **When the maintainer says an estimate is off, do not guess again.** Ask for the target time,
+  or switch to milestone reporting, then state what fits before that time and what would move.
+- **Record actual durations** in the plan's Commits/log lines (start and finish time), so the
+  next estimate has data.
+
 ## The Guiding Philosophy
 
 > **"The best code you write is the code you don't write."**

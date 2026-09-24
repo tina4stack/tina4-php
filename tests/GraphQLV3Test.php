@@ -485,4 +485,29 @@ class GraphQLV3Test extends TestCase
             unset($_ENV['TINA4_GRAPHQL_MAX_DEPTH']);
         }
     }
+
+    /**
+     * GraphQL spec 2.1.7: commas are insignificant - between arguments,
+     * between selected fields and between list values (parity case
+     * commas_are_insignificant_between_arguments_and_fields).
+     */
+    public function testCommasAreInsignificantBetweenArgumentsAndFields(): void
+    {
+        $gql = new GraphQL();
+        $gql->addType('Pair', ['a' => 'Int', 'b' => 'Int', 'sum' => 'Int', 'tags' => '[String]']);
+        $gql->addQuery('pair', ['a' => 'Int', 'b' => 'Int', 'tags' => '[String]'], 'Pair', function ($root, $args, $ctx) {
+            return ['a' => $args['a'], 'b' => $args['b'], 'sum' => $args['a'] + $args['b'], 'tags' => $args['tags'] ?? []];
+        });
+
+        $expected = ['a' => 1, 'b' => 2, 'sum' => 3, 'tags' => ['x', 'y']];
+        foreach ([
+            '{ pair(a: 1, b: 2, tags: ["x", "y"]) { a, b, sum, tags } }',
+            '{ pair(a: 1 b: 2 tags: ["x" "y"]) { a b sum tags } }',
+            '{ pair(a: 1,, b: 2, tags: ["x",, "y",]) { a,, b, sum, tags, } }',
+        ] as $query) {
+            $result = $gql->execute($query);
+            $this->assertArrayNotHasKey('errors', $result, $query . ' => ' . json_encode($result));
+            $this->assertSame($expected, $result['data']['pair'] ?? null, $query . ' => ' . json_encode($result));
+        }
+    }
 }

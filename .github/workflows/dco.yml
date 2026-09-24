@@ -1,0 +1,32 @@
+name: DCO
+
+# Every commit in a pull request carries a Signed-off-by line (git commit -s).
+# Contributor policy: https://tina4.com/general/contributing.html (ADR-0073, ADR-0075).
+# Shell only; no third-party action.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sign-off:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Every commit is signed off
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          for commit in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$commit" | grep -qE '^Signed-off-by: .+ <.+>$'; then
+              echo "::error::commit $commit has no Signed-off-by line - amend it with: git commit --amend -s"
+              missing=1
+            fi
+          done
+          exit $missing

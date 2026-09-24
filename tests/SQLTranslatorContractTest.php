@@ -73,7 +73,7 @@ class SQLTranslatorContractTest extends TestCase
         $host = getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_MYSQL_PORT') ?: 3306);
         if (!self::reachable($host, $port)) {
-            $this->markTestSkipped("MySQL not reachable at {$host}:{$port} for the SQL-translator contract");
+            $this->markTestSkipped("[needs:mysql] MySQL not reachable at {$host}:{$port} for the SQL-translator contract");
         }
         return Database::create(self::mysqlUrl());
     }
@@ -83,7 +83,7 @@ class SQLTranslatorContractTest extends TestCase
         $host = getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_PG_PORT') ?: 55432);
         if (!self::reachable($host, $port)) {
-            $this->markTestSkipped("PostgreSQL not reachable at {$host}:{$port} for the SQL-translator contract");
+            $this->markTestSkipped("[needs:postgres] PostgreSQL not reachable at {$host}:{$port} for the SQL-translator contract");
         }
         return Database::create(self::pgUrl());
     }

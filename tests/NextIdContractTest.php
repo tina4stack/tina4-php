@@ -97,7 +97,7 @@ class NextIdContractTest extends TestCase
         $host = getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_PG_PORT') ?: 55432);
         if (!self::tcpReachable($host, $port)) {
-            $this->markTestSkipped("no reachable postgres at {$host}:{$port} (set TINA4_TEST_PG_*)");
+            $this->markTestSkipped("[needs:postgres] no reachable postgres at {$host}:{$port} (set TINA4_TEST_PG_*)");
         }
     }
 
@@ -106,7 +106,7 @@ class NextIdContractTest extends TestCase
         $host = getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_MYSQL_PORT') ?: 3306);
         if (!self::tcpReachable($host, $port)) {
-            $this->markTestSkipped("no reachable mysql at {$host}:{$port} (set TINA4_TEST_MYSQL_*)");
+            $this->markTestSkipped("[needs:mysql] no reachable mysql at {$host}:{$port} (set TINA4_TEST_MYSQL_*)");
         }
     }
 

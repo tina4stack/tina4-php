@@ -152,7 +152,7 @@ class SeederContractTest extends TestCase
         $host = getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_PG_PORT') ?: 55432);
         if (!self::tcpReachable($host, $port)) {
-            $this->markTestSkipped("no reachable postgres at {$host}:{$port} (set TINA4_TEST_PG_*)");
+            $this->markTestSkipped("[needs:postgres] no reachable postgres at {$host}:{$port} (set TINA4_TEST_PG_*)");
         }
     }
 
@@ -160,13 +160,13 @@ class SeederContractTest extends TestCase
     {
         if (!function_exists('sqlsrv_connect') && !in_array('dblib', \PDO::getAvailableDrivers(), true)) {
             $this->markTestSkipped(
-                'MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
+                '[needs:mssql] MSSQL client not installed — neither ext-sqlsrv nor ext-pdo_dblib (FreeTDS) is available'
             );
         }
         $host = getenv('TINA4_TEST_MSSQL_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('TINA4_TEST_MSSQL_PORT') ?: 1433);
         if (!self::tcpReachable($host, $port)) {
-            $this->markTestSkipped("MSSQL not reachable at {$host}:{$port} (set TINA4_TEST_MSSQL_*)");
+            $this->markTestSkipped("[needs:mssql] MSSQL not reachable at {$host}:{$port} (set TINA4_TEST_MSSQL_*)");
         }
     }
 
@@ -174,7 +174,7 @@ class SeederContractTest extends TestCase
     {
         $url = self::firebirdUrl();
         if ($url === '') {
-            $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
+            $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)');
         }
         return $url;
     }

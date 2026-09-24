@@ -170,7 +170,7 @@ class InstanceLoadingContractTest extends TestCase
         $port = (int) (getenv('TINA4_TEST_PG_PORT') ?: 55432);
         $c = @fsockopen($host, $port, $errno, $errstr, 3.0);
         if (!$c) {
-            $this->markTestSkipped("postgres unreachable at {$host}:{$port} (set TINA4_TEST_PG_*)");
+            $this->markTestSkipped("[needs:postgres] postgres unreachable at {$host}:{$port} (set TINA4_TEST_PG_*)");
         }
         fclose($c);
 

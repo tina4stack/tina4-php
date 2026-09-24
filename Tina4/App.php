@@ -1468,7 +1468,12 @@ HTML;
                     Swagger::isEnabled(),
                     $this->isDevelopment()
                 );
-                echo "  Server:    http://localhost:{$port}{$wsInfo}{$swaggerLine}{$dashboardLine}\n";
+                // Name the host the server really bound. This hard-coded
+                // "localhost", so a server bound to a LAN address advertised
+                // an address it was not listening on. Only the wildcard binds
+                // read as localhost, as in Python, Ruby and Node.
+                $displayHost = ($host === '0.0.0.0' || $host === '::') ? 'localhost' : $host;
+                echo "  Server:    http://{$displayHost}:{$port}{$wsInfo}{$swaggerLine}{$dashboardLine}\n";
                 echo "  Routes:    {$routeCount}\n";
                 echo "\n  Press Ctrl+C to stop.\n\n";
             }

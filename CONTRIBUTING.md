@@ -1,52 +1,20 @@
-### Contributing to Tina4
+# Contributing
 
-All contributors are welcome, especially if you are wanting to fix a bug or add functionality.
+Thanks for helping with Tina4. The full contributor policy lives at
+https://tina4.com/general/contributing.html - this is the short version.
 
-In order to contribute you need to fork this project and submit a pull request
-
-- All code submitted will be subject to review
-- Tina4 is highly opinionated from a design stand point so please discuss new features with the team.
-
-#### Where can you make the most impact?
-
-- Adding to documentation
-- Submitting or fixing bugs
-- Adding new database functionality (MSSQL,PostGres,CUBRID,ODBC are top priority)
-- Assisting with localization (translating)
-
-#### PHPDoc house style
-
-Docblocks describe what the code does for the next reader. They are not a
-changelog. Keep them accurate and current with the code.
-
-Every public method and function carries a docblock with:
-
-- A one-line summary of the behaviour, in the present tense ("Lists the tables
-  in the connected database.").
-- `@param <type> $name` for each parameter, describing what it is, not just its
-  type.
-- `@return <type>` describing what comes back (omit only for a `void`/`never`
-  method where the summary already makes that clear).
-- `@throws <Class>` for every exception the caller can reasonably hit, with the
-  condition that triggers it ("@throws DatabaseException when the statement
-  fails").
-
-Rules:
-
-- Describe the behaviour, never the fix. Write "Returns the parsed body" not
-  "Fixed body parsing" or "Changed in 3.13.x". Version notes belong in the
-  changelog and release notes, not in a docblock.
-- No orphaned docblocks. A docblock must sit directly above the method,
-  function, class, or property it documents. Delete a docblock when you delete
-  its code, and update it in the same change when you change a signature.
-- Types in `@param`/`@return` must match the real signature, including nullable
-  (`?string`) and union (`int|string`) types. A docblock that disagrees with
-  the signature is a bug.
-- Keep it short. If the docblock is longer than the method, the method probably
-  needs splitting, or the docblock is narrating instead of describing.
-
-The AI-context generator (`Tina4\AITools::generateContext`) reflects this standard so
-generated contribution guidance matches it. A lightweight lint for missing tags
-may follow; until then this is reviewed by hand on every pull request.
-
-Join the Slack channel by clicking on the link at https://tina4.com
+- **Fork and open a pull request** against `v3`. Nobody pushes to the release branch
+  directly, and a pull request merges only when the required checks are green.
+- **Tests first, and real.** A test that touches a database, queue, cache, socket or mail
+  server talks to the real thing. No mocks. Include a positive and a negative case, and a
+  regression test for every bug fix.
+- **Parity.** Tina4 is one framework in four languages. If the behaviour exists in Python,
+  PHP, Ruby and Node.js, change all four or say why it belongs to one.
+- **No new runtime dependencies.** Drivers and optional servers are the application's
+  choice (ADR-0067). A new development dependency needs a written reason.
+- **Sign off every commit** with `git commit -s`, and agree to the
+  [Contributor Licence Agreement](https://tina4.com/general/contributor-licence-agreement.html)
+  on your first pull request.
+- **Security issues stay private.** Don't open an issue or pull request about a
+  vulnerability - follow [SECURITY.md](SECURITY.md) and the
+  [security research policy](https://tina4.com/general/security-research.html).

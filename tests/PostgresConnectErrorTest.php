@@ -23,7 +23,7 @@ final class PostgresConnectErrorTest extends TestCase
     protected function setUp(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('needs ext-pgsql to exercise the adapter');
+            $this->markTestSkipped('[needs:postgres] needs ext-pgsql to exercise the adapter');
         }
     }
 

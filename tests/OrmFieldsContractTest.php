@@ -251,7 +251,7 @@ final class OrmFieldsContractTest extends TestCase
         if ($engine === 'postgres') {
             $h = getenv('TINA4_TEST_PG_HOST') ?: '127.0.0.1';
             $p = (int) (getenv('TINA4_TEST_PG_PORT') ?: 55432);
-            if (!$reach($h, $p)) { $this->markTestSkipped("postgres unreachable at {$h}:{$p} (set TINA4_TEST_PG_*)"); }
+            if (!$reach($h, $p)) { $this->markTestSkipped("[needs:postgres] postgres unreachable at {$h}:{$p} (set TINA4_TEST_PG_*)"); }
             $db = getenv('TINA4_TEST_PG_DB') ?: 'tina4_php';
             $u = getenv('TINA4_TEST_PG_USERNAME') ?: 'tina4';
             $pw = getenv('TINA4_TEST_PG_PASSWORD') ?: 'tina4';
@@ -260,7 +260,7 @@ final class OrmFieldsContractTest extends TestCase
         if ($engine === 'mysql') {
             $h = getenv('TINA4_TEST_MYSQL_HOST') ?: '127.0.0.1';
             $p = (int) (getenv('TINA4_TEST_MYSQL_PORT') ?: 3306);
-            if (!$reach($h, $p)) { $this->markTestSkipped("mysql unreachable at {$h}:{$p} (set TINA4_TEST_MYSQL_*)"); }
+            if (!$reach($h, $p)) { $this->markTestSkipped("[needs:mysql] mysql unreachable at {$h}:{$p} (set TINA4_TEST_MYSQL_*)"); }
             $db = getenv('TINA4_TEST_MYSQL_DB') ?: 'tina4_test';
             $u = getenv('TINA4_TEST_MYSQL_USERNAME') ?: 'tina4';
             $pw = getenv('TINA4_TEST_MYSQL_PASSWORD') ?: 'tina4';
@@ -269,7 +269,7 @@ final class OrmFieldsContractTest extends TestCase
         if ($engine === 'mssql') {
             $h = getenv('TINA4_TEST_MSSQL_HOST') ?: '127.0.0.1';
             $p = (int) (getenv('TINA4_TEST_MSSQL_PORT') ?: 1433);
-            if (!$reach($h, $p)) { $this->markTestSkipped("mssql unreachable at {$h}:{$p} (set TINA4_TEST_MSSQL_*)"); }
+            if (!$reach($h, $p)) { $this->markTestSkipped("[needs:mssql] mssql unreachable at {$h}:{$p} (set TINA4_TEST_MSSQL_*)"); }
             $db = getenv('TINA4_TEST_MSSQL_DB') ?: 'tina4_test';
             $u = getenv('TINA4_TEST_MSSQL_USERNAME') ?: 'sa';
             $pw = getenv('TINA4_TEST_MSSQL_PASSWORD') ?: 'TinaSQL123!Secure';
@@ -277,7 +277,7 @@ final class OrmFieldsContractTest extends TestCase
         }
         // firebird — gated; runs when TINA4_TEST_FIREBIRD_URL is set (the lab sets it)
         $url = getenv('TINA4_TEST_FIREBIRD_URL') ?: '';
-        if ($url === '') { $this->markTestSkipped('TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)'); }
+        if ($url === '') { $this->markTestSkipped('[needs:firebird] TINA4_TEST_FIREBIRD_URL not set (needs a live Firebird)'); }
         return Database::create($url);
     }
 

@@ -41,11 +41,11 @@ class BooleanParamBindingTest extends TestCase
     public function testPostgresBoundBooleanRoundTrips(): void
     {
         if (!function_exists('pg_connect')) {
-            $this->markTestSkipped('PostgresAdapter requires ext-pgsql.');
+            $this->markTestSkipped('[needs:postgres] PostgresAdapter requires ext-pgsql.');
         }
         $pg = \PgTestEnv::resolve();
         if (!$pg->reachable()) {
-            $this->markTestSkipped('PostgreSQL not reachable — skip');
+            $this->markTestSkipped('[needs:postgres] PostgreSQL not reachable — skip');
         }
 
         $db = Database::create(

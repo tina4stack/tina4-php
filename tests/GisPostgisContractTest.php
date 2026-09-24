@@ -20,7 +20,7 @@ final class GisPostgisContractTest extends TestCase
         $host = $parts['host'] ?? 'localhost';
         $port = (int) ($parts['port'] ?? 5432);
         $socket = @fsockopen($host, $port, $errno, $error, 1.0);
-        if ($socket === false) $this->markTestSkipped("PostGIS not reachable at {$host}:{$port}");
+        if ($socket === false) $this->markTestSkipped("[needs:postgis] PostGIS not reachable at {$host}:{$port}");
         fclose($socket);
         $database = ltrim($parts['path'] ?? '/tina4_gis', '/');
         $this->db = Database::create(

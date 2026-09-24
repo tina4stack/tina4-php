@@ -35,7 +35,7 @@ class SessionDatabaseFirebirdTest extends TestCase
         $url = getenv('TINA4_TEST_FIREBIRD_URL');
         if ($url === false || $url === '') {
             $this->markTestSkipped(
-                'Set TINA4_TEST_FIREBIRD_URL to run the live Firebird session test '
+                '[needs:firebird] Set TINA4_TEST_FIREBIRD_URL to run the live Firebird session test '
                 . '(e.g. firebird://SYSDBA:masterkey@localhost:3050//tmp/test.fdb)'
             );
         }
@@ -54,13 +54,13 @@ class SessionDatabaseFirebirdTest extends TestCase
     {
         $url = $this->pdoUrl();
         if (!in_array('firebird', \PDO::getAvailableDrivers(), true)) {
-            $this->markTestSkipped('pdo_firebird driver not present - session-on-Firebird UNVERIFIED here.');
+            $this->markTestSkipped('[needs:firebird] pdo_firebird driver not present - session-on-Firebird UNVERIFIED here.');
         }
         try {
             $db = Database::create($url);
             $db->fetchOne('SELECT 1 AS N FROM RDB$DATABASE'); // touch it - a broken driver fails HERE
         } catch (\Throwable $e) {
-            $this->markTestSkipped("pdo_firebird cannot connect here ({$e->getMessage()}) - leg UNVERIFIED.");
+            $this->markTestSkipped("[needs:firebird] pdo_firebird cannot connect here ({$e->getMessage()}) - leg UNVERIFIED.");
         }
         return $db;
     }
