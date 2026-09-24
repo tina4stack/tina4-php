@@ -78,12 +78,15 @@ class Database implements DatabaseAdapter
      * the final commit lands on yet another adapter that has nothing
      * to commit; rollback() is silently no-op'd).
      *
-     * PHP-FPM is one process per request, so a plain instance property
-     * works as the per-request pin — there's no thread-local needed
-     * (Python uses threading.local() for its multi-threaded model).
-     * startTransaction() sets the pin, commit()/rollback() clear it.
+     * A shared Database may be used by native Fibers or Swoole coroutines.
+     * Each execution context has its own transaction/operation state, and
+     * the pool owns exclusive leases until terminal commit/rollback.
      */
-    private ?DatabaseAdapter $pinnedAdapter = null;
+    private ?\WeakMap $fiberContexts = null;
+    private array $coroutineContexts = [];
+    private ?object $mainContext = null;
+    /** @var array<int, object> Exclusive execution-context owners of pool slots. */
+    private array $poolOwners = [];
 
     /**
      * @var int Explicit-transaction depth counter (DB-contract C, v3.13.37).
@@ -96,7 +99,7 @@ class Database implements DatabaseAdapter
      * re-beginning; the inner commit just unwinds the depth, the OUTER commit
      * is the real one. Parity with Python's _tx_local.depth.
      */
-    private int $txDepth = 0;
+
 
     /**
      * @var bool Whether the current pin came from an explicit startTransaction()
@@ -104,7 +107,7 @@ class Database implements DatabaseAdapter
      *           must NOT open a nested BEGIN IMMEDIATE while a user transaction
      *           is open on the same connection.
      */
-    private bool $insideExplicitTransaction = false;
+
 
     /** @var string Connection URL for lazy pool creation */
     private string $url;
@@ -212,28 +215,124 @@ class Database implements DatabaseAdapter
      *
      * @return DatabaseAdapter
      */
+    private function executionContext(): object
+    {
+        $make = static fn() => (object) ['pinnedAdapter' => null, 'txDepth' => 0,
+            'insideExplicitTransaction' => false, 'operationAdapter' => null];
+        // Fibers are native execution contexts; their objects avoid recycled IDs.
+        if (($fiber = \Fiber::getCurrent()) !== null) {
+            $this->fiberContexts ??= new \WeakMap();
+            return $this->fiberContexts[$fiber] ??= $make();
+        }
+        foreach (['Swoole\\Coroutine', 'OpenSwoole\\Coroutine'] as $class) {
+            if (class_exists($class, false) && ($id = $class::getCid()) >= 0) {
+                return $this->coroutineContexts[$class . ':' . $id] ??= $make();
+            }
+        }
+        return $this->mainContext ??= $make();
+    }
+
+    private function borrowAdapter(): DatabaseAdapter
+    {
+        $size = max(1, $this->poolSize);
+        for ($i = 0; $i < $size; $i++) {
+            $idx = $this->poolIndex;
+            $this->poolIndex = ($idx + 1) % $size;
+            if (isset($this->poolOwners[$idx])) {
+                continue;
+            }
+            // Reserve before connecting: an async driver can yield here.
+            $this->poolOwners[$idx] = $this->executionContext();
+            try {
+                if ($this->poolSize === 0) {
+                    $this->adapter ??= self::wrapWithCache(self::createAdapter($this->url, $this->autoCommit, $this->dbUsername, $this->dbPassword), $this->url);
+                    return $this->adapter;
+                }
+                if ($this->pool[$idx] === null) {
+                    $adapter = self::createAdapter($this->url, $this->autoCommit, $this->dbUsername, $this->dbPassword);
+                    $this->pool[$idx] = self::wrapWithCache($adapter, $this->url);
+                }
+                return $this->pool[$idx];
+            } catch (\Throwable $e) {
+                unset($this->poolOwners[$idx]);
+                throw $e;
+            }
+        }
+        throw new \RuntimeException('Database connection pool exhausted');
+    }
+
+    private function returnAdapter(DatabaseAdapter $adapter, bool $discard = false): void
+    {
+        $candidates = $this->poolSize > 0 ? $this->pool : [$this->adapter];
+        foreach ($candidates as $idx => $candidate) {
+            $raw = $candidate instanceof CachedDatabase ? $candidate->getAdapter() : $candidate;
+            if ($adapter !== $candidate && $adapter !== $raw) {
+                continue;
+            }
+            if (($this->poolOwners[$idx] ?? null) !== $this->executionContext()) {
+                throw new \LogicException('Adapter is not leased by this execution context');
+            }
+            if ($discard) {
+                try { $candidate->close(); } catch (\Throwable) {}
+                if ($this->poolSize > 0) {
+                    $this->pool[$idx] = null;
+                } else {
+                    $this->adapter = null;
+                }
+            }
+            unset($this->poolOwners[$idx]);
+            return;
+        }
+        throw new \LogicException('Adapter does not belong to this pool');
+    }
+
     private function getNextAdapter(): DatabaseAdapter
     {
-        // Pinned during a transaction — same adapter for every call.
-        if ($this->pinnedAdapter !== null) {
-            return $this->pinnedAdapter;
+        $state = $this->executionContext();
+        if ($state->pinnedAdapter !== null) {
+            return $state->pinnedAdapter;
         }
-
-        if ($this->poolSize > 0) {
-            $idx = $this->poolIndex;
-            $this->poolIndex = ($this->poolIndex + 1) % $this->poolSize;
-
-            if ($this->pool[$idx] === null) {
-                $adapter = self::createAdapter(
-                    $this->url, $this->autoCommit, $this->dbUsername, $this->dbPassword
-                );
-                $this->pool[$idx] = self::wrapWithCache($adapter, $this->url);
-            }
-
-            return $this->pool[$idx];
+        if ($state->operationAdapter !== null) {
+            return $state->operationAdapter;
         }
+        // Non-owning metadata getter: never expose another context's lease.
+        $adapter = $this->borrowAdapter();
+        $this->returnAdapter($adapter);
+        return $adapter;
+    }
 
-        return $this->adapter;
+    private function enterOperation(): ?DatabaseAdapter
+    {
+        $state = $this->executionContext();
+        if ($state->pinnedAdapter !== null || $state->operationAdapter !== null) {
+            return null;
+        }
+        return $state->operationAdapter = $this->borrowAdapter();
+    }
+
+    private function leaveOperation(?DatabaseAdapter $adapter, bool $failed): void
+    {
+        if ($adapter === null) { return; }
+        $state = $this->executionContext();
+        $state->operationAdapter = null;
+        if ($state->pinnedAdapter === $adapter) { return; }
+        $discard = false;
+        if ($failed) {
+            try { $adapter->rollback(); } catch (\Throwable) { $discard = true; }
+        }
+        $this->returnAdapter($adapter, $discard);
+    }
+
+    private function releaseTransaction(bool $discard = false): void
+    {
+        $state = $this->executionContext();
+        $adapter = $state->pinnedAdapter;
+        $state->pinnedAdapter = null;
+        $state->insideExplicitTransaction = false;
+        $state->txDepth = 0;
+        if ($adapter !== null && $state->operationAdapter !== $adapter) {
+            $this->returnAdapter($adapter, $discard);
+        }
     }
 
     /**
@@ -298,22 +397,26 @@ class Database implements DatabaseAdapter
      */
     public function checkout(): DatabaseAdapter
     {
-        return $this->getAdapter();
+        $adapter = $this->borrowAdapter();
+        return $adapter instanceof CachedDatabase ? $adapter->getAdapter() : $adapter;
     }
 
     /**
      * Return a borrowed adapter to the pool.
      *
-     * In PHP, pool connections are persistent and remain in the pool array,
-     * so this is a no-op. It exists to satisfy the cross-framework interface
-     * and document the borrow/return pattern.
+     * Only the execution context that checked out the adapter may return it.
+     * Transaction leases belong to commit/rollback, not an explicit borrower.
      *
      * @param DatabaseAdapter $adapter The adapter previously returned by checkout()
      */
     public function checkin(DatabaseAdapter $adapter): void
     {
-        // No-op — PHP pool connections are persistent references in the pool array.
-        // The adapter is already held by $this->pool and will be reused automatically.
+        $pin = $this->executionContext()->pinnedAdapter;
+        $rawPin = $pin instanceof CachedDatabase ? $pin->getAdapter() : $pin;
+        if ($adapter === $pin || $adapter === $rawPin) {
+            throw new \LogicException('Cannot check in an active transaction');
+        }
+        $this->returnAdapter($adapter);
     }
 
     /**
@@ -340,7 +443,16 @@ class Database implements DatabaseAdapter
      */
     public function query(string $sql, array $params = []): array
     {
-        return $this->getNextAdapter()->query($sql, $params);
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->query($sql, $params);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -360,38 +472,47 @@ class Database implements DatabaseAdapter
      */
     public function fetch(string $sql, array $params = [], int $limit = 100, int $offset = 0, bool $noCache = false): DatabaseResult
     {
-        $adapter = $this->getNextAdapter();
-
-        // FAIL LOUD (v3.13.37, DB-contract A): the adapter's fetch() RAISES on a
-        // bad statement (no swallow-to-empty-result). Mirror the Python master's
-        // _fetch_direct: clear lastError on success, and on a SQL error capture
-        // the cause on getError() — preferring the adapter's own error message
-        // (set in its error path) over the str() of the exception — BEFORE the
-        // re-raise. Engines that don't expose their own lastError still get a
-        // populated getError() via $e->getMessage().
+        $lease = $this->enterOperation();
+        $operationFailed = false;
         try {
-            $raw = $adapter instanceof CachedDatabase
-                ? $adapter->fetch($sql, $params, $limit, $offset, $noCache)
-                : $adapter->fetch($sql, $params, $limit, $offset);
-            $this->lastError = null;
+            $adapter = $this->getNextAdapter();
+
+            // FAIL LOUD (v3.13.37, DB-contract A): the adapter's fetch() RAISES on a
+            // bad statement (no swallow-to-empty-result). Mirror the Python master's
+            // _fetch_direct: clear lastError on success, and on a SQL error capture
+            // the cause on getError() — preferring the adapter's own error message
+            // (set in its error path) over the str() of the exception — BEFORE the
+            // re-raise. Engines that don't expose their own lastError still get a
+            // populated getError() via $e->getMessage().
+            try {
+                $raw = $adapter instanceof CachedDatabase
+                    ? $adapter->fetch($sql, $params, $limit, $offset, $noCache)
+                    : $adapter->fetch($sql, $params, $limit, $offset);
+                $this->lastError = null;
+            } catch (\Throwable $e) {
+                $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+                throw $e;
+            }
+
+            $records = $raw['data'] ?? [];
+            $columns = !empty($records) ? array_keys($records[0]) : [];
+            $total   = $raw['total'] ?? count($records);
+
+            return new DatabaseResult(
+                records: $records,
+                columns: $columns,
+                count:   $total,
+                limit:   $limit,
+                offset:  $offset,
+                adapter: $adapter,
+                sql:     $sql,
+            );
         } catch (\Throwable $e) {
-            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            $operationFailed = true;
             throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-
-        $records = $raw['data'] ?? [];
-        $columns = !empty($records) ? array_keys($records[0]) : [];
-        $total   = $raw['total'] ?? count($records);
-
-        return new DatabaseResult(
-            records: $records,
-            columns: $columns,
-            count:   $total,
-            limit:   $limit,
-            offset:  $offset,
-            adapter: $adapter,
-            sql:     $sql,
-        );
     }
 
     /**
@@ -419,7 +540,16 @@ class Database implements DatabaseAdapter
      */
     public function fetchAll(string $sql, array $params = [], int $limit = 0, int $offset = 0, bool $noCache = false): array
     {
-        return $this->fetch($sql, $params, $limit, $offset, $noCache)->records;
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->fetch($sql, $params, $limit, $offset, $noCache)->records;
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -432,25 +562,34 @@ class Database implements DatabaseAdapter
      */
     public function fetchOne(string $sql, array $params = [], bool $noCache = false): ?array
     {
-        $adapter = $this->getNextAdapter();
-
-        // FAIL LOUD (v3.13.37, DB-contract A): fetchOne() used to call the
-        // adapter directly, so a SQL error raised (good) but getError() stayed
-        // null — the public API couldn't read the cause. Route it through the
-        // same error-capturing path fetch() uses: clear lastError on success,
-        // and on a SQL error capture the cause (adapter->error() preferred over
-        // the exception message) BEFORE the re-raise. Because it raises before
-        // the CachedDatabase wrapper can store the result, a buried failure can
-        // never be cached. Mirrors the Python master's _fetch_one_direct.
+        $lease = $this->enterOperation();
+        $operationFailed = false;
         try {
-            $result = $adapter instanceof CachedDatabase
-                ? $adapter->fetchOne($sql, $params, $noCache)
-                : $adapter->fetchOne($sql, $params);
-            $this->lastError = null;
-            return $result;
+            $adapter = $this->getNextAdapter();
+
+            // FAIL LOUD (v3.13.37, DB-contract A): fetchOne() used to call the
+            // adapter directly, so a SQL error raised (good) but getError() stayed
+            // null — the public API couldn't read the cause. Route it through the
+            // same error-capturing path fetch() uses: clear lastError on success,
+            // and on a SQL error capture the cause (adapter->error() preferred over
+            // the exception message) BEFORE the re-raise. Because it raises before
+            // the CachedDatabase wrapper can store the result, a buried failure can
+            // never be cached. Mirrors the Python master's _fetch_one_direct.
+            try {
+                $result = $adapter instanceof CachedDatabase
+                    ? $adapter->fetchOne($sql, $params, $noCache)
+                    : $adapter->fetchOne($sql, $params);
+                $this->lastError = null;
+                return $result;
+            } catch (\Throwable $e) {
+                $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+                throw $e;
+            }
         } catch (\Throwable $e) {
-            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            $operationFailed = true;
             throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
     }
 
@@ -477,71 +616,80 @@ class Database implements DatabaseAdapter
      */
     public function execute(string $sql, array $params = []): bool|DatabaseResult
     {
-        $adapter = $this->getNextAdapter();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            $adapter = $this->getNextAdapter();
 
-        // A statement that produces rows - a query, a CALL/EXEC, a write with
-        // RETURNING or OUTPUT - hands them back as a DatabaseResult. It runs
-        // ONCE through the adapter's query(), with no COUNT probe and no
-        // pagination, and commits like any other statement outside a
-        // transaction.
-        if (SqlStatement::producesRows($sql)) {
+            // A statement that produces rows - a query, a CALL/EXEC, a write with
+            // RETURNING or OUTPUT - hands them back as a DatabaseResult. It runs
+            // ONCE through the adapter's query(), with no COUNT probe and no
+            // pagination, and commits like any other statement outside a
+            // transaction.
+            if (SqlStatement::producesRows($sql)) {
+                try {
+                    $rows = $adapter->query($sql, $params);
+                } catch (\Exception $e) {
+                    $this->affectedRows = 0;
+                    $this->lastError = $e->getMessage();
+                    throw $e;
+                }
+                if ($adapter->error() !== null) {
+                    $this->affectedRows = 0;
+                    $this->lastError = $adapter->error();
+                    throw new DatabaseException('Database::execute() failed: ' . $this->lastError);
+                }
+                $this->affectedRows = SqlStatement::isWrite($sql) ? count($rows) : 0;
+                $this->lastError = null;
+                // A write that returned its key keeps lastInsertId() working, as it
+                // did when RETURNING went through the adapter's execute().
+                $first = $rows[0] ?? [];
+                $this->returnedId = SqlStatement::isWrite($sql) && $first !== [] ? reset($first) : null;
+                return new DatabaseResult(
+                    records: $rows,
+                    columns: $rows === [] ? [] : array_keys($rows[0]),
+                    count: count($rows),
+                    adapter: $adapter,
+                    sql: $sql,
+                    affectedRows: $this->affectedRows,
+                );
+            }
+
+            $this->returnedId = null;
             try {
-                $rows = $adapter->query($sql, $params);
+                $result = $adapter->execute($sql, $params);
             } catch (\Exception $e) {
+                // Adapter raised (driver exception, or our own DatabaseException
+                // re-thrown from the adapter). Capture the cause and re-raise —
+                // fetch()/fetchOne() already behave this way; execute() was the
+                // lone swallower. Python master: "set last_error; raise".
                 $this->affectedRows = 0;
                 $this->lastError = $e->getMessage();
                 throw $e;
             }
-            if ($adapter->error() !== null) {
-                $this->affectedRows = 0;
+            // Capture the affected-row count from the adapter that just ran the write
+            // (guarded — an adapter that does not expose it reports 0). Consumers read
+            // it via affectedRows(); the dev-MCP database_execute tool returns it.
+            $this->affectedRows = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
+
+            // Plain write/DDL: PHP adapters return a boolean and record the driver
+            // error in error(). A false return means the statement failed — capture
+            // the cause and RAISE rather than return false (the old behaviour
+            // silently masked failed INSERT/UPDATE/DELETE/DDL one level up).
+            if ($result === false) {
                 $this->lastError = $adapter->error();
-                throw new DatabaseException('Database::execute() failed: ' . $this->lastError);
+                throw new DatabaseException(
+                    'Database::execute() failed: ' . ($this->lastError ?? 'unknown error')
+                );
             }
-            $this->affectedRows = SqlStatement::isWrite($sql) ? count($rows) : 0;
             $this->lastError = null;
-            // A write that returned its key keeps lastInsertId() working, as it
-            // did when RETURNING went through the adapter's execute().
-            $first = $rows[0] ?? [];
-            $this->returnedId = SqlStatement::isWrite($sql) && $first !== [] ? reset($first) : null;
-            return new DatabaseResult(
-                records: $rows,
-                columns: $rows === [] ? [] : array_keys($rows[0]),
-                count: count($rows),
-                adapter: $adapter,
-                sql: $sql,
-                affectedRows: $this->affectedRows,
-            );
-        }
-
-        $this->returnedId = null;
-        try {
-            $result = $adapter->execute($sql, $params);
-        } catch (\Exception $e) {
-            // Adapter raised (driver exception, or our own DatabaseException
-            // re-thrown from the adapter). Capture the cause and re-raise —
-            // fetch()/fetchOne() already behave this way; execute() was the
-            // lone swallower. Python master: "set last_error; raise".
-            $this->affectedRows = 0;
-            $this->lastError = $e->getMessage();
+            return true;
+        } catch (\Throwable $e) {
+            $operationFailed = true;
             throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-        // Capture the affected-row count from the adapter that just ran the write
-        // (guarded — an adapter that does not expose it reports 0). Consumers read
-        // it via affectedRows(); the dev-MCP database_execute tool returns it.
-        $this->affectedRows = method_exists($adapter, 'affectedRows') ? (int) $adapter->affectedRows() : 0;
-
-        // Plain write/DDL: PHP adapters return a boolean and record the driver
-        // error in error(). A false return means the statement failed — capture
-        // the cause and RAISE rather than return false (the old behaviour
-        // silently masked failed INSERT/UPDATE/DELETE/DDL one level up).
-        if ($result === false) {
-            $this->lastError = $adapter->error();
-            throw new DatabaseException(
-                'Database::execute() failed: ' . ($this->lastError ?? 'unknown error')
-            );
-        }
-        $this->lastError = null;
-        return true;
     }
 
     /**
@@ -562,11 +710,20 @@ class Database implements DatabaseAdapter
      */
     public function exec(string $sql, array $params = []): bool
     {
-        $result = $this->execute($sql, $params);
-        // execute() returns a DatabaseResult for RETURNING/CALL/EXEC/SELECT;
-        // exec() promises a bool, so collapse that to true. A failure has
-        // already raised inside execute() before reaching here.
-        return $result !== false;
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            $result = $this->execute($sql, $params);
+            // execute() returns a DatabaseResult for RETURNING/CALL/EXEC/SELECT;
+            // exec() promises a bool, so collapse that to true. A failure has
+            // already raised inside execute() before reaching here.
+            return $result !== false;
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -600,23 +757,32 @@ class Database implements DatabaseAdapter
      */
     public function insert(string $table, array $data): DatabaseResult
     {
-        // A list of rows (indexed array whose first element is itself an array)
-        // is a batch insert. An empty array is treated as a single (degenerate)
-        // insert by the adapter, as before.
-        if (isset($data[0]) && is_array($data[0])) {
-            return $this->insertBatch($table, $data);
-        }
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            // A list of rows (indexed array whose first element is itself an array)
+            // is a batch insert. An empty array is treated as a single (degenerate)
+            // insert by the adapter, as before.
+            if (isset($data[0]) && is_array($data[0])) {
+                return $this->insertBatch($table, $data);
+            }
 
-        $adapter = $this->getNextAdapter();
-        $result = $adapter->insert($table, $data);
-        // Fail-loud: an adapter that returns false failed — capture + raise
-        // (parity with execute()/fetch()). Adapters that already raise never
-        // reach this branch.
-        if ($result === false) {
-            $this->lastError = $adapter->error();
-            throw new DatabaseException('Database::insert() failed: ' . ($this->lastError ?? 'unknown error'));
+            $adapter = $this->getNextAdapter();
+            $result = $adapter->insert($table, $data);
+            // Fail-loud: an adapter that returns false failed — capture + raise
+            // (parity with execute()/fetch()). Adapters that already raise never
+            // reach this branch.
+            if ($result === false) {
+                $this->lastError = $adapter->error();
+                throw new DatabaseException('Database::insert() failed: ' . ($this->lastError ?? 'unknown error'));
+            }
+            return $this->writeResult($adapter, withLastId: true, minAffected: 1);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-        return $this->writeResult($adapter, withLastId: true, minAffected: 1);
     }
 
     /**
@@ -780,56 +946,65 @@ class Database implements DatabaseAdapter
 
     public function update(string $table, array $data, string|array $filterSql = '', array $params = []): DatabaseResult
     {
-        [$filterSql, $params] = $this->asWhere($filterSql, $params);
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            [$filterSql, $params] = $this->asWhere($filterSql, $params);
 
-        if ($filterSql === '') {
-            $pkColumns = $this->primaryKey($table);
-            [$resolved, $missing] = $this->matchKeyColumns($table, $pkColumns, $data);
+            if ($filterSql === '') {
+                $pkColumns = $this->primaryKey($table);
+                [$resolved, $missing] = $this->matchKeyColumns($table, $pkColumns, $data);
 
-            if ($pkColumns === [] || $missing !== []) {
-                throw new DatabaseException(sprintf(
-                    'Database::update() requires a filter or the complete primary key in the data; '
-                    . 'pass a filter explicitly to update multiple rows (table=%s, primary key=[%s], '
-                    . 'missing from data=[%s]). To empty a table use truncate(%s).',
-                    $table,
-                    implode(', ', $pkColumns),
-                    implode(', ', $missing),
-                    $table
-                ));
+                if ($pkColumns === [] || $missing !== []) {
+                    throw new DatabaseException(sprintf(
+                        'Database::update() requires a filter or the complete primary key in the data; '
+                        . 'pass a filter explicitly to update multiple rows (table=%s, primary key=[%s], '
+                        . 'missing from data=[%s]). To empty a table use truncate(%s).',
+                        $table,
+                        implode(', ', $pkColumns),
+                        implode(', ', $missing),
+                        $table
+                    ));
+                }
+
+                // EVERY key column goes into the WHERE. A composite key built from
+                // only its first column would match every row sharing that value -
+                // the data-loss bug this method exists to prevent, reintroduced.
+                // The WHERE is built from the ENGINE's column name and the CALLER's
+                // value, which is why the lookup goes through $resolved.
+                $params = [];
+                $where = [];
+                foreach ($pkColumns as $column) {
+                    $callerKey = $resolved[$column];
+                    $params[] = $data[$callerKey];
+                    $where[] = $column . ' = ?';
+                    unset($data[$callerKey]);
+                }
+
+                if ($data === []) {
+                    throw new DatabaseException(sprintf(
+                        'Database::update() was given only the primary key [%s] and no columns to set (table=%s)',
+                        implode(', ', $pkColumns),
+                        $table
+                    ));
+                }
+
+                $filterSql = implode(' AND ', $where);
             }
 
-            // EVERY key column goes into the WHERE. A composite key built from
-            // only its first column would match every row sharing that value -
-            // the data-loss bug this method exists to prevent, reintroduced.
-            // The WHERE is built from the ENGINE's column name and the CALLER's
-            // value, which is why the lookup goes through $resolved.
-            $params = [];
-            $where = [];
-            foreach ($pkColumns as $column) {
-                $callerKey = $resolved[$column];
-                $params[] = $data[$callerKey];
-                $where[] = $column . ' = ?';
-                unset($data[$callerKey]);
+            $adapter = $this->getNextAdapter();
+            $result = $adapter->update($table, $data, $filterSql, $params);
+            if ($result === false) {
+                $this->lastError = $adapter->error();
+                throw new DatabaseException('Database::update() failed: ' . ($this->lastError ?? 'unknown error'));
             }
-
-            if ($data === []) {
-                throw new DatabaseException(sprintf(
-                    'Database::update() was given only the primary key [%s] and no columns to set (table=%s)',
-                    implode(', ', $pkColumns),
-                    $table
-                ));
-            }
-
-            $filterSql = implode(' AND ', $where);
+            return $this->writeResult($adapter, withLastId: false);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-
-        $adapter = $this->getNextAdapter();
-        $result = $adapter->update($table, $data, $filterSql, $params);
-        if ($result === false) {
-            $this->lastError = $adapter->error();
-            throw new DatabaseException('Database::update() failed: ' . ($this->lastError ?? 'unknown error'));
-        }
-        return $this->writeResult($adapter, withLastId: false);
     }
 
     /**
@@ -843,36 +1018,45 @@ class Database implements DatabaseAdapter
      */
     public function primaryKey(string $table): array
     {
-        if (!array_key_exists($table, $this->pkCache)) {
-            try {
-                $columns = $this->getColumns($table);
-                $pkColumns = array_values(array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey'])));
-                // ADR-0044 amendment: sort by primaryKeyPosition so a composite
-                // PRIMARY KEY (b, a) returns ["b", "a"] (declared key order), not
-                // table-column order. A column with no reported position sorts last.
-                usort($pkColumns, static function (array $a, array $b): int {
-                    $posA = $a['primaryKeyPosition'] ?? null;
-                    $posB = $b['primaryKeyPosition'] ?? null;
-                    if ($posA === $posB) {
-                        return 0;
-                    }
-                    if ($posA === null) {
-                        return 1;
-                    }
-                    if ($posB === null) {
-                        return -1;
-                    }
-                    return $posA <=> $posB;
-                });
-                $this->pkCache[$table] = array_values(array_map(
-                    static fn(array $c): string => (string)$c['name'],
-                    $pkColumns
-                ));
-            } catch (\Throwable) {
-                $this->pkCache[$table] = [];
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            if (!array_key_exists($table, $this->pkCache)) {
+                try {
+                    $columns = $this->getColumns($table);
+                    $pkColumns = array_values(array_filter($columns, static fn(array $c): bool => !empty($c['primaryKey'])));
+                    // ADR-0044 amendment: sort by primaryKeyPosition so a composite
+                    // PRIMARY KEY (b, a) returns ["b", "a"] (declared key order), not
+                    // table-column order. A column with no reported position sorts last.
+                    usort($pkColumns, static function (array $a, array $b): int {
+                        $posA = $a['primaryKeyPosition'] ?? null;
+                        $posB = $b['primaryKeyPosition'] ?? null;
+                        if ($posA === $posB) {
+                            return 0;
+                        }
+                        if ($posA === null) {
+                            return 1;
+                        }
+                        if ($posB === null) {
+                            return -1;
+                        }
+                        return $posA <=> $posB;
+                    });
+                    $this->pkCache[$table] = array_values(array_map(
+                        static fn(array $c): string => (string)$c['name'],
+                        $pkColumns
+                    ));
+                } catch (\Throwable) {
+                    $this->pkCache[$table] = [];
+                }
             }
+            return $this->pkCache[$table];
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-        return $this->pkCache[$table];
     }
 
     /**
@@ -904,13 +1088,22 @@ class Database implements DatabaseAdapter
      */
     public function truncate(string $table): DatabaseResult
     {
-        $adapter = $this->getNextAdapter();
-        $result = $adapter->delete($table, '1 = 1', []);
-        if ($result === false) {
-            $this->lastError = $adapter->error();
-            throw new DatabaseException('Database::truncate() failed: ' . ($this->lastError ?? 'unknown error'));
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            $adapter = $this->getNextAdapter();
+            $result = $adapter->delete($table, '1 = 1', []);
+            if ($result === false) {
+                $this->lastError = $adapter->error();
+                throw new DatabaseException('Database::truncate() failed: ' . ($this->lastError ?? 'unknown error'));
+            }
+            return $this->writeResult($adapter, withLastId: false);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-        return $this->writeResult($adapter, withLastId: false);
     }
 
     /**
@@ -923,37 +1116,46 @@ class Database implements DatabaseAdapter
      */
     public function delete(string $table, string|array $filter = '', array $whereParams = []): DatabaseResult
     {
-        // A list of filter maps deletes each listed row (the batch form the
-        // adapters already accept). Every map is checked before any row is
-        // deleted, so a bad key never leaves a partial delete behind.
-        if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
-            foreach ($filter as $rowFilter) {
-                ColumnName::assertAll(array_keys($rowFilter));
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            // A list of filter maps deletes each listed row (the batch form the
+            // adapters already accept). Every map is checked before any row is
+            // deleted, so a bad key never leaves a partial delete behind.
+            if (is_array($filter) && isset($filter[0]) && is_array($filter[0])) {
+                foreach ($filter as $rowFilter) {
+                    ColumnName::assertAll(array_keys($rowFilter));
+                }
+                $affected = 0;
+                foreach ($filter as $rowFilter) {
+                    $affected += $this->delete($table, $rowFilter)->affectedRows;
+                }
+                $this->affectedRows = $affected;
+                return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: $affected, lastId: null, error: null);
             }
-            $affected = 0;
-            foreach ($filter as $rowFilter) {
-                $affected += $this->delete($table, $rowFilter)->affectedRows;
+
+            [$filterSql, $whereParams] = $this->asWhere($filter, $whereParams);
+            if ($filterSql === '') {
+                throw new DatabaseException(sprintf(
+                    'Database::delete() requires a filter (table=%s). To remove every row use truncate(%s).',
+                    $table,
+                    $table
+                ));
             }
-            $this->affectedRows = $affected;
-            return new DatabaseResult(records: [], columns: [], count: 0, limit: 0, offset: 0, adapter: null, sql: null, affectedRows: $affected, lastId: null, error: null);
-        }
 
-        [$filterSql, $whereParams] = $this->asWhere($filter, $whereParams);
-        if ($filterSql === '') {
-            throw new DatabaseException(sprintf(
-                'Database::delete() requires a filter (table=%s). To remove every row use truncate(%s).',
-                $table,
-                $table
-            ));
+            $adapter = $this->getNextAdapter();
+            $result = $adapter->delete($table, $filterSql, $whereParams);
+            if ($result === false) {
+                $this->lastError = $adapter->error();
+                throw new DatabaseException('Database::delete() failed: ' . ($this->lastError ?? 'unknown error'));
+            }
+            return $this->writeResult($adapter, withLastId: false);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-
-        $adapter = $this->getNextAdapter();
-        $result = $adapter->delete($table, $filterSql, $whereParams);
-        if ($result === false) {
-            $this->lastError = $adapter->error();
-            throw new DatabaseException('Database::delete() failed: ' . ($this->lastError ?? 'unknown error'));
-        }
-        return $this->writeResult($adapter, withLastId: false);
     }
 
     // -------------------------------------------------------------------------
@@ -985,7 +1187,16 @@ class Database implements DatabaseAdapter
      */
     public function getDatabaseType(): string
     {
-        return $this->getNextAdapter()->getDatabaseType();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->getDatabaseType();
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -993,7 +1204,16 @@ class Database implements DatabaseAdapter
      */
     public function autocommit(?bool $on = null): bool
     {
-        return $this->getNextAdapter()->autocommit($on);
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->autocommit($on);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     public function close(): void
@@ -1008,6 +1228,10 @@ class Database implements DatabaseAdapter
         } elseif ($this->adapter !== null) {
             $this->adapter->close();
         }
+        $this->poolOwners = [];
+        $this->fiberContexts = null;
+        $this->coroutineContexts = [];
+        $this->mainContext = null;
     }
 
     /**
@@ -1015,7 +1239,16 @@ class Database implements DatabaseAdapter
      */
     public function lastInsertId(): int|string
     {
-        return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -1032,23 +1265,28 @@ class Database implements DatabaseAdapter
      */
     public function startTransaction(): void
     {
-        if ($this->pinnedAdapter !== null && $this->insideExplicitTransaction) {
+        if ($this->executionContext()->pinnedAdapter !== null && $this->executionContext()->insideExplicitTransaction) {
             // Nested begin — warn and bump the depth; do NOT begin again.
             \Tina4\Log::warning(
                 'startTransaction() called while a transaction is already open '
-                . '(depth would become ' . ($this->txDepth + 1) . '). Nested '
+                . '(depth would become ' . ($this->executionContext()->txDepth + 1) . '). Nested '
                 . 'transactions are not supported — the existing transaction '
                 . 'stays open on its pinned connection and this nested begin is '
                 . 'ignored. Commit or rollback the outer transaction first.'
             );
-            $this->txDepth++;
+            $this->executionContext()->txDepth++;
             return;
         }
-        $adapter = $this->getNextAdapter();
-        $this->pinnedAdapter = $adapter;
-        $this->insideExplicitTransaction = true;
-        $this->txDepth = 1;
-        $adapter->startTransaction();
+        $adapter = $this->executionContext()->operationAdapter ?? $this->borrowAdapter();
+        $this->executionContext()->pinnedAdapter = $adapter;
+        $this->executionContext()->insideExplicitTransaction = true;
+        $this->executionContext()->txDepth = 1;
+        try {
+            $adapter->startTransaction();
+        } catch (\Throwable $e) {
+            $this->releaseTransaction(true);
+            throw $e;
+        }
     }
 
     /**
@@ -1064,24 +1302,31 @@ class Database implements DatabaseAdapter
      */
     public function commit(): void
     {
-        if ($this->txDepth > 1) {
-            // Inner commit of an ignored nested begin — just unwind the depth.
-            $this->txDepth--;
-            return;
-        }
-        $adapter = $this->getNextAdapter();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
         try {
-            $adapter->commit();
-            $this->lastError = null;
+            if ($this->executionContext()->txDepth > 1) {
+                // Inner commit of an ignored nested begin — just unwind the depth.
+                $this->executionContext()->txDepth--;
+                return;
+            }
+            $adapter = $this->getNextAdapter();
+            try {
+                $adapter->commit();
+                $this->lastError = null;
+            } catch (\Throwable $e) {
+                // Keep the pin so rollback() reaches this same connection.
+                $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+                throw $e;
+            }
+            // Successful outer commit returns the exclusive transaction lease.
+            $this->releaseTransaction();
         } catch (\Throwable $e) {
-            // Keep the pin so rollback() reaches this same connection.
-            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            $operationFailed = true;
             throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-        // Success — release the pin.
-        $this->pinnedAdapter = null;
-        $this->insideExplicitTransaction = false;
-        $this->txDepth = 0;
     }
 
     /**
@@ -1095,18 +1340,27 @@ class Database implements DatabaseAdapter
      */
     public function rollback(): void
     {
-        $adapter = $this->getNextAdapter();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
         try {
-            $adapter->rollback();
-            $this->lastError = null;
+            $failed = false;
+            $adapter = $this->getNextAdapter();
+            try {
+                $adapter->rollback();
+                $this->lastError = null;
+            } catch (\Throwable $e) {
+                $failed = true;
+                $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+                throw $e;
+            } finally {
+                // Terminal cleanup — always release the pin.
+                $this->releaseTransaction($failed);
+            }
         } catch (\Throwable $e) {
-            $this->lastError = $adapter->error() ?: ($e->getMessage() ?: $this->lastError);
+            $operationFailed = true;
             throw $e;
         } finally {
-            // Terminal cleanup — always release the pin.
-            $this->pinnedAdapter = null;
-            $this->insideExplicitTransaction = false;
-            $this->txDepth = 0;
+            $this->leaveOperation($lease, $operationFailed);
         }
     }
 
@@ -1119,7 +1373,16 @@ class Database implements DatabaseAdapter
      */
     public function tableExists(string $tableName): bool
     {
-        return $this->getNextAdapter()->tableExists($tableName);
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->tableExists($tableName);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -1129,7 +1392,16 @@ class Database implements DatabaseAdapter
      */
     public function getTables(): array
     {
-        return $this->getNextAdapter()->getTables();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->getTables();
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -1140,7 +1412,16 @@ class Database implements DatabaseAdapter
      */
     public function getColumns(string $tableName): array
     {
-        return $this->getNextAdapter()->getColumns($tableName);
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->getColumns($tableName);
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -1156,7 +1437,16 @@ class Database implements DatabaseAdapter
      */
     public function getLastId(): int|string
     {
-        return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     /**
@@ -1263,7 +1553,7 @@ class Database implements DatabaseAdapter
             // ("cannot start a transaction within a transaction"). In that case
             // the outer transaction already serialises the increment, so skip
             // our own BEGIN/COMMIT.
-            $insideTxn = $this->pinnedAdapter !== null && $this->insideExplicitTransaction;
+            $insideTxn = $this->executionContext()->pinnedAdapter !== null && $this->executionContext()->insideExplicitTransaction;
             return $this->sequenceNextSqlite($raw, $seqName, $table, $pkColumn, !$insideTxn);
         }
 
@@ -1486,22 +1776,31 @@ class Database implements DatabaseAdapter
      */
     public function getNextId(string $table, string $pkColumn = 'id', ?string $generatorName = null): int
     {
-        // Pin ONE adapter for the whole operation so the sequence-table engines
-        // that need two statements (MySQL LAST_INSERT_ID, MSSQL seed+OUTPUT) hit
-        // the SAME connection. If we're already inside a transaction the adapter
-        // is already pinned; otherwise pin here and release in the finally so
-        // the pool can rotate afterwards. Parity with Python's _sequence_next.
-        $alreadyPinned = $this->pinnedAdapter !== null;
-        $adapter = $this->getNextAdapter();
-        if (!$alreadyPinned) {
-            $this->pinnedAdapter = $adapter;
-        }
+        $lease = $this->enterOperation();
+        $operationFailed = false;
         try {
-            return $this->getNextIdPinned($table, $pkColumn, $generatorName, $adapter);
-        } finally {
+            // Pin ONE adapter for the whole operation so the sequence-table engines
+            // that need two statements (MySQL LAST_INSERT_ID, MSSQL seed+OUTPUT) hit
+            // the SAME connection. If we're already inside a transaction the adapter
+            // is already pinned; otherwise pin here and release in the finally so
+            // the pool can rotate afterwards. Parity with Python's _sequence_next.
+            $alreadyPinned = $this->executionContext()->pinnedAdapter !== null;
+            $adapter = $this->getNextAdapter();
             if (!$alreadyPinned) {
-                $this->pinnedAdapter = null;
+                $this->executionContext()->pinnedAdapter = $adapter;
             }
+            try {
+                return $this->getNextIdPinned($table, $pkColumn, $generatorName, $adapter);
+            } finally {
+                if (!$alreadyPinned) {
+                    $this->executionContext()->pinnedAdapter = null;
+                }
+            }
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
     }
 
@@ -1730,7 +2029,16 @@ class Database implements DatabaseAdapter
      */
     public function error(): ?string
     {
-        return $this->getNextAdapter()->error();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $this->getNextAdapter()->error();
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -1839,19 +2147,28 @@ class Database implements DatabaseAdapter
      */
     public function cacheStats(): array
     {
-        $adapter = $this->getNextAdapter();
-        if ($adapter instanceof CachedDatabase) {
-            return $adapter->cacheStats();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            $adapter = $this->getNextAdapter();
+            if ($adapter instanceof CachedDatabase) {
+                return $adapter->cacheStats();
+            }
+            return [
+                'enabled' => false,
+                'mode' => 'off',
+                'hits' => 0,
+                'misses' => 0,
+                'size' => 0,
+                'ttl' => 0,
+                'backend' => 'memory',
+            ];
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
-        return [
-            'enabled' => false,
-            'mode' => 'off',
-            'hits' => 0,
-            'misses' => 0,
-            'size' => 0,
-            'ttl' => 0,
-            'backend' => 'memory',
-        ];
     }
 
     /**
@@ -1859,9 +2176,18 @@ class Database implements DatabaseAdapter
      */
     public function cacheClear(): void
     {
-        $adapter = $this->getNextAdapter();
-        if ($adapter instanceof CachedDatabase) {
-            $adapter->cacheClear();
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            $adapter = $this->getNextAdapter();
+            if ($adapter instanceof CachedDatabase) {
+                $adapter->cacheClear();
+            }
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
         }
     }
 

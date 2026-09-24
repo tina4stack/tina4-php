@@ -14,7 +14,7 @@ Ship the merged fixes and measured-estimate skills on the coordinated 3.13.138 r
 Version consistency and packaging metadata checks passed locally. PHP App.php syntax and Composer manifest validation passed. Full services and release publication remain with the parent coordinator; no shared lab tests started here.
 
 ## Bugs
-No runtime edits in this release-preparation commit. All included fixes are documented in CHANGELOG.md.
+Real PostgreSQL/two-Fiber regression reproduced dirty reads before the fix. Exclusive context-local operation/transaction leases resolve the leak. Further real regressions reproduced swallowed PostgreSQL transaction failures; BEGIN/COMMIT/ROLLBACK now raise on driver failure. Focused pool/database/batch coverage: 74 tests, 558 assertions pass; no shared lab used. All included fixes are documented in CHANGELOG.md.
 
 ## Commits
 Signed release-preparation commit recorded by git history.

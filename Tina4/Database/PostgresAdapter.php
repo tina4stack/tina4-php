@@ -444,19 +444,31 @@ class PostgresAdapter implements DatabaseAdapter
     public function startTransaction(): void
     {
         $this->ensureOpen();
-        @pg_query($this->db, 'BEGIN');
+        if (@pg_query($this->db, 'BEGIN') === false) {
+            $this->lastError = pg_last_error($this->db);
+            throw new DatabaseException('PostgreSQL BEGIN failed: ' . $this->lastError);
+        }
+        $this->lastError = null;
     }
 
     public function commit(): void
     {
         $this->ensureOpen();
-        @pg_query($this->db, 'COMMIT');
+        if (@pg_query($this->db, 'COMMIT') === false) {
+            $this->lastError = pg_last_error($this->db);
+            throw new DatabaseException('PostgreSQL COMMIT failed: ' . $this->lastError);
+        }
+        $this->lastError = null;
     }
 
     public function rollback(): void
     {
         $this->ensureOpen();
-        @pg_query($this->db, 'ROLLBACK');
+        if (@pg_query($this->db, 'ROLLBACK') === false) {
+            $this->lastError = pg_last_error($this->db);
+            throw new DatabaseException('PostgreSQL ROLLBACK failed: ' . $this->lastError);
+        }
+        $this->lastError = null;
     }
 
     public function error(): ?string
