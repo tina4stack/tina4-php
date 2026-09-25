@@ -213,6 +213,7 @@ PHP);
         $snapshot = $store->getValue();
         $store->setValue(null, array_merge((array) $snapshot, [
             'TINA4_DEBUG' => 'true',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_NO_TAKEOVER' => 'false',
         ]));
         try {

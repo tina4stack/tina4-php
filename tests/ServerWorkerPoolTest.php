@@ -117,6 +117,7 @@ PHP);
             'TINA4_OVERRIDE_CLIENT' => 'true',
             'TINA4_NO_BROWSER'      => 'true',
             'TINA4_DEBUG'           => 'false',
+            'TINA4_SECRET'           => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_SERVE_WORKERS'   => (string)self::WORKERS,
         ], $env);
         $lines = '';

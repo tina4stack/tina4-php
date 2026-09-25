@@ -134,6 +134,7 @@ PHP);
         }
         $env = array_merge($env, [
             'TINA4_DEBUG' => 'false',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_MAX_UPLOAD_SIZE' => (string)self::LIMIT,
             'TINA4_MAX_REQUEST_HEADER' => (string)self::HEADER_LIMIT,
             'TINA4_REQUEST_TIMEOUT' => (string)self::IDLE_SECONDS,

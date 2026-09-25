@@ -69,6 +69,7 @@ class ResponseBinaryBodyTest extends TestCase
                 'TINA4_SUPPRESS' => 'true',
                 'TINA4_AUTO_MIGRATE' => 'false',
                 'TINA4_DEBUG' => 'false',
+                'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             ]
         );
         $this->assertIsResource($process, 'the server process must start');

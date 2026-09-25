@@ -452,6 +452,7 @@ class DevSurfaceContractTest extends TestCase
             'TINA4_SUPPRESS' => 'true',
             'TINA4_AUTO_MIGRATE' => 'false',
             'TINA4_DEBUG' => 'true',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_NO_AI_PORT' => 'true',
             'TINA4_NO_BROWSER' => 'true',
         ];
