@@ -88,7 +88,19 @@ final class QueueSizeDeadStoreTest extends TestCase
         $q = new Queue('rabbitmq', ['maxRetries' => 1], 'sizedead_' . bin2hex(random_bytes(6)));
         try {
             $this->primeDeadLetter($q);
-            self::assertSame(1, $q->size('dead'), "RabbitMQ size('dead') must count the .dead_letter queue depth");
+            // RabbitMQ delivery is asynchronous: the dead-letter Basic.Publish
+            // (fire-and-forget, no publisher confirm — same as tina4-nodejs) may
+            // not be counted the instant fail() returns. Poll briefly for it,
+            // matching the sleep the Node/Python queue-lifecycle tests use.
+            $size = 0;
+            for ($i = 0; $i < 40; $i++) {
+                $size = $q->size('dead');
+                if ($size >= 1) {
+                    break;
+                }
+                usleep(50000);
+            }
+            self::assertSame(1, $size, "RabbitMQ size('dead') must count the .dead_letter queue depth");
         } finally {
             $q->close();
         }
