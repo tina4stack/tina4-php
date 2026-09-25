@@ -46,8 +46,14 @@ final class RestoreDefaultSecretSubscriber implements PreparationStartedSubscrib
         // which would SHADOW a test that deliberately clears getenv and sets its
         // own $_ENV secret (the RS256 and getenv-precedence tests do exactly
         // that, and a seeded getenv made their PEM/override unreachable).
+        // Seed BOTH getenv() and $_ENV so (a) resolveSecret() sees it and (b) a
+        // child process spawned with an INHERITED env (proc_open null-env) boots.
+        // Guarded on the RESOLVED secret so a test that already set its own (via
+        // getenv OR $_ENV) is never overwritten. A test that needs a SPECIFIC
+        // secret must set it via putenv() (the authoritative source) so it wins.
         $current = (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if (strlen((string) $current) < 32) {
+            putenv('TINA4_SECRET=' . self::DEFAULT_SECRET);
             $_ENV['TINA4_SECRET'] = self::DEFAULT_SECRET;
         }
     }

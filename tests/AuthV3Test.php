@@ -173,7 +173,7 @@ class AuthV3Test extends TestCase
     {
         // Generate token with correct secret, then switch env to wrong secret for validation
         $token = Auth::getToken(['sub' => '123']);
-        $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
+        putenv('TINA4_SECRET=wrong-secret-0123456789abcdef012'); $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
         $result = Auth::validToken($token);
         $_ENV['TINA4_SECRET'] = $this->secret;
 
@@ -266,7 +266,7 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $_ENV['TINA4_SECRET'] = $privateKey;
+        putenv('TINA4_SECRET=' . $privateKey); $_ENV['TINA4_SECRET'] = $privateKey;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
 
         $token = Auth::getToken(['sub' => 'rs256-user', 'role' => 'admin'], 3600);
@@ -276,7 +276,7 @@ class AuthV3Test extends TestCase
         $this->assertCount(3, $parts);
 
         // Verify with public key
-        $_ENV['TINA4_SECRET'] = $publicKey;
+        putenv('TINA4_SECRET=' . $publicKey); $_ENV['TINA4_SECRET'] = $publicKey;
         $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals('rs256-user', $payload['sub']);
@@ -299,12 +299,12 @@ class AuthV3Test extends TestCase
         $publicKeyDetails2 = openssl_pkey_get_details($keyPair2);
         $publicKey2 = $publicKeyDetails2['key'];
 
-        $_ENV['TINA4_SECRET'] = $privateKey1;
+        putenv('TINA4_SECRET=' . $privateKey1); $_ENV['TINA4_SECRET'] = $privateKey1;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
         $token = Auth::getToken(['sub' => 'test'], 3600);
 
         // Verify with wrong public key
-        $_ENV['TINA4_SECRET'] = $publicKey2;
+        putenv('TINA4_SECRET=' . $publicKey2); $_ENV['TINA4_SECRET'] = $publicKey2;
         $result = Auth::validToken($token);
 
         // Restore
@@ -320,7 +320,7 @@ class AuthV3Test extends TestCase
         $keyPair = openssl_pkey_new($config);
         openssl_pkey_export($keyPair, $privateKey);
 
-        $_ENV['TINA4_SECRET'] = $privateKey;
+        putenv('TINA4_SECRET=' . $privateKey); $_ENV['TINA4_SECRET'] = $privateKey;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
         $token = Auth::getToken(['sub' => '1'], 3600);
 
@@ -608,12 +608,12 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $_ENV['TINA4_SECRET'] = $privateKey;
+        putenv('TINA4_SECRET=' . $privateKey); $_ENV['TINA4_SECRET'] = $privateKey;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
 
         $token = Auth::getToken(['sub' => 'test', 'exp' => time() - 10], 0);
 
-        $_ENV['TINA4_SECRET'] = $publicKey;
+        putenv('TINA4_SECRET=' . $publicKey); $_ENV['TINA4_SECRET'] = $publicKey;
         $result = Auth::validToken($token); // Expired
 
         // Restore
