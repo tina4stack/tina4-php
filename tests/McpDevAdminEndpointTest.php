@@ -76,7 +76,7 @@ class McpDevAdminEndpointTest extends TestCase
     {
         $callback = $this->findRouteCallback('POST', $pattern);
         $this->assertNotNull($callback, "POST {$pattern} must be registered");
-        $request = Request::create('POST', $pattern, body: $message);
+        $request = Request::create('POST', $pattern, body: $message, remoteIp: '127.0.0.1');
         $response = new Response(true);
         return $callback($request, $response);
     }
@@ -289,7 +289,7 @@ class McpDevAdminEndpointTest extends TestCase
         $callback = $this->findRouteCallback('GET', '/__dev/mcp/sse');
         $this->assertNotNull($callback, 'GET /__dev/mcp/sse must be registered');
 
-        $request = Request::create('GET', '/__dev/mcp/sse');
+        $request = Request::create('GET', '/__dev/mcp/sse', remoteIp: '127.0.0.1');
         $response = new Response(true);
         /** @var Response $result */
         $result = $callback($request, $response);
