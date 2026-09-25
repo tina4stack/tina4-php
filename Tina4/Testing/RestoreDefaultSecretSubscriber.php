@@ -39,8 +39,15 @@ final class RestoreDefaultSecretSubscriber implements PreparationStartedSubscrib
      */
     public static function ensure(): void
     {
-        if (strlen((string)(getenv('TINA4_SECRET') ?: '')) < 32) {
-            putenv('TINA4_SECRET=' . self::DEFAULT_SECRET);
+        // Resolve the way Auth does (getenv first, then $_ENV). Only supply a
+        // default when NEITHER source already carries a usable secret, and set
+        // ONLY $_ENV — never putenv/getenv. resolveSecret() falls back to $_ENV,
+        // so this still heals a suite-wide blank; but it must not seed getenv,
+        // which would SHADOW a test that deliberately clears getenv and sets its
+        // own $_ENV secret (the RS256 and getenv-precedence tests do exactly
+        // that, and a seeded getenv made their PEM/override unreachable).
+        $current = (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
+        if (strlen((string) $current) < 32) {
             $_ENV['TINA4_SECRET'] = self::DEFAULT_SECRET;
         }
     }
