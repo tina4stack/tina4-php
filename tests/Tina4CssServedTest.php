@@ -69,7 +69,7 @@ class Tina4CssServedTest extends TestCase
         copy(dirname(__DIR__) . '/index.php', $this->appDir . '/index.php');
         file_put_contents(
             $this->appDir . '/.env',
-            "TINA4_OVERRIDE_CLIENT=true\nTINA4_NO_BROWSER=true\nTINA4_DEBUG=false\n"
+            "TINA4_OVERRIDE_CLIENT=true\nTINA4_NO_BROWSER=true\nTINA4_DEBUG=false\nTINA4_SECRET=tina4-php-test-suite-secret-0123456789abcdef\n"
         );
 
         $this->port = $this->freePort();
@@ -80,7 +80,7 @@ class Tina4CssServedTest extends TestCase
             $pipes,
             dirname(__DIR__),
             ['TINA4_PORT' => (string)$this->port, 'TINA4_OVERRIDE_CLIENT' => 'true',
-             'TINA4_NO_BROWSER' => 'true', 'TINA4_DEBUG' => 'false', 'PATH' => getenv('PATH')]
+             'TINA4_NO_BROWSER' => 'true', 'TINA4_DEBUG' => 'false', 'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef', 'PATH' => getenv('PATH')]
         );
 
         $deadline = microtime(true) + 45;
