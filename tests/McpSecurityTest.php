@@ -95,9 +95,12 @@ class McpSecurityTest extends TestCase
 
     public function testLoopbackAddresses(): void
     {
-        foreach (['127.0.0.1', '127.0.0.5', '::1', '::ffff:127.0.0.1', 'localhost', ''] as $ip) {
-            $this->assertTrue(McpServer::isLoopback($ip), $ip === '' ? '(empty)' : $ip);
+        foreach (['127.0.0.1', '127.0.0.5', '::1', '::ffff:127.0.0.1', 'localhost'] as $ip) {
+            $this->assertTrue(McpServer::isLoopback($ip), $ip);
         }
+        // An empty/missing peer is an UNKNOWN address, never loopback (parity
+        // with tina4-python and tina4-nodejs; a real dev server always sets it).
+        $this->assertFalse(McpServer::isLoopback(''), '(empty is not loopback)');
     }
 
     public function testNonLoopbackAddresses(): void
@@ -149,7 +152,9 @@ class McpSecurityTest extends TestCase
     {
         $this->env('TINA4_DEBUG', 'true');
         $this->assertTrue(McpServer::isRequestAllowed('127.0.0.1'));
-        $this->assertTrue(McpServer::isRequestAllowed(''));   // in-process / built-in dev
+        // An empty peer is UNKNOWN and denied even when enabled (parity with
+        // tina4-python/tina4-nodejs); a real loopback request carries 127.0.0.1.
+        $this->assertFalse(McpServer::isRequestAllowed(''));
     }
 
     public function testRemoteDeniedWithoutOptIn(): void
