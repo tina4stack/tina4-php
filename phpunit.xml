@@ -33,6 +33,7 @@
           so production is unaffected. See HandlerStackHygieneExtension.
         -->
         <bootstrap class="Tina4\Testing\HandlerStackHygieneExtension"/>
+        <bootstrap class="Tina4\Testing\SecretDefaultExtension"/>
     </extensions>
     <testsuites>
         <testsuite name="Tina4 Frond Tests">
