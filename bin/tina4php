@@ -3376,7 +3376,7 @@ require_once __DIR__ . '/../src/orm/{$model}.php';
 class {$className}Test extends TestCase
 {
     private \\Tina4\\Database\\SQLite3Adapter \$db;
-    private string \$secret = 'scaffold-test-secret';
+    private string \$secret = 'scaffold-test-secret-0123456789ab';
 
     protected function setUp(): void
     {
@@ -4486,7 +4486,7 @@ require_once __DIR__ . '/../src/orm/User.php';
 class AuthTest extends TestCase
 {
     private SQLite3Adapter $db;
-    private string $secret = 'scaffold-auth-secret';
+    private string $secret = 'scaffold-auth-secret-0123456789ab';
 
     protected function setUp(): void
     {
