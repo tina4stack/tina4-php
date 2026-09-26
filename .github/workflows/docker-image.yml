@@ -83,7 +83,7 @@ jobs:
         # ADR-0078: /health exposes `version` only in debug (hidden in production
         # as version-disclosure hardening). This is a CONTROLLED verification boot,
         # so enable debug to read the version for the gate; production is unchanged.
-        run: docker run -d --name gate -e TINA4_DEBUG=true -p 8080:$APP_PORT "$IMAGE:ci"
+        run: docker run -d --name gate -e TINA4_DEBUG=true -e TINA4_HOST=0.0.0.0 -p 8080:$APP_PORT "$IMAGE:ci"
 
       # Probe /health, NEVER "/". A stock scaffold has an empty src/routes and
       # answers 404 at "/", and `curl -fsS` scores a 404 as a failure -- which is
