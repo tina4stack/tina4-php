@@ -58,6 +58,15 @@
     },
     {
       "ecosystem": "composer",
+      "name": "nyholm/psr7",
+      "version": "1.8.2",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
       "name": "phar-io/manifest",
       "version": "2.0.4",
       "platform": "",
@@ -126,6 +135,24 @@
       "platform": "",
       "lock_license": "BSD-3-Clause",
       "upstream_declaration": "BSD-3-Clause",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "psr/http-factory",
+      "version": "1.1.0",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
+      "evidence": "composer.lock"
+    },
+    {
+      "ecosystem": "composer",
+      "name": "psr/http-message",
+      "version": "2.0",
+      "platform": "",
+      "lock_license": "MIT",
+      "upstream_declaration": "MIT",
       "evidence": "composer.lock"
     },
     {
