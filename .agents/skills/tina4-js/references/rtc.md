@@ -122,7 +122,7 @@ interface RemotePeer { id: string; stream: MediaStream | null; }
 
 ```ts
 import { rtc } from 'tina4js/rtc';
-import { html, mount, effect } from 'tina4js';
+import { html, effect } from 'tina4js';
 
 const call = await rtc.call('standup');   // camera + mic by default
 
@@ -132,8 +132,10 @@ effect(() => {
   if (local) (document.querySelector('#me') as HTMLVideoElement).srcObject = local;
 });
 
-mount('#peers', () => html`
-  ${call.peers.value.map(p => html`
+// html`` returns a DocumentFragment; the ${() => …} hole re-renders reactively.
+// Append it once, then the peer list updates in place as call.peers changes.
+document.querySelector('#peers')!.append(html`
+  ${() => call.peers.value.map(p => html`
     <video autoplay playsinline .srcObject=${p.stream}></video>
   `)}
 `);
@@ -208,19 +210,20 @@ interface ChatMessage {
 
 ```ts
 import { rtc } from 'tina4js/rtc';
-import { html, mount } from 'tina4js';
+import { html } from 'tina4js';
 
 const chat = rtc.chat('general', { token: myJwt });
 
 await chat.history();        // load the last 50, prepended into chat.messages
 
-mount('#log', () => html`
-  ${chat.messages.value.map(m => html`<p><b>${m.user_id}</b> ${m.body}</p>`)}
+// Append each fragment once; the ${() => …} holes keep it reactive.
+document.querySelector('#log')!.append(html`
+  ${() => chat.messages.value.map(m => html`<p><b>${m.user_id}</b> ${m.body}</p>`)}
 `);
 
-mount('#who', () => html`Online: ${chat.presence.value.join(', ')}`);
-mount('#typing', () => html`
-  ${chat.typing.value.length ? `${chat.typing.value.join(', ')} typing…` : ''}
+document.querySelector('#who')!.append(html`Online: ${() => chat.presence.value.join(', ')}`);
+document.querySelector('#typing')!.append(html`
+  ${() => chat.typing.value.length ? `${chat.typing.value.join(', ')} typing…` : ''}
 `);
 
 const input = document.querySelector('#msg') as HTMLInputElement;
