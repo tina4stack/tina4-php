@@ -334,7 +334,7 @@ class Queue
     public function size(string $status = 'pending'): int
     {
         if ($this->externalBackend !== null) {
-            return $this->externalBackend->size($this->topic);
+            return $this->externalBackend->size($this->topic, $status);
         }
 
         return $this->liteBackend->count($this->topic, $status);
@@ -463,6 +463,31 @@ class Queue
             return;
         }
         $this->liteBackend->retryJob($topic, $jobData, $delaySeconds);
+    }
+
+    /**
+     * Reject a job permanently — dead-letter it NOW, no retry (ADR-0023).
+     *
+     * Distinct from failJob(): reject is for a message the consumer KNOWS is
+     * poison, so it skips the retry budget and goes straight to the dead-letter
+     * store. Attempts is floored at maxRetries so deadLetters()/size('dead')
+     * (which filter attempts >= maxRetries) see it.
+     *
+     * @param string    $topic   Queue/topic name
+     * @param array|Job $jobData The job, as a Job or the raw backend record
+     * @param string    $reason  Rejection reason recorded on the dead letter
+     */
+    public function rejectJob(string $topic, array|Job $jobData, string $reason = ''): void
+    {
+        $jobData = $jobData instanceof Job ? $jobData->toHash() : $jobData;
+        $jobData['attempts'] = max(((int) ($jobData['attempts'] ?? 0)) + 1, $this->maxRetries);
+        $jobData['error'] = $reason;
+        if ($this->externalBackend !== null) {
+            $this->externalBackend->deadLetter($topic, $jobData);
+            $this->externalBackend->acknowledge($topic, (string) ($jobData['id'] ?? ''));
+            return;
+        }
+        $this->liteBackend->rejectJob($topic, $jobData, $reason);
     }
 
     /**

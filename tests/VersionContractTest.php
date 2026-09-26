@@ -226,6 +226,7 @@ class VersionContractTest extends TestCase
             'TINA4_OVERRIDE_CLIENT' => 'true',
             'TINA4_AUTO_MIGRATE' => 'false',
             'TINA4_DEBUG' => 'true',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_NO_AI_PORT' => 'true',
             // TINA4_SUPPRESS deliberately NOT set (defaults to 'false') — this
             // suite needs the REAL boot banner to prove every_reporting_surface_agrees.

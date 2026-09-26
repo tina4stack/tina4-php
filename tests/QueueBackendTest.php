@@ -54,7 +54,7 @@ class QueueBackendTest extends TestCase
 
         // The interface itself declares every required method with the exact
         // arity the facade relies on (enqueue/acknowledge/requeue/deadLetter take
-        // 2, dequeue/size take 1, close takes 0) and the return-type contract
+        // 2, dequeue takes 1; size takes 2 (topic + optional status, for size('dead')), close takes 0) and the return-type contract
         // (enqueue->string, dequeue nullable, size->int, close->void).
         $ref = new \ReflectionClass(QueueBackend::class);
         $expected = [
@@ -63,7 +63,7 @@ class QueueBackendTest extends TestCase
             'acknowledge' => ['params' => 2, 'return' => 'void', 'nullable' => false],
             'requeue' => ['params' => 2, 'return' => 'void', 'nullable' => false],
             'deadLetter' => ['params' => 2, 'return' => 'void', 'nullable' => false],
-            'size' => ['params' => 1, 'return' => 'int', 'nullable' => false],
+            'size' => ['params' => 2, 'return' => 'int', 'nullable' => false],
             'close' => ['params' => 0, 'return' => 'void', 'nullable' => false],
         ];
         foreach ($expected as $name => $spec) {

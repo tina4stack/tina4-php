@@ -34,7 +34,7 @@ use Tina4\Session;
 
 class RouterAuthSourcesTest extends TestCase
 {
-    private string $secret = 'test-auth-sources-secret';
+    private string $secret = 'test-auth-sources-secret-0123456';
 
     protected function setUp(): void
     {
@@ -89,8 +89,13 @@ class RouterAuthSourcesTest extends TestCase
 
     // ── Body formToken ───────────────────────────────────────────
 
-    public function testValidFormTokenInBodyPasses(): void
+    public function testLoneFormTokenInBodyDoesNotAuthenticate(): void
     {
+        // ADR-0079 s1: a Frond form token ("type": "form") proves where a write
+        // came from, never who the caller is, so it is NOT an identity. A write
+        // route whose ONLY auth source is a body form token must be refused 401.
+        // (A logged-in user posting a rendered form is authenticated by the
+        // session that rides alongside the form token — see AuthTokenContractTest.)
         Router::post('/api/items', function ($request, $response) {
             return $response->json(['ok' => true]);
         });
@@ -99,7 +104,7 @@ class RouterAuthSourcesTest extends TestCase
         $request = $this->createRequest('POST', '/api/items', body: ['formToken' => $token]);
         $response = $this->dispatchInner($request, new Response(true));
 
-        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals(401, $response->getStatusCode());
     }
 
     public function testInvalidFormTokenInBodyReturns401(): void
@@ -116,11 +121,16 @@ class RouterAuthSourcesTest extends TestCase
 
     public function testFreshTokenHeaderReturnedWhenBodyTokenValidates(): void
     {
+        // An IDENTITY token carried in the body formToken field still
+        // authenticates (it names a caller) and, because the body is the source
+        // that decided, earns a FreshToken so frond.js can move it to the
+        // Authorization header on the next request (ADR-0079 s1: identity, not
+        // a form token). A form token in the same slot would be skipped.
         Router::post('/api/items', function ($request, $response) {
             return $response->json(['ok' => true]);
         });
 
-        $token = Auth::getToken(['type' => 'form'], $this->secret);
+        $token = Auth::getToken(['sub' => 'user-1'], $this->secret);
         $request = $this->createRequest('POST', '/api/items', body: ['formToken' => $token]);
         $response = $this->dispatchInner($request, new Response(true));
 

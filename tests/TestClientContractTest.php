@@ -72,7 +72,7 @@ final class Tc131Marker
 
 class TestClientContractTest extends TestCase
 {
-    private const SECRET = 'tc131-contract-secret';
+    private const SECRET = 'tc131-contract-secret-0123456789';
 
     protected function setUp(): void
     {
@@ -206,8 +206,20 @@ class TestClientContractTest extends TestCase
 
         $loginResponse = $client->post('/tc131-login');
         $this->assertSame(200, $loginResponse->status);
-        $setCookie = $loginResponse->headers['set-cookie'] ?? null;
-        $this->assertNotNull($setCookie, 'login must set a session cookie for the session stage to have run');
+        // The login persists its token in the Tina4 session, whose cookie is
+        // 'tina4_session'. A request also carries an incidental native PHPSESSID
+        // (the $_SESSION compatibility session, which this flow never writes);
+        // headers['set-cookie'] is a single order-dependent value that can be
+        // that PHPSESSID, so target the Tina4 session cookie explicitly — it is
+        // the one the session-token auth path reads back.
+        $setCookie = null;
+        foreach ($loginResponse->getList('set-cookie') as $c) {
+            if (str_starts_with($c, 'tina4_session=')) {
+                $setCookie = $c;
+                break;
+            }
+        }
+        $this->assertNotNull($setCookie, 'login must set the tina4_session cookie for the session stage to have run');
         $cookiePair = explode(';', $setCookie, 2)[0];
 
         $protectedResponse = $client->get('/tc131-protected', headers: ['Cookie' => $cookiePair]);

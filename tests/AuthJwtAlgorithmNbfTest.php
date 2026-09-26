@@ -31,7 +31,7 @@ use Tina4\Auth;
  */
 class AuthJwtAlgorithmNbfTest extends TestCase
 {
-    private string $secret = 'jwt-cluster-regression-secret';
+    private string $secret = 'jwt-cluster-regression-secret-01';
 
     protected function setUp(): void
     {
@@ -518,12 +518,12 @@ class AuthJwtAlgorithmNbfTest extends TestCase
     /** NEGATIVE + POSITIVE: the secret override is honoured alongside the algorithm one. */
     public function testAuthenticateRequestHonoursTheSecretOverride(): void
     {
-        $token = Auth::getToken(['user_id' => 42], 'the-other-secret', 60, 'HS384');
+        $token = Auth::getToken(['user_id' => 42], 'the-other-secret-0123456789abcde', 60, 'HS384');
         $headers = ['Authorization' => "Bearer {$token}"];
 
         $this->assertNull(Auth::authenticateRequest($headers, $this->secret, 'HS384'));
 
-        $payload = Auth::authenticateRequest($headers, 'the-other-secret', 'HS384');
+        $payload = Auth::authenticateRequest($headers, 'the-other-secret-0123456789abcde', 'HS384');
         $this->assertNotNull($payload);
         $this->assertSame(42, $payload['user_id']);
     }

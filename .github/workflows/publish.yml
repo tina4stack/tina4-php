@@ -55,6 +55,11 @@ jobs:
     needs: release-package
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # Gate the publish behind a protected environment (ADR-0081). Configure
+    # required reviewers / a tag deployment-branch rule on the `release`
+    # environment in Settings -> Environments, and keep PACKAGIST_TOKEN as an
+    # ENVIRONMENT secret so no other workflow can read it.
+    environment: release
     permissions:
       contents: write
       id-token: write

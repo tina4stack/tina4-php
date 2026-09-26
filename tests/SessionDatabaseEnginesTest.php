@@ -109,6 +109,9 @@ class SessionDatabaseEnginesTest extends TestCase
      */
     private const OPPORTUNISTIC_ENGINES = ['mssql'];
 
+    /** The MySQL race pass whose workers hold a named lock - see raceScenarios(). */
+    private const MYSQL_NAMED_LOCK_SCENARIO = 'mysql+named-lock';
+
     /**
      * Engines whose failure is a MEASURED, OPEN framework defect - not a
      * regression this run introduced, and NOT a permission to fail.
@@ -513,10 +516,15 @@ class SessionDatabaseEnginesTest extends TestCase
      * is Msg 2714 on SQL Server, SQLSTATE 42S01 on Firebird, and a
      * pg_type_typname_nsp_index unique violation on PostgreSQL - three
      * spellings, which is why the guard re-checks instead of matching strings.
+     *
+     * Removing the RETRY (re-checking once, immediately) fails the MySQL
+     * named-lock pass: the victim's 1213 "Deadlock found" arrives before the
+     * winner has committed, so a single re-check still sees no table. That is
+     * the failure of CI run 35972320442 - see raceScenarios().
      */
     public function testConcurrentFirstUseIsSafeOnEveryEngine(): void
     {
-        $workerCount = 6;
+        $defaultWorkerCount = 6;
         $workerScript = __DIR__ . '/fixtures/session_concurrent_first_use.php';
         $repositoryRoot = dirname(__DIR__);
 
@@ -527,8 +535,8 @@ class SessionDatabaseEnginesTest extends TestCase
         /** @var string[] $failures */
         $failures = [];
 
-        foreach ($this->reachableEngineSpecifications() as $engine) {
-            $name = $engine['name'];
+        foreach ($this->raceScenarios() as $engine) {
+            $name = $engine['scenario'];
             $verifier = null;
 
             try {
@@ -537,12 +545,13 @@ class SessionDatabaseEnginesTest extends TestCase
                 ]);
                 // The race is about FIRST use, so the table has to be absent.
                 $verifier->exec('DROP TABLE IF EXISTS tina4_session');
-                $this->settleSqliteJournalMode($verifier, $name);
+                $this->settleSqliteJournalMode($verifier, $engine['name']);
 
                 $childEnvironment = array_merge(getenv(), [
                     'T4_RACE_URL' => $engine['url'],
                     'T4_RACE_USERNAME' => $engine['username'],
                     'T4_RACE_PASSWORD' => $engine['password'],
+                    'T4_RACE_HOLD_NAMED_LOCK' => $engine['holdNamedLock'] ? '1' : '',
                     // A cache in front of the adapter could answer tableExists()
                     // from memory, which would decide the race instead of the
                     // engine.
@@ -556,6 +565,7 @@ class SessionDatabaseEnginesTest extends TestCase
                 $startAt = microtime(true) + 1.5;
 
                 $workers = [];
+                $workerCount = $engine['workers'] ?? $defaultWorkerCount;
                 for ($worker = 0; $worker < $workerCount; $worker++) {
                     $pipes = [];
                     $process = proc_open(
@@ -628,7 +638,7 @@ class SessionDatabaseEnginesTest extends TestCase
             }
         }
 
-        fwrite(STDERR, '[session-contract] concurrent first use (' . $workerCount
+        fwrite(STDERR, '[session-contract] concurrent first use (' . $defaultWorkerCount
             . ' real processes per engine) survived on: '
             . ($exercised !== [] ? implode(', ', $exercised) : 'NONE') . "\n");
 
@@ -640,12 +650,46 @@ class SessionDatabaseEnginesTest extends TestCase
             . ' more than one process, and the loser must not take a request down'
         );
 
-        $missingRequired = array_values(array_diff(self::REQUIRED_ENGINES, $exercised));
+        $missingRequired = array_values(array_diff(
+            [...self::REQUIRED_ENGINES, self::MYSQL_NAMED_LOCK_SCENARIO],
+            $exercised
+        ));
         $this->assertSame(
             [],
             $missingRequired,
             'the race was never run on these REQUIRED engines: ' . implode(', ', $missingRequired)
         );
+    }
+
+    /**
+     * The concurrent first-use race runs once per reachable engine, plus once
+     * more on MySQL with every worker holding a named lock.
+     *
+     * WHY THE SECOND MYSQL PASS. On MySQL the race is a metadata-lock deadlock
+     * inside CREATE TABLE IF NOT EXISTS: each session takes a shared lock on the
+     * name, checks, then upgrades to exclusive, and two upgrades deadlock. MySQL
+     * backs the victim off and retries it silently when the session holds no
+     * other metadata lock - so the plain pass reaches the failure only rarely
+     * (CI run 35972320442; 1 in 35 on the lab). A session that holds a lock
+     * (GET_LOCK here, the way apps serialise work) cannot be backed off, so the
+     * victim gets 1213 "Deadlock found" before the winner has committed. Measured
+     * on the lab MySQL 8.4 before the fix: 25 of 30 rounds lost a worker. This
+     * pass makes that path run every time instead of by luck.
+     *
+     * @return array<int, array{name:string,scenario:string,holdNamedLock:bool,workers?:int,url:string,username:string,password:string,host:?string,port:int,dsn:string}>
+     */
+    private function raceScenarios(): array
+    {
+        $scenarios = [];
+        foreach ($this->reachableEngineSpecifications() as $engine) {
+            $scenarios[] = $engine + ['scenario' => $engine['name'], 'holdNamedLock' => false];
+            if ($engine['name'] === 'mysql') {
+                // Twelve workers, not six: more concurrent upgrades per round, so
+                // the unfixed code loses a worker on essentially every run.
+                $scenarios[] = $engine + ['scenario' => self::MYSQL_NAMED_LOCK_SCENARIO, 'holdNamedLock' => true, 'workers' => 12];
+            }
+        }
+        return $scenarios;
     }
 
     /**

@@ -96,6 +96,9 @@ class Api
     private bool $cookiesEnabled;
     private array $cookies = [];
 
+    /** SSRF guard allow-list of hosts / host:port / CIDRs (ADR-0084). */
+    private array $allowHosts = [];
+
     /**
      * Buffer size used by the streaming primitives when reading from a
      * plain (non-chunked) response body. 8 KB matches PHP's default
@@ -166,9 +169,12 @@ class Api
         int $maxRetries = 0,
         float $retryBackoff = 0.5,
         ?callable $transport = null,
-        bool $cookies = false
+        bool $cookies = false,
+        ?array $allowHosts = null
     ) {
         $this->baseUrl = rtrim($baseUrl, '/');
+        // SSRF guard (ADR-0084): explicit allow-list of hosts / host:port / CIDRs.
+        $this->allowHosts = $allowHosts ?? [];
         $this->authHeader = $authHeader;
         $this->timeout = $timeout;
         $this->maxRetries = max(0, $maxRetries);
@@ -605,6 +611,21 @@ class Api
         $currentContent = $content;
 
         for ($hop = 0; ; $hop++) {
+            // SSRF guard (ADR-0084): re-validated per hop, so a redirect to a
+            // private/internal address is refused even when the initial URL was
+            // public. Both callers (dispatch + download) handle handle===false.
+            try {
+                Ssrf::guardUrl($currentUrl, $this->allowHosts);
+            } catch (SsrfError $e) {
+                return [
+                    'handle' => false,
+                    'status' => null,
+                    'headers' => [],
+                    'rawHeaders' => [],
+                    'error' => $e->getMessage(),
+                ];
+            }
+
             // Checked per hop, not once up front: a plain http:// request is
             // allowed to redirect to https://, so the hop that actually needs
             // TLS may not be the one the caller asked for.
@@ -718,10 +739,16 @@ class Api
     private function baseHeaders(?string $targetUrl = null): array
     {
         $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->headers);
-        if ($this->authHeader !== '') {
+        // Attach the configured Authorization / Cookie ONLY when the request
+        // target is same-origin as the configured base. A path that is itself an
+        // absolute off-origin URL otherwise leaks the bearer token / session
+        // cookie to an attacker-chosen host - the same cross-origin strip already
+        // applied to followed redirects, now for the initial target too.
+        $sameOriginAsBase = $targetUrl === null || $this->sameOrigin($targetUrl, $this->baseUrl);
+        if ($this->authHeader !== '' && $sameOriginAsBase) {
             $headers['Authorization'] = $this->authHeader;
         }
-        if ($this->cookiesEnabled) {
+        if ($this->cookiesEnabled && $sameOriginAsBase) {
             $cookieHeader = $this->cookieHeaderValue();
             if ($cookieHeader !== null) {
                 $headers['Cookie'] = $cookieHeader;
@@ -1138,6 +1165,13 @@ class Api
 
         if ($scheme === 'https' && !self::httpsAvailable()) {
             throw new ApiStreamError(self::HTTPS_UNAVAILABLE . ' (requested ' . DatabaseUrl::redact($url) . ')');
+        }
+
+        // SSRF guard (ADR-0084): refuse a private/internal target before connect.
+        try {
+            Ssrf::guardUrl($url, $this->allowHosts);
+        } catch (SsrfError $e) {
+            throw new ApiStreamError($e->getMessage());
         }
 
         $contextOptions = [];

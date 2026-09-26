@@ -101,6 +101,14 @@ class DevSecretTest extends TestCase
         $this->assertFileExists($local);
         $this->assertFileDoesNotExist($this->tmpDir . '/.env');
         $this->assertStringContainsString("TINA4_SECRET={$secret}", file_get_contents($local));
+
+        // F15: the file holds a signing secret, so it must be owner-only (0600),
+        // never the default 0644. Skip only where the OS has no POSIX perm bits.
+        if (DIRECTORY_SEPARATOR === '/') {
+            clearstatcache(true, $local);
+            $this->assertSame('0600', substr(sprintf('%o', fileperms($local)), -4),
+                '.env.local holds a secret and must be mode 0600');
+        }
     }
 
     public function testDevAppendsToExistingEnvLocalWithoutCorruptingLastLine(): void
@@ -126,12 +134,12 @@ class DevSecretTest extends TestCase
     public function testExistingSecretIsLeftUntouchedNoWrite(): void
     {
         $this->setEnv('TINA4_DEBUG', 'true');
-        $this->setEnv('TINA4_SECRET', 'already-set-secret');
+        $this->setEnv('TINA4_SECRET', 'already-set-secret-0123456789abc');
 
         $result = Auth::ensureDevSecret($this->tmpDir);
 
         $this->assertNull($result);                                  // no-op
-        $this->assertSame('already-set-secret', getenv('TINA4_SECRET')); // unchanged
+        $this->assertSame('already-set-secret-0123456789abc', getenv('TINA4_SECRET')); // unchanged
         $this->assertFileDoesNotExist($this->tmpDir . '/.env.local'); // no write
     }
 

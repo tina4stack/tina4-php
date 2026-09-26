@@ -52,7 +52,7 @@ use Tina4\Session;
 
 class CsrfMiddlewareTest extends TestCase
 {
-    private string $secret = 'test-csrf-secret-key';
+    private string $secret = 'test-csrf-secret-key-0123456789a';
 
     protected function setUp(): void
     {
@@ -162,6 +162,29 @@ class CsrfMiddlewareTest extends TestCase
     private static function b64url(string $data): string
     {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * Forge a genuinely HS256-signed JWT with an ATTACKER-chosen secret.
+     *
+     * A real forger signs the JWT itself with `hash_hmac` and is not bound by
+     * Auth::getToken()'s ADR-0079 refusal to mint with a weak/blank/short key —
+     * so these negative tests must forge by hand to exercise the verifier's
+     * rejection with a wrong, blank, or retired-default secret.
+     *
+     * @param string $secret The (deliberately wrong) key the attacker signs with
+     * @param array  $claims Extra claims merged over a valid iat/exp
+     */
+    private function forgeToken(string $secret, array $claims = []): string
+    {
+        $now = time();
+        $header = self::b64url(json_encode(['alg' => 'HS256', 'typ' => 'JWT'], JSON_UNESCAPED_SLASHES));
+        $payload = self::b64url(json_encode(
+            array_merge(['iat' => $now, 'exp' => $now + 3600], $claims),
+            JSON_UNESCAPED_SLASHES
+        ));
+        $sig = self::b64url(hash_hmac('sha256', "{$header}.{$payload}", $secret, true));
+        return "{$header}.{$payload}.{$sig}";
     }
 
     /**
@@ -329,7 +352,7 @@ class CsrfMiddlewareTest extends TestCase
     {
         // Genuine JWT shape, signed with a different secret — the HMAC check
         // (against TINA4_SECRET) must fail.
-        $forged = Auth::getToken(['type' => 'form'], 'a-different-secret', 60);
+        $forged = $this->forgeToken('a-different-secret', ['type' => 'form']);
         [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $forged]));
         $this->assertRejected($res);
     }
@@ -401,7 +424,7 @@ class CsrfMiddlewareTest extends TestCase
 
     public function testBearerSignedWithWrongSecretDoesNotSkipCsrf(): void
     {
-        $forgedBearer = Auth::getToken(['sub' => 'api-client'], 'wrong-secret', 60);
+        $forgedBearer = $this->forgeToken('wrong-secret', ['sub' => 'api-client']);
         [, $res, $passed] = $this->dispatchCsrf(
             $this->makeRequest('POST', headers: ['Authorization' => "Bearer {$forgedBearer}"])
         );
@@ -588,7 +611,7 @@ class CsrfMiddlewareTest extends TestCase
         // 'tina4-default-secret' must be rejected (fail closed — no default).
         putenv('TINA4_SECRET');
         unset($_ENV['TINA4_SECRET']);
-        $forged = Auth::getToken(['type' => 'form'], 'tina4-default-secret', 60);
+        $forged = $this->forgeToken('tina4-default-secret', ['type' => 'form']);
         [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $forged]));
         $this->assertRejected($res);
     }
@@ -600,7 +623,7 @@ class CsrfMiddlewareTest extends TestCase
         // middleware fails closed: no secret means no trusted token.
         putenv('TINA4_SECRET');
         unset($_ENV['TINA4_SECRET']);
-        $forged = Auth::getToken(['type' => 'form'], '', 60);
+        $forged = $this->forgeToken('', ['type' => 'form']);
         [, $res] = $this->dispatchCsrf($this->makeRequest('POST', body: ['formToken' => $forged]));
         $this->assertRejected($res);
     }

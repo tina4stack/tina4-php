@@ -266,11 +266,12 @@ class KafkaBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
-    public function size(string $topic): int
+    public function size(string $topic, string $status = 'pending'): int
     {
-        // Kafka doesn't have a simple "queue size" concept.
-        // We return 0 as a placeholder — proper implementation would
-        // query earliest and latest offsets.
+        // ADR-0022 decision 5: a Kafka log has no queue depth, so size()
+        // returns 0 for EVERY status, including the dead aliases. That 0 is the
+        // documented answer, not a wrong one — computing a depth means an admin
+        // round-trip per call.
         return 0;
     }
 

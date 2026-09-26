@@ -47,8 +47,8 @@ class RequestContractTest extends TestCase
     protected function setUp(): void
     {
         Router::clear();
-        putenv('TINA4_SECRET=request-contract-secret');
-        $_ENV['TINA4_SECRET'] = 'request-contract-secret';
+        putenv('TINA4_SECRET=request-contract-secret-01234567');
+        $_ENV['TINA4_SECRET'] = 'request-contract-secret-01234567';
 
         Router::get('/__rq29/{id}', function (Request $request, Response $response) {
             return $response->json(['params' => $request->params, 'query' => $request->query]);

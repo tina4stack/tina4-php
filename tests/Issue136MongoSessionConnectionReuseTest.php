@@ -121,6 +121,7 @@ PHP);
             'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
             'TMPDIR' => sys_get_temp_dir(),
             'TINA4_DEBUG' => 'false',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_SERVE_FORK' => 'false',
             'TINA4_OVERRIDE_CLIENT' => 'true',
             'TINA4_SUPPRESS' => 'true',

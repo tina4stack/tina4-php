@@ -34,7 +34,7 @@ use Tina4\Session;
  */
 class AuthSessionContractTest extends TestCase
 {
-    private const SECRET = 'auth-session-contract-secret';
+    private const SECRET = 'auth-session-contract-secret-012';
 
     /** @var string Temp root for this test's real session directories. */
     private string $tempRoot;

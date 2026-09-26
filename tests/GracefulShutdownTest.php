@@ -590,6 +590,7 @@ class GracefulShutdownTest extends TestCase
             'TINA4_SUPPRESS' => 'true',
             'TINA4_AUTO_MIGRATE' => 'false',
             'TINA4_DEBUG' => 'false',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
         ];
 
         // fd 1 and 2 -> a real FILE. Never a pipe nobody reads (the child would

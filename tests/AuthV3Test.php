@@ -20,7 +20,7 @@ use Tina4\Auth;
 
 class AuthV3Test extends TestCase
 {
-    private string $secret = 'test-secret-key-for-jwt';
+    private string $secret = 'test-secret-key-for-jwt-01234567';
 
     protected function setUp(): void
     {
@@ -48,8 +48,8 @@ class AuthV3Test extends TestCase
     {
         // Simulate a CI runner where $_ENV['TINA4_SECRET'] was set by .env load
         // (or a prior test) and a runtime putenv() then overrides it.
-        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value';
-        putenv('TINA4_SECRET=runtime-override-value');
+        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value-0123';
+        putenv('TINA4_SECRET=runtime-override-value-0123456789');
 
         // Sign with no-arg getToken (resolves from env) and verify the same way
         $token = Auth::getToken(['sub' => 'tester']);
@@ -64,10 +64,10 @@ class AuthV3Test extends TestCase
         // SmokeTest pattern: getToken receives an explicit secret AND
         // putenv() is set to the same value. validToken (no arg) must
         // resolve to the runtime putenv() value, not a stale $_ENV.
-        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value';
-        putenv('TINA4_SECRET=explicit-runtime-secret');
+        $_ENV['TINA4_SECRET'] = 'stale-env-superglobal-value-0123';
+        putenv('TINA4_SECRET=explicit-runtime-secret-0123456789');
 
-        $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret');
+        $token = Auth::getToken(['sub' => 'tester'], 'explicit-runtime-secret-0123456789');
         $this->assertNotNull(Auth::validToken($token));
 
         putenv('TINA4_SECRET');
@@ -77,10 +77,10 @@ class AuthV3Test extends TestCase
     {
         // Direct probe: getenv and $_ENV disagree. The token is signed with
         // the getenv value; validation must accept it.
-        $_ENV['TINA4_SECRET'] = 'env-superglobal-value';
-        putenv('TINA4_SECRET=getenv-value');
+        $_ENV['TINA4_SECRET'] = 'env-superglobal-value-0123456789';
+        putenv('TINA4_SECRET=getenv-value-0123456789abcdef0123');
 
-        $token = Auth::getToken(['sub' => 'tester'], 'getenv-value');
+        $token = Auth::getToken(['sub' => 'tester'], 'getenv-value-0123456789abcdef0123');
 
         // No-arg validation must use getenv() — same source getToken used
         $this->assertNotNull(Auth::validToken($token));
@@ -94,7 +94,7 @@ class AuthV3Test extends TestCase
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';            // stale
         putenv('TINA4_JWT_ALGORITHM=HS256');                // runtime override
         $_ENV['TINA4_SECRET'] = 'stale';
-        putenv('TINA4_SECRET=test-secret-key-for-jwt');
+        putenv('TINA4_SECRET=test-secret-key-for-jwt-0123456789');
 
         $token = Auth::getToken(['sub' => 'tester']);
 
@@ -173,7 +173,7 @@ class AuthV3Test extends TestCase
     {
         // Generate token with correct secret, then switch env to wrong secret for validation
         $token = Auth::getToken(['sub' => '123']);
-        $_ENV['TINA4_SECRET'] = 'wrong-secret';
+        putenv('TINA4_SECRET=wrong-secret-0123456789abcdef012'); $_ENV['TINA4_SECRET'] = 'wrong-secret-0123456789abcdef012';
         $result = Auth::validToken($token);
         $_ENV['TINA4_SECRET'] = $this->secret;
 
@@ -266,7 +266,7 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $_ENV['TINA4_SECRET'] = $privateKey;
+        putenv('TINA4_SECRET=' . $privateKey); $_ENV['TINA4_SECRET'] = $privateKey;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
 
         $token = Auth::getToken(['sub' => 'rs256-user', 'role' => 'admin'], 3600);
@@ -276,7 +276,7 @@ class AuthV3Test extends TestCase
         $this->assertCount(3, $parts);
 
         // Verify with public key
-        $_ENV['TINA4_SECRET'] = $publicKey;
+        putenv('TINA4_SECRET=' . $publicKey); $_ENV['TINA4_SECRET'] = $publicKey;
         $this->assertNotNull(Auth::validToken($token));
         $payload = Auth::getPayload($token);
         $this->assertEquals('rs256-user', $payload['sub']);
@@ -299,12 +299,12 @@ class AuthV3Test extends TestCase
         $publicKeyDetails2 = openssl_pkey_get_details($keyPair2);
         $publicKey2 = $publicKeyDetails2['key'];
 
-        $_ENV['TINA4_SECRET'] = $privateKey1;
+        putenv('TINA4_SECRET=' . $privateKey1); $_ENV['TINA4_SECRET'] = $privateKey1;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
         $token = Auth::getToken(['sub' => 'test'], 3600);
 
         // Verify with wrong public key
-        $_ENV['TINA4_SECRET'] = $publicKey2;
+        putenv('TINA4_SECRET=' . $publicKey2); $_ENV['TINA4_SECRET'] = $publicKey2;
         $result = Auth::validToken($token);
 
         // Restore
@@ -320,7 +320,7 @@ class AuthV3Test extends TestCase
         $keyPair = openssl_pkey_new($config);
         openssl_pkey_export($keyPair, $privateKey);
 
-        $_ENV['TINA4_SECRET'] = $privateKey;
+        putenv('TINA4_SECRET=' . $privateKey); $_ENV['TINA4_SECRET'] = $privateKey;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
         $token = Auth::getToken(['sub' => '1'], 3600);
 
@@ -608,12 +608,12 @@ class AuthV3Test extends TestCase
         $publicKeyDetails = openssl_pkey_get_details($keyPair);
         $publicKey = $publicKeyDetails['key'];
 
-        $_ENV['TINA4_SECRET'] = $privateKey;
+        putenv('TINA4_SECRET=' . $privateKey); $_ENV['TINA4_SECRET'] = $privateKey;
         $_ENV['TINA4_JWT_ALGORITHM'] = 'RS256';
 
         $token = Auth::getToken(['sub' => 'test', 'exp' => time() - 10], 0);
 
-        $_ENV['TINA4_SECRET'] = $publicKey;
+        putenv('TINA4_SECRET=' . $publicKey); $_ENV['TINA4_SECRET'] = $publicKey;
         $result = Auth::validToken($token); // Expired
 
         // Restore
@@ -724,7 +724,7 @@ class AuthV3Test extends TestCase
 
     public function testGetTokenWithExplicitSecret(): void
     {
-        $token = Auth::getToken(['sub' => 'custom'], 'custom-secret', 3600);
+        $token = Auth::getToken(['sub' => 'custom'], 'custom-secret-0123456789abcdef01', 3600);
         $this->assertIsString($token);
         $this->assertStringContainsString('.', $token);
     }

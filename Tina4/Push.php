@@ -28,8 +28,12 @@ final class Push
     private int $ttl;
     private ?string $urgency;
 
-    public function __construct(?string $subject = null, ?string $publicKey = null, ?string $privateKey = null, int $ttl = 60, ?string $urgency = null)
+    /** SSRF guard allow-list of hosts / host:port / CIDRs (ADR-0084). */
+    private array $allowHosts;
+
+    public function __construct(?string $subject = null, ?string $publicKey = null, ?string $privateKey = null, int $ttl = 60, ?string $urgency = null, ?array $allowHosts = null)
     {
+        $this->allowHosts = $allowHosts ?? [];
         $this->subject = trim($subject ?? (getenv('TINA4_VAPID_SUBJECT') ?: ''));
         $this->publicKey = trim($publicKey ?? (getenv('TINA4_VAPID_PUBLIC') ?: ''));
         $this->privateKey = trim($privateKey ?? (getenv('TINA4_VAPID_PRIVATE') ?: ''));
@@ -105,12 +109,21 @@ final class Push
         if ($this->urgency !== null && $this->urgency !== '') {
             $headers[] = 'Urgency: ' . $this->urgency;
         }
+        // SSRF guard (ADR-0084): refuse a private/internal push endpoint.
+        try {
+            Ssrf::guardUrl($endpoint, $this->allowHosts);
+        } catch (SsrfError $e) {
+            throw new PushError($e->getMessage());
+        }
         $context = stream_context_create(['http' => [
             'method' => 'POST',
             'header' => implode("\r\n", $headers),
             'content' => $body,
             'ignore_errors' => true,
             'timeout' => 30,
+            // A real push service answers the POST directly; a redirect from a
+            // push endpoint is not followed to a private address (ADR-0084).
+            'follow_location' => 0,
         ]]);
         $responseBody = @file_get_contents($endpoint, false, $context);
         $status = 0;

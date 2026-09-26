@@ -109,7 +109,7 @@ class WebSapiEntryTest extends TestCase
             . "});\n"
         );
 
-        file_put_contents($base . '/.env', "TINA4_DEBUG=false\nTINA4_OVERRIDE_CLIENT=true\n");
+        file_put_contents($base . '/.env', "TINA4_DEBUG=false\nTINA4_OVERRIDE_CLIENT=true\nTINA4_SECRET=tina4-php-test-suite-secret-0123456789abcdef\n");
 
         return $base;
     }

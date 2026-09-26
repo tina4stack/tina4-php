@@ -1124,6 +1124,7 @@ class SessionZeroDependencyFallbackTest extends TestCase
             // against nothing at all.
             'TINA4_SESSION_STRICT' => 'true',
             'TINA4_DEBUG' => 'false',
+            'TINA4_SECRET' => 'tina4-php-test-suite-secret-0123456789abcdef',
             'TINA4_LOG_OUTPUT' => 'stdout',
             'TINA4_SESSION_PATH' => $sessionDirectory,
             'TINA4_SESSION_TTL' => '300',

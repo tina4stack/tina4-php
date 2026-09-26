@@ -808,9 +808,10 @@ class McpServer
     /**
      * Whether an address is a loopback (in-process / same-host) peer.
      *
-     * Operates on the RAW socket peer, never X-Forwarded-For. Empty means an
-     * in-process / synthetic request (no socket) and is trusted. The
-     * `::ffff:` IPv4-mapped prefix is stripped. NOTE: 0.0.0.0 is a BIND
+     * Operates on the RAW socket peer, never X-Forwarded-For. An empty peer is
+     * UNKNOWN and is NOT loopback: a runtime path that failed to pass its peer
+     * must fail closed, never open (ADR-0079 s4). The `::ffff:` IPv4-mapped
+     * prefix is stripped. NOTE: 0.0.0.0 is a BIND
      * address, never a client address, so it is deliberately NOT loopback.
      *
      * Python master parity: tina4_python.mcp.is_loopback.
@@ -818,7 +819,7 @@ class McpServer
     public static function isLoopback(string $ip): bool
     {
         if ($ip === '') {
-            return true;
+            return false;
         }
         $ip = strtolower(trim($ip));
         if (str_starts_with($ip, '::ffff:')) {
