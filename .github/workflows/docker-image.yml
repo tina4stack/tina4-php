@@ -80,7 +80,10 @@ jobs:
           echo "on-disk size: $(( kb / 1024 )) MB"
 
       - name: Boot the container
-        run: docker run -d --name gate -p 8080:$APP_PORT "$IMAGE:ci"
+        # ADR-0078: /health exposes `version` only in debug (hidden in production
+        # as version-disclosure hardening). This is a CONTROLLED verification boot,
+        # so enable debug to read the version for the gate; production is unchanged.
+        run: docker run -d --name gate -e TINA4_DEBUG=true -p 8080:$APP_PORT "$IMAGE:ci"
 
       # Probe /health, NEVER "/". A stock scaffold has an empty src/routes and
       # answers 404 at "/", and `curl -fsS` scores a 404 as a failure -- which is
