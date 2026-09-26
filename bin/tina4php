@@ -770,7 +770,7 @@ function resolveGeneration(string $what, string $name, array $flags): array
                 $transform['to'] = $table;   // reflect a --table-name override
                 $transformations[] = $transform;
             }
-            $routeName = "{$table}s";
+            $routeName = pluralizeTable(tableNameFromClass($name)); // single plural of the singular base (never $table . "s", which double-pluralises a reserved-word table)
             $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $routeName)));
             return [
                 'class_name'      => $name,
@@ -815,7 +815,7 @@ function resolveGeneration(string $what, string $name, array $flags): array
 
         case 'view':
             $table = resolveTable($name, $flags);
-            $routeName = "{$table}s";
+            $routeName = pluralizeTable(tableNameFromClass($name)); // single plural of the singular base (never $table . "s", which double-pluralises a reserved-word table)
             return [
                 'class_name'      => $name,
                 'table_name'      => $table,
@@ -3094,7 +3094,7 @@ function generateCrud(string $name, array $flags, array $fieldTypeMap): void
     // generateModel sub-call below announces the reserved-word note exactly once.
     // `--table-name` flows through $flags to every sub-call.
     $table = resolveTable($name, $flags);
-    $routeName = $table . 's';
+    $routeName = pluralizeTable(tableNameFromClass($name)); // single plural of the singular base (never $table . "s", which double-pluralises a reserved-word table)
     $public = !empty($flags['public']);
 
     echo "\n  Generating CRUD for {$name}...\n\n";
@@ -3518,7 +3518,7 @@ function generateForm(string $name, array $flags): void
     // Existing-table generator: honour `--table-name`, match the model's
     // reserved-word-safe name, stay quiet (no repeated note).
     $table = resolveTable($name, $flags);
-    $routeName = $table . 's';
+    $routeName = pluralizeTable(tableNameFromClass($name)); // single plural of the singular base (never $table . "s", which double-pluralises a reserved-word table)
 
     $dir = 'src/templates/forms';
     @mkdir($dir, 0755, true);
@@ -3601,7 +3601,7 @@ function generateView(string $name, array $flags): void
     // Existing-table generator: honour `--table-name`, match the model's
     // reserved-word-safe name, stay quiet (no repeated note).
     $table = resolveTable($name, $flags);
-    $routeName = $table . 's';
+    $routeName = pluralizeTable(tableNameFromClass($name)); // single plural of the singular base (never $table . "s", which double-pluralises a reserved-word table)
 
     $dir = 'src/templates/pages';
     @mkdir($dir, 0755, true);

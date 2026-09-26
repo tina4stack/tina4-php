@@ -340,6 +340,51 @@ class CLIScaffoldingTest extends TestCase
         $this->assertStringContainsString('float', $content);
     }
 
+    /**
+     * The ONE pluralisation rule (regression for the double-pluralisation bug):
+     * the route path, route file and list/page template are the SINGLE plural of
+     * the singular base -- pluralizeTable(tableNameFromClass($name)) -- never the
+     * plural of an already-pluralised table. `order` is a SQL reserved word, so
+     * the TABLE is pluralised to `orders`; the route must be `orders`, NOT
+     * `orderss`. The migration stays `create_orders`.
+     */
+    public function testCrudReservedWordClassIsNotDoublePluralised(): void
+    {
+        ob_start();
+        generateCrud('Order', ['fields' => 'total:float'], self::$fieldTypeMap);
+        ob_end_clean();
+
+        $this->assertFileExists('src/routes/orders.php');
+        $this->assertFileDoesNotExist('src/routes/orderss.php');
+        $route = file_get_contents('src/routes/orders.php');
+        $this->assertStringContainsString('/orders', $route);
+        $this->assertStringNotContainsString('orderss', $route);
+
+        $this->assertFileExists('src/templates/pages/orders.twig');
+        $this->assertFileDoesNotExist('src/templates/pages/orderss.twig');
+
+        $this->assertFileExists('src/orm/Order.php');
+        $this->assertNotEmpty(glob('migrations/*create_orders.sql'));
+        $this->assertEmpty(glob('migrations/*create_orderss.sql'));
+    }
+
+    public function testCrudPlainWordClassIsPluralisedOnce(): void
+    {
+        ob_start();
+        generateCrud('Product', ['fields' => 'name:string'], self::$fieldTypeMap);
+        ob_end_clean();
+
+        $this->assertFileExists('src/routes/products.php');
+        $this->assertFileDoesNotExist('src/routes/productss.php');
+        $route = file_get_contents('src/routes/products.php');
+        $this->assertStringContainsString('/products', $route);
+        $this->assertStringNotContainsString('productss', $route);
+
+        $this->assertFileExists('src/orm/Product.php');
+        // non-reserved -> table stays SINGULAR, so the migration is create_product.
+        $this->assertNotEmpty(glob('migrations/*create_product.sql'));
+    }
+
     public function testGenerateModelSkipsDuplicate(): void
     {
         ob_start();
