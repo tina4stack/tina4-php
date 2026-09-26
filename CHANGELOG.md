@@ -6,6 +6,10 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.139
+
+Outbound requests from the Api client and Web Push are guarded against SSRF: private, loopback and link-local targets are refused unless explicitly allowed (ADR-0084). The development admin surface is hardened -- the health endpoint no longer discloses the framework version outside debug, and development binds loopback by default (ADR-0078). Production refuses to boot with a blank or short HMAC secret so tokens cannot be forged (ADR-0079). Queue reject() dead-letters immediately and size("dead") reports the dead-letter depth (ADR-0022, ADR-0023). Session table first-use is concurrency-safe across every engine. Mail encryption follows the configured TLS/STARTTLS contract (ADR-0071). Log output, driver-install hints and WSDL/mail diagnostics redact credentials and URLs. Publishing is gated behind a protected environment with release actions pinned by commit SHA, and a medium-severity API token-leak path is closed. The framework still has no required runtime dependencies.
+
 ## 3.13.138
 
 - Bind HTTP credentials to the configured origin on every transfer path; trust forwarded host and protocol only from trusted transport peers. Gate all development endpoint methods by peer, Host and browser Origin, confine resolved file paths, and validate table identifiers. Preserve the documented MCP transport API-key fallback and health version.
