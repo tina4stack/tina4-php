@@ -80,10 +80,11 @@ jobs:
           echo "on-disk size: $(( kb / 1024 )) MB"
 
       - name: Boot the container
-        # ADR-0078: /health exposes `version` only in debug (hidden in production
-        # as version-disclosure hardening). This is a CONTROLLED verification boot,
-        # so enable debug to read the version for the gate; production is unchanged.
-        run: docker run -d --name gate -e TINA4_DEBUG=true -e TINA4_HOST=0.0.0.0 -p 8080:$APP_PORT "$IMAGE:ci"
+        # ADR-0079: a production image refuses to boot without a >=32-byte
+        # TINA4_SECRET (blank/short forges tokens). Provide a throwaway one for
+        # this verification boot; real deployments set their own. The image binds
+        # 0.0.0.0 by default, so this still proves the 0.0.0.0 bind below.
+        run: docker run -d --name gate -e TINA4_SECRET=ci-docker-boot-verification-secret-0123456789 -p 8080:$APP_PORT "$IMAGE:ci"
 
       # Probe /health, NEVER "/". A stock scaffold has an empty src/routes and
       # answers 404 at "/", and `curl -fsS` scores a 404 as a failure -- which is
@@ -133,22 +134,23 @@ jobs:
       #
       # "0.0.0" is called out by name because it is the resolvers' fallback
       # sentinel, not because it is an implausible version.
-      - name: Require /health to report a real version
+      - name: Require the image to report a real version
         run: |
-          version=$(curl -fsS -m 5 "http://127.0.0.1:8080/health" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))')
+          # ADR-0078 hides `version` from a production /health, so read it from the
+          # image's own version resolver instead (still catches the 0.0.0 fallback).
+          version=$(docker exec gate php -r 'require "vendor/autoload.php"; echo \Tina4\App::$VERSION;')
           echo "reported version: '$version'"
 
           if [ -z "$version" ]; then
-            echo "::error::/health reported no version -- an unverifiable image must not be published"
+            echo "::error::the image reported no version -- an unverifiable image must not be published"
             exit 1
           fi
           if [ "$version" = "0.0.0" ]; then
-            echo "::error::/health reports 0.0.0 -- that is the version resolver's FALLBACK, so it failed to locate the package manifest inside the image"
+            echo "::error::the version resolver reports 0.0.0 -- it failed to locate the package manifest inside the image"
             exit 1
           fi
           if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-            echo "::error::/health version '$version' is not a release version"
+            echo "::error::reported version '$version' is not a release version"
             exit 1
           fi
 
