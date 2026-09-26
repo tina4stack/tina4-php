@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Code Infinity
+# SPDX-License-Identifier: MPL-2.0
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Doc-drift gate: the in-repo CLAUDE.md must not document a Tina4 API the code
+# does not have. Fast, no live services -- it autoloads the package and checks
+# every documented symbol resolves against the real classes with Reflection.
+name: Doc Drift
+
+on:
+  push:
+    branches: [v3]
+  pull_request:
+    branches: [v3]
+
+permissions:
+  contents: read
+
+jobs:
+  doc-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: json
+          coverage: none
+
+      - name: Install package (for live introspection)
+        run: composer install --prefer-dist --no-progress
+
+      - name: Doc-drift audit (strict)
+        run: php scripts/audit-doc-drift.php --strict
+
+      - name: Doc-drift gate mutation tests
+        run: ./vendor/bin/phpunit --filter DocDriftGateTest
