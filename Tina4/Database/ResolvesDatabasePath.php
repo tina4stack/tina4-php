@@ -62,12 +62,67 @@ trait ResolvesDatabasePath
             return $dbPath;
         }
 
-        // Relative — resolve under cwd and ensure parent exists.
-        $resolved = getcwd() . DIRECTORY_SEPARATOR . $dbPath;
+        // Relative — resolve under cwd; create the parent (mode 0775) ONLY when
+        // it stays inside cwd (ADR-0086). A relative path whose parent escapes
+        // the project (e.g. "../../etc/foo.db") is REFUSED loudly here — never
+        // the silent mkdir outside the project that used to happen.
+        $cwd = getcwd();
+        $resolved = $cwd . DIRECTORY_SEPARATOR . $dbPath;
         $parent = dirname($resolved);
+        if (!self::pathIsWithin($parent, $cwd)) {
+            throw new \InvalidArgumentException(
+                "SQLite path '{$dbPath}' resolves outside the project directory: '"
+                . self::normalizePathLexically($parent) . "' is not within '{$cwd}'. "
+                . "Tina4 refuses to create directories outside the project (ADR-0086). "
+                . "Use an absolute path for a database that lives outside the project."
+            );
+        }
         if (!is_dir($parent)) {
             @mkdir($parent, 0775, true);
         }
         return $resolved;
+    }
+
+    /**
+     * Collapse ``.`` and ``..`` segments in a path WITHOUT touching the
+     * filesystem (realpath cannot be used — the directory does not exist yet).
+     *
+     * @param string $path Any path, absolute or relative
+     * @return string      The lexically-normalised path
+     */
+    private static function normalizePathLexically(string $path): string
+    {
+        $isAbsolute = str_starts_with($path, '/') || str_starts_with($path, '\\');
+        $stack = [];
+        foreach (preg_split('#[/\\\\]+#', $path) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+            if ($part === '..') {
+                if ($stack && end($stack) !== '..') {
+                    array_pop($stack);
+                } elseif (!$isAbsolute) {
+                    $stack[] = '..';
+                }
+                continue;
+            }
+            $stack[] = $part;
+        }
+        return ($isAbsolute ? DIRECTORY_SEPARATOR : '') . implode(DIRECTORY_SEPARATOR, $stack);
+    }
+
+    /**
+     * Whether ``$target`` is ``$base`` itself or a descendant of it, compared
+     * lexically (the containment guard behind the escape refusal).
+     *
+     * @param string $target The directory under test
+     * @param string $base   The project root (cwd)
+     * @return bool           True when $target is within $base
+     */
+    private static function pathIsWithin(string $target, string $base): bool
+    {
+        $target = self::normalizePathLexically($target);
+        $base = self::normalizePathLexically($base);
+        return $target === $base || str_starts_with($target, $base . DIRECTORY_SEPARATOR);
     }
 }
