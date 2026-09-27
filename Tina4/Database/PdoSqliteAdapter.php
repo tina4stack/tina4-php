@@ -50,6 +50,7 @@ class PdoSqliteAdapter implements DatabaseAdapter
 
     use SqlNormalizerTrait;
     use PdoAdapterTrait;
+    use ResolvesDatabasePath;
 
     /** Resolved database path (after cwd-relative resolution). */
     private string $database;
@@ -156,36 +157,5 @@ class PdoSqliteAdapter implements DatabaseAdapter
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
         );
         return array_column($rows, 'name');
-    }
-
-    /**
-     * Resolve a SQLite path argument against the project root (cwd).
-     * Identical to SQLite3Adapter::resolveDatabasePath so both adapters treat
-     * a connection string the same way.
-     */
-    private static function resolveDatabasePath(string $dbPath): string
-    {
-        if ($dbPath === ':memory:') {
-            return $dbPath;
-        }
-
-        $isUnixAbs = str_starts_with($dbPath, '/');
-        $isWindowsAbs = (
-            strlen($dbPath) >= 3
-            && ctype_alpha($dbPath[0])
-            && $dbPath[1] === ':'
-            && ($dbPath[2] === '/' || $dbPath[2] === '\\')
-        );
-
-        if ($isUnixAbs || $isWindowsAbs) {
-            return $dbPath;
-        }
-
-        $resolved = getcwd() . DIRECTORY_SEPARATOR . $dbPath;
-        $parent = dirname($resolved);
-        if (!is_dir($parent)) {
-            @mkdir($parent, 0775, true);
-        }
-        return $resolved;
     }
 }
