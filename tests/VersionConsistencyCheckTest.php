@@ -95,6 +95,7 @@ class VersionConsistencyCheckTest extends TestCase
         mkdir($root . '/Tina4', 0755, true);
         copy(self::$repoRoot . '/Tina4/App.php', $root . '/Tina4/App.php');
         copy(self::$repoRoot . '/CLAUDE.md', $root . '/CLAUDE.md');
+        copy(self::$repoRoot . '/AGENTS.md', $root . '/AGENTS.md');
         copy(self::$repoRoot . '/composer.json', $root . '/composer.json');
         return $root;
     }
@@ -118,6 +119,7 @@ class VersionConsistencyCheckTest extends TestCase
             'precheck must pass at HEAD for ' . self::$currentVersion . ":\n" . $out);
         self::assertStringContainsString('PASS  Tina4/App.php  ' . self::$currentVersion, $out);
         self::assertStringContainsString('PASS  CLAUDE.md  ' . self::$currentVersion, $out);
+        self::assertStringContainsString('PASS  AGENTS.md  ' . self::$currentVersion, $out);
         self::assertStringContainsString('agree on ' . self::$currentVersion, $out);
         self::assertStringNotContainsString('FAIL', $out);
         self::assertStringNotContainsString('DRIFT', $out);
@@ -176,6 +178,33 @@ class VersionConsistencyCheckTest extends TestCase
         self::assertStringContainsString('9.9.9', $out);
         self::assertStringContainsString('DRIFT', $out);
         self::assertStringContainsString('PASS  Tina4/App.php', $out);
+    }
+
+    // ── negative: drift in AGENTS.md header is named too ────────────────────
+
+    public function testDriftInAgentsMdFailsAndNamesThatFile(): void
+    {
+        $this->fixtureRoot = $this->makeFixture();
+
+        $agentsPath = $this->fixtureRoot . '/AGENTS.md';
+        $rewritten = preg_replace(
+            '/^(#\s+Tina4 PHP v)\d+\.\d+\.\d+/m',
+            '${1}9.9.9',
+            (string) file_get_contents($agentsPath),
+            1,
+            $count
+        );
+        self::assertSame(1, $count, 'fixture setup failed to rewrite the AGENTS.md header');
+        file_put_contents($agentsPath, $rewritten);
+
+        [$out, , $exit] = $this->runCheck(self::$currentVersion, $this->fixtureRoot);
+
+        self::assertNotSame(0, $exit, "drift must exit non-zero:\n" . $out);
+        self::assertStringContainsString('AGENTS.md', $out); // names the drifted file
+        self::assertStringContainsString('9.9.9', $out);
+        self::assertStringContainsString('DRIFT', $out);
+        self::assertStringContainsString('PASS  Tina4/App.php', $out);
+        self::assertStringContainsString('PASS  CLAUDE.md', $out);
     }
 
     // ── negative: a malformed expected version is a usage error ─────────────
