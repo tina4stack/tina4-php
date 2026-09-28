@@ -246,7 +246,7 @@ class DbAdapterDedupCharacterizationTest extends TestCase
         $engines = ['sqlite' => ['sqlite::memory:']];
         foreach ([
             'mysql'    => 'TINA4_TEST_MYSQL_URL',
-            'postgres' => 'TINA4_TEST_POSTGRES_URL',
+            'postgres' => 'TINA4_TEST_PG_URL',
             'mssql'    => 'TINA4_TEST_MSSQL_URL',
             'firebird' => 'TINA4_TEST_FIREBIRD_URL',
         ] as $engine => $envVar) {
