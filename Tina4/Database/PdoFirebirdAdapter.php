@@ -333,29 +333,6 @@ class PdoFirebirdAdapter implements DatabaseAdapter
      */
     private function parseConnection(string $input): array
     {
-        $envOverride = \Tina4\DotEnv::getEnv('TINA4_DATABASE_FIREBIRD_PATH');
-
-        if (str_contains($input, '://')) {
-            $parts = parse_url($input);
-            $rawPath = $parts['path'] ?? '';
-            $database = ($envOverride !== null && $envOverride !== '')
-                ? $envOverride
-                : FirebirdAdapter::normalizeDbIdentifier($rawPath);
-            return [
-                'host' => $parts['host'] ?? '',
-                'port' => $parts['port'] ?? 3050,
-                'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
-                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
-                'database' => $database,
-            ];
-        }
-
-        return [
-            'host' => '',
-            'port' => 3050,
-            'username' => $this->username,
-            'password' => $this->password,
-            'database' => ($envOverride !== null && $envOverride !== '') ? $envOverride : $input,
-        ];
+        return FirebirdAdapter::parseFirebirdConnection($input, $this->username, $this->password);
     }
 }
