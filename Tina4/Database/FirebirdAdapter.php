@@ -715,6 +715,29 @@ class FirebirdAdapter implements DatabaseAdapter
      */
     private function parseConnection(string $input): array
     {
+        return self::parseFirebirdConnection($input, $this->username, $this->password);
+    }
+
+    /**
+     * Parse a Firebird connection string (URL or bare path) into connection
+     * params — shared verbatim by the native and PDO Firebird adapters, which
+     * copied it byte for byte.
+     *
+     * Firebird's parse is engine-specific and NOT the generic URL shape (so it
+     * is not part of {@see ParsesConnectionTrait}): the host defaults to ""
+     * (embedded), the port to 3050, a TINA4_DATABASE_FIREBIRD_PATH environment
+     * override wins over the URL path, and the path is run through
+     * {@see normalizeDbIdentifier()} so the classic double-slash, a single
+     * slash, a Windows drive letter and a bare alias all resolve. Credentials
+     * fall back to the arguments the caller passes from its own constructor.
+     *
+     * @param string $input    A firebird:// URL, or a bare path/alias
+     * @param string $username Fallback username when the URL omits one
+     * @param string $password Fallback password when the URL omits one
+     * @return array{host:string, port:int, username:string, password:string, database:string}
+     */
+    public static function parseFirebirdConnection(string $input, string $username, string $password): array
+    {
         $envOverride = \Tina4\DotEnv::getEnv('TINA4_DATABASE_FIREBIRD_PATH');
 
         if (str_contains($input, '://')) {
@@ -726,8 +749,8 @@ class FirebirdAdapter implements DatabaseAdapter
             return [
                 'host' => $parts['host'] ?? '',
                 'port' => $parts['port'] ?? 3050,
-                'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
-                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
+                'username' => isset($parts['user']) ? urldecode($parts['user']) : $username,
+                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $password,
                 'database' => $database,
             ];
         }
@@ -736,8 +759,8 @@ class FirebirdAdapter implements DatabaseAdapter
         return [
             'host' => '',
             'port' => 3050,
-            'username' => $this->username,
-            'password' => $this->password,
+            'username' => $username,
+            'password' => $password,
             'database' => ($envOverride !== null && $envOverride !== '') ? $envOverride : $input,
         ];
     }

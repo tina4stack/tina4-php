@@ -55,6 +55,47 @@ trait CrudSqlTrait
     }
 
     /**
+     * Validate the columns and build the `a, b, c` column list and matching
+     * `?, ?, ?` placeholder list for an INSERT.
+     *
+     * Shared by the single-row and batch INSERT paths, which built the same
+     * pair inline.
+     *
+     * @param array<int, string> $keys Column names (already extracted)
+     * @return array{0: string, 1: string} [column list, placeholder list]
+     */
+    private function insertColumns(array $keys): array
+    {
+        ColumnName::assertAll($keys);
+        return [
+            implode(', ', $keys),
+            implode(', ', array_fill(0, count($keys), '?')),
+        ];
+    }
+
+    /**
+     * Validate the columns and build the `col = ?` fragments and their bound
+     * values from an assoc array.
+     *
+     * Shared by UPDATE's SET clause and DELETE's assoc-array WHERE clause, which
+     * built the same fragment/param pair inline.
+     *
+     * @param array<string, mixed> $data Column => value pairs
+     * @return array{0: array<int, string>, 1: array<int, mixed>} [fragments, params]
+     */
+    private function assignmentClause(array $data): array
+    {
+        ColumnName::assertAll(array_keys($data));
+        $parts = [];
+        $params = [];
+        foreach ($data as $col => $val) {
+            $parts[] = "{$col} = ?";
+            $params[] = $val;
+        }
+        return [$parts, $params];
+    }
+
+    /**
      * Insert one row, or a list of rows as a batch.
      *
      * @param string $table Table name
@@ -66,18 +107,13 @@ trait CrudSqlTrait
         // An indexed array of assoc arrays is a batch: ONE parameterised
         // statement run per row through executeMany, not N round trips.
         if (isset($data[0]) && is_array($data[0])) {
-            $keys = array_keys($data[0]);
-            ColumnName::assertAll($keys);
-            $cols = implode(', ', $keys);
-            $placeholders = implode(', ', array_fill(0, count($keys), '?'));
+            [$cols, $placeholders] = $this->insertColumns(array_keys($data[0]));
             $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})";
             $paramsList = array_map(static fn($row) => array_values($row), $data);
             return $this->executeMany($sql, $paramsList) > 0;
         }
 
-        ColumnName::assertAll(array_keys($data));
-        $cols = implode(', ', array_keys($data));
-        $placeholders = implode(', ', array_fill(0, count($data), '?'));
+        [$cols, $placeholders] = $this->insertColumns(array_keys($data));
         $sql = "INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})"
             . $this->insertReturningClause();
 
@@ -95,13 +131,7 @@ trait CrudSqlTrait
      */
     public function update(string $table, array $data, string $where = '', array $whereParams = []): bool|DatabaseResult
     {
-        ColumnName::assertAll(array_keys($data));
-        $setParts = [];
-        $params = [];
-        foreach ($data as $col => $val) {
-            $setParts[] = "{$col} = ?";
-            $params[] = $val;
-        }
+        [$setParts, $params] = $this->assignmentClause($data);
 
         $sql = "UPDATE {$table} SET " . implode(', ', $setParts);
         if ($where !== '') {
@@ -141,13 +171,7 @@ trait CrudSqlTrait
         // An assoc array builds the WHERE from its keys, then falls through to
         // the string form below - one code path builds the statement.
         if (is_array($filter)) {
-            ColumnName::assertAll(array_keys($filter));
-            $parts = [];
-            $params = [];
-            foreach ($filter as $col => $val) {
-                $parts[] = "{$col} = ?";
-                $params[] = $val;
-            }
+            [$parts, $params] = $this->assignmentClause($filter);
             return $this->delete($table, implode(' AND ', $parts), $params);
         }
 
