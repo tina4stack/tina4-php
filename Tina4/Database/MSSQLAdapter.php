@@ -34,6 +34,7 @@ namespace Tina4\Database;
 class MSSQLAdapter implements DatabaseAdapter
 {
     use CrudSqlTrait;
+    use ParsesConnectionTrait;
 
     use AutocommitTrait;
 
@@ -590,27 +591,13 @@ class MSSQLAdapter implements DatabaseAdapter
 
     /**
      * Parse a connection string (URL or host) into connection params.
+     *
+     * MSSQL's default port is 1433; the parse is otherwise the shared URL/host
+     * decomposition ({@see ParsesConnectionTrait::parseUrlConnection()}).
      */
     private function parseConnection(string $input): array
     {
-        if (str_contains($input, '://')) {
-            $parts = parse_url($input);
-            return [
-                'host' => $parts['host'] ?? 'localhost',
-                'port' => $parts['port'] ?? 1433,
-                'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
-                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
-                'database' => ltrim($parts['path'] ?? '', '/'),
-            ];
-        }
-
-        return [
-            'host' => $input ?: 'localhost',
-            'port' => $this->port,
-            'username' => $this->username,
-            'password' => $this->password,
-            'database' => $this->database,
-        ];
+        return $this->parseUrlConnection($input, 1433);
     }
 
     /**

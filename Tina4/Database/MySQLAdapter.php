@@ -24,6 +24,7 @@ namespace Tina4\Database;
 class MySQLAdapter implements DatabaseAdapter
 {
     use CrudSqlTrait;
+    use ParsesConnectionTrait;
 
     use AutocommitTrait;
 
@@ -522,29 +523,13 @@ class MySQLAdapter implements DatabaseAdapter
 
     /**
      * Parse a connection string (URL or host) into connection params.
+     *
+     * MySQL's default port is 3306; the parse is otherwise the shared URL/host
+     * decomposition ({@see ParsesConnectionTrait::parseUrlConnection()}).
      */
     private function parseConnection(string $input): array
     {
-        // URL format: mysql://user:pass@host:port/dbname
-        if (str_contains($input, '://')) {
-            $parts = parse_url($input);
-            return [
-                'host' => $parts['host'] ?? 'localhost',
-                'port' => $parts['port'] ?? 3306,
-                'username' => isset($parts['user']) ? urldecode($parts['user']) : $this->username,
-                'password' => isset($parts['pass']) ? urldecode($parts['pass']) : $this->password,
-                'database' => ltrim($parts['path'] ?? '', '/'),
-            ];
-        }
-
-        // Plain host string — use constructor params
-        return [
-            'host' => $input ?: 'localhost',
-            'port' => $this->port,
-            'username' => $this->username,
-            'password' => $this->password,
-            'database' => $this->database,
-        ];
+        return $this->parseUrlConnection($input, 3306);
     }
 
     /**
