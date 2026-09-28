@@ -20,6 +20,49 @@ under `src/templates/` and are only reachable via `{% include %}` / `{% extends 
 Need the rendered HTML as a string instead of a response (e.g. an email body)? Use the Frond engine
 directly: `$html = (new \Tina4\Frond())->render("emails/welcome.twig", $data);`
 
+### Globals (values available in every template)
+
+Register a value every template can read with `addGlobal`:
+
+```php
+$engine = new \Tina4\Frond();
+$engine->addGlobal("app_name", "My App");
+```
+
+```twig
+<title>{{ app_name }}</title>
+```
+
+**`addGlobal` takes a VALUE, not a lazy callable.** Whatever you pass is stored
+as-is and merged into the render context unchanged — Frond never calls it for you
+when you name it bare. A `Closure` is therefore stored uncalled, and in a
+condition it is a plain object, which is truthy. So this section shows to
+everyone:
+
+```php
+$frond->addGlobal("admin_only", fn() => Access::adminOnly());   // WRONG for {% if %}
+```
+
+```twig
+{% if admin_only %} ...admin link... {% endif %}   {# always true — admin_only is a Closure #}
+```
+
+Verified on tina4php 3.13.x with `addGlobal("g", fn() => false)`: `{% if g %}` is
+**true**, `{% if g|default(false) %}` is **true**, and only `{% if g() %}` calls
+it (false). Fixes:
+
+- **Resolve it before you pass it:** `$frond->addGlobal("admin_only", Access::adminOnly());` — a real bool.
+- **Or call it in the template:** `{% if admin_only() %}`.
+- **Accept either a closure global or a plain bool from the render context:**
+  `{% if (admin_only is boolean and admin_only) or admin_only() %}`. A name that
+  is not registered, called as `nope()`, renders as false (it does not throw on
+  3.13.x), so this form is safe when the global is missing.
+
+**Tests must register the global the way the app does.** A plain bool passed in
+the render context (`render($tpl, ["admin_only" => false])`) makes
+`{% if admin_only %}` behave correctly, so a test that passes a bool hides the
+closure bug that production hits through `addGlobal`.
+
 ### Basic Syntax
 ```twig
 {# Output variables #}
