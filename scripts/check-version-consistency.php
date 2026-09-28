@@ -26,6 +26,7 @@
  *   - Tina4/App.php   public static string $VERSION = 'X';   (the single source
  *                     of truth — see the docblock on that constant)
  *   - CLAUDE.md       footer line:  Version X - ...
+ *   - AGENTS.md       header line:  # Tina4 PHP vX
  *
  * composer.json carries NO `version` key by design — Packagist derives the
  * version from the git tag (see the App::$VERSION docblock). Its absence is NOT
@@ -96,7 +97,10 @@ $results[] = $check('Tina4/App.php', $root . '/Tina4/App.php', "~\\\$VERSION\\s*
 // 2. CLAUDE.md — footer line:  Version 3.13.121 - ...
 $results[] = $check('CLAUDE.md', $root . '/CLAUDE.md', '/^Version\s+(\d+\.\d+\.\d+)\b/m');
 
-// 3. composer.json — checked ONLY if a `version` key is present (absent by
+// 3. AGENTS.md — header line:  # Tina4 PHP v3.13.121
+$results[] = $check('AGENTS.md', $root . '/AGENTS.md', '/^#\s+Tina4 PHP v(\d+\.\d+\.\d+)\b/m');
+
+// 4. composer.json — checked ONLY if a `version` key is present (absent by
 //    design; Packagist derives the version from the git tag).
 $composerPath = $root . '/composer.json';
 if (is_file($composerPath)) {
