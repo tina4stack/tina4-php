@@ -152,3 +152,4 @@ tmp/
 # container build can never re-stage the cruft. The no-symlinks guard
 # (scripts/check-no-symlinks.sh) is the belt to this braces.
 /.confd_*/
+*.bak
