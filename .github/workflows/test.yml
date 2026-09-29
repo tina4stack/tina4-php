@@ -13,6 +13,19 @@ on:
     branches: [v3]
 
 jobs:
+  # Committed symlinks (git mode 120000) are banned. A leaked container conf.d
+  # snapshot once committed 134 absolute symlinks; on Windows `composer install`
+  # 7-Zip refuses the absolute link target as a "Dangerous link path",
+  # extraction exits 2 and composer fails. This gate needs no PHP and no
+  # services -- just git -- so it runs on its own and fails fast. The same check
+  # is proven by NoSymlinksGuardTest, which runs inside the main test job.
+  no-symlinks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No committed symlinks
+        run: ./scripts/check-no-symlinks.sh
+
   test:
     runs-on: ubuntu-latest
 

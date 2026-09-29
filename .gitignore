@@ -141,3 +141,15 @@ tmp/
 # boots tests/fixtures/*_app.php with `php -S` (cwd = tests/fixtures).
 /tests/fixtures/data/sessions/
 /tests/fixtures/data/sessions-php/
+
+# Leaked container conf.d snapshots. A container build once staged copies of
+# this host's PHP conf.d as directories of ABSOLUTE symlinks to
+# /etc/php/*/cli/conf.d/*.ini (134 of them, under .confd_clean/, .confd_nogrpc/
+# and .confd_withgrpc/). Nothing in the app reads them, but committed symlinks
+# break Windows `composer install`: 7-Zip refuses the absolute link target as a
+# "Dangerous link path", extraction exits 2, and composer fails. The build may
+# still CREATE these dirs locally as an artifact -- ignore them so a future
+# container build can never re-stage the cruft. The no-symlinks guard
+# (scripts/check-no-symlinks.sh) is the belt to this braces.
+/.confd_*/
+*.bak
