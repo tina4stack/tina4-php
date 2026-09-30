@@ -1,0 +1,37 @@
+name: Metrics
+
+# Ratchet gate (ADR-0002): fail a PR whose code is measurably worse than the
+# committed baseline in Tina4/.tina4-metrics.json — a new offender file, more
+# offenders on a file, a worse worst-case complexity on a file that still
+# offends, or more duplicated lines. It never fails on inherent structure the
+# baseline already records; it only stops NEW regressions. To re-baseline after
+# a deliberate change, run `tina4 metrics --path Tina4` locally and commit the
+# updated Tina4/.tina4-metrics.json.
+on:
+  push:
+    branches: [v3]
+  pull_request:
+    branches: [v3]
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Metrics regression gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install tina4 CLI v3.8.95 (checksum-verified)
+        run: |
+          set -euo pipefail
+          ver=v3.8.95
+          base="https://github.com/tina4stack/tina4/releases/download/${ver}"
+          curl -fsSL -o tina4-linux-amd64 "${base}/tina4-linux-amd64"
+          curl -fsSL -o SHA256SUMS "${base}/SHA256SUMS"
+          grep ' tina4-linux-amd64$' SHA256SUMS | sha256sum -c -
+          sudo install -m 0755 tina4-linux-amd64 /usr/local/bin/tina4
+          rm -f tina4-linux-amd64 SHA256SUMS
+          tina4 --version
+      - name: Regression gate (no metric worse than the committed baseline)
+        run: tina4 metrics --path Tina4 --fail-on-regression
