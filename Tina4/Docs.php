@@ -613,120 +613,26 @@ class Docs
                     continue;
                 }
                 if ($id === T_NAMESPACE) {
-                    $parts = [];
-                    for ($j = $i + 1; $j < $n; $j++) {
-                        $tt = $tokens[$j];
-                        if (is_string($tt)) {
-                            if ($tt === ';' || $tt === '{') break;
-                            continue;
-                        }
-                        if (in_array($tt[0], [T_STRING, T_NS_SEPARATOR, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
-                            $parts[] = $tt[1];
-                        }
-                    }
-                    $namespace = trim(implode('', $parts), '\\');
+                    $namespace = $this->parseNamespaceName($tokens, $i, $n);
                     $lastDoc = '';
                     continue;
                 }
                 if (in_array($id, [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true)) {
-                    // Skip ::class
-                    $prev = $i - 1;
-                    while ($prev >= 0 && is_array($tokens[$prev]) && in_array($tokens[$prev][0], [T_WHITESPACE, T_COMMENT], true)) {
-                        $prev--;
-                    }
-                    if ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_DOUBLE_COLON) {
-                        continue;
-                    }
-                    // Class name is next T_STRING
-                    $name = '';
-                    $classLine = $line;
-                    for ($j = $i + 1; $j < $n; $j++) {
-                        $tt = $tokens[$j];
-                        if (is_array($tt) && $tt[0] === T_STRING) {
-                            $name = $tt[1];
-                            break;
-                        }
-                    }
-                    if ($name === '') {
-                        continue;
-                    }
-                    $kind = match ($id) {
-                        T_INTERFACE => 'interface',
-                        T_TRAIT     => 'trait',
-                        T_ENUM      => 'enum',
-                        default     => 'class',
-                    };
-                    $fqn = $namespace !== '' ? $namespace . '\\' . $name : $name;
-                    $currentClass = [
-                        'start_depth' => $braceDepth,
-                        'entry' => [
-                            'fqn'     => $fqn,
-                            'name'    => $name,
-                            'kind'    => $kind,
-                            'line'    => $classLine,
-                            'doc'     => $lastDoc,
-                            'methods' => [],
-                        ],
-                    ];
-                    $lastDoc = '';
-                    // Fast-forward to the opening brace
-                    for ($k = $i + 1; $k < $n; $k++) {
-                        $tk = $tokens[$k];
-                        if (is_string($tk) && $tk === '{') {
-                            $braceDepth++;
-                            $i = $k;
-                            break;
-                        }
+                    $opened = $this->scanClassDeclaration($tokens, $i, $n, $id, $line, $namespace, $lastDoc, $braceDepth);
+                    if ($opened !== null) {
+                        $currentClass = $opened['currentClass'];
+                        $braceDepth   = $opened['braceDepth'];
+                        $i            = $opened['i'];
+                        $lastDoc      = '';
                     }
                     continue;
                 }
                 if ($id === T_FUNCTION && $currentClass !== null && $braceDepth === $currentClass['start_depth'] + 1) {
-                    // Collect modifiers looking backward for public/private/protected/static
-                    $visibility = 'public';
-                    $static = false;
-                    for ($k = $i - 1; $k >= 0; $k--) {
-                        $tk = $tokens[$k];
-                        if (is_string($tk)) break;
-                        $tkId = $tk[0];
-                        if ($tkId === T_WHITESPACE || $tkId === T_COMMENT) continue;
-                        if ($tkId === T_PUBLIC) { $visibility = 'public'; continue; }
-                        if ($tkId === T_PROTECTED) { $visibility = 'protected'; continue; }
-                        if ($tkId === T_PRIVATE) { $visibility = 'private'; continue; }
-                        if ($tkId === T_STATIC) { $static = true; continue; }
-                        if ($tkId === T_ABSTRACT || $tkId === T_FINAL) continue;
-                        if ($tkId === T_DOC_COMMENT) continue;
-                        break;
+                    $method = $this->scanMethodDeclaration($tokens, $i, $n, $line, $lastDoc);
+                    if ($method !== null) {
+                        $currentClass['entry']['methods'][] = $method;
+                        $lastDoc = '';
                     }
-                    // Function name
-                    $mName = '';
-                    $mLine = $line;
-                    $sigEnd = $i;
-                    for ($j = $i + 1; $j < $n; $j++) {
-                        $tt = $tokens[$j];
-                        if (is_array($tt) && $tt[0] === T_STRING) {
-                            $mName = $tt[1];
-                            $sigEnd = $j;
-                            break;
-                        }
-                        if (is_string($tt) && $tt === '(') {
-                            // Anonymous
-                            break;
-                        }
-                    }
-                    if ($mName === '') {
-                        continue;
-                    }
-                    // Capture signature tokens from '(' through ')' plus optional ': type'
-                    $signature = $this->captureMethodSignature($tokens, $sigEnd + 1, $n);
-                    $currentClass['entry']['methods'][] = [
-                        'name'       => $mName,
-                        'line'       => $mLine,
-                        'doc'        => $lastDoc,
-                        'visibility' => $visibility,
-                        'static'     => $static,
-                        'signature'  => $mName . $signature,
-                    ];
-                    $lastDoc = '';
                     continue;
                 }
                 // Non-whitespace, non-doc-comment other tokens consume the docblock.
@@ -758,6 +664,142 @@ class Docs
             $classes[] = $currentClass['entry'];
         }
         return $classes;
+    }
+
+    /**
+     * Read the namespace name that follows a T_NAMESPACE token at $i, stopping
+     * at the first `;` or `{`. Returns the trimmed, backslash-normalised name.
+     */
+    private function parseNamespaceName(array $tokens, int $i, int $n): string
+    {
+        $parts = [];
+        for ($j = $i + 1; $j < $n; $j++) {
+            $tt = $tokens[$j];
+            if (is_string($tt)) {
+                if ($tt === ';' || $tt === '{') break;
+                continue;
+            }
+            if (in_array($tt[0], [T_STRING, T_NS_SEPARATOR, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                $parts[] = $tt[1];
+            }
+        }
+        return trim(implode('', $parts), '\\');
+    }
+
+    /**
+     * Handle a class/interface/trait/enum keyword at $i. Returns null when the
+     * token is a `::class` constant fetch or has no name (the caller then just
+     * continues, leaving the pending docblock untouched — as before). Otherwise
+     * returns the new $currentClass structure, the updated brace depth, and the
+     * index fast-forwarded to the opening `{`.
+     *
+     * @return array{currentClass: array<string,mixed>, braceDepth: int, i: int}|null
+     */
+    private function scanClassDeclaration(array $tokens, int $i, int $n, int $id, int $line, string $namespace, string $lastDoc, int $braceDepth): ?array
+    {
+        // Skip ::class
+        $prev = $i - 1;
+        while ($prev >= 0 && is_array($tokens[$prev]) && in_array($tokens[$prev][0], [T_WHITESPACE, T_COMMENT], true)) {
+            $prev--;
+        }
+        if ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_DOUBLE_COLON) {
+            return null;
+        }
+        // Class name is next T_STRING
+        $name = '';
+        for ($j = $i + 1; $j < $n; $j++) {
+            $tt = $tokens[$j];
+            if (is_array($tt) && $tt[0] === T_STRING) {
+                $name = $tt[1];
+                break;
+            }
+        }
+        if ($name === '') {
+            return null;
+        }
+        $kind = match ($id) {
+            T_INTERFACE => 'interface',
+            T_TRAIT     => 'trait',
+            T_ENUM      => 'enum',
+            default     => 'class',
+        };
+        $fqn = $namespace !== '' ? $namespace . '\\' . $name : $name;
+        $currentClass = [
+            'start_depth' => $braceDepth,
+            'entry' => [
+                'fqn'     => $fqn,
+                'name'    => $name,
+                'kind'    => $kind,
+                'line'    => $line,
+                'doc'     => $lastDoc,
+                'methods' => [],
+            ],
+        ];
+        // Fast-forward to the opening brace
+        for ($k = $i + 1; $k < $n; $k++) {
+            $tk = $tokens[$k];
+            if (is_string($tk) && $tk === '{') {
+                $braceDepth++;
+                $i = $k;
+                break;
+            }
+        }
+        return ['currentClass' => $currentClass, 'braceDepth' => $braceDepth, 'i' => $i];
+    }
+
+    /**
+     * Handle a method's T_FUNCTION token at $i: resolve its visibility/static
+     * modifiers (looking backward) and its name/signature (looking forward).
+     * Returns the method entry, or null for an anonymous function (no name).
+     *
+     * @return array<string,mixed>|null
+     */
+    private function scanMethodDeclaration(array $tokens, int $i, int $n, int $line, string $lastDoc): ?array
+    {
+        // Collect modifiers looking backward for public/private/protected/static
+        $visibility = 'public';
+        $static = false;
+        for ($k = $i - 1; $k >= 0; $k--) {
+            $tk = $tokens[$k];
+            if (is_string($tk)) break;
+            $tkId = $tk[0];
+            if ($tkId === T_WHITESPACE || $tkId === T_COMMENT) continue;
+            if ($tkId === T_PUBLIC) { $visibility = 'public'; continue; }
+            if ($tkId === T_PROTECTED) { $visibility = 'protected'; continue; }
+            if ($tkId === T_PRIVATE) { $visibility = 'private'; continue; }
+            if ($tkId === T_STATIC) { $static = true; continue; }
+            if ($tkId === T_ABSTRACT || $tkId === T_FINAL) continue;
+            if ($tkId === T_DOC_COMMENT) continue;
+            break;
+        }
+        // Function name
+        $mName = '';
+        $sigEnd = $i;
+        for ($j = $i + 1; $j < $n; $j++) {
+            $tt = $tokens[$j];
+            if (is_array($tt) && $tt[0] === T_STRING) {
+                $mName = $tt[1];
+                $sigEnd = $j;
+                break;
+            }
+            if (is_string($tt) && $tt === '(') {
+                // Anonymous
+                break;
+            }
+        }
+        if ($mName === '') {
+            return null;
+        }
+        // Capture signature tokens from '(' through ')' plus optional ': type'
+        $signature = $this->captureMethodSignature($tokens, $sigEnd + 1, $n);
+        return [
+            'name'       => $mName,
+            'line'       => $line,
+            'doc'        => $lastDoc,
+            'visibility' => $visibility,
+            'static'     => $static,
+            'signature'  => $mName . $signature,
+        ];
     }
 
     /**
