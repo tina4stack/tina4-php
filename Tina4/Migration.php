@@ -1371,44 +1371,12 @@ class Migration
                 continue;
             }
 
-            // Single-quoted string
-            if ($sql[$i] === "'") {
-                $current .= "'";
-                $i++;
-                while ($i < $len) {
-                    if ($sql[$i] === "'" && $i + 1 < $len && $sql[$i + 1] === "'") {
-                        // Escaped quote ''
-                        $current .= "''";
-                        $i += 2;
-                    } elseif ($sql[$i] === "'") {
-                        $current .= "'";
-                        $i++;
-                        break;
-                    } else {
-                        $current .= $sql[$i];
-                        $i++;
-                    }
-                }
-                continue;
-            }
-
-            // Double-quoted identifier
-            if ($sql[$i] === '"') {
-                $current .= '"';
-                $i++;
-                while ($i < $len) {
-                    if ($sql[$i] === '"' && $i + 1 < $len && $sql[$i + 1] === '"') {
-                        $current .= '""';
-                        $i += 2;
-                    } elseif ($sql[$i] === '"') {
-                        $current .= '"';
-                        $i++;
-                        break;
-                    } else {
-                        $current .= $sql[$i];
-                        $i++;
-                    }
-                }
+            // Single-quoted string ('' escapes) or double-quoted identifier
+            // ("" escapes) — copied verbatim so a ';', '--' or '/*' inside the
+            // literal is data, never a delimiter or comment start.
+            if ($sql[$i] === "'" || $sql[$i] === '"') {
+                [$literal, $i] = self::consumeQuotedLiteral($sql, $i, $len);
+                $current .= $literal;
                 continue;
             }
 
@@ -1417,15 +1385,7 @@ class Migration
             // active terminator; every other completed statement is collected.
             $dlen = strlen($delimiter);
             if ($dlen > 0 && $sql[$i] === $delimiter[0] && substr($sql, $i, $dlen) === $delimiter) {
-                $trimmed = trim($current);
-                if ($trimmed !== '') {
-                    $newTerm = self::parseSetTerm($trimmed);
-                    if ($newTerm !== null) {
-                        $delimiter = $newTerm;
-                    } else {
-                        $statements[] = $trimmed;
-                    }
-                }
+                self::flushStatement($current, $statements, $delimiter);
                 $current = '';
                 $i += $dlen;
                 continue;
@@ -1436,13 +1396,62 @@ class Migration
         }
 
         // Don't forget the last statement (may not end with delimiter). A
-        // trailing `SET TERM` directive is a no-op — consume it, don't emit it.
-        $trimmed = trim($current);
-        if ($trimmed !== '' && self::parseSetTerm($trimmed) === null) {
-            $statements[] = $trimmed;
-        }
+        // trailing `SET TERM` directive is a no-op — flushStatement consumes it
+        // (the terminator switch at end of input is harmless).
+        self::flushStatement($current, $statements, $delimiter);
 
         return $statements;
+    }
+
+    /**
+     * Consume a quoted literal starting AT $sql[$i] — a `'` string or a `"`
+     * identifier — honouring the SQL doubled-quote escape (`''` / `""`).
+     *
+     * @return array{0: string, 1: int} The literal text (including both
+     *   quotes) and the index of the first character after the closing quote.
+     */
+    private static function consumeQuotedLiteral(string $sql, int $i, int $len): array
+    {
+        $quote = $sql[$i];
+        $text = $quote;
+        $i++;
+        while ($i < $len) {
+            if ($sql[$i] === $quote && $i + 1 < $len && $sql[$i + 1] === $quote) {
+                // Escaped quote ('' or "")
+                $text .= $quote . $quote;
+                $i += 2;
+            } elseif ($sql[$i] === $quote) {
+                $text .= $quote;
+                $i++;
+                break;
+            } else {
+                $text .= $sql[$i];
+                $i++;
+            }
+        }
+        return [$text, $i];
+    }
+
+    /**
+     * Finalise the statement built so far: a blank one is dropped, a `SET TERM`
+     * directive switches the active terminator (and is never emitted as SQL),
+     * and every other statement is appended trimmed.
+     *
+     * @param array<int, string> $statements Collected statements (by reference).
+     * @param string             $delimiter  Active terminator (by reference).
+     */
+    private static function flushStatement(string $current, array &$statements, string &$delimiter): void
+    {
+        $trimmed = trim($current);
+        if ($trimmed === '') {
+            return;
+        }
+        $newTerm = self::parseSetTerm($trimmed);
+        if ($newTerm !== null) {
+            $delimiter = $newTerm;
+        } else {
+            $statements[] = $trimmed;
+        }
     }
 
     // ──────────────────────────────────────────────────────────────

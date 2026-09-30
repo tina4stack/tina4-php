@@ -2942,63 +2942,89 @@ class Frond
 
     private function findMathOp(string $expr, string $op): int|false
     {
-        // Search from right for +/-, left for *//, to respect precedence
+        // Additive (+/-) binds left-to-right, so the SPLIT point is the LAST
+        // top-level operator (evaluate the right operand last). Multiplicative
+        // (*, /, //, %) takes the FIRST. Both walk the same string/paren-aware
+        // scan; only the direction and the "is this a real operator" test differ.
+        // Additive is left-associative, so the SPLIT point is the LAST top-level
+        // occurrence; multiplicative takes the FIRST. $additive also selects
+        // which "is this a real operator" test the scan applies.
+        $additive = ($op === '+' || $op === '-');
+        return $this->scanTopLevelOp($expr, $op, $additive);
+    }
+
+    /**
+     * Scan $expr for $op at bracket depth 0 and outside string literals.
+     * Validates each candidate with the additive or multiplicative operator
+     * test; returns the first valid match, or the last for additive operators
+     * (left-associativity), or false when none qualifies. No per-call closure
+     * is allocated — this runs on a cache MISS in computeExprScan().
+     */
+    private function scanTopLevelOp(string $expr, string $op, bool $additive): int|false
+    {
         $depth = 0;
         $inStr = false;
         $strCh = '';
         $len = strlen($expr);
         $opLen = strlen($op);
+        $found = false;
 
-        if (in_array($op, ['+', '-'])) {
-            // Right-to-left search for left-associativity (find last)
-            $lastPos = false;
-            for ($i = 0; $i <= $len - $opLen; $i++) {
-                $ch = $expr[$i];
-                if ($inStr) {
-                    if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
-                    continue;
-                }
-                if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
-                if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
-                if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
-                if ($depth === 0 && substr($expr, $i, $opLen) === $op) {
-                    // Don't match unary minus at start or after operator
-                    if ($op === '-' && $i === 0) continue;
-                    if ($i > 0) {
-                        $prev = trim(substr($expr, 0, $i));
-                        if ($prev === '' || str_ends_with($prev, '(') || str_ends_with($prev, ',')) continue;
-                    }
-                    $lastPos = $i;
-                }
-            }
-            return $lastPos;
-        }
-
-        // Left-to-right for *, /, //, %
         for ($i = 0; $i <= $len - $opLen; $i++) {
             $ch = $expr[$i];
             if ($inStr) {
-                if ($ch === $strCh && ($i === 0 || $expr[$i-1] !== '\\')) $inStr = false;
+                if ($ch === $strCh && ($i === 0 || $expr[$i - 1] !== '\\')) $inStr = false;
                 continue;
             }
             if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
             if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
             if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
-            if ($depth === 0 && substr($expr, $i, $opLen) === $op) {
-                // For /, make sure we don't match //
-                if ($op === '/' && $opLen === 1) {
-                    if ($i + 1 < $len && $expr[$i + 1] === '/') continue;
-                    if ($i > 0 && $expr[$i - 1] === '/') continue;
+            if ($depth !== 0 || substr($expr, $i, $opLen) !== $op) {
+                continue;
+            }
+            $valid = $additive
+                ? $this->isBinaryAdditiveOp($expr, $op, $i)
+                : $this->isSingleCharMultiplicativeOp($expr, $op, $i);
+            if ($valid) {
+                if (!$additive) {
+                    return $i;
                 }
-                // For *, make sure we don't match **
-                if ($op === '*' && $opLen === 1) {
-                    if ($i + 1 < $len && $expr[$i + 1] === '*') continue;
-                    if ($i > 0 && $expr[$i - 1] === '*') continue;
-                }
-                return $i;
+                $found = $i;
             }
         }
-        return false;
+
+        return $found;
+    }
+
+    /** A +/- at $i is a binary operator, not a unary sign (start / after `(` / after `,`). */
+    private function isBinaryAdditiveOp(string $expr, string $op, int $i): bool
+    {
+        if ($op === '-' && $i === 0) {
+            return false;
+        }
+        if ($i > 0) {
+            $prev = trim(substr($expr, 0, $i));
+            if ($prev === '' || str_ends_with($prev, '(') || str_ends_with($prev, ',')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A single-char `/` or `*` at $i is itself, not part of `//` (floor div) or `**` (power). */
+    private function isSingleCharMultiplicativeOp(string $expr, string $op, int $i): bool
+    {
+        $len = strlen($expr);
+        $twin = ($op === '/') ? '/' : (($op === '*') ? '*' : '');
+        if ($twin === '') {
+            return true;
+        }
+        if ($i + 1 < $len && $expr[$i + 1] === $twin) {
+            return false;
+        }
+        if ($i > 0 && $expr[$i - 1] === $twin) {
+            return false;
+        }
+        return true;
     }
 
     private function findMatchingParen(string $expr, int $start): int|false
