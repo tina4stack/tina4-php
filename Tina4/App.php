@@ -1458,7 +1458,7 @@ HTML;
 
         $actualPort = self::findAvailablePort($port);
         if ($actualPort !== $port) {
-            echo "Port {$port} is in use, using port {$actualPort} instead.\n";
+            Server::console("Port {$port} is in use, using port {$actualPort} instead.\n");
             $port = $actualPort;
         }
 
@@ -1488,8 +1488,11 @@ HTML;
                 $routeCount = Router::count();
                 $wsCount = count(Router::getWebSocketRoutes());
                 $wsInfo = $wsCount > 0 ? " (WebSocket: {$wsCount} routes)" : '';
-                echo "\n";
-                echo "  Tina4 PHP v" . self::$VERSION . "\n\n";
+                // Server::console, never echo: an echo marks headers as sent
+                // for the whole process and PHP then refuses session_start()
+                // on every request (the CLI SAPI buffers no output).
+                Server::console("\n");
+                Server::console("  Tina4 PHP v" . self::$VERSION . "\n\n");
                 // Only advertise a surface that is actually reachable (issue #99).
                 [$swaggerLine, $dashboardLine] = self::bannerSurfaceLines(
                     $port,
@@ -1501,9 +1504,9 @@ HTML;
                 // an address it was not listening on. Only the wildcard binds
                 // read as localhost, as in Python, Ruby and Node.
                 $displayHost = ($host === '0.0.0.0' || $host === '::') ? 'localhost' : $host;
-                echo "  Server:    http://{$displayHost}:{$port}{$wsInfo}{$swaggerLine}{$dashboardLine}\n";
-                echo "  Routes:    {$routeCount}\n";
-                echo "\n  Press Ctrl+C to stop.\n\n";
+                Server::console("  Server:    http://{$displayHost}:{$port}{$wsInfo}{$swaggerLine}{$dashboardLine}\n");
+                Server::console("  Routes:    {$routeCount}\n");
+                Server::console("\n  Press Ctrl+C to stop.\n\n");
             }
 
             if (!$suppressBanner && self::shouldOpenBrowser($this->isDevelopment())) {
