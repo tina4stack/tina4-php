@@ -2946,29 +2946,21 @@ class Frond
         // top-level operator (evaluate the right operand last). Multiplicative
         // (*, /, //, %) takes the FIRST. Both walk the same string/paren-aware
         // scan; only the direction and the "is this a real operator" test differ.
-        if ($op === '+' || $op === '-') {
-            return $this->scanTopLevelOp(
-                $expr,
-                $op,
-                true,
-                fn(int $i): bool => $this->isBinaryAdditiveOp($expr, $op, $i)
-            );
-        }
-
-        return $this->scanTopLevelOp(
-            $expr,
-            $op,
-            false,
-            fn(int $i): bool => $this->isSingleCharMultiplicativeOp($expr, $op, $i)
-        );
+        // Additive is left-associative, so the SPLIT point is the LAST top-level
+        // occurrence; multiplicative takes the FIRST. $additive also selects
+        // which "is this a real operator" test the scan applies.
+        $additive = ($op === '+' || $op === '-');
+        return $this->scanTopLevelOp($expr, $op, $additive);
     }
 
     /**
-     * Scan $expr for $op at bracket depth 0 and outside string literals. Calls
-     * $isRealOperator($i) at each candidate position; returns the first match,
-     * or the last when $preferLast is set, or false when none qualifies.
+     * Scan $expr for $op at bracket depth 0 and outside string literals.
+     * Validates each candidate with the additive or multiplicative operator
+     * test; returns the first valid match, or the last for additive operators
+     * (left-associativity), or false when none qualifies. No per-call closure
+     * is allocated — this runs on a cache MISS in computeExprScan().
      */
-    private function scanTopLevelOp(string $expr, string $op, bool $preferLast, callable $isRealOperator): int|false
+    private function scanTopLevelOp(string $expr, string $op, bool $additive): int|false
     {
         $depth = 0;
         $inStr = false;
@@ -2986,8 +2978,14 @@ class Frond
             if ($ch === '"' || $ch === "'") { $inStr = true; $strCh = $ch; continue; }
             if ($ch === '(' || $ch === '[' || $ch === '{') { $depth++; continue; }
             if ($ch === ')' || $ch === ']' || $ch === '}') { $depth--; continue; }
-            if ($depth === 0 && substr($expr, $i, $opLen) === $op && $isRealOperator($i)) {
-                if (!$preferLast) {
+            if ($depth !== 0 || substr($expr, $i, $opLen) !== $op) {
+                continue;
+            }
+            $valid = $additive
+                ? $this->isBinaryAdditiveOp($expr, $op, $i)
+                : $this->isSingleCharMultiplicativeOp($expr, $op, $i);
+            if ($valid) {
+                if (!$additive) {
                     return $i;
                 }
                 $found = $i;
