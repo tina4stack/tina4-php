@@ -929,6 +929,7 @@ class FakeData
                     : $target->primaryKey;
                 // query() returns a plain array of rows on every adapter AND
                 // the Database facade (fetch() shape differs between the two).
+                // carbonah:ignore E002 - seed-time FK-pool build — one lookup per DISTINCT FK table (not batchable); cold path, not an N+1
                 $records = $db->query("SELECT {$pkColumn} FROM {$target->tableName}");
                 $values = [];
                 foreach ($records as $r) {

@@ -3174,6 +3174,7 @@ abstract class ORM
                 if (!$config['spatialIndex']) {
                     continue;
                 }
+                // carbonah:ignore E002 - CREATE spatial index per point column at table create — DDL, distinct columns, not an N+1
                 $this->_db->execute(SQLTranslator::spatialIndex(
                     $dialect,
                     $this->tableName,

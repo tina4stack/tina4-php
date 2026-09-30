@@ -239,6 +239,7 @@ HTML;
     $maxRetries = 3;
 
     $result = $db->fetch(
+        // carbonah:ignore E003 - bounded by fetch() limit argument (100)
         "SELECT * FROM tina4_queue WHERE topic = ? ORDER BY id DESC",
         ['gallery-tasks'],
         100,
@@ -289,6 +290,7 @@ HTML;
 
     // Find next pending job
     $result = $db->fetch(
+        // carbonah:ignore E003 - bounded by fetch() limit argument (1)
         "SELECT * FROM tina4_queue WHERE topic = ? AND status = 'pending' AND available_at <= ? ORDER BY priority DESC, id ASC",
         ['gallery-tasks', $now],
         1,
@@ -325,6 +327,7 @@ HTML;
 
     // Find next pending job
     $result = $db->fetch(
+        // carbonah:ignore E003 - bounded by fetch() limit argument (1)
         "SELECT * FROM tina4_queue WHERE topic = ? AND status = 'pending' AND available_at <= ? ORDER BY priority DESC, id ASC",
         ['gallery-tasks', $now],
         1,

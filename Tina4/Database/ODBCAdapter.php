@@ -254,6 +254,7 @@ class ODBCAdapter implements DatabaseAdapter
             $stmt = $this->pdo->prepare($sql);
             foreach ($paramsList as $params) {
                 $this->bindParams($stmt, $params);
+                // carbonah:ignore E002 - executeMany prepares once and reuses the statement per param row — not an N+1
                 $stmt->execute();
                 $totalAffected += $stmt->rowCount();
             }

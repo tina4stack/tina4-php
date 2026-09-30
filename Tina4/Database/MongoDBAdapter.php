@@ -289,6 +289,7 @@ class MongoDBAdapter implements DatabaseAdapter
     {
         $count = 0;
         foreach ($paramsList as $params) {
+            // carbonah:ignore E002 - executeMany batch-write primitive — per param-row write, not an N+1
             if ($this->execute($sql, $params)) {
                 $count++;
             }

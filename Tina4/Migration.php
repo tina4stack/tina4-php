@@ -157,6 +157,7 @@ class Migration
                     // back and records the failure. A raw-adapter binding may
                     // still return false instead of throwing, so keep the
                     // explicit guard for that path.
+                    // carbonah:ignore E002 - applies each DDL/DML statement of a migration file — deploy-time, distinct statements, not an N+1
                     if ($this->db->execute($statement) === false) {
                         $error = $this->db->error() ?? 'Unknown error';
                         throw new \RuntimeException("Migration failed: {$error}");
@@ -274,6 +275,7 @@ class Migration
                                 // back and records the failure. A raw-adapter
                                 // binding may still return false, so keep the
                                 // explicit guard for that path.
+                                // carbonah:ignore E002 - applies each rollback statement — deploy-time, distinct statements, not an N+1
                                 if ($this->db->execute($statement) === false) {
                                     $error = $this->db->error() ?? 'Unknown error';
                                     throw new \RuntimeException("Rollback SQL failed: {$error}");
@@ -302,6 +304,7 @@ class Migration
                 // Remove the migration record -- only reached once the down
                 // artifact actually ran (or was confirmed a deliberate no-op
                 // empty file); a missing/failed down raised above instead.
+                // carbonah:ignore E002 - removes the ledger row per rolled-back file — deploy-time metadata, not an N+1
                 $this->db->execute(
                     "DELETE FROM " . self::MIGRATIONS_TABLE . " WHERE migration_name = :name",
                     [':name' => $fileName]
@@ -783,6 +786,7 @@ class Migration
                 if ($isFirebird && $this->firebirdColumnExists(self::MIGRATIONS_TABLE, $column)) {
                     continue;
                 }
+                // carbonah:ignore E002 - one-time migrations-table self-upgrade ALTER per column — DDL, not an N+1
                 $this->db->execute(
                     "ALTER TABLE " . self::MIGRATIONS_TABLE . " {$addKeyword} {$definition}"
                 );
@@ -914,6 +918,7 @@ class Migration
 
         foreach ($alters as $sql) {
             try {
+                // carbonah:ignore E002 - one-time migrations-table self-upgrade ALTER — DDL, not an N+1
                 $this->db->execute($sql);
             } catch (\Throwable $e) {
                 // Column may already exist from a prior partial upgrade.
@@ -955,6 +960,7 @@ class Migration
             $migration = $fileMap[$prefix] ?? ($prefix . '.sql');
 
             try {
+                // carbonah:ignore E002 - one-time v2->v3 ledger backfill with per-row fault isolation over a tiny table — cold path, not an N+1
                 $this->db->execute(
                     "UPDATE " . self::MIGRATIONS_TABLE
                     . " SET migration_name = :m, batch = 1 WHERE migration_id = :p",

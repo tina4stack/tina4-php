@@ -42,6 +42,7 @@ trait ExecuteManyLoopTrait
     {
         $totalAffected = 0;
         foreach ($paramsList as $params) {
+            // carbonah:ignore E002 - batch-write primitive — one SQL run per param row; the loop IS the batch, not an N+1
             $this->execute($sql, $params);
             $totalAffected++;
         }

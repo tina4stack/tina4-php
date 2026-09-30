@@ -1518,6 +1518,7 @@ class Frond
         foreach ($node['branches'] as $branch) {
             $condValue = $this->evaluateExpression($branch['condition'], $data);
             if ($this->isTruthy($condValue)) {
+                // carbonah:ignore E002 - template AST node evaluation, not a database query
                 return $this->execute($branch['body'], $data);
             }
         }
@@ -1576,6 +1577,7 @@ class Frond
                 'even' => ($idx + 1) % 2 === 0,
                 'odd' => ($idx + 1) % 2 === 1,
             ];
+            // carbonah:ignore E002 - template AST node evaluation, not a database query
             $out .= $this->execute($node['body'], $data);
             $idx++;
         }

@@ -214,6 +214,7 @@ class Context
                     $insert->bindValue(2, $row[1], SQLITE3_TEXT);
                     $insert->bindValue(3, $row[2], SQLITE3_TEXT);
                     $insert->bindValue(4, $row[3], SQLITE3_TEXT);
+                    // carbonah:ignore E002 - bulk INSERT reusing one prepared statement in a transaction — loop is over rows to write, not query results
                     $insert->execute();
                     $insert->reset();
                 }

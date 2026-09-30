@@ -651,6 +651,7 @@ class DevAdmin
                 $db->startTransaction();
                 try {
                     foreach ($statements as $stmt) {
+                        // carbonah:ignore E002 - dev-admin SQL console runs the user's own multi-statement batch in a transaction — not an N+1
                         $db->execute($stmt);
                         $totalAffected++;
                     }

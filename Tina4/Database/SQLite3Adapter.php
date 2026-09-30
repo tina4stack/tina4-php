@@ -332,6 +332,7 @@ class SQLite3Adapter implements DatabaseAdapter
                 $stmt->reset();
                 $stmt->clear();
                 $this->bindParams($stmt, $params);
+                // carbonah:ignore E002 - executeMany reuses one prepared statement per param row (ADR-0044) — not an N+1
                 $result = $stmt->execute();
                 if ($result === false) {
                     $this->lastError = $this->db->lastErrorMsg();
