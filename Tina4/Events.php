@@ -41,13 +41,7 @@ class Events
      */
     public static function on(string $event, callable $callback, int $priority = 0): void
     {
-        self::$listeners[$event][] = [
-            'callback' => $callback,
-            'priority' => $priority,
-            'once' => false,
-        ];
-
-        self::sortListeners($event);
+        self::addListener($event, $callback, $priority, false);
     }
 
     /**
@@ -59,10 +53,24 @@ class Events
      */
     public static function once(string $event, callable $callback, int $priority = 0): void
     {
+        self::addListener($event, $callback, $priority, true);
+    }
+
+    /**
+     * Append a listener and keep the event's handlers sorted by priority.
+     * on() and once() differ only by the $once flag, so they share this home.
+     *
+     * @param string   $event    Event name
+     * @param callable $callback Handler to invoke when the event fires
+     * @param int      $priority Higher priority runs first
+     * @param bool     $once     Auto-remove the listener after its first call
+     */
+    private static function addListener(string $event, callable $callback, int $priority, bool $once): void
+    {
         self::$listeners[$event][] = [
             'callback' => $callback,
             'priority' => $priority,
-            'once' => true,
+            'once' => $once,
         ];
 
         self::sortListeners($event);

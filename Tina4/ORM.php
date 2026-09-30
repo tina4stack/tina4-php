@@ -200,6 +200,30 @@ abstract class ORM
     private const EAGER_PAGE_SIZE = 1000;
 
     /**
+     * Framework-owned property names that are never treated as model columns.
+     * Both the column-definition scan and the model-property collector walk the
+     * subclass's public properties and skip these, so the one list lives here.
+     */
+    private const FRAMEWORK_PROPS = [
+        'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
+        'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
+        'foreignKeys',
+        // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
+        // never a column itself — exclude it even when a subclass redeclares
+        // it (which is how a model asks for a real DECIMAL(p, s) column, since
+        // a PHP typed `float` property cannot carry a precision/scale).
+        'decimals',
+        'pointFields',
+        // $fields is a validation-constraint overlay, never a column —
+        // exclude it even when a subclass redeclares it (which is how a
+        // model attaches its rules: public array $fields = [...];).
+        'fields',
+        // $_db is a connection selector, never a column — exclude it even
+        // when a subclass redeclares it (e.g. public $_db = 'analytics';).
+        '_db',
+    ];
+
+    /**
      * Bind a database to ORM models. Equivalent to Python's bind_database(db, name=None).
      *
      *   - $name === null → set the global default used by all models without a $_db.
@@ -1085,6 +1109,19 @@ abstract class ORM
             $sql = "DELETE FROM {$this->tableName} WHERE {$whereSql}";
         }
 
+        return $this->runDeleteStatement($sql, $whereParams);
+    }
+
+    /**
+     * Run a delete (or soft-delete UPDATE) inside its own transaction and bust
+     * the read cache on success. delete() and forceDelete() build different SQL
+     * but bracket it identically, so the transaction handling lives here.
+     *
+     * @param string               $sql         The DELETE or soft-delete UPDATE statement
+     * @param array<int|string, mixed> $whereParams Bound parameters for the primary-key WHERE
+     */
+    private function runDeleteStatement(string $sql, array $whereParams): bool
+    {
         $this->_db->startTransaction();
         try {
             $result = $this->_db->execute($sql, $whereParams);
@@ -1785,23 +1822,7 @@ abstract class ORM
         // v3.13.39: wrap exec()+commit() in a started transaction. Previously
         // commit() was called with NO startTransaction() — committing whatever
         // ambient/implicit transaction happened to be open (or nothing at all).
-        $this->_db->startTransaction();
-        try {
-            $result = $this->_db->execute($sql, $whereParams);
-            if ($result === false) {
-                $this->_db->rollback();
-                return false;
-            }
-            $this->_exists = false;
-            $this->_db->commit();
-        } catch (\Exception $e) {
-            $this->_db->rollback();
-            throw $e;
-        }
-
-        // Bust cached reads of any table this write touched (CACHE-DEC-01).
-        $this->clearCache();
-        return $result;
+        return $this->runDeleteStatement($sql, $whereParams);
     }
 
     /**
@@ -2462,25 +2483,6 @@ abstract class ORM
      */
     private function declaredColumnDefinitions(): array
     {
-        static $frameworkProps = [
-            'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
-            'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
-            'foreignKeys',
-            // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
-            // never a column itself — exclude it even when a subclass redeclares
-            // it (which is how a model asks for a real DECIMAL(p, s) column, since
-            // a PHP typed `float` property cannot carry a precision/scale).
-            'decimals',
-            'pointFields',
-            // $fields is a validation-constraint overlay, never a column —
-            // exclude it even when a subclass redeclares it (which is how a
-            // model attaches its rules: public array $fields = [...];).
-            'fields',
-            // $_db is a connection selector, never a column — exclude it even
-            // when a subclass redeclares it (e.g. public $_db = 'analytics';).
-            '_db',
-        ];
-
         $columns = [];
         $ref = new \ReflectionObject($this);
 
@@ -2489,7 +2491,7 @@ abstract class ORM
                 continue;
             }
             $name = $prop->getName();
-            if (in_array($name, $frameworkProps, true)) {
+            if (in_array($name, self::FRAMEWORK_PROPS, true)) {
                 continue;
             }
             // Skip ORM base-class framework properties; only map subclass columns.
@@ -3100,25 +3102,6 @@ abstract class ORM
      */
     private function getModelProperties(): array
     {
-        static $frameworkProps = [
-            'tableName', 'primaryKey', 'fieldMapping', 'autoMap',
-            'softDelete', 'autoCrud', 'hasOne', 'hasMany', 'belongsTo',
-            'foreignKeys',
-            // $decimals is a per-column precision/scale overlay ([prop => [p, s]]),
-            // never a column itself — exclude it even when a subclass redeclares
-            // it (which is how a model asks for a real DECIMAL(p, s) column, since
-            // a PHP typed `float` property cannot carry a precision/scale).
-            'decimals',
-            'pointFields',
-            // $fields is a validation-constraint overlay, never a column —
-            // exclude it even when a subclass redeclares it (which is how a
-            // model attaches its rules: public array $fields = [...];).
-            'fields',
-            // $_db is a connection selector, never a column — exclude it even
-            // when a subclass redeclares it (e.g. public $_db = 'analytics';).
-            '_db',
-        ];
-
         $props = [];
 
         // Declared public properties on the subclass
@@ -3126,7 +3109,7 @@ abstract class ORM
         foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
             if ($prop->isStatic()) continue;
             $name = $prop->getName();
-            if (in_array($name, $frameworkProps, true)) continue;
+            if (in_array($name, self::FRAMEWORK_PROPS, true)) continue;
             if ($prop->getDeclaringClass()->getName() === self::class) continue;
             if (!$prop->isInitialized($this)) continue;
             $props[$name] = $this->$name;

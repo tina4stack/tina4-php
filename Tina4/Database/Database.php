@@ -332,6 +332,31 @@ class Database implements DatabaseAdapter
         $this->returnAdapter($adapter, $discard);
     }
 
+    /**
+     * Run a single delegating operation inside an adapter lease. Borrows an
+     * adapter for the call, returns it afterwards, and rolls it back if the
+     * operation raised — the exact bracket every simple facade getter shares.
+     *
+     * The per-row hot paths (query/fetch/execute/insert/update/delete) keep
+     * their brackets inline: they carry extra work (caching, id capture) and
+     * must not pay a closure allocation per call.
+     *
+     * @param callable $operation The delegating call to run under the lease
+     */
+    private function withOperation(callable $operation): mixed
+    {
+        $lease = $this->enterOperation();
+        $operationFailed = false;
+        try {
+            return $operation();
+        } catch (\Throwable $e) {
+            $operationFailed = true;
+            throw $e;
+        } finally {
+            $this->leaveOperation($lease, $operationFailed);
+        }
+    }
+
     private function releaseTransaction(bool $discard = false): void
     {
         $state = $this->executionContext();
@@ -1196,16 +1221,7 @@ class Database implements DatabaseAdapter
      */
     public function getDatabaseType(): string
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->getNextAdapter()->getDatabaseType();
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->getNextAdapter()->getDatabaseType());
     }
 
     /**
@@ -1213,16 +1229,7 @@ class Database implements DatabaseAdapter
      */
     public function autocommit(?bool $on = null): bool
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->getNextAdapter()->autocommit($on);
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->getNextAdapter()->autocommit($on));
     }
 
     public function close(): void
@@ -1248,16 +1255,7 @@ class Database implements DatabaseAdapter
      */
     public function lastInsertId(): int|string
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->returnedId ?? $this->getNextAdapter()->lastInsertId());
     }
 
     /**
@@ -1382,16 +1380,7 @@ class Database implements DatabaseAdapter
      */
     public function tableExists(string $tableName): bool
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->getNextAdapter()->tableExists($tableName);
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->getNextAdapter()->tableExists($tableName));
     }
 
     /**
@@ -1401,16 +1390,7 @@ class Database implements DatabaseAdapter
      */
     public function getTables(): array
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->getNextAdapter()->getTables();
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->getNextAdapter()->getTables());
     }
 
     /**
@@ -1421,16 +1401,7 @@ class Database implements DatabaseAdapter
      */
     public function getColumns(string $tableName): array
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->getNextAdapter()->getColumns($tableName);
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->getNextAdapter()->getColumns($tableName));
     }
 
     /**
@@ -1446,16 +1417,7 @@ class Database implements DatabaseAdapter
      */
     public function getLastId(): int|string
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->returnedId ?? $this->getNextAdapter()->lastInsertId();
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->returnedId ?? $this->getNextAdapter()->lastInsertId());
     }
 
     /**
@@ -2038,16 +2000,7 @@ class Database implements DatabaseAdapter
      */
     public function error(): ?string
     {
-        $lease = $this->enterOperation();
-        $operationFailed = false;
-        try {
-            return $this->getNextAdapter()->error();
-        } catch (\Throwable $e) {
-            $operationFailed = true;
-            throw $e;
-        } finally {
-            $this->leaveOperation($lease, $operationFailed);
-        }
+        return $this->withOperation(fn() => $this->getNextAdapter()->error());
     }
 
     // -------------------------------------------------------------------------

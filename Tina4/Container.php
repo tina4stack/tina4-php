@@ -41,11 +41,7 @@ class Container
      */
     public function register(string $name, callable $factory): void
     {
-        $this->registry[$name] = [
-            'factory' => $factory,
-            'singleton' => false,
-            'instance' => null,
-        ];
+        $this->store($name, $factory, false);
     }
 
     /**
@@ -57,9 +53,22 @@ class Container
      */
     public function singleton(string $name, callable $factory): void
     {
+        $this->store($name, $factory, true);
+    }
+
+    /**
+     * Record a factory in the registry. register() and singleton() differ only
+     * by whether the resolved instance is cached, so they share this home.
+     *
+     * @param string   $name      Service name
+     * @param callable $factory   Factory function returning the service
+     * @param bool     $singleton Cache the first result for later get() calls
+     */
+    private function store(string $name, callable $factory, bool $singleton): void
+    {
         $this->registry[$name] = [
             'factory' => $factory,
-            'singleton' => true,
+            'singleton' => $singleton,
             'instance' => null,
         ];
     }
