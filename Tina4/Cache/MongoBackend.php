@@ -225,24 +225,29 @@ class MongoBackend extends CacheBackend
 
     private function deleteOne(array $filter): int
     {
-        $result = $this->command([
-            'delete' => $this->collection,
-            'deletes' => [[
-                'q' => $filter,
-                'limit' => 1,
-            ]],
-            '$db' => $this->database,
-        ]);
-        return (int)($result['n'] ?? 0);
+        return $this->runDelete($filter, 1);
     }
 
     private function deleteMany(array $filter): int
+    {
+        return $this->runDelete($filter, 0);
+    }
+
+    /**
+     * Run a MongoDB delete command and return the deleted count. The wire
+     * request is identical for one or many — the delete's `limit` field is the
+     * only difference (1 = single document, 0 = all matches).
+     *
+     * @param array<string, mixed> $filter Query selector for documents to remove
+     * @param int                  $limit  1 to delete a single match, 0 for all
+     */
+    private function runDelete(array $filter, int $limit): int
     {
         $result = $this->command([
             'delete' => $this->collection,
             'deletes' => [[
                 'q' => $filter,
-                'limit' => 0,
+                'limit' => $limit,
             ]],
             '$db' => $this->database,
         ]);
