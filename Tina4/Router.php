@@ -1240,7 +1240,7 @@ class Router
                 $_SESSION = [];
             }
             self::$routerNativeSessionActive = false;
-            self::$routerNativeSessionIsNew = false;
+            self::$routerNativeSessionIncomingId = null;
         }
 
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
@@ -1282,7 +1282,15 @@ class Router
                     ? $incoming : null;
                 session_id($incoming ?? session_create_id());
                 @session_start(['use_strict_mode' => 1]);
-                self::$routerNativeSessionIsNew = session_status() === PHP_SESSION_ACTIVE && session_id() !== $incoming;
+                // Remember the id the client actually sent (null when none, or
+                // when its cookie was malformed / rejected by strict mode). The
+                // cookie is re-emitted at finish whenever session_id() ends up
+                // different from this - which is a brand-new session AND a
+                // mid-request session_regenerate_id() (the login fixation
+                // defence). A start-time "is new" flag missed the regenerate
+                // case: the id changed after it was computed, so no Set-Cookie
+                // went out and the client kept the stale id (#253).
+                self::$routerNativeSessionIncomingId = $incoming;
             } else {
                 @session_start();
             }
@@ -1293,18 +1301,26 @@ class Router
     /** True when the router opened the native session for the request in flight. */
     private static bool $routerNativeSessionActive = false;
 
-    /** True when that session was created for this request (its cookie must be sent). */
-    private static bool $routerNativeSessionIsNew = false;
+    /**
+     * The validated native session id the client sent on this request, or null
+     * when none arrived (or the cookie was malformed / rejected by strict mode).
+     * finishNativeSession() re-emits the cookie whenever the session id at the
+     * end of the request differs from this - covering both a session created
+     * for this request AND a mid-request session_regenerate_id() (#253).
+     */
+    private static ?string $routerNativeSessionIncomingId = null;
 
     /** One PHP process serves many requests: tina4's server, Swoole, RoadRunner, CLI. */
     /**
      * End the request's native session in a long-running process.
      *
-     * Emits the native session cookie on the Response when this request
-     * created the session (no SAPI will send one), then writes and closes the
-     * session so its data persists and its file lock is released. $_SESSION is
-     * left readable for code that runs after dispatch; the next dispatch
-     * empties it before starting the next request's session.
+     * Emits the native session cookie on the Response whenever the current
+     * session id differs from the one the client sent (no SAPI will send one) -
+     * a session created for this request, or one whose id changed mid-request
+     * via session_regenerate_id() (#253) - then writes and closes the session
+     * so its data persists and its file lock is released. $_SESSION is left
+     * readable for code that runs after dispatch; the next dispatch empties it
+     * before starting the next request's session.
      */
     private static function finishNativeSession(Response $result): void
     {
@@ -1312,7 +1328,7 @@ class Router
             return;
         }
         if (session_status() === PHP_SESSION_ACTIVE) {
-            if (self::$routerNativeSessionIsNew) {
+            if (session_id() !== (self::$routerNativeSessionIncomingId ?? '')) {
                 $params = session_get_cookie_params();
                 $options = [
                     'path' => $params['path'] ?: '/',
@@ -1331,7 +1347,7 @@ class Router
             session_write_close();
         }
         self::$routerNativeSessionActive = false;
-        self::$routerNativeSessionIsNew = false;
+        self::$routerNativeSessionIncomingId = null;
     }
 
     /**
