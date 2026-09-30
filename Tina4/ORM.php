@@ -3343,19 +3343,51 @@ abstract class ORM
         }
 
         $sample = $instances[0];
+        self::mergeFkRegistryHasMany($sample);
 
-        // REL auto-wire parity: merge any FK-registry has-many entries onto the
-        // sample so an FK-auto-wired has-many resolves through the EAGER path too,
-        // exactly as __get() merges them for the lazy path. Without this, an
-        // include=['posts'] for a $foreignKeys-declared relation silently finds
-        // nothing unless the relation had been touched lazily first.
+        foreach (self::groupIncludesByTopLevel($include) as $relName => $nested) {
+            $relation = self::resolveRelationDefinition($sample, $relName);
+            if ($relation === null) {
+                continue;
+            }
+
+            $defParts = explode('.', $relation['definition'], 2);
+            $relatedClass = $defParts[0];
+            $foreignKey = $defParts[1] ?? null;
+
+            if ($relation['type'] === 'belongsTo') {
+                self::eagerLoadBelongsTo($instances, $relName, $relatedClass, $foreignKey, $nested, $db);
+            } else {
+                self::eagerLoadHasRelation($instances, $relName, $relation['type'], $relatedClass, $foreignKey, $sample, $nested, $db);
+            }
+        }
+    }
+
+    /**
+     * REL auto-wire parity: merge any FK-registry has-many entries onto the
+     * sample so an FK-auto-wired has-many resolves through the EAGER path too,
+     * exactly as __get() merges them for the lazy path. Without this, an
+     * include=['posts'] for a $foreignKeys-declared relation silently finds
+     * nothing unless the relation had been touched lazily first.
+     */
+    private static function mergeFkRegistryHasMany(ORM $sample): void
+    {
         foreach (self::$_fkRegistry[get_class($sample)] ?? [] as $fkEntry) {
             if (!isset($sample->hasMany[$fkEntry['key']])) {
                 $sample->hasMany[$fkEntry['key']] = $fkEntry['spec'];
             }
         }
+    }
 
-        // Group includes: top-level and nested
+    /**
+     * Group include paths by their top-level relation name, collecting any
+     * nested (dot-notation) remainder for recursive eager loading.
+     *
+     * @param array<string> $include
+     * @return array<string, array<int, string>> relName => [nested includes]
+     */
+    private static function groupIncludesByTopLevel(array $include): array
+    {
         $topLevel = [];
         foreach ($include as $inc) {
             $parts = explode('.', $inc, 2);
@@ -3367,151 +3399,201 @@ abstract class ORM
                 $topLevel[$relName][] = $parts[1];
             }
         }
+        return $topLevel;
+    }
 
-        foreach ($topLevel as $relName => $nested) {
-            $definition = null;
-            $type = null;
+    /**
+     * Resolve a relation name on $sample to its definition and kind
+     * (hasOne | hasMany | belongsTo), or null when the name is not a relation.
+     *
+     * @return array{definition: string, type: string}|null
+     */
+    private static function resolveRelationDefinition(ORM $sample, string $relName): ?array
+    {
+        if (isset($sample->hasOne[$relName])) {
+            return ['definition' => $sample->hasOne[$relName], 'type' => 'hasOne'];
+        }
+        if (isset($sample->hasMany[$relName])) {
+            return ['definition' => $sample->hasMany[$relName], 'type' => 'hasMany'];
+        }
+        if (isset($sample->belongsTo[$relName])) {
+            return ['definition' => $sample->belongsTo[$relName], 'type' => 'belongsTo'];
+        }
+        return null;
+    }
 
-            if (isset($sample->hasOne[$relName])) {
-                $definition = $sample->hasOne[$relName];
-                $type = 'hasOne';
-            } elseif (isset($sample->hasMany[$relName])) {
-                $definition = $sample->hasMany[$relName];
-                $type = 'hasMany';
-            } elseif (isset($sample->belongsTo[$relName])) {
-                $definition = $sample->belongsTo[$relName];
-                $type = 'belongsTo';
-            }
+    /**
+     * Eager-load a hasOne / hasMany relation onto every instance (one bounded,
+     * paged query across all parents — no N+1), then recurse into any nested
+     * includes and cache the grouped children on each parent.
+     *
+     * @param array<ORM>         $instances
+     * @param array<int, string> $nested
+     */
+    private static function eagerLoadHasRelation(
+        array &$instances,
+        string $relName,
+        string $type,
+        string $relatedClass,
+        ?string $foreignKey,
+        ORM $sample,
+        array $nested,
+        DatabaseAdapter $db
+    ): void {
+        if ($foreignKey === null) {
+            $foreignKey = self::defaultForeignKey($sample);
+        }
 
-            if ($definition === null) {
-                continue;
-            }
-
-            $defParts = explode('.', $definition, 2);
-            $relatedClass = $defParts[0];
-            $foreignKey = $defParts[1] ?? null;
-
-            if ($type === 'hasOne' || $type === 'hasMany') {
-                if ($foreignKey === null) {
-                    $foreignKey = self::defaultForeignKey($sample);
-                }
-
-                $pkValues = [];
-                foreach ($instances as $inst) {
-                    $pkVal = $inst->getPrimaryKeyValue();
-                    if ($pkVal !== null) {
-                        $pkValues[] = $pkVal;
-                    }
-                }
-
-                if (empty($pkValues)) {
-                    continue;
-                }
-
-                /** @var ORM $relTemplate */
-                $relTemplate = new $relatedClass($db);
-                // REL-SOFTDELETE-TRAVERSAL: a soft-deleted child must not surface
-                // through eager traversal (parity with the lazy where() path).
-                $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
-                $orderCol = $relTemplate->getDbColumn($relTemplate->getPrimaryKeys()[0]);
-
-                // REL-EAGER-UNBOUNDED: chunk the parent PKs so the IN list stays
-                // bounded, and page each chunk so no relation is truncated.
-                $related = [];
-                foreach (array_chunk($pkValues, self::EAGER_IN_CHUNK) as $chunk) {
-                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-                    $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN ({$placeholders}){$soft} ORDER BY {$orderCol}";
-                    $offset = 0;
-                    do {
-                        $result = $db->fetch($sql, $chunk, self::EAGER_PAGE_SIZE, $offset);
-                        $rows = is_array($result) ? ($result['data'] ?? $result) : $result->records;
-                        foreach ($rows as $row) {
-                            $model = new $relatedClass($db);
-                            $model->fill($row);
-                            $model->_exists = true;
-                            $related[] = $model;
-                        }
-                        $offset += self::EAGER_PAGE_SIZE;
-                    } while (count($rows) === self::EAGER_PAGE_SIZE);
-                }
-
-                // Eager load nested
-                if (!empty($nested) && !empty($related)) {
-                    self::eagerLoad($related, $nested, $db);
-                }
-
-                // Group by FK — resolveFkValue() reverse-maps the FK column
-                // through fieldMapping so a snake_case FK on a camelCase
-                // (autoMap) property still groups correctly.
-                $grouped = [];
-                foreach ($related as $record) {
-                    $fkVal = $record->resolveFkValue($foreignKey);
-                    // Skip records whose FK is null — they cannot match any parent PK
-                    // (avoids PHP 8.5 "null as array offset" deprecation)
-                    if ($fkVal === null) {
-                        continue;
-                    }
-                    $grouped[$fkVal][] = $record;
-                }
-
-                foreach ($instances as $inst) {
-                    $pkVal = $inst->getPrimaryKeyValue();
-                    $records = $grouped[$pkVal] ?? [];
-                    if ($type === 'hasOne') {
-                        $inst->_relCache[$relName] = $records[0] ?? null;
-                    } else {
-                        $inst->_relCache[$relName] = $records;
-                    }
-                }
-
-            } elseif ($type === 'belongsTo') {
-                /** @var ORM $relTemplate */
-                $relTemplate = new $relatedClass($db);
-                if ($foreignKey === null) {
-                    $foreignKey = self::defaultForeignKey($relatedClass);
-                }
-
-                $fkValues = [];
-                foreach ($instances as $inst) {
-                    $fkVal = $inst->resolveFkValue($foreignKey);
-                    if ($fkVal !== null) {
-                        $fkValues[$fkVal] = true;
-                    }
-                }
-                $fkValues = array_keys($fkValues);
-
-                if (empty($fkValues)) {
-                    continue;
-                }
-
-                $relPk = $relTemplate->primaryKey;
-                // REL-SOFTDELETE-TRAVERSAL: exclude a soft-deleted parent (parity
-                // with findById). REL-EAGER-UNBOUNDED: chunk the FK values.
-                $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
-                $lookup = [];
-                foreach (array_chunk($fkValues, self::EAGER_IN_CHUNK) as $chunk) {
-                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-                    $sql = "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN ({$placeholders}){$soft}";
-                    $result = $db->fetch($sql, $chunk, count($chunk), 0);
-                    foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
-                        $model = new $relatedClass($db);
-                        $model->fill($row);
-                        $model->_exists = true;
-                        $lookup[$model->getPrimaryKeyValue()] = $model;
-                    }
-                }
-
-                if (!empty($nested) && !empty($lookup)) {
-                    $lookupList = array_values($lookup);
-                    self::eagerLoad($lookupList, $nested, $db);
-                }
-
-                foreach ($instances as $inst) {
-                    $fkVal = $inst->resolveFkValue($foreignKey);
-                    $inst->_relCache[$relName] = $lookup[$fkVal] ?? null;
-                }
+        $pkValues = [];
+        foreach ($instances as $inst) {
+            $pkVal = $inst->getPrimaryKeyValue();
+            if ($pkVal !== null) {
+                $pkValues[] = $pkVal;
             }
         }
+
+        if (empty($pkValues)) {
+            return;
+        }
+
+        /** @var ORM $relTemplate */
+        $relTemplate = new $relatedClass($db);
+        // REL-SOFTDELETE-TRAVERSAL: a soft-deleted child must not surface
+        // through eager traversal (parity with the lazy where() path).
+        $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
+        $orderCol = $relTemplate->getDbColumn($relTemplate->getPrimaryKeys()[0]);
+
+        $related = self::fetchRelatedInChunks(
+            $db,
+            $relatedClass,
+            "SELECT * FROM {$relTemplate->tableName} WHERE {$foreignKey} IN (%s){$soft} ORDER BY {$orderCol}",
+            $pkValues,
+            true
+        );
+
+        // Eager load nested
+        if (!empty($nested) && !empty($related)) {
+            self::eagerLoad($related, $nested, $db);
+        }
+
+        // Group by FK — resolveFkValue() reverse-maps the FK column through
+        // fieldMapping so a snake_case FK on a camelCase (autoMap) property
+        // still groups correctly.
+        $grouped = [];
+        foreach ($related as $record) {
+            $fkVal = $record->resolveFkValue($foreignKey);
+            // Skip records whose FK is null — they cannot match any parent PK
+            // (avoids PHP 8.5 "null as array offset" deprecation)
+            if ($fkVal === null) {
+                continue;
+            }
+            $grouped[$fkVal][] = $record;
+        }
+
+        foreach ($instances as $inst) {
+            $records = $grouped[$inst->getPrimaryKeyValue()] ?? [];
+            $inst->_relCache[$relName] = ($type === 'hasOne') ? ($records[0] ?? null) : $records;
+        }
+    }
+
+    /**
+     * Eager-load a belongsTo relation (the parent row each instance points at)
+     * with one bounded query, then recurse into any nested includes and cache
+     * the resolved parent on each instance.
+     *
+     * @param array<ORM>         $instances
+     * @param array<int, string> $nested
+     */
+    private static function eagerLoadBelongsTo(
+        array &$instances,
+        string $relName,
+        string $relatedClass,
+        ?string $foreignKey,
+        array $nested,
+        DatabaseAdapter $db
+    ): void {
+        /** @var ORM $relTemplate */
+        $relTemplate = new $relatedClass($db);
+        if ($foreignKey === null) {
+            $foreignKey = self::defaultForeignKey($relatedClass);
+        }
+
+        $fkValues = [];
+        foreach ($instances as $inst) {
+            $fkVal = $inst->resolveFkValue($foreignKey);
+            if ($fkVal !== null) {
+                $fkValues[$fkVal] = true;
+            }
+        }
+        $fkValues = array_keys($fkValues);
+
+        if (empty($fkValues)) {
+            return;
+        }
+
+        $relPk = $relTemplate->primaryKey;
+        // REL-SOFTDELETE-TRAVERSAL: exclude a soft-deleted parent (parity with
+        // findById). REL-EAGER-UNBOUNDED: chunk the FK values.
+        $soft = $relTemplate->softDelete ? ' AND is_deleted = 0' : '';
+        $parents = self::fetchRelatedInChunks(
+            $db,
+            $relatedClass,
+            "SELECT * FROM {$relTemplate->tableName} WHERE {$relPk} IN (%s){$soft}",
+            $fkValues,
+            false
+        );
+        $lookup = [];
+        foreach ($parents as $model) {
+            $lookup[$model->getPrimaryKeyValue()] = $model;
+        }
+
+        if (!empty($nested) && !empty($lookup)) {
+            $lookupList = array_values($lookup);
+            self::eagerLoad($lookupList, $nested, $db);
+        }
+
+        foreach ($instances as $inst) {
+            $fkVal = $inst->resolveFkValue($foreignKey);
+            $inst->_relCache[$relName] = $lookup[$fkVal] ?? null;
+        }
+    }
+
+    /**
+     * Run one IN-list query per chunk of $keyValues (REL-EAGER-UNBOUNDED keeps
+     * the IN list bounded) and hydrate the rows into $relatedClass instances.
+     * $sqlTemplate carries a single `%s` where the `?` placeholders go. When
+     * $page is set, each chunk is paged with EAGER_PAGE_SIZE so nothing is
+     * truncated; otherwise a chunk is fetched in one call.
+     *
+     * @param array<int, mixed> $keyValues
+     * @return array<int, ORM>
+     */
+    private static function fetchRelatedInChunks(
+        DatabaseAdapter $db,
+        string $relatedClass,
+        string $sqlTemplate,
+        array $keyValues,
+        bool $page
+    ): array {
+        $related = [];
+        foreach (array_chunk($keyValues, self::EAGER_IN_CHUNK) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = sprintf($sqlTemplate, $placeholders);
+            $limit = $page ? self::EAGER_PAGE_SIZE : count($chunk);
+            $offset = 0;
+            do {
+                $result = $db->fetch($sql, $chunk, $limit, $offset);
+                $rows = is_array($result) ? ($result['data'] ?? $result) : $result->records;
+                foreach ($rows as $row) {
+                    $model = new $relatedClass($db);
+                    $model->fill($row);
+                    $model->_exists = true;
+                    $related[] = $model;
+                }
+                $offset += $limit;
+            } while ($page && count($rows) === self::EAGER_PAGE_SIZE);
+        }
+        return $related;
     }
 
     /**
