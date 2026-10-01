@@ -125,6 +125,35 @@ class Session
     private bool $loadFound = false;
 
     /**
+     * @var array What this request last saw of the stored record: one
+     *            fingerprint per key (_meta aside), taken by start() and again
+     *            by every save. save() compares the live data against it to
+     *            find the keys THIS request changed, and writes only those.
+     */
+    private array $loaded = [];
+
+    /**
+     * @var bool Whether this request is working on a record the store holds —
+     *           start() adopted one, or a save has written one since. A save
+     *           never re-creates such a record once another request removed it.
+     */
+    private bool $stored = false;
+
+    /**
+     * @var bool Whether clear() ran since the last save. The save then replaces
+     *           the stored record outright instead of merging into it, so keys
+     *           another request added are cleared too.
+     */
+    private bool $cleared = false;
+
+    /**
+     * @var bool Whether this request found its session ended by another request
+     *           (the record it loaded is gone). It stays ended for the rest of
+     *           the request: regenerate() mints nothing either.
+     */
+    private bool $ended = false;
+
+    /**
      * @param string $backend 'file' or 'redis'
      * @param array  $config  Override defaults: 'path', 'ttl', 'redis_url'
      */
@@ -204,6 +233,12 @@ class Session
             $this->data = ['_meta' => ['created_at' => time(), 'last_accessed' => time()]];
         }
 
+        // A read that FAILED adopts the id with an empty session (above); it is
+        // not a record this request has seen, so its first save writes whole.
+        $this->stored = $sessionId !== null && $this->backendHadRecord;
+        $this->loaded = $this->stored ? self::fingerprints($this->data) : [];
+        $this->cleared = false;
+        $this->ended = false;
         $this->started = true;
         return $this->sessionId;
     }
@@ -261,10 +296,23 @@ class Session
         if ($this->sessionId !== '') {
             $this->removeStorage();
         }
+        $this->forget();
+    }
+
+    /**
+     * Forget the session in memory: no data, no id, nothing left to save. What
+     * destroy() does after removing the record, and what save() does when it
+     * finds another request already removed it.
+     */
+    private function forget(): void
+    {
         $this->data = [];
         $this->sessionId = '';
         $this->started = false;
         $this->dirty = false;
+        $this->stored = false;
+        $this->cleared = false;
+        $this->loaded = [];
     }
 
     /**
@@ -278,6 +326,7 @@ class Session
         if ($meta !== null) {
             $this->data['_meta'] = $meta;
         }
+        $this->cleared = true;
         $this->dirty = true;
         $this->save();
     }
@@ -321,10 +370,33 @@ class Session
      * against session-fixation attacks (an attacker who planted a known ID
      * before login can no longer ride the authenticated session).
      *
-     * @return string The new session ID
+     * What is carried is the session as it is stored now with this request's
+     * own changes applied, the same merge save() does. If another request ended
+     * the session after this one loaded it (a logout, or a regenerate of its
+     * own), it stays ended: nothing is carried, no id is minted and '' is
+     * returned, so no cookie goes out to replace the one that request sent.
+     *
+     * @return string The new session ID, or '' when the session has ended
      */
     public function regenerate(): string
     {
+        if ($this->ended) {
+            return '';
+        }
+        if ($this->sessionId !== '' && $this->stored) {
+            $current = $this->read($this->sessionId);
+            if (!$this->backendReadFailed) {
+                if ($current === null) {
+                    $this->forget();
+                    $this->ended = true;
+                    return '';
+                }
+                if (!$this->cleared) {
+                    $this->data = $this->merged($current);
+                }
+            }
+        }
+
         $oldData = $this->data;
         $oldId = $this->sessionId;
 
@@ -332,6 +404,8 @@ class Session
         $this->data = $oldData;
         $this->data['_meta']['last_accessed'] = time();
         $this->dirty = true;
+        // Nothing is stored under the new id yet, so the save writes it whole.
+        $this->stored = false;
         $this->save();
 
         // Best-effort removal of the old record (log + swallow on failure).
@@ -513,7 +587,11 @@ class Session
             $this->ttl = $ttl;
         }
 
-        $this->save();
+        // A raw write of exactly $data. Not save(): its merge and has-it-gone
+        // checks describe THIS instance's own session, not $sessionId's.
+        if ($sessionId !== '') {
+            $this->safeWrite();
+        }
 
         $this->sessionId = $previousId;
         $this->data = $previousData;
@@ -684,9 +762,23 @@ class Session
     /**
      * Save session data to the backend.
      *
+     * Another request may have changed or ended this session since this one
+     * loaded it: a logout, a regenerate(), a set() that took a privilege away.
+     * Writing back the whole snapshot loaded at the start undid all of those, so
+     * a request in flight across a logout logged the user straight back in.
+     * The save therefore re-reads the stored record and writes only what THIS
+     * request changed onto it, and never re-creates a record another request
+     * removed: it ends the session for this request instead, and no cookie goes
+     * out for it.
+     *
+     * An unchanged session is still written: that write is what moves the
+     * expiry forward, so a session expires after TINA4_SESSION_TTL seconds of
+     * inactivity rather than that long after its last change (ADR-0087).
+     *
      * Honours the log-loud + degrade policy: on a successful write the dirty
-     * flag is cleared; on a degraded write it is retained so a later save()
-     * retries the same data. Returns true on success, false on a degraded write.
+     * flag is cleared; on a degraded read or write it is retained so a later
+     * save() retries. Returns true on success (or when there is nothing to
+     * write), false on a degraded read or write.
      */
     public function save(): bool
     {
@@ -696,12 +788,112 @@ class Session
         if ($this->sessionId === '') {
             return true;
         }
-        if ($this->safeWrite()) {
+
+        $record = null;
+        if ($this->stored) {
+            $current = $this->read($this->sessionId);
+            if ($this->backendReadFailed) {
+                // Whether the record still exists is unknown, so nothing is
+                // written; dirty is kept for a later retry.
+                return false;
+            }
+            if ($current === null) {
+                $this->forget();
+                $this->ended = true;
+                return true;
+            }
+            if (!$this->cleared) {
+                $record = $this->merged($current);
+            }
+        }
+
+        if ($this->persist($record)) {
             $this->dirty = false;
+            $this->stored = true;
+            $this->cleared = false;
+            $this->loaded = self::fingerprints($this->data);
             return true;
         }
         // Write failed — keep dirty set for a later retry (do not crash).
         return false;
+    }
+
+    /**
+     * The stored record with only this request's own changes applied to it:
+     * the keys it set or changed since it last loaded or saved, minus the keys
+     * it removed. Every other key keeps the value the store holds now.
+     *
+     * @param array $current The record as stored right now
+     * @return array The record to write
+     */
+    private function merged(array $current): array
+    {
+        $record = $current;
+        foreach ($this->data as $key => $value) {
+            $now = self::fingerprint($value);
+            if ($now === null || !array_key_exists($key, $this->loaded) || $this->loaded[$key] !== $now) {
+                $record[$key] = $value;
+            }
+        }
+        foreach (array_keys($this->loaded) as $key) {
+            if (!array_key_exists($key, $this->data)) {
+                unset($record[$key]);
+            }
+        }
+        return $record;
+    }
+
+    /**
+     * Write $record (or this request's own data when null) through the backend.
+     * The backend writers persist $this->data, so a merged record is swapped in
+     * for the write only, the way write() does it: the request keeps its own
+     * view of the session, and later saves keep comparing against that view.
+     */
+    private function persist(?array $record): bool
+    {
+        if ($record === null) {
+            return $this->safeWrite();
+        }
+        $mine = $this->data;
+        $this->data = $record;
+        try {
+            return $this->safeWrite();
+        } finally {
+            $this->data = $mine;
+        }
+    }
+
+    /**
+     * One fingerprint per key, _meta aside: the exact serialised value, so that
+     * any change, including one made in place, shows up as a different string.
+     * _meta has none, so a save always writes this request's own copy of it.
+     *
+     * @param array $data Session data
+     * @return array<string, ?string>
+     */
+    private static function fingerprints(array $data): array
+    {
+        $fingerprints = [];
+        foreach ($data as $key => $value) {
+            if ($key !== '_meta') {
+                $fingerprints[$key] = self::fingerprint($value);
+            }
+        }
+        return $fingerprints;
+    }
+
+    /**
+     * The serialised form of a value, or null when it cannot be serialised (a
+     * closure, say). A null fingerprint always counts as changed: writing a
+     * value again is harmless, missing a change is not.
+     */
+    private static function fingerprint(mixed $value): ?string
+    {
+        try {
+            return serialize($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
