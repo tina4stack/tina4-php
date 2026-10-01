@@ -183,13 +183,15 @@ class ErrorOverlayTest extends TestCase
                 touch($tmp, time() + 5);
                 clearstatcache(true, $tmp);
                 $html = ErrorOverlay::renderErrorOverlay($e);
-                // Match the actual badge HTML — the peach background
-                // + font-weight 700 is the signature of the stale pill,
-                // never produced by rendered source-code snippets.
+                // The stale pill is now a class (.eo-stale, styled peach in the
+                // nonce'd <style> block — ADR-0088 de-inlines every style=), so
+                // match the class + the FILE MODIFIED signature it wraps.
                 $this->assertMatchesRegularExpression(
-                    '/background:#fab387;[^"]*">\s*FILE MODIFIED @ \d{2}:\d{2}:\d{2} UTC/',
+                    '/<span class="eo-stale">\s*FILE MODIFIED @ \d{2}:\d{2}:\d{2} UTC/',
                     $html
                 );
+                // The peach colour lives in the stylesheet, keyed to that class.
+                $this->assertMatchesRegularExpression('/\.eo-stale\{background:#fab387;/', $html);
                 $this->assertStringContainsString('source may not match what failed</span>', $html);
             }
         } finally {
@@ -223,11 +225,12 @@ class ErrorOverlayTest extends TestCase
                 $this->fail('expected exception');
             } catch (\RuntimeException $e) {
                 $html = ErrorOverlay::renderErrorOverlay($e);
-                // Look for the badge HTML signature, not the bare
-                // "FILE MODIFIED" substring (which appears in the
+                // Look for the badge markup signature (the .eo-stale span wrapping
+                // FILE MODIFIED — ADR-0088 de-inlined its style into that class),
+                // not the bare "FILE MODIFIED" substring (which appears in the
                 // source-code preview of this very test file).
                 $this->assertDoesNotMatchRegularExpression(
-                    '/background:#fab387;[^"]*">\s*FILE MODIFIED @/',
+                    '/<span class="eo-stale">\s*FILE MODIFIED @/',
                     $html
                 );
             }

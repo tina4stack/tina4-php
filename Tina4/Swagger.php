@@ -1450,6 +1450,11 @@ class Swagger
         // TINA4_SWAGGER_UI_CDN at a self-hosted mirror (a base URL serving
         // swagger-ui.css + swagger-ui-bundle.js).
         $cdn = rtrim((string) (DotEnv::getEnv('TINA4_SWAGGER_UI_CDN', 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5') ?? 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5'), '/');
+        // Per-response CSP nonce (ADR-0088) on the inline <style>/<script> so
+        // they run under the strict default policy. (The CDN css/js are
+        // cross-origin and still need a relaxed TINA4_CSP — see the one-time
+        // default-CSP warning; the nonce only covers the framework's own inline.)
+        $nonce = Csp::currentCspNonce();
 
         return <<<HTML
 <!DOCTYPE html>
@@ -1459,7 +1464,7 @@ class Swagger
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{$title} — Swagger UI</title>
     <link rel="stylesheet" href="{$cdn}/swagger-ui.css">
-    <style>
+    <style nonce="{$nonce}">
         html { box-sizing: border-box; overflow-y: scroll; }
         *, *:before, *:after { box-sizing: inherit; }
         body { margin: 0; background: #fafafa; }
@@ -1469,7 +1474,7 @@ class Swagger
 <body>
     <div id="swagger-ui"></div>
     <script src="{$cdn}/swagger-ui-bundle.js"></script>
-    <script>
+    <script nonce="{$nonce}">
         window.onload = function() {
             SwaggerUIBundle({
                 url: '/swagger/openapi.json',

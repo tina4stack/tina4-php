@@ -3683,6 +3683,13 @@ class Frond
         // which returns an empty string in production.
         $this->globals['dump'] = static fn($v = null) => self::renderDump($v);
 
+        // CSP nonce (ADR-0088): {{ csp_nonce() }} returns the current response's
+        // nonce so a template can serve an inline <style>/<script> under the
+        // strict default Content-Security-Policy — <style nonce="{{ csp_nonce() }}">.
+        // The value matches the 'nonce-X' the security middleware puts in the
+        // Content-Security-Policy header (both read the request-scoped Tina4\Csp).
+        $this->globals['csp_nonce'] = static fn(): string => Csp::currentCspNonce();
+
         // Also register as filters so {{ "" | formToken }} and {{ "" | form_token }} work
         $this->filters['formToken'] = fn($v) => $formTokenFn((string)($v ?: ''));
         $this->filters['form_token'] = fn($v) => $formTokenFn((string)($v ?: ''));

@@ -13,15 +13,30 @@
  */
 
 \Tina4\Router::get('/gallery/auth', function (\Tina4\Request $request, \Tina4\Response $response) {
+    // Per-response CSP nonce (ADR-0088): stamped on the inline <style>/<script>
+    // so the demo renders under the strict default Content-Security-Policy. The
+    // nowdoc carries a {{CSP_NONCE}} placeholder swapped for the live nonce; a
+    // nonce covers a <style>/<script> ELEMENT but not a style= / onclick=
+    // ATTRIBUTE, so those are de-inlined into classes + addEventListener.
+    $nonce = \Tina4\Csp::currentCspNonce();
     $html = <<<'HTML'
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Auth Demo</title><link rel="stylesheet" href="/css/tina4.min.css">
+<style nonce="{{CSP_NONCE}}">
+.auth-container { max-width: 600px; }
+.auth-hidden { display: none; }
+.token-box { word-break: break-all; white-space: pre-wrap; color: #4ade80; background: #1e293b; padding: 1rem; border-radius: 0.5rem; }
+.payload-box { color: #38bdf8; background: #1e293b; padding: 1rem; border-radius: 0.5rem; }
+.auth-info-card { border: 1px solid #334155; }
+.auth-info-title { color: #e2e8f0; }
+.auth-howto { background: #0f172a; color: #4ade80; padding: 1rem; border-radius: 0.5rem; font-size: 0.8rem; }
+</style>
 </head>
 <body class="bg-dark text-light">
-<div class="container mt-5" style="max-width:600px;">
+<div class="container mt-5 auth-container">
     <h2 class="mb-4">JWT Authentication Demo</h2>
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">Login</div>
@@ -34,36 +49,36 @@
                 <label class="form-label">Password</label>
                 <input type="password" id="password" class="form-control" placeholder="secret" value="secret">
             </div>
-            <button class="btn btn-primary" onclick="doLogin()">Login</button>
+            <button class="btn btn-primary" data-action="login">Login</button>
         </div>
     </div>
-    <div id="result" style="display:none;">
+    <div id="result" class="auth-hidden">
         <div class="card mb-3">
             <div class="card-header bg-success text-white">Token Received</div>
             <div class="card-body">
-                <pre id="token" style="word-break:break-all;white-space:pre-wrap;color:#4ade80;background:#1e293b;padding:1rem;border-radius:0.5rem;"></pre>
+                <pre id="token" class="token-box"></pre>
             </div>
         </div>
         <div class="card mb-3">
             <div class="card-header">Token Payload (decoded)</div>
             <div class="card-body">
-                <pre id="payload" style="color:#38bdf8;background:#1e293b;padding:1rem;border-radius:0.5rem;"></pre>
+                <pre id="payload" class="payload-box"></pre>
             </div>
         </div>
-        <button class="btn btn-outline-info" onclick="verifyToken()">Verify Token</button>
+        <button class="btn btn-outline-info" data-action="verify">Verify Token</button>
         <span id="verify-result" class="ms-2"></span>
     </div>
-    <div class="card bg-dark mt-4" style="border:1px solid #334155;">
+    <div class="card bg-dark mt-4 auth-info-card">
         <div class="card-body">
-            <h6 style="color:#e2e8f0;">How it works</h6>
-            <pre style="background:#0f172a;color:#4ade80;padding:1rem;border-radius:0.5rem;font-size:0.8rem;"><code>$auth = new \Tina4\Auth();
+            <h6 class="auth-info-title">How it works</h6>
+            <pre class="auth-howto"><code>$auth = new \Tina4\Auth();
 $token = Auth::getToken(["username" => "admin"], $secret);
 $payload = Auth::getPayload($token);
 $valid = Auth::validToken($token, $secret);</code></pre>
         </div>
     </div>
 </div>
-<script>
+<script nonce="{{CSP_NONCE}}">
 var currentToken = '';
 function doLogin() {
     fetch('/api/gallery/auth/login', {
@@ -102,10 +117,12 @@ function verifyToken() {
         }
     });
 }
+document.querySelectorAll('[data-action="login"]').forEach(function(b){ b.addEventListener('click', doLogin); });
+document.querySelectorAll('[data-action="verify"]').forEach(function(b){ b.addEventListener('click', verifyToken); });
 </script>
 </body></html>
 HTML;
-    return $response->html($html);
+    return $response->html(str_replace('{{CSP_NONCE}}', $nonce, $html));
 });
 
 \Tina4\Router::post('/api/gallery/auth/login', function (\Tina4\Request $request, \Tina4\Response $response) {

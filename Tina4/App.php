@@ -971,15 +971,23 @@ class App
      */
     private static function galleryBtn(string $name, string $tryUrl): string
     {
+        $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+        $safeUrl = htmlspecialchars($tryUrl, ENT_QUOTES, 'UTF-8');
         if (self::isGalleryDeployed($name)) {
-            return '<button class="try-btn" style="background:#22c55e;" onclick="window.open(\'' . $tryUrl . '\',\'_blank\')" data-deployed="1">View &#8599;</button>';
+            return '<button class="try-btn try-btn-deployed" data-name="' . $safeName
+                . '" data-try-url="' . $safeUrl . '" data-deployed="1">View &#8599;</button>';
         }
-        return '<button class="try-btn" onclick="deployGallery(\'' . $name . '\',\'' . $tryUrl . '\')">Try It</button>';
+        return '<button class="try-btn" data-name="' . $safeName
+            . '" data-try-url="' . $safeUrl . '">Try It</button>';
     }
 
     private static function renderLandingPage(string $version, bool $isDev): string
     {
         $port = $_SERVER['SERVER_PORT'] ?? getenv('TINA4_PORT') ?: getenv('PORT') ?: '7145';
+        // Per-response CSP nonce (ADR-0088) stamped on the page's inline
+        // <style>/<script> so the welcome page renders under the strict default
+        // Content-Security-Policy without 'unsafe-inline'.
+        $nonce = Csp::currentCspNonce();
 
         $btnRestApi = self::galleryBtn('rest-api', '/api/gallery/hello');
         $btnOrm = self::galleryBtn('orm', '/api/gallery/products');
@@ -996,7 +1004,7 @@ class App
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tina4Php</title>
-<style>
+<style nonce="{$nonce}">
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;position:relative}
 .bg-watermark{position:fixed;bottom:-5%;right:-5%;width:45%;opacity:0.04;pointer-events:none;z-index:0}
@@ -1029,6 +1037,17 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 .gallery-card .try-btn:hover{opacity:0.85}
 @keyframes wiggle{0%{transform:rotate(0deg)}15%{transform:rotate(14deg)}30%{transform:rotate(-10deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-4deg)}75%{transform:rotate(2deg)}100%{transform:rotate(0deg)}}
 .star-wiggle{display:inline-block;transform-origin:center}
+.try-btn-deployed{background:#22c55e}
+.gallery-hint{color:#64748b;font-size:0.85rem;text-align:center;margin-bottom:1.25rem}
+.gallery-hint strong{color:#94a3b8}
+.gallery-hint code{color:#4ade80}
+.gallery-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+.card-code{background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace}
+.tok-comment{color:#64748b}
+.tok-kw{color:#c084fc}
+.tok-str{color:#4ade80}
+.tok-fn{color:#38bdf8}
+.tok-dec{color:#fbbf24}
 </style>
 </head>
 <body>
@@ -1054,28 +1073,28 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
 <div class="section">
     <div class="card">
         <h2>Getting Started</h2>
-        <pre class="code-block"><code><span style="color:#64748b">// index.php</span>
-<span style="color:#c084fc">require_once</span> <span style="color:#4ade80">'vendor/autoload.php'</span>;
+        <pre class="code-block"><code><span class="tok-comment">// index.php</span>
+<span class="tok-kw">require_once</span> <span class="tok-str">'vendor/autoload.php'</span>;
 
-\$app = <span style="color:#c084fc">new</span> <span style="color:#38bdf8">\Tina4\App</span>();
+\$app = <span class="tok-kw">new</span> <span class="tok-fn">\Tina4\App</span>();
 
-<span style="color:#38bdf8">\Tina4\Router</span>::<span style="color:#fbbf24">get</span>(<span style="color:#4ade80">'/hello'</span>, <span style="color:#c084fc">function</span> (\$request, \$response) {
-    <span style="color:#c084fc">return</span> \$response-&gt;json([<span style="color:#4ade80">'message'</span> =&gt; <span style="color:#4ade80">'Hello World!'</span>]);
+<span class="tok-fn">\Tina4\Router</span>::<span class="tok-dec">get</span>(<span class="tok-str">'/hello'</span>, <span class="tok-kw">function</span> (\$request, \$response) {
+    <span class="tok-kw">return</span> \$response-&gt;json([<span class="tok-str">'message'</span> =&gt; <span class="tok-str">'Hello World!'</span>]);
 });
 
-\$app-&gt;run();  <span style="color:#64748b">// starts on port 7145</span></code></pre>
+\$app-&gt;run();  <span class="tok-comment">// starts on port 7145</span></code></pre>
     </div>
 </div>
 <div class="gallery">
     <h2 id="gallery">What You Can Build</h2>
-    <p style="color:#64748b;font-size:0.85rem;text-align:center;margin-bottom:1.25rem;">Click <strong style="color:#94a3b8;">Try It</strong> to deploy working example code into your <code style="color:#4ade80;">src/</code> folder</p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
+    <p class="gallery-hint">Click <strong>Try It</strong> to deploy working example code into your <code>src/</code> folder</p>
+    <div class="gallery-cards">
         <div class="gallery-card">
             <div class="accent accent-purple"></div>
             <div class="icon">&#128640;</div>
             <h3>REST API</h3>
             <p>Define routes with one closure</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">Router::get('/api/users', function(\$req, \$res) {
+            <pre class="card-code">Router::get('/api/users', function(\$req, \$res) {
     return \$res-&gt;json(['users' =&gt; []]);
 });</pre>
             {$btnRestApi}
@@ -1085,7 +1104,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <div class="icon">&#128451;</div>
             <h3>ORM</h3>
             <p>Active record models, zero config</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">class User extends ORM {
+            <pre class="card-code">class User extends ORM {
     public \$tableName = "users";
     public \$primaryKey = "id";
 }</pre>
@@ -1096,7 +1115,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <div class="icon">&#128274;</div>
             <h3>Auth</h3>
             <p>JWT tokens built-in</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$token = Auth::getToken(["user_id" =&gt; 1]);
+            <pre class="card-code">\$token = Auth::getToken(["user_id" =&gt; 1]);
 \$valid = Auth::validToken(\$token);</pre>
             {$btnAuth}
         </div>
@@ -1105,7 +1124,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <div class="icon">&#9889;</div>
             <h3>Queue</h3>
             <p>Background jobs, no Redis needed</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$producer = new Producer(new Queue("emails"));
+            <pre class="card-code">\$producer = new Producer(new Queue("emails"));
 \$producer-&gt;produce(["to" =&gt; "a@b.com"]);</pre>
             {$btnQueue}
         </div>
@@ -1114,7 +1133,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <div class="icon">&#128196;</div>
             <h3>Templates</h3>
             <p>Twig templates with auto-reload</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">Router::get('/dashboard', function(\$req, \$res) {
+            <pre class="card-code">Router::get('/dashboard', function(\$req, \$res) {
     return \$res-&gt;template("dashboard.twig", \$data);
 });</pre>
             {$btnTemplates}
@@ -1124,7 +1143,7 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <div class="icon">&#128225;</div>
             <h3>Database</h3>
             <p>Multi-engine, one API</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$db = new Database("sqlite:///app.db");
+            <pre class="card-code">\$db = new Database("sqlite:///app.db");
 \$result = \$db-&gt;fetch("SELECT * FROM users");</pre>
             {$btnDatabase}
         </div>
@@ -1133,15 +1152,14 @@ h1{font-size:3rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:-1px}
             <div class="icon">&#128680;</div>
             <h3>Error Overlay</h3>
             <p>Rich debug page with source code</p>
-            <pre style="background:#0f172a;color:#4ade80;padding:0.75rem;border-radius:0.375rem;font-size:0.75rem;overflow-x:auto;margin-top:0.5rem;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;">\$user = ["name" =&gt; "Alice"];
+            <pre class="card-code">\$user = ["name" =&gt; "Alice"];
 \$role = \$user["role"];  // KeyError!</pre>
             {$btnErrorOverlay}
         </div>
     </div>
 </div>
-<script>
-function deployGallery(name, tryUrl) {
-    var btn = event.target;
+<script nonce="{$nonce}">
+function deployGallery(btn, name, tryUrl) {
     if (btn.dataset.deployed) {
         window.open(tryUrl, '_blank');
         return;
@@ -1187,8 +1205,16 @@ function deployGallery(name, tryUrl) {
         alert('Deploy failed — check console');
     });
 }
+// CSP-clean wiring: no inline onclick handlers — bind every Try It / View
+// button from its data-* attributes (a nonce covers script elements, not
+// event-handler attributes).
+document.querySelectorAll('.try-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+        deployGallery(btn, btn.dataset.name, btn.dataset.tryUrl);
+    });
+});
 </script>
-<script>
+<script nonce="{$nonce}">
 (function(){
     var star=document.querySelector('.star-wiggle');
     if(!star)return;

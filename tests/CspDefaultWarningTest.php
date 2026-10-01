@@ -146,8 +146,13 @@ class CspDefaultWarningTest extends TestCase
         $this->dispatch();
         $this->dispatch();
         $this->assertSame(1, $this->markCount(), 'the default-CSP warning must fire exactly once');
-        // Behaviour unchanged: the header is still the secure default.
-        $this->assertSame("default-src 'self'", $h1['content-security-policy']);
+        // Behaviour unchanged: the header is still the secure default — now with a
+        // per-response nonce in style-src/script-src (ADR-0088).
+        $csp = $h1['content-security-policy'];
+        $this->assertStringStartsWith("default-src 'self'", $csp, $csp);
+        $this->assertStringContainsString("style-src 'self' 'nonce-", $csp, $csp);
+        $this->assertStringContainsString("script-src 'self' 'nonce-", $csp, $csp);
+        $this->assertStringNotContainsString("'unsafe-inline'", $csp, $csp);
     }
 
     public function testSetCspDoesNotWarn(): void
@@ -157,6 +162,11 @@ class CspDefaultWarningTest extends TestCase
         $this->resetLedger();
         $h = $this->dispatch();
         $this->assertSame(0, $this->markCount(), 'setting TINA4_CSP is an opt-in and must not warn');
-        $this->assertSame("default-src 'self' https://api.example", $h['content-security-policy']);
+        // The user policy is honoured and the framework's nonce is added to
+        // style-src/script-src so its own inline content still runs (ADR-0088).
+        $csp = $h['content-security-policy'];
+        $this->assertStringStartsWith("default-src 'self' https://api.example", $csp, $csp);
+        $this->assertStringContainsString("style-src 'self' https://api.example 'nonce-", $csp, $csp);
+        $this->assertStringContainsString("script-src 'self' https://api.example 'nonce-", $csp, $csp);
     }
 }

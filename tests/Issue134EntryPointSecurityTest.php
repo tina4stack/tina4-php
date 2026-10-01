@@ -101,7 +101,14 @@ class Issue134EntryPointSecurityTest extends TestCase
         foreach (SecurityEntryProject::HEADERS as $header) {
             $this->assertArrayHasKey($header, $response['headers'], "{$entry}: GET /page must carry {$header}");
         }
-        $this->assertSame("default-src 'self'", $response['headers']['content-security-policy']);
+        // CSP carries a per-response nonce in style-src/script-src (ADR-0088),
+        // injected even into the harness's explicit TINA4_CSP="default-src 'self'",
+        // so assert the STRUCTURE rather than a byte-equal string.
+        $csp = $response['headers']['content-security-policy'];
+        $this->assertStringContainsString("default-src 'self'", $csp, $csp);
+        $this->assertStringContainsString("style-src 'self' 'nonce-", $csp, $csp);
+        $this->assertStringContainsString("script-src 'self' 'nonce-", $csp, $csp);
+        $this->assertStringNotContainsString("'unsafe-inline'", $csp, $csp);
         $this->assertSame('nosniff', $response['headers']['x-content-type-options']);
     }
 

@@ -77,6 +77,16 @@ class Response
         return self::$frameworkFrond;
     }
 
+    /**
+     * @var string Per-response CSP nonce (ADR-0088). Router::dispatch() mints
+     * one per request and publishes it on the request-scoped Tina4\Csp holder,
+     * so the framework's inline <style>/<script>, the Frond csp_nonce() global
+     * and this property all carry the SAME value the security middleware names
+     * in the Content-Security-Policy header. A Response built outside dispatch
+     * still gets a usable nonce from this default.
+     */
+    public string $cspNonce;
+
     /** @var int HTTP status code */
     private int $statusCode = 200;
 
@@ -128,6 +138,10 @@ class Response
     {
         $this->testing = $testing;
         $this->rawSocket = $rawSocket;
+        // Per-response CSP nonce (ADR-0088). Router::dispatch() overrides this
+        // with the request nonce and publishes it on Tina4\Csp; a Response built
+        // outside a dispatch still renders inline content under a usable nonce.
+        $this->cspNonce = Csp::generateNonce();
     }
 
     /**

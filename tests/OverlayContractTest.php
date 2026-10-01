@@ -174,7 +174,9 @@ class OverlayContractTest extends TestCase
             $this->fail('expected the deep recursion to throw');
         } catch (\Throwable $e) {
             $html = ErrorOverlay::renderErrorOverlay($e);
-            $frameBlocks = substr_count($html, '<div style="margin-bottom:16px;">');
+            // Frames are now class-based (.eo-frame) — ADR-0088 de-inlined every
+            // style= attribute; count that class so this still gates the cap.
+            $frameBlocks = substr_count($html, '<div class="eo-frame">');
             $this->assertLessThanOrEqual(
                 50,
                 $frameBlocks,

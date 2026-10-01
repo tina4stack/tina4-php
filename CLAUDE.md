@@ -680,6 +680,7 @@ $frond->unsandbox(): self
 - **Fragment caching**: `{% cache "key" 300 %}...{% endcache %}` — caches rendered block content for TTL seconds.
 - **Raw blocks**: `{% raw %}...{% endraw %}` — output literal template syntax without parsing.
 - **Sandbox mode**: Restrict template capabilities via `$frond->sandbox(filters: [...], tags: [...], vars: [...])`.
+- **`csp_nonce()`** (ADR-0088): a built-in Frond global returning the current response's Content-Security-Policy nonce. Tina4 serves the strict default `default-src 'self'`, under which a browser refuses every inline `<style>`/`<script>` unless the element carries a nonce the CSP header also names. The framework mints one cryptographically-random nonce per response, injects `'nonce-<X>'` into `style-src` AND `script-src` (for the default policy and for a user-set `TINA4_CSP`, never `'unsafe-inline'`), and exposes it as `csp_nonce()` and on `$response->cspNonce`. Serve your own inline blocks with it — `<style nonce="{{ csp_nonce() }}">…</style>`, `<script nonce="{{ csp_nonce() }}">…</script>`. A nonce covers a `<style>`/`<script>` ELEMENT but never an inline `style="…"` or `onclick="…"` ATTRIBUTE — de-inline those into classes and `addEventListener`. A `<script src="…">` needs no nonce (cross-origin resources still require a relaxed `TINA4_CSP`).
 
 ### Auth — JWT authentication
 

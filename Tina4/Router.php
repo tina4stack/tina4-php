@@ -671,14 +671,23 @@ class Router
         $requestId = Log::sanitizeRequestId($request->header('X-Request-ID'))
             ?? bin2hex(random_bytes(4));
         Log::setRequestId($requestId);
+        // One CSP nonce per request (ADR-0088), published on the request-scoped
+        // Tina4\Csp holder so the inline HTML body and the security middleware's
+        // CSP header name the same value, and exposed on the response object for
+        // routes. Cleared in `finally`, exactly like the request id, so an
+        // overlapping request never observes a stale nonce.
+        $requestNonce = Csp::generateNonce();
+        Csp::setCurrentNonce($requestNonce);
+        $response->cspNonce = $requestNonce;
         try {
             return self::dispatchBody($request, $response, $requestId, $reqStart);
         } finally {
             // The request pipeline installs the id before its first log and
             // clears it in `finally` after its last (Decision 12 / LOG-Q03),
             // so an overlapping request can never observe a stale id from a
-            // request that already finished.
+            // request that already finished. The CSP nonce has the same lifetime.
             Log::clearRequestId();
+            Csp::clearCurrentNonce();
         }
     }
 
