@@ -773,7 +773,7 @@ class Session
      *
      * An unchanged session is still written: that write is what moves the
      * expiry forward, so a session expires after TINA4_SESSION_TTL seconds of
-     * inactivity rather than that long after its last change.
+     * inactivity rather than that long after its last change (ADR-0087).
      *
      * Honours the log-loud + degrade policy: on a successful write the dirty
      * flag is cleared; on a degraded read or write it is retained so a later
