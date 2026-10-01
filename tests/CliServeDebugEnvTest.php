@@ -25,58 +25,133 @@ class CliServeDebugEnvTest extends TestCase
 {
     private const SECRET = 'cli-serve-debug-secret-0123456789abcdef';
 
-    /** Boot `tina4php serve` in $env and return the HTTP status of GET /__dev. */
+    /** GET http://127.0.0.1:$port$path; HTTP status, or 0 on a socket error. */
+    private function httpStatus(int $port, string $path): int
+    {
+        $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 2]]);
+        $http_response_header = [];
+        $body = @file_get_contents("http://127.0.0.1:{$port}{$path}", false, $context);
+        if ($body === false) {
+            return 0;
+        }
+        return (int)(explode(' ', ($http_response_header[0] ?? 'HTTP/1.1 0'))[1] ?? 0);
+    }
+
+    /**
+     * Poll /__dev until it settles: the first non-404 the instant it appears
+     * (debug mounted it), or a settled 404 after the window (genuinely off) -
+     * neither answer weakened.
+     */
+    private function pollDev(int $port, float $settle = 5.0): int
+    {
+        $deadline = microtime(true) + $settle;
+        $last = 404;
+        while (true) {
+            $status = $this->httpStatus($port, '/__dev');
+            if ($status !== 0 && $status !== 404) {
+                return $status;
+            }
+            if ($status !== 0) {
+                $last = $status;
+            }
+            if (microtime(true) >= $deadline) {
+                return $last;
+            }
+            usleep(100000);
+        }
+    }
+
+    private function stopProcess($process): void
+    {
+        if (!is_resource($process)) {
+            return;
+        }
+        proc_terminate($process, 15);
+        $wait = microtime(true) + 5;
+        while (proc_get_status($process)['running'] && microtime(true) < $wait) {
+            usleep(50000);
+        }
+        if (proc_get_status($process)['running']) {
+            proc_terminate($process, 9);
+        }
+        proc_close($process);
+    }
+
+    /**
+     * Boot `tina4php serve` in $env and return the HTTP status of GET /__dev.
+     *
+     * PORT IDENTITY (the flake this guards): FreePort::get() hands out an
+     * ephemeral port that, under load, a DIFFERENT debug-off server may already
+     * hold (a prior case's child lingering on the reused port). With
+     * TINA4_NO_TAKEOVER our debug-on child cannot evict it, so a bare /__dev
+     * probe would hit the FOREIGN server and read its 404 as the answer - a
+     * 200/404 on the port proves only that SOMETHING listens, not that it is OUR
+     * child. So each boot plants a per-boot UNIQUE readiness route
+     * (/ready_<token>) that only OUR child serves; readiness waits for a 200 on
+     * THAT (a foreign server 404s it), and only then polls /__dev. A contended
+     * port never yields our token, so the boot times out and retries on a FRESH
+     * port instead of trusting a stranger. Mirrors the Ruby ShutdownProbe
+     * identity guard and the Python/Node readiness guards. No mocks: a real
+     * process, a real socket.
+     */
     private function devStatus(?string $envFile, array $flags = [], array $realEnv = [], ?string $envLocal = null): int
     {
-        $dir = sys_get_temp_dir() . '/tina4_serve_' . uniqid();
-        mkdir($dir . '/src/routes', 0755, true);
         $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
-        file_put_contents($dir . '/index.php', "<?php\nrequire_once '{$autoload}';\n\$app = new \\Tina4\\App(basePath: __DIR__);\n\$app->handle();\n");
-        if ($envFile !== null) {
-            file_put_contents($dir . '/.env', $envFile);
-        }
-        if ($envLocal !== null) {
-            file_put_contents($dir . '/.env.local', $envLocal);
-        }
-        $port = \FreePort::get();
-        $env = array_filter(getenv(), fn($key) => !str_starts_with($key, 'TINA4_'), ARRAY_FILTER_USE_KEY);
-        $env = array_merge($env, [
-            'TINA4_NO_BROWSER' => 'true', 'TINA4_SECRET' => self::SECRET,
-            'TINA4_SERVE_FORK' => 'false', 'TINA4_NO_TAKEOVER' => 'true', 'TINA4_OVERRIDE_CLIENT' => 'true',
-        ], $realEnv);
         $cli = realpath(__DIR__ . '/../bin/tina4php');
-        $cmd = 'exec ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($cli)
-            . ' serve --host 127.0.0.1 --port ' . $port . ' --no-browser';
-        foreach ($flags as $flag) {
-            $cmd .= ' ' . escapeshellarg($flag);
-        }
-        $log = $dir . '/serve.log';
-        $process = proc_open($cmd, [0 => ['file', '/dev/null', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes, $dir, $env);
-        $this->assertIsResource($process);
-        try {
-            $deadline = microtime(true) + 20;
-            while (microtime(true) < $deadline) {
-                if (!proc_get_status($process)['running']) {
-                    $this->fail('serve exited early: ' . @file_get_contents($log));
+        $bootAttempts = 5;
+        for ($attempt = 0; $attempt < $bootAttempts; $attempt++) {
+            $token = bin2hex(random_bytes(8));
+            $readyPath = "/ready_{$token}";
+            $dir = sys_get_temp_dir() . '/tina4_serve_' . uniqid();
+            mkdir($dir . '/src/routes', 0755, true);
+            file_put_contents($dir . '/index.php', "<?php\nrequire_once '{$autoload}';\n\$app = new \\Tina4\\App(basePath: __DIR__);\n\$app->handle();\n");
+            file_put_contents(
+                $dir . '/src/routes/ready.php',
+                "<?php\n\\Tina4\\Router::get(" . var_export($readyPath, true)
+                . ", function (\$request, \$response) { return \$response('ok'); });\n"
+            );
+            if ($envFile !== null) {
+                file_put_contents($dir . '/.env', $envFile);
+            }
+            if ($envLocal !== null) {
+                file_put_contents($dir . '/.env.local', $envLocal);
+            }
+            $port = \FreePort::get();
+            $env = array_filter(getenv(), fn($key) => !str_starts_with($key, 'TINA4_'), ARRAY_FILTER_USE_KEY);
+            $env = array_merge($env, [
+                'TINA4_NO_BROWSER' => 'true', 'TINA4_SECRET' => self::SECRET,
+                'TINA4_SERVE_FORK' => 'false', 'TINA4_NO_TAKEOVER' => 'true', 'TINA4_OVERRIDE_CLIENT' => 'true',
+            ], $realEnv);
+            $cmd = 'exec ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($cli)
+                . ' serve --host 127.0.0.1 --port ' . $port . ' --no-browser';
+            foreach ($flags as $flag) {
+                $cmd .= ' ' . escapeshellarg($flag);
+            }
+            $log = $dir . '/serve.log';
+            $process = proc_open($cmd, [0 => ['file', '/dev/null', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes, $dir, $env);
+            $this->assertIsResource($process);
+            try {
+                $deadline = microtime(true) + 20;
+                $owned = false;
+                while (microtime(true) < $deadline) {
+                    if (!proc_get_status($process)['running']) {
+                        break; // child exited (could not own the contended port) -> fresh port
+                    }
+                    if ($this->httpStatus($port, $readyPath) === 200) {
+                        $owned = true;
+                        break;
+                    }
+                    usleep(100000);
                 }
-                $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 2]]);
-                if (@file_get_contents("http://127.0.0.1:{$port}/__dev", false, $context) !== false) {
-                    return (int)explode(' ', $http_response_header[0] ?? 'HTTP/1.1 0')[1];
+                if ($owned) {
+                    return $this->pollDev($port);
                 }
-                usleep(100000);
+                // The port was not ours this attempt; retry on a fresh one.
+            } finally {
+                $this->stopProcess($process);
             }
-            $this->fail('serve never answered: ' . @file_get_contents($log));
-        } finally {
-            proc_terminate($process, 15);
-            $wait = microtime(true) + 5;
-            while (proc_get_status($process)['running'] && microtime(true) < $wait) {
-                usleep(50000);
-            }
-            if (proc_get_status($process)['running']) {
-                proc_terminate($process, 9);
-            }
-            proc_close($process);
         }
+        $this->fail("serve never owned its own port after {$bootAttempts} attempts");
     }
 
     public function testServeHonoursDebugFalseFromEnvFile(): void
