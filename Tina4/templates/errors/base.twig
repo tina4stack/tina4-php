@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 {% block meta %}{% endblock %}
 <title>{% block title %}Error{% endblock %}</title>
-<style>
+<style nonce="{{ csp_nonce() }}">
 :root {
     --bg: #0f172a; --surface: #1e293b; --border: #334155;
     --text: #e2e8f0; --muted: #94a3b8; --primary: #3b82f6;
@@ -23,6 +23,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .error-home { display: inline-block; margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--primary); color: #fff; text-decoration: none; border-radius: 0.5rem; font-size: 0.85rem; }
 .error-home:hover { opacity: 0.9; }
 .logo { width: 3rem; height: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+.c-danger { color: var(--danger); }
+.c-warn { color: var(--warn); }
+.c-primary { color: var(--primary); }
 {% block extra_styles %}{% endblock %}
 </style>
 </head>

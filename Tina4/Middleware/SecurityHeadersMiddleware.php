@@ -85,6 +85,13 @@ class SecurityHeadersMiddleware
         if (DotEnv::getEnv('TINA4_CSP', null) === null) {
             self::warnCspDefaultOnce();
         }
+        // Always name a per-response nonce in style-src AND script-src (ADR-0088)
+        // so the framework's own inline <style>/<script> (and user templates
+        // using the Frond csp_nonce() global) run under the strict policy without
+        // ever adding 'unsafe-inline'. The value comes from the request-scoped
+        // Csp holder so it matches the nonce the HTML body stamps on its inline
+        // elements. Works for the default policy and for a user-set TINA4_CSP.
+        $canonical['Content-Security-Policy'] = \Tina4\Csp::resolveCspHeader(\Tina4\Csp::currentCspNonce());
         foreach (['Content-Security-Policy', 'Referrer-Policy', 'X-XSS-Protection', 'Permissions-Policy'] as $name) {
             $response->header($name, $canonical[$name]);
         }
@@ -133,8 +140,10 @@ class SecurityHeadersMiddleware
         }
         self::$cspDefaultWarned = true;
         $message = "TINA4_CSP is not set, so Tina4 is serving the default Content-Security-Policy "
-            . "\"default-src 'self'\" on every response. That default blocks runtime-injected "
-            . "inline styles, cross-origin fonts/scripts/CDNs, data: URIs, and cross-origin "
+            . "\"default-src 'self'\" on every response. The framework injects a per-response "
+            . "nonce into style-src and script-src, so its own inline <style>/<script> (and your "
+            . "templates using the csp_nonce() Frond global) work under this policy. The default "
+            . "still blocks cross-origin fonts/scripts/CDNs, data: URIs, and cross-origin "
             . "WebSocket/XHR (e.g. a separate API or LiveKit host). If your app uses any of "
             . "these, set TINA4_CSP to a policy that allows them (see https://tina4.com); to "
             . "silence this notice without changing behaviour, set TINA4_CSP=\"default-src 'self'\".";

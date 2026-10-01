@@ -51,14 +51,26 @@ final class HttpHardeningContractTest extends TestCase
     private const HEADER_LIMIT = 8192;    // TINA4_MAX_REQUEST_HEADER
     private const IDLE_SECONDS = 3;       // TINA4_REQUEST_TIMEOUT
 
+    // content-security-policy is asserted via assertCspNonce: ADR-0088 adds a
+    // per-response random nonce to style-src/script-src, so it is never byte-equal.
     private const SECURITY_HEADERS = [
         'x-frame-options' => 'SAMEORIGIN',
         'x-content-type-options' => 'nosniff',
-        'content-security-policy' => "default-src 'self'",
         'referrer-policy' => 'strict-origin-when-cross-origin',
         'x-xss-protection' => '0',
         'permissions-policy' => 'camera=(), microphone=(), geolocation=()',
     ];
+
+    /** Default CSP = default-src 'self' + a nonce in style-src and script-src (ADR-0088). */
+    private function assertCspNonce(?string $value): void
+    {
+        $this->assertNotNull($value, 'no Content-Security-Policy header');
+        $this->assertStringContainsString("default-src 'self'", $value, $value);
+        $this->assertStringContainsString('style-src', $value, $value);
+        $this->assertStringContainsString('script-src', $value, $value);
+        $this->assertGreaterThanOrEqual(2, substr_count($value, "'nonce-"), "CSP carries no nonce: {$value}");
+        $this->assertStringNotContainsString("'unsafe-inline'", $value, $value);
+    }
 
     private const ROUTES = <<<'PHP'
 <?php
@@ -741,6 +753,7 @@ PHP);
             foreach (self::SECURITY_HEADERS as $name => $value) {
                 $this->assertSame($value, self::one($answer, $name), "{$name}" . self::describe($answer));
             }
+            $this->assertCspNonce(self::one($answer, 'content-security-policy'));
             $this->assertArrayNotHasKey('strict-transport-security', $answer['headers'], self::describe($answer));
         }
     }

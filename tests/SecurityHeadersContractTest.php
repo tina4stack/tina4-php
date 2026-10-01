@@ -51,11 +51,14 @@ use Tina4\Router;
 
 class SecurityHeadersContractTest extends TestCase
 {
-    /** The canonical set every framework emits, byte-identical values. */
+    /**
+     * The canonical set every framework emits, byte-identical values.
+     * content-security-policy is asserted separately (assertDefaultCsp): its
+     * value carries a per-response random nonce (ADR-0088), never byte-equal.
+     */
     private const CANONICAL = [
         'x-frame-options' => 'SAMEORIGIN',
         'x-content-type-options' => 'nosniff',
-        'content-security-policy' => "default-src 'self'",
         'referrer-policy' => 'strict-origin-when-cross-origin',
         'x-xss-protection' => '0',
         'permissions-policy' => 'camera=(), microphone=(), geolocation=()',
@@ -137,12 +140,48 @@ class SecurityHeadersContractTest extends TestCase
         $this->assertContains(SecurityHeadersMiddleware::class, Middleware::getGlobal());
         // HSTS must NOT be emitted by default (TINA4_HSTS unset).
         $this->assertArrayNotHasKey('strict-transport-security', $headers);
+        $this->assertDefaultCsp($headers['content-security-policy'] ?? null);
     }
 
     public function testCspDefaultsToDefaultSrcSelf(): void
     {
         $headers = $this->dispatch();
-        $this->assertSame("default-src 'self'", $headers['content-security-policy']);
+        $this->assertDefaultCsp($headers['content-security-policy'] ?? null);
+    }
+
+    public function testEachResponseGetsAFreshCspNonce(): void
+    {
+        // The nonce is per-response: two requests never share one (ADR-0088).
+        $first = $this->dispatch()['content-security-policy'] ?? '';
+        $second = $this->dispatch()['content-security-policy'] ?? '';
+        $this->assertSame(1, preg_match("/'nonce-([^']+)'/", $first, $m1), $first);
+        $this->assertSame(1, preg_match("/'nonce-([^']+)'/", $second, $m2), $second);
+        $this->assertNotSame($m1[1], $m2[1], "nonce was reused across responses: {$m1[1]}");
+    }
+
+    /**
+     * The default CSP: default-src 'self' plus a nonce in style-src + script-src
+     * (ADR-0088). The nonce is random per request, so assert the STRUCTURE,
+     * never a byte-equal string.
+     */
+    private function assertDefaultCsp(?string $value): void
+    {
+        $this->assertNotNull($value, 'no Content-Security-Policy header');
+        $this->assertStringContainsString("default-src 'self'", $value, $value);
+        $directives = [];
+        foreach (explode(';', $value) as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            $name = strtolower(preg_split('/\s+/', $part)[0]);
+            $directives[$name] = $part;
+        }
+        foreach (['style-src', 'script-src'] as $directive) {
+            $this->assertArrayHasKey($directive, $directives, "$directive missing from CSP: $value");
+            $this->assertStringContainsString("'nonce-", $directives[$directive], "$directive carries no nonce: $value");
+        }
+        $this->assertStringNotContainsString("'unsafe-inline'", $value, "CSP must never use unsafe-inline: $value");
     }
 
     // ------------------------------------------------------ HSTS HTTPS-guarded

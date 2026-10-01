@@ -5,10 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ title }}</title>
     <link rel="stylesheet" href="/css/tina4.min.css">
-    <style>
+    <style nonce="{{ csp_nonce() }}">
         .component-section { margin-bottom: 2.5rem; }
         .component-section h3 { border-bottom: 2px solid var(--bs-primary, #0d6efd); padding-bottom: 0.5rem; margin-bottom: 1rem; }
         .code-preview { background: #1e293b; color: #4ade80; padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.85rem; overflow-x: auto; margin-top: 0.75rem; }
+        .progress-25 { width: 25%; }
+        .progress-50 { width: 50%; }
+        .progress-75 { width: 75%; }
+        .progress-100 { width: 100%; }
+        .build-card { background: #0f172a; border: 1px solid #334155; }
+        .build-heading { color: #e2e8f0; }
+        .build-code { background: #1e293b; border: 1px solid #334155; border-radius: 0.5rem; padding: 1.25rem; margin-top: 0.75rem; overflow-x: auto; font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 0.9rem; line-height: 1.7; }
+        .build-note { color: #94a3b8; margin-top: 0.75rem; margin-bottom: 0; }
+        .tok-kw { color: #38bdf8; }
+        .tok-str { color: #4ade80; }
+        .tok-fn { color: #fbbf24; }
+        .tok-dec { color: #c084fc; }
+        .tok-comment { color: #94a3b8; }
     </style>
 </head>
 <body>
@@ -29,7 +42,7 @@
 
     <div class="alert alert-info alert-dismissible mb-4">
         <strong>tina4css</strong> — Zero-dependency CSS framework (~24KB). Bootstrap-compatible class names, dark mode ready. No CDN needed — ships with every Tina4 project.
-        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        <button type="button" class="btn-close js-dismiss"></button>
     </div>
 
     <!-- Buttons -->
@@ -217,10 +230,10 @@
     <!-- Progress -->
     <div class="component-section">
         <h3>Progress Bars</h3>
-        <div class="progress mb-2"><div class="progress-bar bg-primary" style="width: 25%">25%</div></div>
-        <div class="progress mb-2"><div class="progress-bar bg-success" style="width: 50%">50%</div></div>
-        <div class="progress mb-2"><div class="progress-bar bg-warning" style="width: 75%">75%</div></div>
-        <div class="progress"><div class="progress-bar bg-danger" style="width: 100%">100%</div></div>
+        <div class="progress mb-2"><div class="progress-bar bg-primary progress-25">25%</div></div>
+        <div class="progress mb-2"><div class="progress-bar bg-success progress-50">50%</div></div>
+        <div class="progress mb-2"><div class="progress-bar bg-warning progress-75">75%</div></div>
+        <div class="progress"><div class="progress-bar bg-danger progress-100">100%</div></div>
     </div>
 
     <!-- List Group -->
@@ -235,23 +248,29 @@
     </div>
 
     <!-- How this page was built -->
-    <div class="card mt-4 mb-5" style="background:#0f172a;border:1px solid #334155;">
+    <div class="card mt-4 mb-5 build-card">
         <div class="card-body">
-            <h5 style="color:#e2e8f0;">How this page was built</h5>
-            <pre style="background:#1e293b;border:1px solid #334155;border-radius:0.5rem;padding:1.25rem;margin-top:0.75rem;overflow-x:auto;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:0.9rem;line-height:1.7;"><code><span style="color:#c084fc;">Router</span>::<span style="color:#fbbf24;">get</span>(<span style="color:#4ade80;">'/gallery/page'</span>, <span style="color:#c084fc;">function</span>(<span style="color:#38bdf8;">$request</span>, <span style="color:#38bdf8;">$response</span>) {
-    <span style="color:#38bdf8;">return</span> <span style="color:#38bdf8;">$response</span>-&gt;<span style="color:#fbbf24;">template</span>(<span style="color:#4ade80;">'gallery_page.twig'</span>, [
-        <span style="color:#4ade80;">'title'</span> =&gt; <span style="color:#4ade80;">'tina4css Component Showcase'</span>,
-        <span style="color:#4ade80;">'items'</span> =&gt; [...]
+            <h5 class="build-heading">How this page was built</h5>
+            <pre class="build-code"><code><span class="tok-dec">Router</span>::<span class="tok-fn">get</span>(<span class="tok-str">'/gallery/page'</span>, <span class="tok-dec">function</span>(<span class="tok-kw">$request</span>, <span class="tok-kw">$response</span>) {
+    <span class="tok-kw">return</span> <span class="tok-kw">$response</span>-&gt;<span class="tok-fn">template</span>(<span class="tok-str">'gallery_page.twig'</span>, [
+        <span class="tok-str">'title'</span> =&gt; <span class="tok-str">'tina4css Component Showcase'</span>,
+        <span class="tok-str">'items'</span> =&gt; [...]
     ]);
 });</code></pre>
-            <p style="color:#94a3b8;margin-top:0.75rem;margin-bottom:0;">
-                Rendered via <code style="color:#c084fc;">$response->render()</code>. Styled with <strong style="color:#e2e8f0;">tina4css</strong> — zero external CDN.
-                All components above use only <code style="color:#4ade80;">&lt;link href="/css/tina4.min.css"&gt;</code>.
+            <p class="build-note">
+                Rendered via <code class="tok-dec">$response->render()</code>. Styled with <strong class="build-heading">tina4css</strong> — zero external CDN.
+                All components above use only <code class="tok-str">&lt;link href="/css/tina4.min.css"&gt;</code>.
             </p>
         </div>
     </div>
 
 </div>
+
+<script nonce="{{ csp_nonce() }}">
+    document.querySelectorAll('.js-dismiss').forEach(function(b){
+        b.addEventListener('click', function(){ this.parentElement.remove(); });
+    });
+</script>
 
 </body>
 </html>

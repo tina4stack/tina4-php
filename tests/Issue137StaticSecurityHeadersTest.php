@@ -87,6 +87,20 @@ class Issue137StaticSecurityHeadersTest extends TestCase
         $route = $this->get($entry, '/page');
         foreach (SecurityEntryProject::HEADERS as $header) {
             $this->assertArrayHasKey($header, $route['headers'], "control: the route response carries {$header}");
+            // content-security-policy carries a per-response random nonce
+            // (ADR-0088), so it is never byte-equal across two responses. Assert
+            // the SHARED STRUCTURE instead: both carry a nonce in style-src AND
+            // script-src, same as the route's.
+            if (strtolower($header) === 'content-security-policy') {
+                foreach ([$route['headers'][$header], $response['headers'][$header] ?? null] as $csp) {
+                    $this->assertNotNull($csp, "{$entry} GET {$path} must carry {$header}");
+                    $this->assertStringContainsString("default-src 'self'", $csp, $csp);
+                    $this->assertStringContainsString("style-src 'self' 'nonce-", $csp, $csp);
+                    $this->assertStringContainsString("script-src 'self' 'nonce-", $csp, $csp);
+                    $this->assertStringNotContainsString("'unsafe-inline'", $csp, $csp);
+                }
+                continue;
+            }
             $this->assertSame(
                 $route['headers'][$header],
                 $response['headers'][$header] ?? null,

@@ -117,8 +117,7 @@ class ErrorOverlay
         }
         $hidden = (1 + count($trace)) - $shown;
         if ($hidden > 0) {
-            $subtext = self::SUBTEXT;
-            $framesHtml .= "<div style=\"color:{$subtext};padding:8px 0;font-size:13px;\">"
+            $framesHtml .= "<div class=\"eo-hidden-frames\">"
                 . "&#8230; {$hidden} more stack frames hidden (truncated at " . self::MAX_FRAMES . ")</div>";
         }
 
@@ -176,13 +175,12 @@ class ErrorOverlay
 
         $e_excType = self::esc($excType);
         $e_excMsg = self::esc($excMsg);
-        $bg = self::BG;
-        $text = self::TEXT;
-        $red = self::RED;
-        $subtext = self::SUBTEXT;
-        $surface = self::SURFACE;
-        $overlay = self::OVERLAY;
         $stackSection = self::collapsible('Stack Trace', $framesHtml, true);
+        // Per-response CSP nonce (ADR-0088): the overlay serves its whole
+        // stylesheet inside one nonce'd <style> and carries no style= attribute,
+        // so it renders under the strict default Content-Security-Policy.
+        $nonce = Csp::currentCspNonce();
+        $styles = self::overlayStylesheet();
 
         return <<<HTML
 <!DOCTYPE html>
@@ -191,25 +189,24 @@ class ErrorOverlay
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tina4 Error — {$e_excType}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:{$bg};color:{$text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:24px;line-height:1.5;}
+<style nonce="{$nonce}">
+{$styles}
 </style>
 </head>
 <body>
-<div style="max-width:960px;margin:0 auto;">
-  <div style="margin-bottom:24px;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-      <span style="background:{$red};color:{$bg};padding:4px 12px;border-radius:4px;font-weight:700;font-size:13px;text-transform:uppercase;">Error</span>
-      <span style="color:{$subtext};font-size:14px;">Tina4 Debug Overlay</span>
+<div class="eo-wrap">
+  <div class="eo-header">
+    <div class="eo-badge-row">
+      <span class="eo-badge">Error</span>
+      <span class="eo-sub">Tina4 Debug Overlay</span>
     </div>
-    <h1 style="color:{$red};font-size:28px;font-weight:700;margin-bottom:8px;">{$e_excType}</h1>
-    <p style="color:{$text};font-size:18px;font-family:'SF Mono','Fira Code','Consolas',monospace;background:{$surface};padding:12px 16px;border-radius:6px;border-left:4px solid {$red};">{$e_excMsg}</p>
+    <h1 class="eo-type">{$e_excType}</h1>
+    <p class="eo-msg">{$e_excMsg}</p>
   </div>
   {$stackSection}
   {$requestSection}
   {$envSection}
-  <div style="margin-top:32px;padding-top:16px;border-top:1px solid {$overlay};color:{$subtext};font-size:12px;">
+  <div class="eo-footer">
     Tina4 Debug Overlay &mdash; This page is only shown in debug mode. Set TINA4_DEBUG=false in production.
   </div>
 </div>
@@ -217,6 +214,64 @@ body{background:{$bg};color:{$text};font-family:-apple-system,BlinkMacSystemFont
 </body>
 </html>
 HTML;
+    }
+
+    /**
+     * The overlay's full stylesheet, served inside one nonce'd <style> block.
+     *
+     * Keeping the rules here (not on the elements) is what makes the overlay
+     * CSP-clean: no framework page emits a `style="..."` attribute, because a
+     * nonce covers a <style> ELEMENT but never a style attribute (ADR-0088).
+     *
+     * @return string
+     */
+    private static function overlayStylesheet(): string
+    {
+        $bg = self::BG;
+        $surface = self::SURFACE;
+        $overlay = self::OVERLAY;
+        $text = self::TEXT;
+        $subtext = self::SUBTEXT;
+        $red = self::RED;
+        $yellow = self::YELLOW;
+        $blue = self::BLUE;
+        $green = self::GREEN;
+        $lavender = self::LAVENDER;
+        $peach = self::PEACH;
+        $errorLineBg = self::ERROR_LINE_BG;
+        return <<<CSS
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:{$bg};color:{$text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:24px;line-height:1.5;}
+.eo-wrap{max-width:960px;margin:0 auto;}
+.eo-header{margin-bottom:24px;}
+.eo-badge-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.eo-badge{background:{$red};color:{$bg};padding:4px 12px;border-radius:4px;font-weight:700;font-size:13px;text-transform:uppercase;}
+.eo-sub{color:{$subtext};font-size:14px;}
+.eo-type{color:{$red};font-size:28px;font-weight:700;margin-bottom:8px;}
+.eo-msg{color:{$text};font-size:18px;font-family:'SF Mono','Fira Code','Consolas',monospace;background:{$surface};padding:12px 16px;border-radius:6px;border-left:4px solid {$red};}
+.eo-footer{margin-top:32px;padding-top:16px;border-top:1px solid {$overlay};color:{$subtext};font-size:12px;}
+.eo-source{background:{$surface};border-radius:6px;padding:12px;overflow-x:auto;font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:13px;line-height:1.6;}
+.eo-line{display:flex;padding:1px 0;}
+.eo-line-err{background:{$errorLineBg};}
+.eo-ln{color:{$yellow};min-width:3.5em;text-align:right;padding-right:1em;user-select:none;}
+.eo-marker{color:{$red};width:1.2em;user-select:none;}
+.eo-code{color:{$text};white-space:pre-wrap;tab-size:4;}
+.eo-frame{margin-bottom:16px;}
+.eo-frame-head{margin-bottom:4px;}
+.eo-file{color:{$blue};}
+.eo-sep{color:{$subtext};}
+.eo-lineno{color:{$yellow};}
+.eo-fn{color:{$green};}
+.eo-stale{background:{$peach};color:{$bg};padding:1px 8px;border-radius:3px;font-size:11px;font-weight:700;margin-left:6px;}
+.eo-details{margin-top:16px;}
+.eo-summary{cursor:pointer;color:{$lavender};font-weight:600;font-size:15px;padding:8px 0;user-select:none;}
+.eo-details-body{padding:8px 0;}
+.eo-table{border-collapse:collapse;width:100%;}
+.eo-key{color:{$peach};padding:4px 16px 4px 0;vertical-align:top;white-space:nowrap;}
+.eo-val{color:{$text};padding:4px 0;word-break:break-all;}
+.eo-none{color:{$subtext};}
+.eo-hidden-frames{color:{$subtext};padding:8px 0;font-size:13px;}
+CSS;
     }
 
     /**
@@ -305,22 +360,16 @@ HTML;
         }
         $rows = '';
         foreach ($lines as [$num, $text, $isError]) {
-            $bg = $isError ? 'background:' . self::ERROR_LINE_BG . ';' : '';
+            $rowClass = $isError ? 'eo-line eo-line-err' : 'eo-line';
             $marker = $isError ? '&#x25b6;' : ' ';
             $e_text = self::esc($text);
-            $yellow = self::YELLOW;
-            $red = self::RED;
-            $textColor = self::TEXT;
-            $rows .= "<div style=\"{$bg}display:flex;padding:1px 0;\">"
-                . "<span style=\"color:{$yellow};min-width:3.5em;text-align:right;padding-right:1em;user-select:none;\">{$num}</span>"
-                . "<span style=\"color:{$red};width:1.2em;user-select:none;\">{$marker}</span>"
-                . "<span style=\"color:{$textColor};white-space:pre-wrap;tab-size:4;\">{$e_text}</span>"
+            $rows .= "<div class=\"{$rowClass}\">"
+                . "<span class=\"eo-ln\">{$num}</span>"
+                . "<span class=\"eo-marker\">{$marker}</span>"
+                . "<span class=\"eo-code\">{$e_text}</span>"
                 . "</div>\n";
         }
-        $surface = self::SURFACE;
-        return "<div style=\"background:{$surface};border-radius:6px;padding:12px;overflow-x:auto;"
-            . "font-family:'SF Mono','Fira Code','Consolas',monospace;font-size:13px;line-height:1.6;\">"
-            . $rows . "</div>";
+        return "<div class=\"eo-source\">" . $rows . "</div>";
     }
 
     /**
@@ -339,31 +388,24 @@ HTML;
         $source = ($filename && $lineno > 0) ? self::formatSourceBlock($filename, $lineno) : '';
         $e_file = self::esc($filename);
         $e_func = self::esc($funcName);
-        $blue = self::BLUE;
-        $yellow = self::YELLOW;
-        $green = self::GREEN;
-        $subtext = self::SUBTEXT;
 
         $staleBadge = '';
         if ($capturedAt > 0.0 && $filename !== '' && is_file($filename)) {
             $mtime = @filemtime($filename);
             if ($mtime !== false && $mtime > $capturedAt + 0.5) {
                 $mtimeIso = gmdate('H:i:s', $mtime);
-                $peach = self::PEACH;
-                $bg = self::BG;
-                $staleBadge = " <span style=\"background:{$peach};color:{$bg};padding:1px 8px;"
-                    . "border-radius:3px;font-size:11px;font-weight:700;margin-left:6px;\">"
+                $staleBadge = " <span class=\"eo-stale\">"
                     . "FILE MODIFIED @ {$mtimeIso} UTC — source may not match what failed</span>";
             }
         }
 
-        return "<div style=\"margin-bottom:16px;\">"
-            . "<div style=\"margin-bottom:4px;\">"
-            . "<span style=\"color:{$blue};\">{$e_file}</span>"
-            . "<span style=\"color:{$subtext};\"> : </span>"
-            . "<span style=\"color:{$yellow};\">{$lineno}</span>"
-            . "<span style=\"color:{$subtext};\"> in </span>"
-            . "<span style=\"color:{$green};\">{$e_func}</span>"
+        return "<div class=\"eo-frame\">"
+            . "<div class=\"eo-frame-head\">"
+            . "<span class=\"eo-file\">{$e_file}</span>"
+            . "<span class=\"eo-sep\"> : </span>"
+            . "<span class=\"eo-lineno\">{$lineno}</span>"
+            . "<span class=\"eo-sep\"> in </span>"
+            . "<span class=\"eo-fn\">{$e_func}</span>"
             . $staleBadge
             . "</div>"
             . $source
@@ -374,31 +416,26 @@ HTML;
     {
         $open = $openByDefault ? ' open' : '';
         $e_title = self::esc($title);
-        $lavender = self::LAVENDER;
-        return "<details style=\"margin-top:16px;\"{$open}>"
-            . "<summary style=\"cursor:pointer;color:{$lavender};font-weight:600;font-size:15px;"
-            . "padding:8px 0;user-select:none;\">{$e_title}</summary>"
-            . "<div style=\"padding:8px 0;\">{$content}</div>"
+        return "<details class=\"eo-details\"{$open}>"
+            . "<summary class=\"eo-summary\">{$e_title}</summary>"
+            . "<div class=\"eo-details-body\">{$content}</div>"
             . "</details>";
     }
 
     private static function table(array $pairs): string
     {
         if (empty($pairs)) {
-            $subtext = self::SUBTEXT;
-            return "<span style=\"color:{$subtext};\">None</span>";
+            return "<span class=\"eo-none\">None</span>";
         }
         $rows = '';
         foreach ($pairs as [$key, $val]) {
             $e_key = self::esc($key);
             $e_val = self::esc($val);
-            $peach = self::PEACH;
-            $text = self::TEXT;
             $rows .= "<tr>"
-                . "<td style=\"color:{$peach};padding:4px 16px 4px 0;vertical-align:top;white-space:nowrap;\">{$e_key}</td>"
-                . "<td style=\"color:{$text};padding:4px 0;word-break:break-all;\">{$e_val}</td>"
+                . "<td class=\"eo-key\">{$e_key}</td>"
+                . "<td class=\"eo-val\">{$e_val}</td>"
                 . "</tr>";
         }
-        return "<table style=\"border-collapse:collapse;width:100%;\">{$rows}</table>";
+        return "<table class=\"eo-table\">{$rows}</table>";
     }
 }

@@ -1801,7 +1801,12 @@ class Server
             . "Content-Type: application/json\r\n"
             . 'Content-Length: ' . strlen($body) . "\r\n"
             . "Connection: close\r\n";
-        foreach (Middleware\SecurityHeadersMiddleware::canonicalHeaders() as $name => $value) {
+        $canonical = Middleware\SecurityHeadersMiddleware::canonicalHeaders();
+        // ADR-0088: name a fresh per-response nonce in style-src/script-src here
+        // too, so a transport rejection carries the same CSP shape as every other
+        // response (the body has no inline content, but the header stays uniform).
+        $canonical['Content-Security-Policy'] = Csp::resolveCspHeader(Csp::generateNonce());
+        foreach ($canonical as $name => $value) {
             // A broken environment override must not break the rejection itself.
             if (!Response::hasLineBreakOrNul($value)) {
                 $head .= "{$name}: {$value}\r\n";
