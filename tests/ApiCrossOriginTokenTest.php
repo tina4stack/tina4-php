@@ -123,4 +123,43 @@ class ApiCrossOriginTokenTest extends TestCase
         } finally { @unlink($file); }
     }
 
+    // A configured header can carry a credential under any name. It is bound to
+    // the base origin exactly like the token: never to an absolute target on
+    // another origin, never onto a cross-origin redirect hop.
+
+    public function testConfiguredHeaderStaysOffAnAbsoluteOffOriginTarget(): void
+    {
+        foreach (['ctor', 'addHeaders'] as $how) {
+            $api = $how === 'ctor' ? new Api(self::$baseA, headers: ['X-Api-Key' => 'synthetic-key']) : new Api(self::$baseA);
+            if ($how === 'addHeaders') { $api->addHeaders(['X-Api-Key' => 'synthetic-key']); }
+            $off = $api->get(self::$baseB . '/echo-headers');
+            $this->assertSame(200, $off['http_code']);
+            $this->assertArrayNotHasKey('x-api-key', $off['body'], "{$how} key leaked to an absolute off-origin URL");
+            $this->assertSame('synthetic-key', $api->get('/echo-headers')['body']['x-api-key'] ?? null, "{$how} key lost on its own origin");
+        }
+    }
+
+    public function testConfiguredAndPerCallHeadersStayOffACrossOriginRedirect(): void
+    {
+        $api = new Api(self::$baseA, headers: ['X-Api-Key' => 'synthetic-key', 'Accept' => 'application/json']);
+        $toB = '/redirect?code=302&to=' . rawurlencode(self::$baseB . '/echo-headers');
+        $body = $api->get($toB)['body'];
+        $this->assertArrayNotHasKey('x-api-key', $body, 'configured key followed a redirect to another origin');
+        $this->assertSame('application/json', $body['accept'] ?? null, 'content negotiation must still cross');
+
+        $toB307 = '/redirect?code=307&to=' . rawurlencode(self::$baseB . '/echo-headers');
+        $upload = $api->upload($toB307, headers: ['X-Upload-Token' => 'synthetic-call'], fileBytes: 'payload', filename: 'a.txt')['body'];
+        $this->assertArrayNotHasKey('x-upload-token', $upload, 'per-call header followed a redirect to another origin');
+
+        $toA = '/redirect?code=302&to=' . rawurlencode(self::$baseA . '/echo-headers');
+        $this->assertSame('synthetic-key', $api->get($toA)['body']['x-api-key'] ?? null, 'same-origin redirect lost the key');
+    }
+
+    public function testBaselessClientSendsConfiguredHeaderOnlyToTheUrlItNames(): void
+    {
+        $api = new Api('', headers: ['X-Api-Key' => 'synthetic-key']);
+        $this->assertSame('synthetic-key', $api->get(self::$baseA . '/echo-headers')['body']['x-api-key'] ?? null);
+        $hop = self::$baseA . '/redirect?code=302&to=' . rawurlencode(self::$baseB . '/echo-headers');
+        $this->assertArrayNotHasKey('x-api-key', $api->get($hop)['body'], 'baseless key followed a redirect to another origin');
+    }
 }
