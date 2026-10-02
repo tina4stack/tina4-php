@@ -80,19 +80,26 @@ class CliServeDebugEnvTest extends TestCase
     /**
      * Boot `tina4php serve` in $env and return the HTTP status of GET /__dev.
      *
-     * PORT IDENTITY (the flake this guards): FreePort::get() hands out an
-     * ephemeral port that, under load, a DIFFERENT debug-off server may already
-     * hold (a prior case's child lingering on the reused port). With
-     * TINA4_NO_TAKEOVER our debug-on child cannot evict it, so a bare /__dev
-     * probe would hit the FOREIGN server and read its 404 as the answer - a
-     * 200/404 on the port proves only that SOMETHING listens, not that it is OUR
-     * child. So each boot plants a per-boot UNIQUE readiness route
-     * (/ready_<token>) that only OUR child serves; readiness waits for a 200 on
-     * THAT (a foreign server 404s it), and only then polls /__dev. A contended
-     * port never yields our token, so the boot times out and retries on a FRESH
-     * port instead of trusting a stranger. Mirrors the Ruby ShutdownProbe
-     * identity guard and the Python/Node readiness guards. No mocks: a real
-     * process, a real socket.
+     * Harness shape is IDENTICAL across tina4-python / tina4-php / tina4-ruby so
+     * there are no cross-framework surprises:
+     *
+     * 1. CLEAN child env (the real cure). proc_open is given an explicit $env
+     *    with every TINA4_ key filtered out, so no stale TINA4_DEBUG leaks in
+     *    from the parent and the temp .env alone decides debug. This is PHP's
+     *    idiomatic equivalent of Ruby's Process.spawn `unsetenv_others: true`
+     *    (PHP's $env already REPLACES the environment; Ruby MERGES, which is why
+     *    the flake was Ruby-only).
+     * 2. IDENTITY-GUARDED readiness. Readiness waits for the child's OWN
+     *    `Server: http://...:<thisport>` banner in its serve.log - the same
+     *    banner all four frameworks print once they have bound THIS port -
+     *    before probing /__dev. A 200/404 on the port alone proves only that
+     *    SOMETHING listens, not that it is OUR child; a port a foreign server
+     *    already holds never yields our banner, so the boot times out and
+     *    retries on a FRESH port.
+     * 3. Poll /__dev and return its status (debug-on non-404 at once, debug-off
+     *    a settled 404 by outlasting the window).
+     *
+     * No mocks: a real process, a real socket, real .env files.
      */
     private function devStatus(?string $envFile, array $flags = [], array $realEnv = [], ?string $envLocal = null): int
     {
@@ -100,16 +107,9 @@ class CliServeDebugEnvTest extends TestCase
         $cli = realpath(__DIR__ . '/../bin/tina4php');
         $bootAttempts = 5;
         for ($attempt = 0; $attempt < $bootAttempts; $attempt++) {
-            $token = bin2hex(random_bytes(8));
-            $readyPath = "/ready_{$token}";
             $dir = sys_get_temp_dir() . '/tina4_serve_' . uniqid();
             mkdir($dir . '/src/routes', 0755, true);
             file_put_contents($dir . '/index.php', "<?php\nrequire_once '{$autoload}';\n\$app = new \\Tina4\\App(basePath: __DIR__);\n\$app->handle();\n");
-            file_put_contents(
-                $dir . '/src/routes/ready.php',
-                "<?php\n\\Tina4\\Router::get(" . var_export($readyPath, true)
-                . ", function (\$request, \$response) { return \$response('ok'); });\n"
-            );
             if ($envFile !== null) {
                 file_put_contents($dir . '/.env', $envFile);
             }
@@ -128,6 +128,7 @@ class CliServeDebugEnvTest extends TestCase
                 $cmd .= ' ' . escapeshellarg($flag);
             }
             $log = $dir . '/serve.log';
+            $ownServer = '~Server:\s+http://\S*:' . $port . '\b~';
             $process = proc_open($cmd, [0 => ['file', '/dev/null', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes, $dir, $env);
             $this->assertIsResource($process);
             try {
@@ -135,9 +136,9 @@ class CliServeDebugEnvTest extends TestCase
                 $owned = false;
                 while (microtime(true) < $deadline) {
                     if (!proc_get_status($process)['running']) {
-                        break; // child exited (could not own the contended port) -> fresh port
+                        break; // child exited (could not own a contended port) -> fresh port
                     }
-                    if ($this->httpStatus($port, $readyPath) === 200) {
+                    if (preg_match($ownServer, (string)@file_get_contents($log))) {
                         $owned = true;
                         break;
                     }
@@ -146,12 +147,12 @@ class CliServeDebugEnvTest extends TestCase
                 if ($owned) {
                     return $this->pollDev($port);
                 }
-                // The port was not ours this attempt; retry on a fresh one.
+                // The child never claimed THIS port; retry on a fresh one.
             } finally {
                 $this->stopProcess($process);
             }
         }
-        $this->fail("serve never owned its own port after {$bootAttempts} attempts");
+        $this->fail("serve never printed its own Server banner after {$bootAttempts} attempts");
     }
 
     public function testServeHonoursDebugFalseFromEnvFile(): void
