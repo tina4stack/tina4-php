@@ -1488,12 +1488,14 @@ function killProcessOnPort(int $port): bool
         \Tina4\PortTakeover::isDev(),
         \Tina4\PortTakeover::noTakeoverOptedOut()
     );
+    // Server::console, never echo: an echo here would mark headers as sent for
+    // the whole serve process, and PHP then refuses its native sessions.
     if ($result['status'] === \Tina4\PortTakeover::KILLED) {
-        echo "  Warning: {$result['message']}\n";
+        \Tina4\Server::console("  Warning: {$result['message']}\n");
         return true;
     }
     if ($result['message'] !== '' && in_array($result['status'], \Tina4\PortTakeover::REFUSALS, true)) {
-        echo "  {$result['message']}\n";
+        \Tina4\Server::console("  {$result['message']}\n");
     }
     return false;
 }
@@ -2215,7 +2217,10 @@ DOCKERFILE;
             $isDebug
         );
 
-        echo "{$color}
+        // Server::console, never echo: the CLI SAPI buffers no output, so an
+        // echo here marks headers as sent before the first request, and PHP
+        // then refuses session_start() for every request this process serves.
+        \Tina4\Server::console("{$color}
   ______ _             __ __
  /_  __/(_)___  ____ _/ // /
   / /  / / __ \\/ __ \`/ // /_
@@ -2226,7 +2231,7 @@ DOCKERFILE;
 
   Server:    http://{$host}:{$port} ({$serverName}){$wsInfo}{$swaggerLine}{$dashboardLine}
   Debug:     " . ($isDebug ? 'ON' : 'OFF') . " (Log level: {$logLevel})
-";
+");
 
         // Open browser unless --no-browser or TINA4_NO_BROWSER env
         $envNoBrowser = in_array(strtolower(getenv('TINA4_NO_BROWSER') ?: ''), ['true', '1', 'yes'], true);

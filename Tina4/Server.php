@@ -232,6 +232,33 @@ class Server
         return self::$instance;
     }
 
+    /**
+     * Write the server's own console output: the startup banner, port notices.
+     *
+     * Never `echo`. The CLI SAPI hardcodes output_buffering=0, so the first
+     * echo marks headers as sent for the whole life of the process, and PHP
+     * then refuses session_start() and session_regenerate_id() for every
+     * request the server goes on to handle. Under `tina4 serve` the banner
+     * alone was enough to stop the router's native session from ever starting.
+     * A write to the stdout stream bypasses PHP's output layer, as
+     * Log::writeStdout() does, so headers_sent() stays false and the terminal
+     * shows the same text.
+     */
+    public static function console(string $text): void
+    {
+        if (defined('STDOUT')) {
+            @fwrite(\STDOUT, $text);
+            @fflush(\STDOUT);
+            return;
+        }
+        $stdout = @fopen('php://stdout', 'w');
+        if (is_resource($stdout)) {
+            @fwrite($stdout, $text);
+            @fflush($stdout);
+            @fclose($stdout);
+        }
+    }
+
     /** @var array<string, array{socket: resource, path: string, buffer: string, id: string}> WebSocket clients keyed by connection ID */
     private array $wsClients = [];
 
@@ -367,7 +394,7 @@ class Server
             PortTakeover::noTakeoverOptedOut()
         );
         if ($result['status'] === PortTakeover::KILLED) {
-            echo "  {$result['message']}\n";
+            self::console("  {$result['message']}\n");
             return;
         }
         if (in_array($result['status'], PortTakeover::REFUSALS, true)) {
@@ -439,7 +466,7 @@ class Server
                 );
                 if ($this->aiSocket) {
                     stream_set_blocking($this->aiSocket, false);
-                    echo "  Test Port: http://localhost:{$this->aiPort} (stable — no hot-reload)\n";
+                    self::console("  Test Port: http://localhost:{$this->aiPort} (stable — no hot-reload)\n");
                 } else {
                     // stream_socket_server() returns FALSE on failure, not null.
                     // $this->aiSocket must stay exactly null (its declared default)
@@ -451,11 +478,11 @@ class Server
                     // AI port must warn and skip, never take the base port down
                     // with it (the opposite of takeover, feature 129).
                     $this->aiSocket = null;
-                    echo "  Test Port: SKIPPED (port {$this->aiPort} in use)\n";
+                    self::console("  Test Port: SKIPPED (port {$this->aiPort} in use)\n");
                 }
             } catch (\Throwable $e) {
                 $this->aiSocket = null;
-                echo "  Test Port: SKIPPED ({$e->getMessage()})\n";
+                self::console("  Test Port: SKIPPED ({$e->getMessage()})\n");
             }
         }
 
