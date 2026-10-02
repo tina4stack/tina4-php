@@ -2399,6 +2399,11 @@ DOCKERFILE;
                 }
                 $count = count($result['rolledBack']);
                 echo "\n{$count} migration(s) rolled back.\n";
+                // Same contract as `migrate`: a failed rollback exits
+                // non-zero, so the script that ran it stops.
+                if (!empty($result['errors'])) {
+                    exit(1);
+                }
             }
         } else {
             echo "Migration class not available.\n";
