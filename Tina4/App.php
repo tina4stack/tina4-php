@@ -583,6 +583,14 @@ class App
                         $e->getLine()
                     );
                 }
+                // A handler that returns makes PHP exit 0, so on the CLI an
+                // uncaught exception (an unreachable database during
+                // `tina4php migrate`, say) reported success to the deploy
+                // that ran it. Keep PHP's own status for an uncaught
+                // exception; a web request has no exit status to keep.
+                if (PHP_SAPI === 'cli') {
+                    exit(255);
+                }
             });
             $this->exceptionHandlerSet = true;
         }
