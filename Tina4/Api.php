@@ -22,8 +22,8 @@ namespace Tina4;
  * Multipart upload (from disk or in-memory bytes), streaming download, an
  * injectable transport seam (for USERS to unit-test their own code), and an
  * opt-in per-client cookie jar are all built on the same zero-dependency
- * stream-wrapper core. Redirects are followed with a manual loop that strips
- * the Authorization and Cookie headers on a cross-origin hop.
+ * stream-wrapper core. Redirects are followed with a manual loop that carries
+ * only content-negotiation headers onto a cross-origin hop (no credential).
  *
  * HTTPS needs ext-openssl — it is what registers PHP's `https` stream wrapper.
  * The extension is suggested, not required, so an https:// call on a build
@@ -54,6 +54,15 @@ class Api
      * authenticate to. Compared case-insensitively.
      */
     private const STRIP_ON_CROSS_ORIGIN = ['authorization', 'cookie'];
+
+    /**
+     * The only headers carried onto a different origin. A caller-set header can
+     * hold a credential under any name (X-Api-Key, X-Auth-Token, ...), so a
+     * denylist cannot contain it: the headers configured on the client (and any
+     * per-call header, on a redirect) are bound to the origin they were meant
+     * for, and only these content-negotiation headers cross. Lower-case.
+     */
+    private const KEEP_ON_CROSS_ORIGIN = ['user-agent', 'accept', 'accept-encoding', 'accept-language', 'content-type', 'content-length'];
 
     /**
      * Message returned (and logged at boot) when PHP cannot open https:// URLs.
@@ -596,7 +605,7 @@ class Api
      * response stream (positioned at the body) for the final hop.
      *
      * Redirects are followed with follow_location DISABLED so we control each
-     * hop: the Authorization and Cookie headers are stripped whenever the
+     * hop: only KEEP_ON_CROSS_ORIGIN headers survive whenever the
      * target origin (scheme/host/port) differs from the current one — plain
      * file_get_contents forwards them cross-origin, which leaks a bearer token
      * or session cookie to a host you never authenticated to.
@@ -680,7 +689,7 @@ class Api
                 fclose($handle);
                 $newUrl = $this->resolveLocation($currentUrl, $location);
                 if (!$this->sameOrigin($currentUrl, $newUrl)) {
-                    $headers = $this->stripHeaders($headers, self::STRIP_ON_CROSS_ORIGIN);
+                    $headers = $this->keepCrossOriginHeaders($headers);
                 }
                 // 303, and 301/302 on a POST, downgrade to a bodyless GET (per HTTP
                 // semantics / urllib); 307/308 preserve method and body.
@@ -738,7 +747,7 @@ class Api
      */
     private function baseHeaders(?string $targetUrl = null): array
     {
-        $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->headers);
+        $headers = array_merge(['User-Agent' => 'Tina4/' . App::$VERSION], $this->configuredHeadersFor($targetUrl));
         // Attach the configured Authorization / Cookie ONLY when the request
         // target is same-origin as the configured base. A path that is itself an
         // absolute off-origin URL otherwise leaks the bearer token / session
@@ -894,6 +903,39 @@ class Api
         $out = [];
         foreach ($headers as $name => $value) {
             if (!in_array(strtolower((string)$name), $dropLower, true)) {
+                $out[$name] = $value;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The headers configured on the client, as they may go to $targetUrl.
+     *
+     * They belong to the base origin, like the token: an absolute target on
+     * another origin gets only the cross-origin-safe ones. A client with no
+     * base has no origin to bind them to, and sends them to the URL each call
+     * names.
+     *
+     * @return array<string,string>
+     */
+    private function configuredHeadersFor(?string $targetUrl): array
+    {
+        $offOrigin = $targetUrl !== null && $this->baseUrl !== '' && !$this->sameOrigin($targetUrl, $this->baseUrl);
+        return $offOrigin ? $this->keepCrossOriginHeaders($this->headers) : $this->headers;
+    }
+
+    /**
+     * Keep only the headers allowed onto a different origin (KEEP_ON_CROSS_ORIGIN).
+     *
+     * @param array<string,string> $headers
+     * @return array<string,string>
+     */
+    private function keepCrossOriginHeaders(array $headers): array
+    {
+        $out = [];
+        foreach ($headers as $name => $value) {
+            if (in_array(strtolower((string)$name), self::KEEP_ON_CROSS_ORIGIN, true)) {
                 $out[$name] = $value;
             }
         }

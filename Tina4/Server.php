@@ -1237,6 +1237,33 @@ class Server
     }
 
     /**
+     * The Content-Length to send. RESPECT an explicit Content-Length the
+     * response already carries: a HEAD answer is stripped to an empty body but
+     * keeps the length the GET would have sent (Router::dispatch, RFC 9110
+     * s9.3.2), and a static file pins its own. Overwriting with strlen('')
+     * reported Content-Length: 0 on every routed HEAD, defeating the size
+     * estimate a link checker / monitor / cache validator probes for. Only
+     * compute from the body when no explicit length was declared, or when a
+     * body is actually present (so a normal GET and a compressed body stay
+     * correct).
+     *
+     * @param array<string,mixed> $responseHeaders
+     */
+    private static function contentLengthFor(array $responseHeaders, string $responseBody): string
+    {
+        $declaredLength = null;
+        foreach ($responseHeaders as $headerName => $headerValue) {
+            if (strcasecmp((string) $headerName, 'Content-Length') === 0) {
+                $declaredLength = $headerValue;
+            }
+        }
+        if ($declaredLength === null || $responseBody !== '') {
+            return (string) strlen($responseBody);
+        }
+        return (string) $declaredLength;
+    }
+
+    /**
      * Handle an HTTP request. Detects WebSocket upgrade requests.
      *
      * @param resource $client     Client socket
@@ -1413,25 +1440,7 @@ class Server
             // Toolbar is already injected by Router::dispatch
         }
 
-        // Set content length. RESPECT an explicit Content-Length the response
-        // already carries: a HEAD answer is stripped to an empty body but keeps
-        // the length the GET would have sent (Router::dispatch, RFC 9110 s9.3.2),
-        // and a static file pins its own. Overwriting with strlen('') reported
-        // Content-Length: 0 on every routed HEAD, defeating the size estimate a
-        // link checker / monitor / cache validator probes for. Only compute from
-        // the body when no explicit length was declared, or when a body is
-        // actually present (so a normal GET and a compressed body stay correct).
-        $declaredLength = null;
-        foreach ($responseHeaders as $headerName => $headerValue) {
-            if (strcasecmp($headerName, 'Content-Length') === 0) {
-                $declaredLength = $headerValue;
-            }
-        }
-        if ($declaredLength === null || $responseBody !== '') {
-            $responseHeaders['Content-Length'] = (string) strlen($responseBody);
-        } else {
-            $responseHeaders['Content-Length'] = (string) $declaredLength;
-        }
+        $responseHeaders['Content-Length'] = self::contentLengthFor($responseHeaders, $responseBody);
 
         // Connection handling
         $keepAlive = strtolower($headers['connection'] ?? '') === 'keep-alive';
