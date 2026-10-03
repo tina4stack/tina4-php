@@ -541,6 +541,21 @@ class Session
     }
 
     /**
+     * Whether this session is only an id: nothing has stored it and it holds no
+     * data of its own (its `_meta` bookkeeping does not count). Such a session has no record and needs no cookie, so save() writes
+     * nothing for it and the router sends no cookie for it. It stops being fresh
+     * when something is stored in it. Calls that mark a session changed without
+     * leaving anything in it (deleting a key it never had, clear(), regenerate()
+     * on an empty session) leave it fresh: a record with no data is not a session.
+     *
+     * @return bool
+     */
+    public function isFresh(): bool
+    {
+        return !$this->stored && array_diff_key($this->data, ['_meta' => true]) === [];
+    }
+
+    /**
      * Read raw session data for a given session ID from the backend storage.
      *
      * @param string $sessionId The session ID to read
@@ -771,9 +786,11 @@ class Session
      * removed: it ends the session for this request instead, and no cookie goes
      * out for it.
      *
-     * An unchanged session is still written: that write is what moves the
-     * expiry forward, so a session expires after TINA4_SESSION_TTL seconds of
-     * inactivity rather than that long after its last change (ADR-0087).
+     * An unchanged session the store holds is still written: that write is what
+     * moves the expiry forward, so a session expires after TINA4_SESSION_TTL
+     * seconds of inactivity rather than that long after its last change
+     * (ADR-0087). A fresh one (isFresh()) has no record to move and writes
+     * nothing.
      *
      * Honours the log-loud + degrade policy: on a successful write the dirty
      * flag is cleared; on a degraded read or write it is retained so a later
@@ -786,6 +803,14 @@ class Session
         // is nothing to persist, and a write would re-create a just-destroyed
         // record. Mirrors the Python master's `if self._session_id and self._dirty`.
         if ($this->sessionId === '') {
+            return true;
+        }
+
+        // A session this request minted and never changed has no record whose
+        // expiry could slide and nothing of its own to keep. Writing it anyway
+        // stored one record for every request that arrived without a cookie:
+        // static files, 404s and /health included.
+        if ($this->isFresh()) {
             return true;
         }
 

@@ -1234,78 +1234,200 @@ class Router
      */
     private static function startNativeSession(?Request $request = null): void
     {
-        // A long-running process (the CLI SAPI: tina4's own server, Swoole,
-        // RoadRunner) serves many users from one PHP process, and $_SESSION is
-        // a process global. The native session this router opened for an
-        // earlier request is closed and $_SESSION is emptied before this
-        // request starts its own, so one user's session can never be read by
-        // the next (ADR-0079 s5). A session the host application started
-        // itself before dispatch is left alone.
-        if (self::isCliWorker()) {
-            if (session_status() === PHP_SESSION_ACTIVE && self::$routerNativeSessionActive) {
-                session_write_close();
-            }
-            if (session_status() !== PHP_SESSION_ACTIVE) {
-                $_SESSION = [];
-            }
-            self::$routerNativeSessionActive = false;
-            self::$routerNativeSessionIncomingId = null;
+        // A dispatch inside a dispatch (TestClient from a handler, an internal
+        // sub-request) shares the outer request's native session: it neither
+        // starts one nor settles one, or it would consume the outer request's
+        // bookkeeping and destroy a session the outer request is about to fill.
+        if (!self::isCliWorker() && self::$routerNativeSessionActive) {
+            self::$nativeSessionDepth++;
+            return;
         }
 
+        if (self::isCliWorker()) {
+            self::resetCliWorkerNativeSession();
+        }
+
+        self::$routerNativeSessionKept = false;
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             self::configureNativeSessionStorage();
-
-            // Harden the cookie BEFORE session_start() emits it. PHP's ini
-            // defaults (session.cookie_httponly=0, cookie_samesite="",
-            // cookie_secure=0) ship a bare `PHPSESSID=...; path=/` that is
-            // readable by any XSS and sent on cross-site requests — and $_SESSION
-            // is exactly where an app keeps auth state. Mirror the attributes the
-            // tina4_session cookie already sets below; lifetime/path/domain are
-            // carried over from ini so the cookie's scope is unchanged.
-            $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
-            // Secure when: explicitly asked for, forced by SameSite=None (browsers
-            // reject None without Secure), or the client is really on https.
-            // Request::isSecureScheme() honours x-forwarded-proto, so a TLS-
-            // terminating proxy no longer reads as plain HTTP (#175).
-            $nativeSecure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
-                || strcasecmp($sameSite, 'None') === 0
-                || Request::isSecureScheme();
-            $cookieParams = session_get_cookie_params();
-            session_set_cookie_params([
-                'lifetime' => $cookieParams['lifetime'],
-                'path' => $cookieParams['path'],
-                'domain' => $cookieParams['domain'],
-                'secure' => $nativeSecure,
-                'httponly' => true,
-                'samesite' => $sameSite,
-            ]);
+            self::hardenNativeSessionCookie();
             if (self::isCliWorker() && $request !== null) {
-                // No SAPI parses this request's cookie into $_COOKIE and none
-                // will send header() output, so bind the session to THIS
-                // request's own cookie and emit the cookie on the Response
-                // (finishNativeSession) ourselves.
-                // use_strict_mode: an id the store has never issued is replaced
-                // with a fresh one, never adopted (no session fixation).
-                $incoming = $request->cookies[session_name()] ?? null;
-                $incoming = is_string($incoming) && preg_match('/^[A-Za-z0-9,-]{22,256}$/', $incoming) === 1
-                    ? $incoming : null;
-                session_id($incoming ?? session_create_id());
-                @session_start(['use_strict_mode' => 1]);
-                // Remember the id the client actually sent (null when none, or
-                // when its cookie was malformed / rejected by strict mode). The
-                // cookie is re-emitted at finish whenever session_id() ends up
-                // different from this - which is a brand-new session AND a
-                // mid-request session_regenerate_id() (the login fixation
-                // defence). A start-time "is new" flag missed the regenerate
-                // case: the id changed after it was computed, so no Set-Cookie
-                // went out and the client kept the stale id (#253).
-                self::$routerNativeSessionIncomingId = $incoming;
+                self::startCliWorkerNativeSession($request);
+            } elseif (!isset($_COOKIE[session_name()])) {
+                self::startDeferredNativeSession();
             } else {
                 @session_start();
             }
             self::$routerNativeSessionActive = session_status() === PHP_SESSION_ACTIVE;
         }
     }
+
+    /**
+     * A long-running process (the CLI SAPI: tina4's own server, Swoole,
+     * RoadRunner) serves many users from one PHP process, and $_SESSION is
+     * a process global. The native session this router opened for an
+     * earlier request is closed and $_SESSION is emptied before this
+     * request starts its own, so one user's session can never be read by
+     * the next (ADR-0079 s5). A session the host application started
+     * itself before dispatch is left alone.
+     */
+    private static function resetCliWorkerNativeSession(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE && self::$routerNativeSessionActive) {
+            session_write_close();
+        }
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
+        }
+        self::$routerNativeSessionActive = false;
+        self::$routerNativeSessionIncomingId = null;
+        self::$routerNativeSessionAdopted = false;
+    }
+
+    /**
+     * Harden the native session cookie BEFORE session_start() sends it, and
+     * before the router sends it on its own: PHP's ini defaults are bare.
+     */
+    private static function hardenNativeSessionCookie(): void
+    {
+        // Harden the cookie BEFORE session_start() emits it. PHP's ini
+        // defaults (session.cookie_httponly=0, cookie_samesite="",
+        // cookie_secure=0) ship a bare `PHPSESSID=...; path=/` that is
+        // readable by any XSS and sent on cross-site requests — and $_SESSION
+        // is exactly where an app keeps auth state. Mirror the attributes the
+        // tina4_session cookie already sets below; lifetime/path/domain are
+        // carried over from ini so the cookie's scope is unchanged.
+        $sameSite = getenv('TINA4_SESSION_SAMESITE') ?: 'Lax';
+        // Secure when: explicitly asked for, forced by SameSite=None (browsers
+        // reject None without Secure), or the client is really on https.
+        // Request::isSecureScheme() honours x-forwarded-proto, so a TLS-
+        // terminating proxy no longer reads as plain HTTP (#175).
+        $nativeSecure = DotEnv::isTruthy(DotEnv::getEnv('TINA4_SESSION_SECURE', 'false'))
+            || strcasecmp($sameSite, 'None') === 0
+            || Request::isSecureScheme();
+        $cookieParams = session_get_cookie_params();
+        session_set_cookie_params([
+            'lifetime' => $cookieParams['lifetime'],
+            'path' => $cookieParams['path'],
+            'domain' => $cookieParams['domain'],
+            'secure' => $nativeSecure,
+            'httponly' => true,
+            'samesite' => $sameSite,
+        ]);
+    }
+
+    /**
+     * Start the native session for a CLI worker: bind it to THIS request's own
+     * cookie (no SAPI parses it into $_COOKIE) and remember what the client sent.
+     */
+    private static function startCliWorkerNativeSession(Request $request): void
+    {
+        // No SAPI parses this request's cookie into $_COOKIE and none
+        // will send header() output, so bind the session to THIS
+        // request's own cookie and emit the cookie on the Response
+        // (finishNativeSession) ourselves.
+        // use_strict_mode: an id the store has never issued is replaced
+        // with a fresh one, never adopted (no session fixation).
+        $incoming = $request->cookies[session_name()] ?? null;
+        $incoming = is_string($incoming) && preg_match('/^[A-Za-z0-9,-]{22,256}$/', $incoming) === 1
+            ? $incoming : null;
+        session_id($incoming ?? session_create_id());
+        @session_start(['use_strict_mode' => 1]);
+        // Remember the id the client actually sent (null when none, or
+        // when its cookie was malformed / rejected by strict mode). The
+        // cookie is re-emitted at finish whenever session_id() ends up
+        // different from this - which is a brand-new session AND a
+        // mid-request session_regenerate_id() (the login fixation
+        // defence). A start-time "is new" flag missed the regenerate
+        // case: the id changed after it was computed, so no Set-Cookie
+        // went out and the client kept the stale id (#253).
+        self::$routerNativeSessionIncomingId = $incoming;
+        // Whether the session in use is one the client already held
+        // (strict mode kept its id), as opposed to one minted now.
+        self::$routerNativeSessionAdopted = $incoming !== null && session_id() === $incoming;
+    }
+
+    /**
+     * Start a native session for a request that arrived without one, and send
+     * no cookie for it yet. The cookie is sent, and the session kept, only when
+     * the request used it: settleDeferredNativeSession() decides, at the end of
+     * the request or when headers are about to go out, whichever comes first. A
+     * request that touches nothing ($_SESSION untouched: static files, 404s,
+     * /health) leaves no file and no PHPSESSID behind.
+     *
+     * session.use_cookies stays off for the rest of the request on purpose: the
+     * cookie is ours to send, once, for whatever session_id() ends up being, so
+     * a handler's own session_regenerate_id() or session_start() cannot send a
+     * second, different one.
+     */
+    private static function startDeferredNativeSession(): void
+    {
+        @session_start(['use_cookies' => 0]);
+        self::$routerNativeSessionDeferredCookie = true;
+        self::$routerNativeSessionSettled = false;
+        // A handler that exits, or sends output, never returns to the router,
+        // so the end-of-request step would not run. Two moments still can: the
+        // first output (headers about to be sent: the last chance for a cookie)
+        // and shutdown, while the session is still open (with no output PHP
+        // closes the session before it sends headers, so by then session_id()
+        // is already gone).
+        header_register_callback([self::class, 'settleDeferredNativeSession']);
+        register_shutdown_function([self::class, 'settleDeferredNativeSession']);
+    }
+
+    /**
+     * Decide, once, what becomes of a native session started without a cookie.
+     * Public only so header_register_callback() can reach it; not an API.
+     *
+     * Keeps it, and sends its cookie, when the request put something in
+     * $_SESSION or asked for it to be kept (keepNativeSession()). Otherwise the
+     * session was never used and is removed. The decision reads the session's
+     * final state (session_id(), $_SESSION), not whether it is still open, so a
+     * handler that called session_write_close() is kept like any other.
+     *
+     * @internal
+     */
+    public static function settleDeferredNativeSession(): void
+    {
+        if (!self::$routerNativeSessionDeferredCookie || self::$routerNativeSessionSettled) {
+            return;
+        }
+        self::$routerNativeSessionSettled = true;
+        $used = !empty($_SESSION) || self::$routerNativeSessionKept;
+        if (session_status() === PHP_SESSION_ACTIVE && !$used) {
+            session_destroy();
+            return;
+        }
+        if ($used && session_id() !== '' && !headers_sent()) {
+            self::sendNativeSessionCookie();
+        }
+    }
+
+    /** Nested dispatch depth under a real SAPI: only the outermost one starts and settles the native session. */
+    private static int $nativeSessionDepth = 0;
+
+    /** True once settleDeferredNativeSession() has decided for the request in flight. */
+    private static bool $routerNativeSessionSettled = false;
+
+    /** True when something this request did depends on the native session id (see keepNativeSession()). */
+    private static bool $routerNativeSessionKept = false;
+
+    /**
+     * Keep the native session the router started for this request, and send its
+     * cookie, even if $_SESSION ends the request empty. For framework code that
+     * hands session_id() out, so that id has to mean something on the next
+     * request: a form token bound to it (Frond's form_token()).
+     */
+    public static function keepNativeSession(): void
+    {
+        self::$routerNativeSessionKept = true;
+    }
+
+    /** True when the CLI-worker native session in flight is the one the client sent. */
+    private static bool $routerNativeSessionAdopted = false;
+
+    /** True when the router started the native session without a cookie (see startNativeSession()). */
+    private static bool $routerNativeSessionDeferredCookie = false;
 
     /** True when the router opened the native session for the request in flight. */
     private static bool $routerNativeSessionActive = false;
@@ -1333,30 +1455,72 @@ class Router
      */
     private static function finishNativeSession(Response $result): void
     {
-        if (!self::isCliWorker() || !self::$routerNativeSessionActive) {
+        if (!self::isCliWorker()) {
+            if (self::$nativeSessionDepth > 0) {
+                self::$nativeSessionDepth--;
+                return;
+            }
+            self::settleDeferredNativeSession();
+            self::$routerNativeSessionKept = false;
+            return;
+        }
+        $kept = self::$routerNativeSessionKept;
+        self::$routerNativeSessionKept = false;
+        if (!self::$routerNativeSessionActive) {
             return;
         }
         if (session_status() === PHP_SESSION_ACTIVE) {
+            // A session minted for this request that it left empty has nothing
+            // to keep: removed, and no cookie sent for it.
+            if (!self::$routerNativeSessionAdopted && empty($_SESSION) && !$kept) {
+                session_destroy();
+                self::$routerNativeSessionActive = false;
+                self::$routerNativeSessionIncomingId = null;
+                return;
+            }
             if (session_id() !== (self::$routerNativeSessionIncomingId ?? '')) {
-                $params = session_get_cookie_params();
-                $options = [
-                    'path' => $params['path'] ?: '/',
-                    'secure' => (bool)$params['secure'],
-                    'httponly' => true,
-                    'samesite' => $params['samesite'] ?: 'Lax',
-                ];
-                if (!empty($params['domain'])) {
-                    $options['domain'] = $params['domain'];
-                }
-                if ((int)$params['lifetime'] > 0) {
-                    $options['expires'] = time() + (int)$params['lifetime'];
-                }
-                $result->cookie(session_name(), session_id(), $options);
+                self::emitNativeSessionCookie($result);
             }
             session_write_close();
         }
         self::$routerNativeSessionActive = false;
         self::$routerNativeSessionIncomingId = null;
+    }
+
+    /**
+     * Put the native session cookie for the current session_id() on the Response.
+     * Only a CLI worker uses this: it has no SAPI to send headers, so the cookie
+     * travels on the Response that is returned. Under a real SAPI (Apache, FPM,
+     * php -S) sendNativeSessionCookie() sends it instead.
+     */
+    private static function emitNativeSessionCookie(Response $result): void
+    {
+        $result->cookie(session_name(), session_id(), self::nativeSessionCookieOptions());
+    }
+
+    /** Send the native session cookie for the current session_id() with PHP's own setcookie(). */
+    private static function sendNativeSessionCookie(): void
+    {
+        setcookie(session_name(), session_id(), self::nativeSessionCookieOptions());
+    }
+
+    /** @return array<string, mixed> The attributes the native session cookie carries, from the ini the router configured. */
+    private static function nativeSessionCookieOptions(): array
+    {
+        $params = session_get_cookie_params();
+        $options = [
+            'path' => $params['path'] ?: '/',
+            'secure' => (bool)$params['secure'],
+            'httponly' => true,
+            'samesite' => $params['samesite'] ?: 'Lax',
+        ];
+        if (!empty($params['domain'])) {
+            $options['domain'] = $params['domain'];
+        }
+        if ((int)$params['lifetime'] > 0) {
+            $options['expires'] = time() + (int)$params['lifetime'];
+        }
+        return $options;
     }
 
     /**
@@ -1426,8 +1590,11 @@ class Router
                 // GC failure is non-critical — silently ignore
             }
         }
+        // A fresh session (minted for this request and never written) was not
+        // stored, so a cookie for it would name nothing: the next request could
+        // not resume it and would be handed another one.
         $sid = $session->getSessionId();
-        if ($sid && $sid !== $sessionCookie) {
+        if ($sid && $sid !== $sessionCookie && !$session->isFresh()) {
             self::emitSessionCookie($sid, $sessionCookieName, $result);
         }
     }

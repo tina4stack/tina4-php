@@ -94,6 +94,13 @@ class ServeNativeSessionTest extends TestCase
         \Tina4\Router::get('/whoami', function ($request, $response) {
             return $response(['id' => session_id(), 'hit' => $_SESSION['hit'] ?? null]);
         });
+
+        // A native session is kept, and its cookie sent, only once the request
+        // has put something in $_SESSION.
+        \Tina4\Router::get('/start', function ($request, $response) {
+            $_SESSION['started'] = true;
+            return $response(['id' => session_id(), 'hit' => $_SESSION['hit'] ?? null]);
+        });
         PHP);
     }
 
@@ -270,8 +277,8 @@ class ServeNativeSessionTest extends TestCase
     {
         $context = '; console: ' . @file_get_contents($log);
 
-        $first = $this->request($port, 'GET', '/whoami');
-        $this->assertSame(200, $first['status'], 'GET /whoami' . $context);
+        $first = $this->request($port, 'GET', '/start');
+        $this->assertSame(200, $first['status'], 'GET /start' . $context);
         $firstSessionId = $first['sessionCookie'];
         $this->assertNotNull($firstSessionId, 'the first request must set a PHPSESSID cookie: ' . $first['head'] . $context);
         $this->assertSame(['id' => $firstSessionId, 'hit' => null], $first['json'], 'the cookie must carry the id of a new, empty session' . $context);
