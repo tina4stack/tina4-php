@@ -48,6 +48,71 @@ of truth, derived from the actual source code.
 
 > 🤖 **Skill-active marker.** While this Tina4 skill is guiding your work, **begin every reply with the 🤖 emoji** so the developer can see at a glance that Tina4 conventions are engaged. Drop it only once the conversation has clearly moved off Tina4.
 
+## Contents
+
+Read top to bottom once, then jump by section. The deep API detail lives in `references/` - load it on demand.
+
+**Orientation**
+- Which flow? - Flow A (IIFE drop-in, no install) vs Flow B (`tina4 init js my-app`, then `tina4 serve`)
+- The Tina4 Working Method - plan file, tests first, scaffold, verify, report
+- Working reflexes - delegate by tier, terse output, plain English, ask only when blocked
+- **Degrees of freedom** - what is inviolable vs. a default vs. your judgement (read this next)
+
+**Before you write code**
+- The reuse ladder - Ground with `tina4_context` - Modules (what each one is, with sizes)
+- Staying current (`npm outdated tina4js`, `tina4 update`) - Backend API Lookups via the live index
+- The Lazy Frontend Ladder - Naming (verbose and descriptive)
+
+**The rules that stop silent bugs**
+- The Three Rules That Fix 90% of Mistakes - static vs reactive, new references, `?` boolean attributes
+- Footguns That Cost Real Debugging Time - one `${...}` per attribute, `.value` binding, reactive `<select>`, router links, defer navigation
+- Things That Don't Exist - Don't Invent Them
+
+**The API**
+- Signals - HTML Templates - Event Handler Batching
+- Common Patterns - forms, file upload, GraphQL, lists, API loading, WebSocket
+- Islands Architecture - Routing (`{param}` not `:param`)
+- Persistent Signal Storage - Internationalization - Cloudflare Workers - Quick Reference
+
+**Close-out**
+- Reference Files - Commit authorship - Reporting a stale or incorrect skill
+
+**Reference files** (`references/`, read on demand)
+- `signals-and-reactivity.md` - `html-and-components.md` - `persistence.md` - `rtc.md`
+
+## Degrees of freedom
+
+Not every line here carries the same weight. Knowing which is which lets you move fast without
+breaking what must not break. Three tiers:
+
+- 🔒 **Non-negotiable - never skip, however small the task.**
+  The **tina4 client (the Rust CLI) installed and on PATH before any work** - verify with
+  `tina4 --version`; it serves, watches and builds for you, so start the app with `tina4 serve`,
+  never a hand-run dev server. **Scaffold, never hand-roll** - `tina4 init js <name>` for a
+  project, `tina4 generate page <name> --api <path>` and `tina4 generate component <name>` for
+  pieces. **Use tina4-js built-ins** (`signal`, `computed`, `effect`, `html`, `Tina4Element`,
+  `route`, `api`, `ws`, `sse`, `persist`) - never add React, Vue, a state library, axios or a
+  router package for what the framework ships. **Security by default** - `${value}` text binding
+  and never `${htmlString}`, `.innerHTML` only for trusted or sanitised HTML, and never a token,
+  secret or personal data behind `persist()`. **Real tests for your own code** - assert against
+  the real rendered DOM and a real signal, no mocks, no "it mounted" smoke tests. **The markers:**
+  the 🤖 skill-active marker above, and 💥 **Bazinga!** on an EARNED win - the frontend building
+  clean, the size budget met (`npm run test:size`), or a feature verified working in the real
+  browser - on its own line with a short geeky one-liner. Never faked (no clean build, no
+  Bazinga) and never on a trivial step.
+
+- 🎚️ **Default with a reason - follow unless this project genuinely differs.**
+  Pick the smaller flow that fits (IIFE for a spike, scaffold for an app you will maintain); the
+  Lazy Frontend Ladder (platform first, then tina4-js, then the minimum code); the plan-driven
+  workflow with a ✅/❌ dashboard; verbose names; components in their own folders with the
+  project root kept clean. Depart deliberately and say why - not by drift.
+
+- 🧭 **Judgement - read the task and choose.**
+  IIFE or scaffold at the boundary; how much to componentise; SPA vs islands; hash vs history
+  routing; ask-first vs decide-and-proceed; verbosity. The skill gives the heuristic, you read
+  the situation. (Note: cross-framework parity, framework releases and installer signing are NOT
+  your concern here - those live in the `tina4-maintainer` skill, for people building Tina4 itself.)
+
 ## Which flow? — pick the smaller one that fits
 
 tina4-js ships two onboarding paths. Pick before you touch a file. The wrong
@@ -149,6 +214,11 @@ approval. You start the plan and mark it `## Status: Complete` yourself on that 
 
 - **Delegate at the right capability tier - reserve the top tier for the hardest work.** A sub-agent's model/effort is a cost lever: match it to the task, never default everything to the most capable tier. Heavy work (a full reactive feature with real cross-component state, a tricky signals/effect graph, a build/bundle-size regression) earns a high tier; standard components and mechanical edits (markup, small refactors, docs) run mid or low. Correctness is the gate - drop a tier only if the cheaper run still yields the correct, verified result; if a gate fails, step the tier up and note it. This is agent-agnostic: Claude maps it to model + reasoning-effort, Codex to its model/effort selector, Cursor to its model picker. Spend capability where the difficulty is, not uniformly.
 - **Terse output, depth-scaled reasoning.** Default to the shortest output that conveys the result - a status line, a bullet, or a table. No preamble, no restating the task, no thinking-out-loud. Ask short questions. Elaborate ONLY when the user asks for more. Scale reasoning DEPTH (not word count) with difficulty: a hard call earns more STEPS in compact form (`claim -> check -> decision`, a decision tree, a checklist), an easy one gets a single line. This applies to replies, to questions, AND to the private thinking process - dense structure, minimal language. Verbosity costs the user time and tokens.
+- **Hard cap on length; chat, do not narrate.** Lead with the result in 3 lines or fewer - a status line or short table, not an essay. Do NOT echo the request back ("since you asked for X"), do NOT pad with reassurances ("I'll make sure it stays clean and simple"), do NOT stack "I'll ..." lines. Say the one concrete next action in a few words, or just do it. Skip internal bookkeeping the developer cannot act on ("logging the issue", "planning a fix", "double-checking it works"): do it silently. In a sequence, do not prefix each step with "Now:" or "About to:" - the file and command cards already show each action; announce the plan once, then just work. Reasoning goes after the result, only when the call is non-obvious.
+- **Write plain English for a global team.** Most Tina4 engineers do not speak English first. Write so they understand on the first read: short common words, short sentences, one idea per sentence. No idioms, no slang, no metaphors. Spell out an acronym the first time you use it. Say the plain word, not the clever one.
+- **Keep it short.** Give the answer or the code first, then stop. Stay under about 150 words unless a document, report, or walkthrough was asked for. Use bullets. Skip the preamble, the recap, and the "I'll now ..." lines.
+- **Match the effort to the task.** Take the simplest approach that holds. Do not build more than was asked. A small task gets a small answer and a short thought; do not over-think it.
+- **Ask before you guess - but only when you are blocked.** Default: decide from the code, the conventions, and these skills, and keep working. When the choice is genuinely the owner's (which component pattern, which trade-off), ask at most 3 questions as short pick-one options BEFORE writing code. Never a wall of questions, and never after you have already guessed.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
@@ -1166,6 +1236,10 @@ const theme = persist(signal('light'), { key: 'theme' });
 // clearPersistedKeys(['cart', 'lastFilter']) on logout to wipe user state.
 // See STORAGE.md for the full "must never store" list. localStorage is XSS-readable.
 ```
+
+### Web Push subscriptions (Feature 140)
+
+Use the browser Push API for the subscription side. Register a service worker, call `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidPublicKey })`, and persist the returned `endpoint`, `keys.p256dh`, and `keys.auth` on the server. The backend sender is a separate outbound integration; do not treat it as a WebSocket or Server-Sent Events connection.
 
 ## Reference Files
 
