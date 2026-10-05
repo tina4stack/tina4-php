@@ -43,6 +43,13 @@ if ($port === 0) {
     return $response(['id' => session_id(), 'hit' => $_SESSION['hit']]);
 })->noAuth();
 
+// Establishes a native session: one is kept, and its cookie sent, only once
+// the request has put something in $_SESSION.
+\Tina4\Router::get('/start', function (\Tina4\Request $request, \Tina4\Response $response) {
+    $_SESSION['started'] = true;
+    return $response(['id' => session_id(), 'hit' => $_SESSION['hit'] ?? null]);
+})->noAuth();
+
 // Reads the native session back on the FOLLOWING request.
 \Tina4\Router::get('/whoami', function (\Tina4\Request $request, \Tina4\Response $response) {
     return $response(['id' => session_id(), 'hit' => $_SESSION['hit'] ?? null]);

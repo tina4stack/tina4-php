@@ -65,8 +65,9 @@ class SessionRegenerateNativeCookieTest extends TestCase
         $env['TINA4_DEBUG'] = 'false';
         $server = \TestServer::startScript(self::FIXTURE, env: $env);
         try {
-            // 1) Establish a native session. GET /whoami emits PHPSESSID=<A>.
-            $first = $this->rawRequest('127.0.0.1', $server->port, 'GET', '/whoami');
+            // 1) Establish a native session. GET /start writes $_SESSION and
+            //    emits PHPSESSID=<A>.
+            $first = $this->rawRequest('127.0.0.1', $server->port, 'GET', '/start');
             $this->assertSame('200', substr($first['status'], 0, 3), "log: {$server->log()}");
             $idA = $this->sessionIdFromCookies($first['setCookies']);
             $this->assertNotNull(

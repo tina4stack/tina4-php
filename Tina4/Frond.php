@@ -3649,6 +3649,10 @@ class Frond
             $sessionId = self::$formTokenSessionId;
             if ($sessionId === '' && session_status() === PHP_SESSION_ACTIVE) {
                 $sessionId = session_id();
+                // The token is now bound to this native session, so the session
+                // must outlive the request even when $_SESSION stays empty, or
+                // the form's post arrives under a different id and is refused.
+                Router::keepNativeSession();
             }
             if ($sessionId !== '') {
                 $payload['session_id'] = $sessionId;

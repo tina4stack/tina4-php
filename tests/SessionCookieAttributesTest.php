@@ -49,6 +49,10 @@ class SessionCookieAttributesTest extends TestCase
         <?php
         require_once '{$autoload}';
         \\Tina4\\Router::get('/', function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+            // Write to both sessions: a cookie is sent only for a session the
+            // request put something in.
+            \$request->session->set('seen', true);
+            \$_SESSION['seen'] = true;
             return \$response('ok');
         });
         \$result = \\Tina4\\Router::dispatch(new \\Tina4\\Request(), new \\Tina4\\Response());
