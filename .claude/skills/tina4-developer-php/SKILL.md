@@ -1,6 +1,6 @@
 ---
 name: tina4-developer-php
-updated_for_version: 3.13.105
+updated_for_version: 3.13.147
 description: >
   Use whenever a developer is building a PHP application with the Tina4 framework (tina4-php).
   Trigger when the user wants to create routes, define ORM models, write Frond templates, set up
