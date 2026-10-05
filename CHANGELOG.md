@@ -6,6 +6,15 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.148 — 2026-10-05
+
+### Sessions
+- An anonymous request stores no session: a request that never writes to the session no longer
+  creates or persists an empty session record (cross-framework fix, landed in all four frameworks).
+
+### AI skills
+- `tina4-developer-php` skill `updated_for_version` bumped.
+
 ## 3.13.147 — 2026-10-05
 
 ### Dev MCP tools (fixes #271)
