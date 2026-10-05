@@ -6,6 +6,15 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.147 — 2026-10-05
+
+### Dev MCP tools (fixes #271)
+- `database_columns` reads schema metadata so an empty table returns its columns; a missing table returns a clear `table not found` error.
+- Tool argument validation returns an actionable `missing/unknown argument` error instead of a raw ArgumentCountError / 500; `api_method` now populates `params` and `return`.
+- `route_list` entries include each route's `middleware`, so a middleware-guarded route is distinguishable from an open one.
+- `detectFileChanges` flags a new route file added at runtime (restart-required warning).
+- Developer skill corrected: PHP routes/models need a restart, and `api_method` shown with argument names.
+
 ## 3.13.146 — 2026-10-04
 
 ### AI skills
