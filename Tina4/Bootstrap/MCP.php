@@ -331,20 +331,39 @@ class McpServer
         if ($tool === null) {
             throw new \RuntimeException("Unknown tool: {$name}");
         }
-        $handler = $tool['handler'];
+        $argumentError = $this->validateArguments($name, $tool, $arguments);
+        if ($argumentError !== null) {
+            return ['error' => $argumentError];
+        }
         $schema = $tool['inputSchema'] ?? ['properties' => []];
-        $props = $schema['properties'] ?? [];
-        $positional = [];
-        foreach ($props as $argName => $_) {
-            if (array_key_exists($argName, $arguments)) {
-                $positional[] = $arguments[$argName];
-            } else {
-                // Parameter missing — let the callable's own defaults
-                // handle it; stop collecting positionals at the first gap.
-                break;
+        $known = array_keys($schema['properties'] ?? []);
+        // Named arguments: a gap in optional params can no longer shift later values.
+        $named = array_intersect_key($arguments, array_flip($known));
+        return ($tool['handler'])(...$named);
+    }
+
+    /**
+     * Check `$arguments` against the tool's input schema BEFORE the handler runs,
+     * so a wrong call becomes an actionable message instead of a PHP
+     * ArgumentCountError / 500. Missing required first, then unknown keys.
+     *
+     * @return string|null the error message, or null when the call is valid
+     */
+    private function validateArguments(string $name, array $tool, array $arguments): ?string
+    {
+        $schema = $tool['inputSchema'] ?? [];
+        $takes = implode(', ', array_keys($schema['properties'] ?? []));
+        foreach ($schema['required'] ?? [] as $requiredName) {
+            if (!array_key_exists($requiredName, $arguments)) {
+                return "missing required argument '{$requiredName}' ({$name} takes {$takes})";
             }
         }
-        return $handler(...$positional);
+        foreach (array_keys($arguments) as $givenName) {
+            if (!array_key_exists($givenName, $schema['properties'] ?? [])) {
+                return "unknown argument '{$givenName}' ({$name} takes {$takes})";
+            }
+        }
+        return null;
     }
 
     private string $path;
@@ -641,10 +660,15 @@ class McpServer
         }
 
         $arguments = $params['arguments'] ?? [];
-        $handler = $tool['handler'];
+        $argumentError = $this->validateArguments($toolName, $tool, $arguments);
+        if ($argumentError !== null) {
+            return [
+                'content' => [['type' => 'text', 'text' => json_encode(['error' => $argumentError])]],
+            ];
+        }
 
         // Call the handler with named arguments
-        $result = $handler(...$arguments);
+        $result = ($tool['handler'])(...$arguments);
 
         // Format result as MCP content
         if (is_string($result)) {
@@ -920,6 +944,26 @@ class McpServer
  */
 class McpDevTools
 {
+    /**
+     * Human-readable name for one attached route middleware: a class-name string,
+     * `Class::method`, or `Closure@file:line` for an anonymous function.
+     */
+    public static function describeMiddleware(mixed $middleware): string
+    {
+        if (is_string($middleware)) {
+            return $middleware;
+        }
+        if (is_array($middleware) && count($middleware) === 2) {
+            $owner = is_object($middleware[0]) ? get_class($middleware[0]) : (string) $middleware[0];
+            return $owner . '::' . $middleware[1];
+        }
+        if ($middleware instanceof \Closure) {
+            $reflection = new \ReflectionFunction($middleware);
+            return 'Closure@' . basename((string) $reflection->getFileName()) . ':' . $reflection->getStartLine();
+        }
+        return is_object($middleware) ? get_class($middleware) : gettype($middleware);
+    }
+
     /**
      * Register all built-in dev tools on the given McpServer.
      */
@@ -1313,15 +1357,16 @@ class McpDevTools
             if (!preg_match('/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)?$/', $table)) {
                 return ['error' => 'Invalid table name'];
             }
+            // Schema metadata, not the first row of SELECT *: an EMPTY table
+            // still reports its columns (name, type, nullable).
             try {
-                $result = $db->fetch("SELECT * FROM $table", [], 1, 0);
+                if (!$db->tableExists($table)) {
+                    return ['error' => "table not found: {$table}"];
+                }
+                return $db->getColumns($table);
             } catch (\Throwable $e) {
                 return ['error' => $e->getMessage()];
             }
-            if ($result && !empty($result->records)) {
-                return array_keys($result->records[0]);
-            }
-            return [];
         }, 'Get column definitions for a table');
 
         // ── Route Tools ───────────────────────────────────────
@@ -1340,6 +1385,7 @@ class McpDevTools
                         'method' => $method,
                         'path' => $route['pattern'] ?? '',
                         'auth_required' => !($route['noAuth'] ?? false),
+                        'middleware' => array_map([self::class, 'describeMiddleware'], $route['middleware'] ?? []),
                     ];
                 }
             }

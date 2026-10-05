@@ -335,6 +335,12 @@ class Server
     /** @var bool True if the most recent file-change scan saw a .php file change */
     private bool $phpChangeDetected = false;
 
+    /** True once the first scan has primed fileMtimes (later unseen files are NEW). */
+    private bool $fileMapPrimed = false;
+
+    /** .php files that appeared after the first scan; PHP needs a restart to load them. */
+    private array $newPhpFiles = [];
+
     /** @var float Last time we scanned files for changes */
     private float $lastFileCheck = 0;
 
@@ -3181,6 +3187,7 @@ class Server
         $extensions = ['php', 'twig', 'html', 'scss', 'css', 'js', 'json'];
         $changed = false;
         $this->phpChangeDetected = false;
+        $this->newPhpFiles = [];
 
         // Also watch .env
         $envFile = '.env';
@@ -3212,6 +3219,14 @@ class Server
                 }
                 $path = $file->getPathname();
                 $mtime = $file->getMTime();
+                if ($this->fileMapPrimed && !isset($this->fileMtimes[$path]) && $ext === 'php') {
+                    // A NEW .php file (e.g. src/routes/new.php) never loads into a running
+                    // PHP process, so it must raise the same restart signal an edit does.
+                    $changed = true;
+                    $this->phpChangeDetected = true;
+                    $this->newPhpFiles[] = $path;
+                    Log::info("Hot reload: {$path} added");
+                }
                 if (isset($this->fileMtimes[$path]) && $this->fileMtimes[$path] !== $mtime) {
                     $changed = true;
                     if ($ext === 'php') {
@@ -3222,6 +3237,8 @@ class Server
                 $this->fileMtimes[$path] = $mtime;
             }
         }
+
+        $this->fileMapPrimed = true;
 
         return $changed;
     }
@@ -3241,6 +3258,12 @@ class Server
      */
     private function onFilesChanged(): void
     {
+        if ($this->newPhpFiles !== []) {
+            Log::warning(
+                "Hot reload: new .php file added (" . implode(', ', $this->newPhpFiles) . ") — " .
+                "restart required: a new route/model file is not registered until the server restarts."
+            );
+        }
         if ($this->phpChangeDetected) {
             Log::warning(
                 "Hot reload: .php file changed — PHP code changes require a full server restart. " .

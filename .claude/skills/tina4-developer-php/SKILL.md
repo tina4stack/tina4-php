@@ -242,9 +242,12 @@ the developer can correct.
 ### 1. Keep the main session free — delegate to a worker
 When the developer gives an instruction, don't do the work inline. **Allocate it to a plan, then
 spawn a separate worker to execute it**, so the main session is always free for the next input.
-Tina4 **hot-reloads on save** (DevReload), so as the worker edits routes, models, and templates the
-developer watches the interface change **live in the browser** — keeping the main session open is
-what lets them observe and steer while the work happens. The main agent scopes, dispatches, and
+Templates, SCSS, CSS and JS **hot-reload on save**, so the developer watches those change **live in
+the browser**. PHP route and model files do **not**: PHP cannot re-load an already-included file, so
+a changed or NEW `src/routes/*.php` / `src/orm/*.php` needs a **server restart** (the server logs a
+"restart required" warning). `route_list` shows routes **as loaded at server start** — a missing
+route after an edit usually means "restart", not "not registered". Keeping the main session open is
+what lets the developer observe and steer while the work happens. The main agent scopes, dispatches, and
 reports; workers build and update the plan. When a worker finishes an item, surface it to the
 developer. Whoever builds updates `plan/<feature>.md` in the **same turn** they claim progress:
 saying "done" while the plan still shows `[ ]` is a process failure, so fix the file before you report.
@@ -427,13 +430,13 @@ running (`tina4 serve` with `TINA4_DEBUG=true`):
 
 - **`api_search("render template")`** — ranked search across the framework + your own code; returns fqn, signature, file:line. Run it BEFORE assuming a method exists.
 - **`api_class("Frond")`** — every method on a class, with signatures. A bare name (`Frond`) or the full fqn (`Tina4\Frond`) both resolve.
-- **`api_method("Frond", "addTest")`** — exact signature, params, return type, file and line for one method.
+- **`api_method(class, name)`** e.g. `api_method("Frond", "addTest")` — the two arguments are named `class` and `name` (NOT `method`); over MCP call it as `{"class":"Frond","name":"addTest"}`. Exact signature, params, return type, file and line for one method.
 - **`code_search("where is the auth token issued?")`** — fuzzy/semantic full-text search over **THIS project's own source + docs** (the native `Context` FTS5 index — zero-dep, kept live on every file save). Ranks the file that *defines* a symbol above tests that merely mention it. The in-repo, semantic counterpart to `api_*`.
 
 ```
 api_search("queue consume")     -> finds Queue::consume and its signature
 api_class("Database")           -> every method on Database, with signatures
-api_method("Auth", "getToken")  -> getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string
+api_method(class="Auth", name="getToken")  -> getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string
 code_search("send an email")    -> the routes/services in YOUR app that already do it
 ```
 
@@ -517,7 +520,8 @@ tina4 serve                            # ALWAYS use this — SCSS compile, file 
 
 **IMPORTANT:** Always run the app with `tina4 serve`, not `tina4php serve`, `composer serve`, or
 `php index.php` directly. The unified `tina4` client handles SCSS compilation, file
-watching, browser auto-open, and hot reload. Running `php index.php` directly skips all of that.
+watching, browser auto-open, and hot reload of templates/CSS/JS (PHP route/model edits still need a restart). Running `php index.php`
+directly skips all of that.
 
 The CLI passes `--managed` to the framework server. The framework refuses to start without it.
 To bypass (e.g. Docker, CI), set `TINA4_OVERRIDE_CLIENT=true` in `.env`.

@@ -246,9 +246,74 @@ class Docs
             'static'     => $entry['static'] ?? false,
             'source'     => $entry['source'],
             'version'    => $entry['version'],
-            'params'     => [],
-            'return'     => '',
+            'params'     => $this->paramsFromSignature($entry['signature']),
+            'return'     => $this->returnFromSignature($entry['signature']),
         ];
+    }
+
+    /**
+     * Split a token-parsed signature like `getToken(array $payload, int $n = 5): string`
+     * into the same {name,type,default,optional,variadic} records buildMethodSpec emits.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function paramsFromSignature(string $signature): array
+    {
+        $open = strpos($signature, '(');
+        $close = strrpos($signature, ')');
+        if ($open === false || $close === false || $close <= $open) {
+            return [];
+        }
+        $inner = substr($signature, $open + 1, $close - $open - 1);
+        $pieces = [];
+        $depth = 0;
+        $quote = '';
+        $current = '';
+        foreach (str_split($inner) as $ch) {
+            if ($quote !== '') {
+                if ($ch === $quote) {
+                    $quote = '';
+                }
+            } elseif ($ch === '"' || $ch === "'") {
+                $quote = $ch;
+            } elseif ($ch === '(' || $ch === '[') {
+                $depth++;
+            } elseif ($ch === ')' || $ch === ']') {
+                $depth--;
+            } elseif ($ch === ',' && $depth === 0) {
+                $pieces[] = $current;
+                $current = '';
+                continue;
+            }
+            $current .= $ch;
+        }
+        $pieces[] = $current;
+        $params = [];
+        foreach ($pieces as $piece) {
+            $piece = trim($piece);
+            if ($piece === '' || !preg_match('/^(?:(.*?)\s*)?(&)?(\.\.\.)?\$(\w+)\s*(?:=\s*(.+))?$/s', $piece, $m)) {
+                continue;
+            }
+            $hasDefault = isset($m[5]) && $m[5] !== '';
+            $params[] = [
+                'name'     => $m[4],
+                'type'     => trim($m[1] ?? ''),
+                'default'  => $hasDefault ? trim($m[5]) : null,
+                'optional' => $hasDefault || $m[3] === '...',
+                'variadic' => $m[3] === '...',
+            ];
+        }
+        return $params;
+    }
+
+    /** The `: type` tail of a token-parsed signature, or '' when none was declared. */
+    private function returnFromSignature(string $signature): string
+    {
+        $close = strrpos($signature, ')');
+        if ($close === false) {
+            return '';
+        }
+        return ltrim(trim(substr($signature, $close + 1)), ': ');
     }
 
     /**
