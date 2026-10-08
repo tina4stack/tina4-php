@@ -254,6 +254,18 @@ class App
         // because __destruct doesn't run reliably mid-test. Moving
         // the install into start() keeps the production behaviour
         // identical and stops tests from needing per-test cleanup.
+        //
+        // A web request is the exception. Its index.php builds one App per
+        // request, and that request can be refused before start() installs
+        // anything: here, where Log::configure() below throws on a bad
+        // TINA4_LOG_* value, and by start()'s own boot guards (a short
+        // TINA4_SECRET, a v3.11-era variable). With no capture installed,
+        // PHP's own handler answered the client -- the exception, the
+        // framework's absolute paths and a stack trace, under a 200 when
+        // display_errors is on.
+        if (self::isWebRequest()) {
+            $this->installErrorHandlers();
+        }
 
         // Set base path for static file serving
         Router::$basePath = $this->basePath;
@@ -531,7 +543,11 @@ class App
     {
         // Refuse to boot with v3.11 / v2 era un-prefixed env vars set.
         // See self::LEGACY_ENV_VARS / self::checkLegacyEnvVars().
-        self::checkLegacyEnvVars();
+        // A console exits 2. A web request THROWS instead, so the handler the
+        // constructor installed answers it: exit() ends a request normally, and
+        // the client got an empty 200 on every route while the reason went to
+        // the server's stderr.
+        self::checkLegacyEnvVars(exit: !self::isWebRequest());
 
         // Refuse to serve with a secret anyone can reproduce: blank outside
         // dev, or set but shorter than 32 bytes in any mode (ADR-0079 s2).
@@ -556,80 +572,9 @@ class App
 
         // Install global exception + fatal-error capture. Done here
         // rather than in __construct so tests that don't call start()
-        // don't leak handlers across the suite. The matching restore
-        // happens in stop() / __destruct.
-        //
-        // Exception handler: any uncaught Throwable from a route,
-        // middleware, or bootstrap path gets logged with a full trace
-        // and recorded in the dev-toolbar's ErrorTracker. Without
-        // this, an uncaught exception bypasses Tina4\Log entirely
-        // and surfaces only via PHP's default error output.
-        if (!$this->exceptionHandlerSet) {
-            set_exception_handler(static function (\Throwable $e): void {
-                $msg = sprintf(
-                    'Uncaught %s: %s in %s:%d',
-                    get_class($e),
-                    $e->getMessage(),
-                    $e->getFile(),
-                    $e->getLine()
-                );
-                Log::error($msg, ['trace' => $e->getTraceAsString()]);
-                if (class_exists(ErrorTracker::class)) {
-                    ErrorTracker::capture(
-                        get_class($e),
-                        $e->getMessage(),
-                        $e->getTraceAsString(),
-                        $e->getFile(),
-                        $e->getLine()
-                    );
-                }
-                // A handler that returns makes PHP exit 0, so on the CLI an
-                // uncaught exception (an unreachable database during
-                // `tina4php migrate`, say) reported success to the deploy
-                // that ran it. Keep PHP's own status for an uncaught
-                // exception; a web request has no exit status to keep.
-                if (PHP_SAPI === 'cli') {
-                    exit(255);
-                }
-            });
-            $this->exceptionHandlerSet = true;
-        }
-
-        // Shutdown handler: fatal errors (E_ERROR, E_PARSE,
-        // E_COMPILE_ERROR, E_CORE_ERROR, E_USER_ERROR) kill the
-        // process before any set_error_handler runs, so they'd be
-        // invisible without this. PHP has no API to remove a
-        // shutdown function, so we guard with a class-level flag —
-        // repeated App::start() calls in the same process (test
-        // runs, long-running workers with restarts) don't stack.
-        if (!self::$shutdownHandlerRegistered) {
-            register_shutdown_function(static function (): void {
-                $err = error_get_last();
-                if ($err === null) {
-                    return;
-                }
-                $fatal = E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR | E_USER_ERROR;
-                if (!($err['type'] & $fatal)) {
-                    return;
-                }
-                Log::error(sprintf(
-                    '[FATAL] %s in %s:%d',
-                    $err['message'],
-                    $err['file'],
-                    $err['line']
-                ));
-                if (class_exists(ErrorTracker::class)) {
-                    ErrorTracker::capture(
-                        'FatalError',
-                        $err['message'],
-                        '',
-                        $err['file'],
-                        $err['line']
-                    );
-                }
-            });
-            self::$shutdownHandlerRegistered = true;
-        }
+        // don't leak handlers across the suite. (A web request installed
+        // it in the constructor already; see the note there.)
+        $this->installErrorHandlers();
 
         // Register dev admin dashboard (only in development mode)
         if ($this->isDevelopment()) {
@@ -697,6 +642,130 @@ class App
     }
 
     /**
+     * Install the global exception and fatal-error capture.
+     *
+     * Called from start() rather than __construct so tests that never call
+     * start() don't leak handlers across the suite -- except in a web request,
+     * where the constructor calls it first, before anything there or in
+     * start() can refuse the request (see the note in the constructor). The
+     * matching restore happens in shutdown() / __destruct. A second call is a
+     * no-op.
+     */
+    private function installErrorHandlers(): void
+    {
+        // Exception handler: any uncaught Throwable from a route,
+        // middleware, or bootstrap path gets logged with a full trace
+        // and recorded in the dev-toolbar's ErrorTracker. Without
+        // this, an uncaught exception bypasses Tina4\Log entirely
+        // and surfaces only via PHP's default error output.
+        if (!$this->exceptionHandlerSet) {
+            set_exception_handler(static function (\Throwable $e): void {
+                $msg = sprintf(
+                    'Uncaught %s: %s in %s:%d',
+                    get_class($e),
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine()
+                );
+                // The logger can be what failed: Log::configure() refuses a bad
+                // TINA4_LOG_* value, and logging here asks it again, so the same
+                // throw would escape this handler and PHP's own page would answer
+                // it after all. PHP's error log still takes the line.
+                try {
+                    Log::error($msg, ['trace' => $e->getTraceAsString()]);
+                } catch (\Throwable) {
+                    error_log($msg);
+                }
+                // ErrorTracker is declared inside DevAdmin.php, so no autoloader
+                // can find it: asking with autoload on only makes Tina4 print a
+                // "class not found" hint beside the real error (a boot refusal
+                // reaches here before DevAdmin is loaded). It exists exactly when
+                // DevAdmin has been loaded.
+                if (class_exists(ErrorTracker::class, false)) {
+                    ErrorTracker::capture(
+                        get_class($e),
+                        $e->getMessage(),
+                        $e->getTraceAsString(),
+                        $e->getFile(),
+                        $e->getLine()
+                    );
+                }
+                // A handler that returns makes PHP exit 0, so on the CLI an
+                // uncaught exception (an unreachable database during
+                // `tina4php migrate`, say) reported success to the deploy
+                // that ran it. Keep PHP's own status for an uncaught
+                // exception; a web request has no exit status to keep.
+                if (PHP_SAPI === 'cli') {
+                    exit(255);
+                }
+
+                // A web request has a STATUS to keep instead, and handling the
+                // throwable suppresses PHP's own error page, so nothing else
+                // will set one: without this the client got a 200 carrying
+                // whatever PHP had already printed. Say 500, and say nothing
+                // else outside dev -- the message may name a misconfiguration
+                // (CWE-209), and the trace and the framework's absolute paths
+                // are never for the client. They are in the log above.
+                if (!self::isWebRequest() || headers_sent()) {
+                    return;
+                }
+                http_response_code(500);
+                header('Content-Type: text/plain; charset=utf-8');
+                echo ErrorOverlay::isDebugMode()
+                    ? $e->getMessage() . "\n"
+                    : "Server Error\n";
+            });
+            $this->exceptionHandlerSet = true;
+        }
+
+        // Shutdown handler: fatal errors (E_ERROR, E_PARSE,
+        // E_COMPILE_ERROR, E_CORE_ERROR, E_USER_ERROR) kill the
+        // process before any set_error_handler runs, so they'd be
+        // invisible without this. PHP has no API to remove a
+        // shutdown function, so we guard with a class-level flag —
+        // repeated App::start() calls in the same process (test
+        // runs, long-running workers with restarts) don't stack.
+        if (!self::$shutdownHandlerRegistered) {
+            register_shutdown_function(static function (): void {
+                $err = error_get_last();
+                if ($err === null) {
+                    return;
+                }
+                $fatal = E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR | E_USER_ERROR;
+                if (!($err['type'] & $fatal)) {
+                    return;
+                }
+                Log::error(sprintf(
+                    '[FATAL] %s in %s:%d',
+                    $err['message'],
+                    $err['file'],
+                    $err['line']
+                ));
+                if (class_exists(ErrorTracker::class)) {
+                    ErrorTracker::capture(
+                        'FatalError',
+                        $err['message'],
+                        '',
+                        $err['file'],
+                        $err['line']
+                    );
+                }
+            });
+            self::$shutdownHandlerRegistered = true;
+        }
+    }
+
+    /**
+     * Whether this process is answering a web request (PHP-FPM, Apache, CGI,
+     * `php -S`) rather than running as a console (cli, phpdbg). A refusal is
+     * answered with a status in the first and an exit code in the second.
+     */
+    private static function isWebRequest(): bool
+    {
+        return PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg';
+    }
+
+    /**
      * Apply pending DB migrations on startup — NON-BREAKING.
      *
      * When a `migrations/` folder exists (with at least one `.sql` file) and
@@ -733,14 +802,17 @@ class App
             return;
         }
 
-        // Resolve a database — falls back to TINA4_DATABASE_URL via getDatabase().
-        $db = self::getDatabase();
-        if ($db === null) {
-            Log::debug('Startup migrations skipped (no database configured)');
-            return;
-        }
-
         try {
+            // Resolve a database — falls back to TINA4_DATABASE_URL via getDatabase().
+            // Inside the try: getDatabase() CONNECTS, and an unreachable database
+            // throws here. Outside it, that throw left start() before routing, and
+            // every route — /health included — answered an empty page.
+            $db = self::getDatabase();
+            if ($db === null) {
+                Log::debug('Startup migrations skipped (no database configured)');
+                return;
+            }
+
             $migration = new Migration($db, $folder);
             $result = $migration->migrate();
 
