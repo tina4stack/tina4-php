@@ -706,15 +706,25 @@ class App
      * migration must never take the backend down. (The explicit `tina4 migrate`
      * CLI stays fail-fast so CI still gets a non-zero exit.)
      *
-     * Disable with `TINA4_AUTO_MIGRATE=false` (also false/0/no/off) — e.g.
-     * multi-instance production that migrates as a separate deploy step
-     * (concurrent first-apply can race).
+     * CONCURRENCY: on a persistent server (Tina4\Server, Swoole) this runs ONCE
+     * per process — the static guard below. Under `php -S`, PHP-FPM and mod_php
+     * every request is a FRESH process, so it runs on EVERY request and several
+     * requests can reach a fresh database at the same moment. That is safe:
+     * Migration::migrate() holds a cross-process lock for the whole run
+     * (PostgreSQL/MySQL/MSSQL advisory lock; an OS file lock for SQLite/Firebird),
+     * so the winner migrates while the rest block, then find nothing pending
+     * (issue #277). The lock serializes per DB (advisory) or per host (file lock);
+     * cross-HOST production that runs migrations as a concurrent fleet should
+     * still set `TINA4_AUTO_MIGRATE=false` and run one `tina4 migrate` per deploy.
+     *
+     * Disable with `TINA4_AUTO_MIGRATE=false` (also false/0/no/off).
      */
     private function autoMigrateOnStartup(): void
     {
-        // Run at most once per process — start() may be re-entered per request
-        // under PHP-FPM / php -S (via __invoke()/handle()); migrations must not
-        // re-run on every request.
+        // Once per process on a persistent server. Under php -S / PHP-FPM every
+        // request is a new process, so this still runs per request — the
+        // cross-process lock in Migration::migrate() (not this guard) is what
+        // keeps concurrent first-boots from double-applying (#277).
         if (self::$autoMigrated) {
             return;
         }
