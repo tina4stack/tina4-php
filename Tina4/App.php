@@ -733,14 +733,22 @@ class App
             return;
         }
 
-        // Resolve a database — falls back to TINA4_DATABASE_URL via getDatabase().
-        $db = self::getDatabase();
-        if ($db === null) {
-            Log::debug('Startup migrations skipped (no database configured)');
-            return;
-        }
-
+        // Resolve a database and migrate, all inside the guard. getDatabase()
+        // CONNECTS eagerly (Database::fromEnv -> Database::create), so an
+        // unreachable server throws HERE, not inside migrate() — resolving it
+        // outside the try let that throw escape start(), __invoke() and handle(),
+        // so every route (/health included) answered 200 with an empty body
+        // while the docblock promised the service still starts (tina4-php#276).
+        // A null return is "no database configured" (skip, debug); a throw is a
+        // connect/migrate failure (log LOUD, boot anyway). Parity with the Python
+        // master's _auto_migrate_on_startup (DB resolution inside the try).
         try {
+            $db = self::getDatabase();
+            if ($db === null) {
+                Log::debug('Startup migrations skipped (no database configured)');
+                return;
+            }
+
             $migration = new Migration($db, $folder);
             $result = $migration->migrate();
 
@@ -1595,7 +1603,29 @@ HTML;
      */
     public function __invoke(mixed $request = null): Response
     {
-        $this->start();
+        // A failure inside start() (an insecure TINA4_SECRET, a legacy env var,
+        // any bootstrap throw) must never reach the client as PHP's default
+        // handler output. requireBootSecret() throws BEFORE start() installs its
+        // set_exception_handler, so under `php -S` with display_errors on the
+        // client got 200 OK carrying the fatal message and a stack trace with
+        // server file paths; with it off, an empty 500 (tina4-php#276). Catch it
+        // here, log it ONCE, and answer a plain 500 with no details whatever
+        // display_errors says — the CWE-209 production-500 contract the rest of
+        // the framework follows. (The other three frameworks run a long-lived
+        // server that never begins serving on a boot failure — Python sys.exit(1)s;
+        // PHP re-enters start() per request under php -S / PHP-FPM, so the guard
+        // belongs on this request path.)
+        try {
+            $this->start();
+        } catch (\Throwable $e) {
+            Log::error(sprintf(
+                'Boot failed: %s in %s:%d',
+                $e->getMessage(),
+                $e->getFile(),
+                $e->getLine()
+            ), ['trace' => $e->getTraceAsString()]);
+            return (new Response())->text('Internal Server Error', 500);
+        }
 
         // Build Tina4 Request from whatever we received
         if ($request instanceof Request) {
