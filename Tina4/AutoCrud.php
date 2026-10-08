@@ -225,15 +225,58 @@ class AutoCrud
                 if ($unknownField !== null) {
                     return $response->error('UNKNOWN_FIELD', "Unknown sort field '{$unknownField}'", 400);
                 }
+
+                // ADR-0094: honour an explicit ?sort_dir=asc|desc for a single
+                // bare ?sort=column (the CRUD grid's spelling). The Mongo-style
+                // "-field,field" sort keeps its own inline direction and ignores
+                // sort_dir. parseSortParam() already rejected an unknown column
+                // above (ADR-0069); this just adds the direction toggle the grid
+                // headers need.
+                $sortParam = trim($request->query['sort']);
+                if ($orderBy !== null && isset($request->query['sort_dir'])
+                    && $sortParam !== '' && !str_contains($sortParam, ',') && !str_starts_with($sortParam, '-')) {
+                    $direction = strtolower((string)$request->query['sort_dir']) === 'desc' ? 'DESC' : 'ASC';
+                    $orderBy = preg_replace('/\s+(?:ASC|DESC)\s*$/i', " {$direction}", $orderBy);
+                }
+            }
+
+            // Build the WHERE from resolved filter columns (above) PLUS an
+            // ADR-0094 ?search= clause, so the envelope total reflects both.
+            $conditions = [];
+            $params = [];
+            foreach ($filter as $column => $value) {
+                $conditions[] = "{$column} = ?";
+                $params[] = $value;
+            }
+
+            // ADR-0094: ?search=term full-text filters the list — a case-
+            // insensitive LIKE %term% OR'd across the model's declared string
+            // columns, added to the WHERE before limit/offset so the envelope's
+            // total reflects the filtered set. A model with no string column
+            // simply matches nothing; it never errors. This is what the CRUD
+            // admin grid (and any client) uses to search.
+            $searchTerm = isset($request->query['search']) ? trim((string)$request->query['search']) : '';
+            if ($searchTerm !== '') {
+                $searchColumns = [];
+                foreach ($model->getFieldDefinitions() as $definition) {
+                    if ($definition['type'] === 'string') {
+                        $searchColumns[] = $definition['column'];
+                    }
+                }
+                if ($searchColumns !== []) {
+                    $conditions[] = '(' . implode(' OR ', array_map(static fn (string $column): string => "{$column} LIKE ?", $searchColumns)) . ')';
+                    foreach ($searchColumns as $ignored) {
+                        $params[] = "%{$searchTerm}%";
+                    }
+                }
             }
 
             // Both branches query through $model, which carries the connection
             // this AutoCrud was constructed with - the static find() would
-            // resolve the GLOBAL default instead. The filter columns were
-            // resolved above, so only they and placeholders reach the WHERE.
-            if ($filter !== []) {
-                $conditions = implode(' AND ', array_map(static fn (string $column): string => "{$column} = ?", array_keys($filter)));
-                $models = $model->where($conditions, array_values($filter), $limit, $offset, null, $orderBy);
+            // resolve the GLOBAL default instead. Only resolved columns and
+            // placeholders reach the WHERE.
+            if ($conditions !== []) {
+                $models = $model->where(implode(' AND ', $conditions), $params, $limit, $offset, null, $orderBy);
             } else {
                 $models = $model->all($limit, $offset, null, $orderBy);
             }

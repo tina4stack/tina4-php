@@ -1,0 +1,69 @@
+{#
+  crud/table.twig — the CRUD data table (headers + rows + row actions).
+
+  Override: drop your own templates/crud/table.twig in your app to restyle it.
+  It is rendered on its own by Tina4::Crud, so your copy wins over this one.
+
+  What the controller hands you:
+    headers  - one per column: { label, align, sortable, col, next_dir, url,
+               indicator } (sortable) or { label, align, plain } (not sortable)
+    rows     - one per record: { id, cells }  (cells is the pre-built <td> run)
+    empty    - true when there are no rows
+    colspan  - column count + 1 (for the empty row)
+    editable - inline-edit table (Save/Delete); readonly - view table (Edit/Delete)
+    table_name, table_id_attr, inline_script
+
+  Alignment: each header/cell carries a tina4-css class (text-start for text,
+  text-end for numbers). Actions is always text-end. No inline styles (ADR-0088).
+
+  The initial page is server-rendered here; after it loads, the page's script
+  re-renders <tbody data-crud-body> over fetch() as the user searches/sorts/pages.
+#}
+<div class="table-responsive">
+<table class="table table-striped table-hover"{{ table_id_attr|raw }}>
+<thead class="table-dark"><tr>
+{% for header in headers %}{% if header.sortable %}<th class="{{ header.align }}"><a class="sort-link" href="{{ header.url }}" data-crud-sort="{{ header.col }}" data-crud-dir="{{ header.next_dir }}">{{ header.label }}{{ header.indicator|raw }}</a></th>{% endif %}{% if header.plain %}<th class="{{ header.align }}">{{ header.label }}</th>{% endif %}{% endfor %}<th class="text-end">Actions</th>
+</tr></thead>
+<tbody data-crud-body>
+{% if empty %}<tr><td colspan="{{ colspan }}" class="crud-empty">No records found.</td></tr>{% endif %}
+{% for row in rows %}<tr data-id="{{ row.id }}">{{ row.cells|raw }}<td class="text-end">{% if editable %}<button class="btn btn-sm btn-primary me-1" data-crud-inline="save" data-table="{{ table_name }}" data-id="{{ row.id }}">Save</button><button class="btn btn-sm btn-danger" data-crud-inline="delete" data-table="{{ table_name }}" data-id="{{ row.id }}">Delete</button>{% endif %}{% if readonly %}<button class="btn btn-sm btn-primary me-1" data-crud-action="edit" data-id="{{ row.id }}">Edit</button><button class="btn btn-sm btn-danger" data-crud-action="delete" data-id="{{ row.id }}">Delete</button>{% endif %}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% if inline_script %}
+{# Inline-edit fragment (Tina4::Crud.generate_table). CSP-clean: a nonce'd
+   <script> plus data-crud-inline buttons bound through one delegated listener,
+   never an inline on*= attribute. #}
+<script nonce="{{ csp_nonce() }}">
+function crudSave(table, id) {
+  var row = document.querySelector('tr[data-id="' + id + '"]');
+  var cells = row.querySelectorAll('td[data-field]');
+  var data = {};
+  cells.forEach(function (cell) { data[cell.dataset.field] = cell.textContent; });
+  fetch('/api/' + table + '/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function (r) { return r.json(); }).then(function () { }).catch(function () { });
+}
+function crudDelete(table, id) {
+  fetch('/api/' + table + '/' + id, { method: 'DELETE' })
+    .then(function (r) { return r.json(); })
+    .then(function () {
+      var row = document.querySelector('tr[data-id="' + id + '"]');
+      if (row) row.remove();
+    })
+    .catch(function () { });
+}
+document.addEventListener('click', function (event) {
+  var button = event.target.closest('[data-crud-inline]');
+  if (!button) return;
+  if (button.dataset.crudInline === 'save') {
+    crudSave(button.dataset.table, button.dataset.id);
+  } else if (button.dataset.crudInline === 'delete') {
+    crudDelete(button.dataset.table, button.dataset.id);
+  }
+});
+</script>
+{% endif %}

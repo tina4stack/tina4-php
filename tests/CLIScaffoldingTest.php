@@ -78,7 +78,8 @@ class CLIScaffoldingTest extends TestCase
             'pluralizeTable', 'toTableNameWithTransform', 'resolveTable',
             'generateModel', 'generateRoute', 'generateMigration',
             'generateMiddleware', 'generateTest', 'generateForm',
-            'generateView', 'generateCrud', 'generateAuth',
+            'generateView', 'generateCrud', 'generateCrudAdminRoute',
+            'copyCrudTemplates', 'emitCrudGateTest', 'generateAuth',
             'generateService', 'generateQueue', 'generateValidator',
             'generateSeeder', 'generateWebsocket', 'generateListener',
             // Co-emitted-test helpers (Phase 4): the shared writer + the per-
@@ -348,8 +349,12 @@ class CLIScaffoldingTest extends TestCase
      * the TABLE is pluralised to `orders`; the route must be `orders`, NOT
      * `orderss`. The migration stays `create_orders`.
      */
-    public function testCrudReservedWordClassIsNotDoublePluralised(): void
+    public function testCrudReservedWordClassKeysOffTheTable(): void
     {
+        // ADR-0094: the admin route FILE, the /admin path and the AutoCrud REST
+        // path all key off the TABLE. `order` is a SQL reserved word, so the
+        // table is pluralised to `orders`; the route file is src/routes/orders.php
+        // and the page is /admin/orders — never double-pluralised (orderss).
         ob_start();
         generateCrud('Order', ['fields' => 'total:float'], self::$fieldTypeMap);
         ob_end_clean();
@@ -357,32 +362,96 @@ class CLIScaffoldingTest extends TestCase
         $this->assertFileExists('src/routes/orders.php');
         $this->assertFileDoesNotExist('src/routes/orderss.php');
         $route = file_get_contents('src/routes/orders.php');
-        $this->assertStringContainsString('/orders', $route);
+        $this->assertStringContainsString('/admin/orders', $route);
         $this->assertStringNotContainsString('orderss', $route);
-
-        $this->assertFileExists('src/templates/pages/orders.twig');
-        $this->assertFileDoesNotExist('src/templates/pages/orderss.twig');
 
         $this->assertFileExists('src/orm/Order.php');
         $this->assertNotEmpty(glob('migrations/*create_orders.sql'));
         $this->assertEmpty(glob('migrations/*create_orderss.sql'));
     }
 
-    public function testCrudPlainWordClassIsPluralisedOnce(): void
+    public function testCrudPlainWordClassKeepsSingularTable(): void
     {
         ob_start();
         generateCrud('Product', ['fields' => 'name:string'], self::$fieldTypeMap);
         ob_end_clean();
 
-        $this->assertFileExists('src/routes/products.php');
-        $this->assertFileDoesNotExist('src/routes/productss.php');
-        $route = file_get_contents('src/routes/products.php');
-        $this->assertStringContainsString('/products', $route);
+        // non-reserved -> table stays SINGULAR -> route file + path key off it.
+        $this->assertFileExists('src/routes/product.php');
+        $this->assertFileDoesNotExist('src/routes/products.php');
+        $route = file_get_contents('src/routes/product.php');
+        $this->assertStringContainsString('/admin/product', $route);
         $this->assertStringNotContainsString('productss', $route);
 
         $this->assertFileExists('src/orm/Product.php');
-        // non-reserved -> table stays SINGULAR, so the migration is create_product.
         $this->assertNotEmpty(glob('migrations/*create_product.sql'));
+    }
+
+    // ── generate crud: AutoCrud-backed admin page (ADR-0094) ─────────────
+    public function testCrudDefaultRegistersAutoCrudSecureAndRendersToCrud(): void
+    {
+        ob_start();
+        generateCrud('Doohickey', ['fields' => 'name:string'], self::$fieldTypeMap);
+        ob_end_clean();
+
+        $src = file_get_contents('src/routes/doohickey.php');
+        // Backend is AutoCrud, registered secure-by-default (public=false).
+        $this->assertStringContainsString('new \Tina4\AutoCrud(\Tina4\ORM::database())', $src);
+        $this->assertStringContainsString('register(\Doohickey::class, false)', $src);
+        $this->assertStringContainsString('generateRoutes()', $src);
+        // The page renders via Crud::toCrud and is ->secure() by default.
+        $this->assertStringContainsString('\Tina4\Crud::toCrud($request', $src);
+        $this->assertStringContainsString("'model' => \Doohickey::class", $src);
+        $this->assertStringContainsString('->secure()', $src);
+        // No hand-written list/detail/write route (the backend is AutoCrud).
+        $this->assertStringNotContainsString('Router::post', $src);
+    }
+
+    public function testCrudPublicOpensWritesAndPage(): void
+    {
+        ob_start();
+        generateCrud('Contraption', ['fields' => 'name:string', 'public' => true], self::$fieldTypeMap);
+        ob_end_clean();
+
+        $src = file_get_contents('src/routes/contraption.php');
+        $this->assertStringContainsString('register(\Contraption::class, true)', $src);
+        // --public opens the page too: no ->secure() chained on the GET route.
+        $this->assertStringNotContainsString('->secure()', $src);
+    }
+
+    public function testCrudCopiesOverridableTemplates(): void
+    {
+        ob_start();
+        generateCrud('Gizmo', ['fields' => 'name:string'], self::$fieldTypeMap);
+        ob_end_clean();
+
+        foreach (['page', 'table', 'form', 'modals'] as $t) {
+            $this->assertFileExists("src/templates/crud/{$t}.twig");
+        }
+    }
+
+    public function testCrudNoTemplatesSkipsTemplateCopy(): void
+    {
+        ob_start();
+        generateCrud('Sprocket', ['fields' => 'name:string', 'no-templates' => true], self::$fieldTypeMap);
+        ob_end_clean();
+
+        $this->assertFileDoesNotExist('src/templates/crud/page.twig');
+        // The route is still generated.
+        $this->assertFileExists('src/routes/sprocket.php');
+    }
+
+    public function testCrudEmitsGateTest(): void
+    {
+        ob_start();
+        generateCrud('Trinket', ['fields' => 'name:string'], self::$fieldTypeMap);
+        ob_end_clean();
+
+        $this->assertFileExists('tests/TrinketCrudTest.php');
+        $test = file_get_contents('tests/TrinketCrudTest.php');
+        $this->assertStringContainsString('/api/trinket', $test);
+        $this->assertStringContainsString('/admin/trinket', $test);
+        $this->assertStringContainsString('401', $test);
     }
 
     public function testGenerateModelSkipsDuplicate(): void

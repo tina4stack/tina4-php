@@ -1,0 +1,401 @@
+{#
+  crud/page.twig — the CRUD admin page shell.
+
+  Override: drop your own templates/crud/page.twig in your app to restyle it.
+  This file owns the page chrome (title, search box, info line, table slot,
+  pagination, modals) and ONE nonce'd <script> that drives the grid over fetch()
+  against the AutoCrud REST endpoints. Tina4::Crud registers no routes of its own
+  (ADR-0094) — the backend is entirely AutoCrud.
+
+  Values handed in by the controller:
+    title, search              - page title + current search term (escaped)
+    request_path               - this page's path (for no-JS form/sort fallbacks)
+    info_count/total/page/total_pages - the summary line numbers
+    table_html                 - the server-rendered crud/table.twig (first page)
+    modals_html                - the server-rendered crud/modals.twig
+    show_pagination, controls  - the pager links
+    config_json                - the grid's state + columns for the script
+
+  Styling is tina4-css only (Bootstrap-compatible). The one <style> block below
+  carries the CSP nonce (ADR-0088); there are NO inline style= or on*= attributes
+  anywhere — every control binds through addEventListener in the script.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<link rel="stylesheet" href="/css/tina4.min.css">
+<style nonce="{{ csp_nonce() }}">
+.crud-container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+.crud-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.crud-search { flex: 0 1 300px; max-width: 300px; }
+.crud-actions { display: flex; gap: 0.5rem; align-items: center; }
+.crud-actions .btn { white-space: nowrap; flex-shrink: 0; }
+.crud-info { color: var(--text-muted, #6c757d); font-size: 0.875rem; margin-bottom: 0.5rem; }
+.crud-empty { text-align: center; padding: 2rem; }
+.crud-errors { margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 0.25rem;
+  background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.crud-errors[hidden] { display: none; }
+.crud-pagination { display: flex; justify-content: center; gap: 0.25rem; margin-top: 1rem; }
+.sort-link { text-decoration: none; color: inherit; cursor: pointer; }
+.sort-link:hover { text-decoration: underline; }
+.sort-indicator { font-size: 0.75rem; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal-box { background: var(--bg, #fff); border-radius: 0.5rem; padding: 1.5rem;
+  width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.modal-box h3 { margin-top: 0; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; padding-left: 0; padding-right: 0; }
+.alert { padding: 0.75rem 1rem; border-radius: 0.25rem; margin-bottom: 1rem; display: none; }
+.alert.active { display: block; }
+.alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+</style>
+</head>
+<body>
+<div class="crud-container">
+  <div id="crud-alert" class="alert"></div>
+  <div class="crud-header">
+    <h2>{{ title }}</h2>
+    <div class="crud-actions">
+      {# Live, as-you-type search (no Search button). Typing drives an AJAX
+         reload of the table; the term is preserved across sort + pagination. #}
+      <input type="text" data-crud-search value="{{ search }}" placeholder="Search..." class="form-control crud-search" aria-label="Search">
+      <button class="btn btn-primary" data-crud-action="create">+ New</button>
+    </div>
+  </div>
+  <div class="crud-info" data-crud-info>
+    Showing {{ info_count }} of {{ info_total }} records (page {{ info_page }} of {{ info_total_pages }})
+  </div>
+
+  {{ table_html|raw }}
+
+  <div class="crud-pagination" data-crud-pager>{% if show_pagination %}{% for c in controls %}{% if c.active %}<a class="btn btn-sm btn-primary" href="{{ c.url }}" data-crud-page="{{ c.page }}">{{ c.label }}</a>{% endif %}{% if c.inactive %}<a class="btn btn-sm btn-secondary" href="{{ c.url }}" data-crud-page="{{ c.page }}">{{ c.label }}</a>{% endif %}{% endfor %}{% endif %}</div>
+
+  {{ modals_html|raw }}
+
+  <script nonce="{{ csp_nonce() }}">
+  // The grid is AJAX-driven. CONFIG carries the current state and the column
+  // metadata; every change (search / sort / page) re-fetches the AutoCrud list
+  // endpoint and re-renders the table body + pager. CSP-clean: this element is
+  // nonce-authorised and every control binds through addEventListener — there
+  // is no inline on*= anywhere.
+  var CRUD = {{ config_json|raw }};
+  var CRUD_COLUMNS = CRUD.editable;           // columns the create/edit modals fill
+  var state = {
+    search: CRUD.search || '',
+    sort: CRUD.sort || CRUD.pk,
+    sort_dir: CRUD.sort_dir || 'asc',
+    page: CRUD.page || 1
+  };
+  var controller = null;                      // in-flight fetch, so we can abort it
+  var searchTimer = null;
+
+  var elAlert = document.getElementById('crud-alert');
+  var elBody = document.querySelector('[data-crud-body]');
+  var elPager = document.querySelector('[data-crud-pager]');
+  var elInfo = document.querySelector('[data-crud-info]');
+  var elSearch = document.querySelector('[data-crud-search]');
+
+  function crudShowAlert(message, type) {
+    elAlert.className = 'alert alert-' + type + ' active';
+    elAlert.textContent = message;
+    setTimeout(function () { elAlert.className = 'alert'; }, 3000);
+  }
+
+  // --- Render the table body from a list-endpoint JSON page -----------------
+  // Values go in via textContent, so every cell is escaped by the DOM (no XSS).
+  function renderRows(records) {
+    elBody.textContent = '';
+    if (!records || records.length === 0) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = CRUD.columns.length + 1;
+      td.className = 'crud-empty';
+      td.textContent = 'No records found.';
+      tr.appendChild(td);
+      elBody.appendChild(tr);
+      return;
+    }
+    records.forEach(function (record) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-id', record[CRUD.pk]);
+      CRUD.columns.forEach(function (col) {
+        var td = document.createElement('td');
+        td.className = CRUD.aligns[col] || 'text-start';
+        var value = record[col];
+        td.textContent = (value === null || value === undefined) ? '' : value;
+        tr.appendChild(td);
+      });
+      var actions = document.createElement('td');
+      actions.className = 'text-end';
+      actions.appendChild(actionButton('edit', 'Edit', 'btn-primary me-1', record[CRUD.pk]));
+      actions.appendChild(actionButton('delete', 'Delete', 'btn-danger', record[CRUD.pk]));
+      tr.appendChild(actions);
+      elBody.appendChild(tr);
+    });
+  }
+
+  function actionButton(action, label, variant, id) {
+    var b = document.createElement('button');
+    b.className = 'btn btn-sm ' + variant;
+    b.setAttribute('data-crud-action', action);
+    b.setAttribute('data-id', id);
+    b.textContent = label;
+    return b;
+  }
+
+  function renderPager(data) {
+    elPager.textContent = '';
+    var totalPages = data.total_pages || 1;
+    if (totalPages <= 1) return;
+    if (data.page > 1) elPager.appendChild(pagerLink('Prev', data.page - 1, false));
+    var start = Math.max(data.page - 3, 1);
+    var end = Math.min(start + 6, totalPages);
+    start = Math.max(end - 6, 1);
+    for (var p = start; p <= end; p++) {
+      elPager.appendChild(pagerLink(String(p), p, p === data.page));
+    }
+    if (data.page < totalPages) elPager.appendChild(pagerLink('Next', data.page + 1, false));
+  }
+
+  function pagerLink(label, page, active) {
+    var a = document.createElement('a');
+    a.className = 'btn btn-sm ' + (active ? 'btn-primary' : 'btn-secondary');
+    a.setAttribute('href', '#');
+    a.setAttribute('data-crud-page', page);
+    a.textContent = label;
+    return a;
+  }
+
+  function updateInfo(data) {
+    if (!elInfo) return;
+    elInfo.textContent = 'Showing ' + (data.records ? data.records.length : 0) +
+      ' of ' + data.total + ' records (page ' + data.page + ' of ' + data.total_pages + ')';
+  }
+
+  // Reflect the active sort column + direction on the header arrows.
+  function updateSortIndicators() {
+    document.querySelectorAll('[data-crud-sort]').forEach(function (link) {
+      var old = link.querySelector('.sort-indicator');
+      if (old) old.remove();
+      var col = link.getAttribute('data-crud-sort');
+      if (col === state.sort) {
+        var span = document.createElement('span');
+        span.className = 'sort-indicator';
+        span.textContent = state.sort_dir === 'asc' ? ' ▲' : ' ▼';
+        link.appendChild(span);
+        link.setAttribute('data-crud-dir', state.sort_dir === 'asc' ? 'desc' : 'asc');
+      } else {
+        link.setAttribute('data-crud-dir', 'asc');
+      }
+    });
+  }
+
+  // Abort any in-flight request, then fetch the current state from AutoCrud.
+  function load() {
+    if (controller) controller.abort();
+    controller = new AbortController();
+    var params = new URLSearchParams();
+    params.set('search', state.search);
+    params.set('sort', state.sort);
+    params.set('sort_dir', state.sort_dir);
+    params.set('page', state.page);
+    params.set('per_page', CRUD.limit);
+    fetch(CRUD.api + '?' + params.toString(), { signal: controller.signal })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        renderRows(data.records || []);
+        renderPager(data);
+        updateInfo(data);
+        updateSortIndicators();
+      })
+      .catch(function (e) {
+        if (e.name !== 'AbortError') crudShowAlert('Failed to load: ' + e, 'danger');
+      });
+  }
+
+  // --- Wiring (all delegated, all CSP-clean) --------------------------------
+  if (elSearch) {
+    elSearch.addEventListener('input', function () {
+      clearTimeout(searchTimer);
+      var value = elSearch.value;
+      searchTimer = setTimeout(function () {
+        state.search = value;
+        state.page = 1;
+        load();
+      }, 300);
+    });
+  }
+
+  document.addEventListener('click', function (event) {
+    var sortLink = event.target.closest('[data-crud-sort]');
+    if (sortLink) {
+      event.preventDefault();
+      var col = sortLink.getAttribute('data-crud-sort');
+      if (state.sort === col) {
+        state.sort_dir = state.sort_dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sort = col;
+        state.sort_dir = 'asc';
+      }
+      state.page = 1;
+      load();
+      return;
+    }
+
+    var pageLink = event.target.closest('[data-crud-page]');
+    if (pageLink) {
+      event.preventDefault();
+      state.page = parseInt(pageLink.getAttribute('data-crud-page'), 10) || 1;
+      load();
+      return;
+    }
+
+    var button = event.target.closest('[data-crud-action]');
+    if (!button) return;
+    var action = button.dataset.crudAction;
+    if (action === 'create') {
+      crudShowCreate();
+    } else if (action === 'edit') {
+      crudShowEdit(button.dataset.id);
+    } else if (action === 'delete') {
+      crudShowDelete(button.dataset.id);
+    } else if (action === 'close') {
+      crudCloseModal(button.dataset.crudModal);
+    } else if (action === 'confirm-delete') {
+      crudConfirmDelete();
+    } else if (action === 'save') {
+      saveRecord(button.dataset.crudMode === 'edit' ? 'edit' : 'create');
+    }
+  });
+
+  // The modal forms post over fetch(), so stop their native submit here rather
+  // than with an onsubmit= attribute.
+  document.addEventListener('submit', function (event) {
+    if (event.target.closest('form[data-crud-form]')) {
+      event.preventDefault();
+    }
+  });
+
+  // --- Create / edit / delete modals ----------------------------------------
+  function crudShowCreate() {
+    var form = document.getElementById('form-create');
+    if (form) form.reset();
+    clearErrors('create');
+    document.getElementById('modal-create').classList.add('active');
+  }
+
+  function crudShowEdit(id) {
+    clearErrors('edit');
+    fetch(CRUD.api + '/' + id)
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        var data = result.data || result;
+        document.getElementById('edit-pk-value').value = id;
+        CRUD_COLUMNS.forEach(function (col) {
+          var input = document.getElementById('edit-' + col);
+          if (input) input.value = data[col] != null ? data[col] : '';
+        });
+        document.getElementById('modal-edit').classList.add('active');
+      })
+      .catch(function (e) { crudShowAlert('Failed to load record: ' + e, 'danger'); });
+  }
+
+  function crudShowDelete(id) {
+    document.getElementById('delete-pk-value').value = id;
+    document.getElementById('modal-delete').classList.add('active');
+  }
+
+  function crudCloseModal(name) {
+    document.getElementById('modal-' + name).classList.remove('active');
+  }
+
+  function collectForm(prefix) {
+    var data = {};
+    CRUD_COLUMNS.forEach(function (col) {
+      var input = document.getElementById(prefix + '-' + col);
+      if (input) data[col] = input.value;
+    });
+    return data;
+  }
+
+  // Show / clear the in-modal validation error list (data-crud-errors).
+  function showErrors(mode, list) {
+    var box = document.querySelector('#modal-' + mode + ' [data-crud-errors]');
+    if (!box) return;
+    box.textContent = '';
+    (list || []).forEach(function (msg) {
+      var line = document.createElement('div');
+      line.textContent = msg;
+      box.appendChild(line);
+    });
+    box.hidden = !(list && list.length);
+  }
+
+  function clearErrors(mode) {
+    var box = document.querySelector('#modal-' + mode + ' [data-crud-errors]');
+    if (box) { box.textContent = ''; box.hidden = true; }
+  }
+
+  // Create (POST) or edit (PUT) through AutoCrud. On a failed save AutoCrud
+  // answers non-2xx with {errors:[...]} (or {error:...}); keep the modal OPEN
+  // and show the messages inline instead of reporting a false success.
+  function saveRecord(mode) {
+    clearErrors(mode);
+    var id = (mode === 'edit') ? document.getElementById('edit-pk-value').value : null;
+    var url = (mode === 'edit') ? CRUD.api + '/' + encodeURIComponent(id) : CRUD.api;
+    var method = (mode === 'edit') ? 'PUT' : 'POST';
+    fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collectForm(mode))
+    })
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+      .then(function (res) {
+        var errors = res.body && (res.body.errors || (res.body.error ? [res.body.error] : null));
+        if (!res.ok || errors) {
+          showErrors(mode, errors || ['Save failed. Please check the fields and try again.']);
+          return;
+        }
+        crudCloseModal(mode);
+        crudShowAlert('Record ' + (mode === 'edit' ? 'updated' : 'created') + ' successfully', 'success');
+        load();
+      })
+      .catch(function (e) { showErrors(mode, ['Request failed: ' + e]); });
+  }
+
+  function crudConfirmDelete() {
+    var id = document.getElementById('delete-pk-value').value;
+    fetch(CRUD.api + '/' + id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.error) { crudShowAlert(result.error, 'danger'); return; }
+        crudCloseModal('delete');
+        crudShowAlert('Record deleted successfully', 'success');
+        load();
+      })
+      .catch(function (e) { crudShowAlert('Failed to delete: ' + e, 'danger'); });
+  }
+
+  // Close a modal on backdrop click or the Escape key.
+  document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) overlay.classList.remove('active');
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.active').forEach(function (m) {
+        m.classList.remove('active');
+      });
+    }
+  });
+  </script>
+</div>
+</body>
+</html>

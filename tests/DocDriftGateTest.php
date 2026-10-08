@@ -54,12 +54,16 @@ final class DocDriftGateTest extends TestCase
     /** RED: a CapWord base that resolves to no Tina4 class is flagged. */
     public function testFlagsNonexistentClass(): void
     {
+        // NB: a genuinely absent class. `CRUD::toCrud` resolves now that
+        // Tina4\Crud exists (PHP class names are case-insensitive, so CRUD ==
+        // Crud) — that is correct, so the negative example uses a class that
+        // really is not in the namespace.
         $root = $this->writeClaudeMd(
-            "```php\nuse Tina4\\Auth;\nreturn CRUD::toCrud(\$request, []);\n```\n"
+            "```php\nuse Tina4\\Auth;\nreturn Frobnicator::doThing(\$request, []);\n```\n"
         );
         $problems = Tina4DocDriftAudit::check($root);
         $this->assertNotEmpty($problems);
-        $this->assertStringContainsString('CRUD::toCrud', implode("\n", $problems));
+        $this->assertStringContainsString('Frobnicator::doThing', implode("\n", $problems));
     }
 
     /** GREEN: a real class + a real method passes. */
