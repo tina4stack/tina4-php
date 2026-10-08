@@ -3132,6 +3132,30 @@ class DevAdmin
     }
 
     /**
+     * True when THIS caller could use the dev surface at all (ADR-0082).
+     *
+     * The two gates that depend on the caller rather than on the request shape:
+     * the Host allow-list and the loopback-peer/dedicated-token pair. The
+     * same-origin check in {@see guardRequest()} is deliberately NOT here --
+     * it reads Sec-Fetch-Site/Origin, which differ between a top-level
+     * navigation and the fetch() the toolbar makes from inside that page, so it
+     * cannot answer a question asked while rendering the page.
+     *
+     * Used to decide whether to put the toolbar into a page at all. A caller
+     * these two gates refuse is refused by /__dev itself -- 403, the toolbar's
+     * own script included -- so a toolbar rendered for it is markup that can
+     * only ever fail: the reported symptom
+     * was a container's app browsed from the host, where the toolbar appeared
+     * on every page and every one of its buttons answered 403.
+     */
+    public static function devSurfaceReachable(Request $request): bool
+    {
+        return self::devHostAllowed($request->headers ?? [])
+            && (McpServer::isLoopback((string) ($request->remoteIp ?? ''))
+                || self::mcpTokenOk($request, true));
+    }
+
+    /**
      * Return [status, error] to REFUSE any /__dev request (read or write), or
      * null to allow (ADR-0082): Host allow-list, then same-origin, then the
      * loopback peer (the MCP surface keeps its own 404 gate for the peer).

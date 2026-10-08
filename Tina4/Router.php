@@ -935,6 +935,9 @@ class Router
                         'headers' => $request->headers ?? [],
                         'params' => $request->params ?? [],
                         'body' => is_array($request->body) ? $request->body : [],
+                        // The overlay renders its own copy of the dev toolbar, so
+                        // it must be told what injectDevToolbar() decides.
+                        'dev_surface_reachable' => DevAdmin::devSurfaceReachable($request),
                     ]);
                     return $response->html($overlayHtml, 500);
                 } catch (\Throwable $overlayErr) {
@@ -2602,6 +2605,14 @@ class Router
         }
         $contentType = $finalResponse->getContentType() ?? '';
         if (!str_contains($contentType, 'text/html')) {
+            return $finalResponse;
+        }
+        // Only for a caller that could actually USE the dev surface. Injection
+        // used to turn on TINA4_DEBUG alone, so a peer the dev-admin gate
+        // refuses -- a container's app browsed from the host, a box on the LAN
+        // -- got the toolbar on every page and 403 from every one of its
+        // buttons. The same decision now governs both.
+        if (!DevAdmin::devSurfaceReachable($request)) {
             return $finalResponse;
         }
         $requestId = Log::getRequestId() ?? '';

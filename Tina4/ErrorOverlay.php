@@ -279,11 +279,31 @@ CSS;
      * is, by definition, debug-mode-only — so the toolbar always belongs
      * here. Gives the user a one-click jump to /__dev (chat / plan /
      * file tree / Live Docs) so the error page isn't a dead-end. Falls
-     * back to empty string if DevAdmin isn't loaded for any reason.
+     * back to empty string if DevAdmin isn't loaded for any reason, or if
+     * the caller could not use the dev surface.
      */
     private static function renderInlineToolbar(?array $request): string
     {
         if (!class_exists('\\Tina4\\DevAdmin')) {
+            return '';
+        }
+        // Only for a caller that could use the dev surface at all
+        // (DevAdmin::devSurfaceReachable()): /__dev refuses any other, so its
+        // toolbar could only ever fail. The router says so in
+        // 'dev_surface_reachable'. Any other caller -- the documented
+        // renderErrorOverlay($e, $_SERVER) -- is judged from the same server
+        // fields, and one that names no peer is refused.
+        $reachable = $request['dev_surface_reachable'] ?? DevAdmin::devSurfaceReachable(Request::create(
+            method: (string) ($request['REQUEST_METHOD'] ?? 'GET'),
+            path: (string) ($request['REQUEST_URI'] ?? '/'),
+            headers: array_filter([
+                'host' => $request['HTTP_HOST'] ?? null,
+                'authorization' => $request['HTTP_AUTHORIZATION'] ?? null,
+                'x-mcp-token' => $request['HTTP_X_MCP_TOKEN'] ?? null,
+            ], 'is_string'),
+            remoteIp: (string) ($request['REMOTE_ADDR'] ?? ''),
+        ));
+        if ($reachable !== true) {
             return '';
         }
         $method = $request['REQUEST_METHOD'] ?? 'GET';
