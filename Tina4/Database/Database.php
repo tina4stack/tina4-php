@@ -45,6 +45,7 @@ class Database implements DatabaseAdapter
         'sqlite' => SQLite3Adapter::class,
         'postgres' => PostgresAdapter::class,
         'postgresql' => PostgresAdapter::class,
+        'pgsql' => PostgresAdapter::class,
         'mysql' => MySQLAdapter::class,
         'mssql' => MSSQLAdapter::class,
         'sqlserver' => MSSQLAdapter::class,
