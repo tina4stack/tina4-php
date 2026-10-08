@@ -29,6 +29,7 @@
  *   TINA4_MAIL_ENCRYPTION=tls
  *   TINA4_MAIL_IMAP_HOST=imap.gmail.com
  *   TINA4_MAIL_IMAP_PORT=993
+ *   TINA4_MAIL_TIMEOUT=30          # SMTP socket timeout in seconds: the connect, and each read/write (not IMAP)
  *
  *   $mail = new Messenger();                                    // reads from .env
  *   $mail = new Messenger(host: "smtp.office365.com", port: 587);  // override
@@ -87,8 +88,22 @@ class Messenger
     /** @var string IMAP encryption mode: 'tls' / 'ssl' (implicit TLS), 'starttls', or 'none' */
     private string $imapEncryption;
 
-    /** @var int Socket timeout in seconds */
-    private int $timeout = 30;
+    /** The socket bound when nothing sets one -- the value this class has always used. */
+    public const TIMEOUT_DEFAULT = 30;
+
+    /**
+     * @var int Socket timeout in seconds -- the connect AND every read/write.
+     *
+     * Resolved once in the constructor: an explicit $timeout, else
+     * TINA4_MAIL_TIMEOUT, else TIMEOUT_DEFAULT. It used to be a hard-coded 30
+     * that nothing could reach: no parameter, no env, no setter, and `private`
+     * so not even a subclass could set it. A relay that accepts the connection
+     * and then says nothing held every send() -- and the request behind it --
+     * for the full 30s, with no way to shorten it.
+     *
+     * @var int
+     */
+    private int $timeout;
 
     /**
      * Create a Messenger instance.
@@ -108,6 +123,7 @@ class Messenger
      * @param string|null $imapUsername IMAP username (defaults to TINA4_MAIL_IMAP_USERNAME, then the SMTP username)
      * @param string|null $imapPassword IMAP password (defaults to TINA4_MAIL_IMAP_PASSWORD, then the SMTP password)
      * @param string|null $imapEncryption IMAP encryption: tls, starttls, none (explicit beats env; default port-aware)
+     * @param int|null    $timeout        Socket timeout in whole seconds (default: TINA4_MAIL_TIMEOUT, then 30)
      */
     public function __construct(
         ?string $host = null,
@@ -123,6 +139,7 @@ class Messenger
         ?string $imapUsername = null,
         ?string $imapPassword = null,
         ?string $imapEncryption = null,
+        ?int $timeout = null,
     ) {
         // Whether a host was actually CONFIGURED, which is not the same as $this->host
         // being set: it falls back to 'localhost', so it is never empty and cannot
@@ -200,7 +217,56 @@ class Messenger
         } else {
             $this->imapEncryption = $this->imapPort === 993 ? 'tls' : 'none';
         }
+
+        // Socket timeout -- priority: constructor > TINA4_MAIL_TIMEOUT > 30.
+        $this->timeout = self::resolveTimeout($timeout, $this->env('TINA4_MAIL_TIMEOUT'));
     }
+
+    /**
+     * Resolve the socket timeout to whole seconds.
+     *
+     * Mirrors TINA4_DATABASE_CONNECT_TIMEOUT's handling (Database\ConnectTimeoutTrait):
+     * unset or blank is the default, silently; anything that is not a whole
+     * number of seconds is garbage, so warn and use the default rather than
+     * guess. An explicit constructor value is the caller's own instruction, so
+     * one below a second is a programming error and throws instead.
+     *
+     * Unlike the database bound, zero and negative are garbage here rather than
+     * an opt-out. No deployment wants an SMTP send that can block for ever, and
+     * to PHP's socket calls 0 does not mean "unbounded" anyway: it means "do not
+     * wait at all". The connect fails at once, and every read returns nothing at
+     * once, so no send could succeed.
+     */
+    private static function resolveTimeout(?int $explicit, ?string $raw): int
+    {
+        if ($explicit !== null) {
+            if ($explicit < 1) {
+                throw new \InvalidArgumentException(
+                    'Messenger timeout must be at least 1 second, got ' . $explicit . '.'
+                );
+            }
+            return $explicit;
+        }
+        if ($raw === null || trim($raw) === '') {
+            return self::TIMEOUT_DEFAULT;
+        }
+        $seconds = filter_var(trim($raw), FILTER_VALIDATE_INT);
+        if ($seconds === false || $seconds < 1) {
+            if (!isset(self::$timeoutWarned[$raw])) {
+                self::$timeoutWarned[$raw] = true;
+                Log::warning(
+                    'TINA4_MAIL_TIMEOUT must be a whole number of seconds and at least 1, got '
+                    . var_export($raw, true) . ' -- using the default of '
+                    . self::TIMEOUT_DEFAULT . ' seconds'
+                );
+            }
+            return self::TIMEOUT_DEFAULT;
+        }
+        return $seconds;
+    }
+
+    /** @var array<string, true> Values already warned about, so a bad one is said once. */
+    private static array $timeoutWarned = [];
 
     /**
      * Trim and lowercase an encryption setting, or raise naming the value as
@@ -1107,6 +1173,15 @@ class Messenger
         while (true) {
             $line = fgets($socket, 4096);
             if ($line === false) {
+                // fgets() answers false for a read that ran out of time as well
+                // as for a closed connection; only the stream metadata tells
+                // them apart, and "lost connection" sends the reader looking
+                // for a crash when the relay is merely slow or silent.
+                if (stream_get_meta_data($socket)['timed_out']) {
+                    throw new \RuntimeException(
+                        "Timed out after {$this->timeout}s waiting for the SMTP server to reply"
+                    );
+                }
                 throw new \RuntimeException('Lost connection to SMTP server');
             }
 
