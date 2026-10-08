@@ -123,6 +123,7 @@ class Messenger
         ?string $imapUsername = null,
         ?string $imapPassword = null,
         ?string $imapEncryption = null,
+        ?int $timeout = null,
     ) {
         // Whether a host was actually CONFIGURED, which is not the same as $this->host
         // being set: it falls back to 'localhost', so it is never empty and cannot
@@ -137,6 +138,13 @@ class Messenger
 
         $envPort = $this->env('TINA4_MAIL_PORT');
         $this->port = $port ?? ($envPort !== null ? (int)$envPort : 587);
+
+        // SMTP socket timeout (seconds) - how long a connect, and each reply, may
+        // block before the send fails. Configurable so a host that accepts then
+        // goes silent cannot hold a worker for the full default. Priority:
+        // constructor > TINA4_MAIL_TIMEOUT > SMTP_TIMEOUT > 30 (issue #278).
+        $envTimeout = $this->env('TINA4_MAIL_TIMEOUT') ?? $this->env('SMTP_TIMEOUT');
+        $this->timeout = $timeout ?? ($envTimeout !== null && is_numeric($envTimeout) ? (int)$envTimeout : 30);
 
         $this->username = $username
             ?? $this->env('TINA4_MAIL_USERNAME')
