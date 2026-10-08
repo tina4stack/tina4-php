@@ -2604,6 +2604,13 @@ class Router
         if (!str_contains($contentType, 'text/html')) {
             return $finalResponse;
         }
+        // Do not inject the toolbar for a viewer the /__dev gate would refuse
+        // (#279): otherwise the page carries toolbar markup whose stylesheet and
+        // script 403. The static assets are still served (DevAdmin::guardRequest
+        // exempts them), but an un-admitted peer simply gets no toolbar.
+        if (!DevAdmin::toolbarAllowed($request)) {
+            return $finalResponse;
+        }
         $requestId = Log::getRequestId() ?? '';
         $toolbar = DevAdmin::renderToolbar(
             method: $request->method,
