@@ -3149,29 +3149,43 @@ class DevAdmin
         if (str_starts_with(strtolower($ip), '::ffff:')) {
             $ip = substr($ip, 7); // IPv4-mapped IPv6 -> compare as IPv4
         }
-        $entry = trim($entry);
-        $bits = null;
-        if (str_contains($entry, '/')) {
-            [$entry, $bitsStr] = explode('/', $entry, 2);
-            if (!ctype_digit($bitsStr)) {
-                return false;
-            }
-            $bits = (int) $bitsStr;
+        [$net, $bits] = self::splitCidr(trim($entry));
+        if ($net === null) {
+            return false; // a /bits that is not a whole number
         }
         $ipBin = @inet_pton($ip);
-        $netBin = @inet_pton($entry);
+        $netBin = @inet_pton($net);
         if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
             return false; // unparseable, or different family (v4 vs v6)
         }
         $len = strlen($ipBin) * 8;
-        if ($bits === null) {
-            $bits = $len; // bare IP == /32 (v4) or /128 (v6)
-        }
+        $bits ??= $len; // a bare IP == /32 (v4) or /128 (v6)
         if ($bits < 0 || $bits > $len) {
             return false;
         }
+        return self::binaryPrefixEqual($ipBin, $netBin, $bits);
+    }
+
+    /**
+     * Split "addr/bits" into [addr, bits], or [addr, null] for a bare address.
+     * Returns [null, null] when the prefix length is present but not numeric.
+     *
+     * @return array{0: ?string, 1: ?int}
+     */
+    private static function splitCidr(string $entry): array
+    {
+        if (!str_contains($entry, '/')) {
+            return [$entry, null];
+        }
+        [$addr, $bitsStr] = explode('/', $entry, 2);
+        return ctype_digit($bitsStr) ? [$addr, (int) $bitsStr] : [null, null];
+    }
+
+    /** True when the first $bits bits of two equal-length binary strings match. */
+    private static function binaryPrefixEqual(string $a, string $b, int $bits): bool
+    {
         $fullBytes = intdiv($bits, 8);
-        if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($netBin, 0, $fullBytes)) {
+        if ($fullBytes > 0 && substr($a, 0, $fullBytes) !== substr($b, 0, $fullBytes)) {
             return false;
         }
         $remBits = $bits % 8;
@@ -3179,7 +3193,7 @@ class DevAdmin
             return true;
         }
         $mask = 0xFF << (8 - $remBits) & 0xFF;
-        return (ord($ipBin[$fullBytes]) & $mask) === (ord($netBin[$fullBytes]) & $mask);
+        return (ord($a[$fullBytes]) & $mask) === (ord($b[$fullBytes]) & $mask);
     }
 
     /**
