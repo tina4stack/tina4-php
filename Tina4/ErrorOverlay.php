@@ -286,6 +286,25 @@ CSS;
         if (!class_exists('\\Tina4\\DevAdmin')) {
             return '';
         }
+        // The overlay draws its own copy of the dev toolbar, so it must honour
+        // the same peer gate injectDevToolbar() does (#279): a viewer the dev
+        // surface would refuse gets no toolbar on the error page either. The
+        // in-request path threads the already-computed decision; the direct
+        // renderErrorOverlay($e, $_SERVER) path is judged from the same server
+        // fields, and one that names no peer is refused.
+        $allowed = $request['dev_toolbar_allowed'] ?? \Tina4\DevAdmin::toolbarAllowed(\Tina4\Request::create(
+            method: (string) ($request['REQUEST_METHOD'] ?? 'GET'),
+            path: (string) ($request['REQUEST_URI'] ?? '/'),
+            headers: array_filter([
+                'host' => $request['HTTP_HOST'] ?? null,
+                'authorization' => $request['HTTP_AUTHORIZATION'] ?? null,
+                'x-mcp-token' => $request['HTTP_X_MCP_TOKEN'] ?? null,
+            ], 'is_string'),
+            remoteIp: (string) ($request['REMOTE_ADDR'] ?? ''),
+        ));
+        if ($allowed !== true) {
+            return '';
+        }
         $method = $request['REQUEST_METHOD'] ?? 'GET';
         $path   = $request['REQUEST_URI']   ?? '/';
         $rid    = (class_exists('\\Tina4\\Log') && method_exists('\\Tina4\\Log', 'getRequestId'))

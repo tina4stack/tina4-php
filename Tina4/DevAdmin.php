@@ -3132,6 +3132,98 @@ class DevAdmin
     }
 
     /**
+     * Static dev-toolbar assets that carry no secrets and expose no actions, so
+     * the peer gate does not cover them: wherever the toolbar is injected its
+     * stylesheet and script must load (issue #279). Host + same-origin still apply.
+     */
+    public const DEV_PUBLIC_ASSETS = ['/__dev/toolbar.css', '/__dev/toolbar.js'];
+
+    /**
+     * True when raw peer $ip falls inside $entry (a bare IP or a CIDR). IPv4 and
+     * IPv6; an IPv4-mapped IPv6 peer (::ffff:a.b.c.d) is matched as IPv4. $entry
+     * and $ip are operator config / the raw socket peer, never a forwarded header.
+     */
+    public static function ipInCidr(string $ip, string $entry): bool
+    {
+        $ip = trim($ip);
+        if (str_starts_with(strtolower($ip), '::ffff:')) {
+            $ip = substr($ip, 7); // IPv4-mapped IPv6 -> compare as IPv4
+        }
+        $entry = trim($entry);
+        $bits = null;
+        if (str_contains($entry, '/')) {
+            [$entry, $bitsStr] = explode('/', $entry, 2);
+            if (!ctype_digit($bitsStr)) {
+                return false;
+            }
+            $bits = (int) $bitsStr;
+        }
+        $ipBin = @inet_pton($ip);
+        $netBin = @inet_pton($entry);
+        if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
+            return false; // unparseable, or different family (v4 vs v6)
+        }
+        $len = strlen($ipBin) * 8;
+        if ($bits === null) {
+            $bits = $len; // bare IP == /32 (v4) or /128 (v6)
+        }
+        if ($bits < 0 || $bits > $len) {
+            return false;
+        }
+        $fullBytes = intdiv($bits, 8);
+        if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($netBin, 0, $fullBytes)) {
+            return false;
+        }
+        $remBits = $bits % 8;
+        if ($remBits === 0) {
+            return true;
+        }
+        $mask = 0xFF << (8 - $remBits) & 0xFF;
+        return (ord($ipBin[$fullBytes]) & $mask) === (ord($netBin[$fullBytes]) & $mask);
+    }
+
+    /**
+     * True when the RAW socket peer may reach /__dev: loopback always, plus any
+     * IP/CIDR in TINA4_DEV_ALLOWED_PEERS (comma-separated, opt-in, default none).
+     *
+     * Reads the real socket peer ONLY, never a forwarded header, so it cannot be
+     * spoofed by X-Forwarded-For. This is the documented way to reach the dev
+     * dashboard from a Docker dev box, where the browser's requests arrive from
+     * the container-network gateway rather than loopback (issue #279).
+     */
+    public static function devPeerAllowed(string $remoteIp): bool
+    {
+        if (McpServer::isLoopback($remoteIp)) {
+            return true;
+        }
+        $configured = trim((string) DotEnv::getEnv('TINA4_DEV_ALLOWED_PEERS', ''));
+        if ($configured === '') {
+            return false;
+        }
+        foreach (explode(',', $configured) as $entry) {
+            $entry = trim($entry);
+            if ($entry !== '' && self::ipInCidr($remoteIp, $entry)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when the toolbar may be injected for this viewer - the Host allow-list
+     * and the raw-peer gate both pass. A viewer the /__dev gate would refuse gets
+     * NO toolbar markup, so its stylesheet and script are never requested only to
+     * 403 (issue #279).
+     */
+    public static function toolbarAllowed(Request $request): bool
+    {
+        if (!self::devHostAllowed($request->headers ?? [])) {
+            return false;
+        }
+        return self::devPeerAllowed((string) ($request->remoteIp ?? ''));
+    }
+
+    /**
      * Return [status, error] to REFUSE any /__dev request (read or write), or
      * null to allow (ADR-0082): Host allow-list, then same-origin, then the
      * loopback peer (the MCP surface keeps its own 404 gate for the peer).
@@ -3151,9 +3243,15 @@ class DevAdmin
         if (!self::devSameOriginOk($request)) {
             return [403, 'dev-admin: refused (cross-origin request)'];
         }
+        // The static toolbar assets are exempt from the peer gate (#279): they
+        // carry no secrets and the toolbar needs them wherever it is injected.
+        // Host + same-origin above still apply.
+        if (in_array($path, self::DEV_PUBLIC_ASSETS, true)) {
+            return null;
+        }
         if (!$isMcp) {
             $remoteIp = (string) ($request->remoteIp ?? '');
-            if (!(McpServer::isLoopback($remoteIp) || self::mcpTokenOk($request, true))) {
+            if (!(self::devPeerAllowed($remoteIp) || self::mcpTokenOk($request, true))) {
                 return [403, 'dev-admin: refused (non-loopback peer)'];
             }
         }
