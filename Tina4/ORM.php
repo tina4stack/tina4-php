@@ -251,6 +251,20 @@ abstract class ORM
     }
 
     /**
+     * Resolve the default database adapter (global → App → .env), the reader
+     * counterpart to {@see bindDatabase()}. Parity with Ruby's `Tina4.database`
+     * reader; used where code outside a model needs the bound connection
+     * (e.g. {@see Crud::toCrud()} building an AutoCrud backend).
+     *
+     * @return DatabaseAdapter
+     * @throws \RuntimeException If no database is configured.
+     */
+    public static function database(): DatabaseAdapter
+    {
+        return self::resolveDb();
+    }
+
+    /**
      * Resolve the connection for a model instance.
      *
      * Resolution order:

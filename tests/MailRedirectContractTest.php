@@ -56,6 +56,7 @@ class MailRedirectContractTest extends TestCase
         'TINA4_MAIL_PASSWORD',
         'TINA4_MAIL_FROM',
         'TINA4_MAIL_ENCRYPTION',
+        'TINA4_MAIL_TIMEOUT',
         'TINA4_MAIL_IMAP_HOST',
         'TINA4_MAIL_IMAP_PORT',
         'TINA4_MAIL_IMAP_USERNAME',

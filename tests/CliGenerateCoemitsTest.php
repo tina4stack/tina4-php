@@ -120,7 +120,7 @@ class CliGenerateCoemitsTest extends TestCase
             'listener'         => [[], 'generate listener user.created', 'tests/UserCreatedListenerTest.php'],
             'auth'             => [[], 'generate auth', 'tests/AuthTest.php'],
             'migration'        => [[], 'generate migration create_widget --fields "name:string"', 'tests/WidgetMigrationTest.php'],
-            'crud'             => [[], 'generate crud Trinket --fields "name:string,qty:int"', 'tests/TrinketsTest.php'],
+            'crud'             => [[], 'generate crud Trinket --fields "name:string,qty:int"', 'tests/TrinketCrudTest.php'],
         ];
     }
 
@@ -233,12 +233,14 @@ class CliGenerateCoemitsTest extends TestCase
 
     /**
      * Lock-in: the generated create/update routes must check save() before
-     * serialising. PHP already did this (unlike Python/Ruby/Node, which had to
-     * be fixed) — this pins it so the guard cannot be dropped later.
+     * serialising. (ADR-0094: `generate crud` is now an AutoCrud-backed admin
+     * PAGE with no hand-written write routes, so this guard lives in the
+     * `generate route --model` path — the one that still emits them.)
      */
     public function testGeneratedRoutesCheckSaveBeforeSerialising(): void
     {
-        $this->cli('generate crud Todo');
+        $this->cli('generate model Todo');
+        $this->cli('generate route todos --model Todo');
         $route = (string)file_get_contents($this->tempDir . '/src/routes/todos.php');
         $this->assertStringContainsString('if (!$item->save())', $route);
         $this->assertLessThan(
