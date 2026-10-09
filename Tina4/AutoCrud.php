@@ -187,89 +187,21 @@ class AutoCrud
         return function (Request $request, Response $response) use ($modelClass, $db): Response {
             $model = new $modelClass($db);
 
-            // Accept limit/offset (canonical) or per_page/page (aliases)
-            $limit  = (int)($request->query['limit'] ?? $request->query['per_page'] ?? 10);
-            // PAGE-DEC-01: cap an oversized ?limit=/?per_page= BEFORE it is used to
-            // derive $offset below, so the offset lines up with the size actually
-            // used (a client can no longer request the whole table in one query).
-            $limit  = min($limit, self::MAX_PER_PAGE);
-            $page   = (int)($request->query['page'] ?? 1);
-            // PAGE-DEC-01 (already correct here): a page <= 1 forces offset 0 - the
-            // reference behaviour Python/Ruby/Node were made to match.
-            $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
+            [$limit, $offset] = $this->listPageBounds($request);
 
             // ADR-0069: filter keys and sort fields resolve against the model's
             // fields; anything else is a 400 before any SQL runs.
-            $filter = [];
-            if (isset($request->query['filter']) && is_array($request->query['filter'])) {
-                foreach ($request->query['filter'] as $key => $value) {
-                    $column = $model->resolveFieldColumn((string)$key);
-                    if ($column === null) {
-                        return $response->error('UNKNOWN_FIELD', "Unknown filter field '{$key}'", 400);
-                    }
-                    // filter[name][]=x / filter[name][x]=y arrive as arrays -
-                    // a filter value is one value, never a bound array.
-                    if (!is_scalar($value)) {
-                        return $response->error('INVALID_QUERY_PARAMETER', "Filter value for '{$key}' must be a single value", 400);
-                    }
-                    $filter[$column] = $value;
-                }
+            [$filter, $filterError] = $this->listFilter($model, $request, $response);
+            if ($filterError !== null) {
+                return $filterError;
             }
 
-            $orderBy = null;
-            if (isset($request->query['sort'])) {
-                if (!is_string($request->query['sort'])) {
-                    return $response->error('INVALID_QUERY_PARAMETER', "Query parameter 'sort' must be a single comma-separated string", 400);
-                }
-                [$orderBy, $unknownField] = $this->parseSortParam($model, $request->query['sort']);
-                if ($unknownField !== null) {
-                    return $response->error('UNKNOWN_FIELD', "Unknown sort field '{$unknownField}'", 400);
-                }
-
-                // ADR-0094: honour an explicit ?sort_dir=asc|desc for a single
-                // bare ?sort=column (the CRUD grid's spelling). The Mongo-style
-                // "-field,field" sort keeps its own inline direction and ignores
-                // sort_dir. parseSortParam() already rejected an unknown column
-                // above (ADR-0069); this just adds the direction toggle the grid
-                // headers need.
-                $sortParam = trim($request->query['sort']);
-                if ($orderBy !== null && isset($request->query['sort_dir'])
-                    && $sortParam !== '' && !str_contains($sortParam, ',') && !str_starts_with($sortParam, '-')) {
-                    $direction = strtolower((string)$request->query['sort_dir']) === 'desc' ? 'DESC' : 'ASC';
-                    $orderBy = preg_replace('/\s+(?:ASC|DESC)\s*$/i', " {$direction}", $orderBy);
-                }
+            [$orderBy, $sortError] = $this->listOrderBy($model, $request, $response);
+            if ($sortError !== null) {
+                return $sortError;
             }
 
-            // Build the WHERE from resolved filter columns (above) PLUS an
-            // ADR-0094 ?search= clause, so the envelope total reflects both.
-            $conditions = [];
-            $params = [];
-            foreach ($filter as $column => $value) {
-                $conditions[] = "{$column} = ?";
-                $params[] = $value;
-            }
-
-            // ADR-0094: ?search=term full-text filters the list — a case-
-            // insensitive LIKE %term% OR'd across the model's declared string
-            // columns, added to the WHERE before limit/offset so the envelope's
-            // total reflects the filtered set. A model with no string column
-            // simply matches nothing; it never errors. This is what the CRUD
-            // admin grid (and any client) uses to search.
-            $searchTerm = isset($request->query['search']) ? trim((string)$request->query['search']) : '';
-            if ($searchTerm !== '') {
-                $searchColumns = [];
-                foreach ($model->getFieldDefinitions() as $definition) {
-                    if ($definition['type'] === 'string') {
-                        $searchColumns[] = $definition['column'];
-                    }
-                }
-                if ($searchColumns !== []) {
-                    $conditions[] = '(' . implode(' OR ', array_map(static fn (string $column): string => "{$column} LIKE ?", $searchColumns)) . ')';
-                    foreach ($searchColumns as $ignored) {
-                        $params[] = "%{$searchTerm}%";
-                    }
-                }
-            }
+            [$conditions, $params] = $this->listWhere($model, $filter, $request);
 
             // Both branches query through $model, which carries the connection
             // this AutoCrud was constructed with - the static find() would
@@ -289,6 +221,127 @@ class AutoCrud
             // second COUNT query, no hand-built envelope, no page-2 mismatch.
             return $response->json($models->toPaginate());
         };
+    }
+
+    /**
+     * Resolve the list route's page window from the query string: the capped
+     * per-page size and the derived offset (PAGE-DEC-01).
+     *
+     * @return array{0: int, 1: int} [limit, offset]
+     */
+    private function listPageBounds(Request $request): array
+    {
+        // Accept limit/offset (canonical) or per_page/page (aliases). Cap an
+        // oversized ?limit=/?per_page= BEFORE it derives $offset, so the offset
+        // lines up with the size actually used (a client can no longer request
+        // the whole table in one query).
+        $limit = min((int)($request->query['limit'] ?? $request->query['per_page'] ?? 10), self::MAX_PER_PAGE);
+        $page = (int)($request->query['page'] ?? 1);
+        // A page <= 1 forces offset 0 - the reference behaviour Python/Ruby/Node match.
+        $offset = (int)($request->query['offset'] ?? ($page > 1 ? ($page - 1) * $limit : 0));
+
+        return [$limit, $offset];
+    }
+
+    /**
+     * Resolve the ?filter[field]=value map to a column=>value map (ADR-0069).
+     * Every key resolves against the model's fields; an unknown field or a
+     * non-scalar value yields a 400 Response (second slot) instead of a map.
+     *
+     * @return array{0: array<string, mixed>, 1: ?Response} [filter, error]
+     */
+    private function listFilter(ORM $model, Request $request, Response $response): array
+    {
+        $filter = [];
+        if (isset($request->query['filter']) && is_array($request->query['filter'])) {
+            foreach ($request->query['filter'] as $key => $value) {
+                $column = $model->resolveFieldColumn((string)$key);
+                if ($column === null) {
+                    return [[], $response->error('UNKNOWN_FIELD', "Unknown filter field '{$key}'", 400)];
+                }
+                // filter[name][]=x / filter[name][x]=y arrive as arrays -
+                // a filter value is one value, never a bound array.
+                if (!is_scalar($value)) {
+                    return [[], $response->error('INVALID_QUERY_PARAMETER', "Filter value for '{$key}' must be a single value", 400)];
+                }
+                $filter[$column] = $value;
+            }
+        }
+
+        return [$filter, null];
+    }
+
+    /**
+     * Resolve the ?sort= (and the grid's ?sort_dir=) query into an ORDER BY
+     * clause (ADR-0069/ADR-0094). An unknown sort field or a non-string sort
+     * yields a 400 Response (second slot); no sort yields [null, null].
+     *
+     * @return array{0: ?string, 1: ?Response} [orderBy, error]
+     */
+    private function listOrderBy(ORM $model, Request $request, Response $response): array
+    {
+        if (!isset($request->query['sort'])) {
+            return [null, null];
+        }
+        if (!is_string($request->query['sort'])) {
+            return [null, $response->error('INVALID_QUERY_PARAMETER', "Query parameter 'sort' must be a single comma-separated string", 400)];
+        }
+
+        [$orderBy, $unknownField] = $this->parseSortParam($model, $request->query['sort']);
+        if ($unknownField !== null) {
+            return [null, $response->error('UNKNOWN_FIELD', "Unknown sort field '{$unknownField}'", 400)];
+        }
+
+        // ADR-0094: honour an explicit ?sort_dir=asc|desc for a single bare
+        // ?sort=column (the CRUD grid's spelling). The Mongo-style "-field,field"
+        // sort keeps its own inline direction and ignores sort_dir.
+        // parseSortParam() already rejected an unknown column above (ADR-0069);
+        // this just adds the direction toggle the grid headers need.
+        $sortParam = trim($request->query['sort']);
+        if ($orderBy !== null && isset($request->query['sort_dir'])
+            && $sortParam !== '' && !str_contains($sortParam, ',') && !str_starts_with($sortParam, '-')) {
+            $direction = strtolower((string)$request->query['sort_dir']) === 'desc' ? 'DESC' : 'ASC';
+            $orderBy = preg_replace('/\s+(?:ASC|DESC)\s*$/i', " {$direction}", $orderBy);
+        }
+
+        return [$orderBy, null];
+    }
+
+    /**
+     * Build the WHERE from the resolved filter columns PLUS an ADR-0094 ?search=
+     * clause, so the envelope total reflects both. ?search=term is a case-
+     * insensitive LIKE %term% OR'd across the model's declared string columns; a
+     * model with no string column simply matches nothing, it never errors.
+     *
+     * @param array<string, mixed> $filter
+     * @return array{0: array<int, string>, 1: array<int, mixed>} [conditions, params]
+     */
+    private function listWhere(ORM $model, array $filter, Request $request): array
+    {
+        $conditions = [];
+        $params = [];
+        foreach ($filter as $column => $value) {
+            $conditions[] = "{$column} = ?";
+            $params[] = $value;
+        }
+
+        $searchTerm = isset($request->query['search']) ? trim((string)$request->query['search']) : '';
+        if ($searchTerm !== '') {
+            $searchColumns = [];
+            foreach ($model->getFieldDefinitions() as $definition) {
+                if ($definition['type'] === 'string') {
+                    $searchColumns[] = $definition['column'];
+                }
+            }
+            if ($searchColumns !== []) {
+                $conditions[] = '(' . implode(' OR ', array_map(static fn (string $column): string => "{$column} LIKE ?", $searchColumns)) . ')';
+                foreach ($searchColumns as $ignored) {
+                    $params[] = "%{$searchTerm}%";
+                }
+            }
+        }
+
+        return [$conditions, $params];
     }
 
     /**
