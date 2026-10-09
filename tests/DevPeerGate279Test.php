@@ -111,6 +111,40 @@ class DevPeerGate279Test extends TestCase
             'an admitted peer gets the toolbar injected');
     }
 
+    // ── the rich debug 500 overlay draws its OWN toolbar — gate it too ───────
+
+    public function testErrorOverlayInlineToolbarHonoursThePeerGate(): void
+    {
+        $prev = getenv('TINA4_DEBUG');
+        putenv('TINA4_DEBUG=true');
+        try {
+            $e = new \RuntimeException('boom');
+            $refused = \Tina4\ErrorOverlay::renderErrorOverlay($e, [
+                'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_HOST' => 'localhost',
+                'REMOTE_ADDR' => '203.0.113.9', // non-loopback, no opt-in
+            ]);
+            $loopback = \Tina4\ErrorOverlay::renderErrorOverlay($e, [
+                'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_HOST' => 'localhost',
+                'REMOTE_ADDR' => '127.0.0.1',
+            ]);
+            $this->assertStringNotContainsString('tina4-dev-toolbar', $refused,
+                'the 500 overlay must not draw its dev toolbar for a viewer the dev surface would refuse');
+            $this->assertStringContainsString('tina4-dev-toolbar', $loopback,
+                'a loopback viewer still gets the overlay toolbar');
+
+            putenv('TINA4_DEV_ALLOWED_PEERS=203.0.113.0/24');
+            $admitted = \Tina4\ErrorOverlay::renderErrorOverlay($e, [
+                'REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', 'HTTP_HOST' => 'localhost',
+                'REMOTE_ADDR' => '203.0.113.9',
+            ]);
+            putenv('TINA4_DEV_ALLOWED_PEERS');
+            $this->assertStringContainsString('tina4-dev-toolbar', $admitted,
+                'an opt-in peer gets the overlay toolbar');
+        } finally {
+            putenv($prev === false ? 'TINA4_DEBUG' : "TINA4_DEBUG={$prev}");
+        }
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     /** @param array<string,string> $extraEnv */

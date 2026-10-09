@@ -935,6 +935,10 @@ class Router
                         'headers' => $request->headers ?? [],
                         'params' => $request->params ?? [],
                         'body' => is_array($request->body) ? $request->body : [],
+                        // The overlay renders its own copy of the dev toolbar, so
+                        // tell it what injectDevToolbar() decides for this peer (#279) —
+                        // keyed on the raw socket peer, not the overlay's REMOTE_ADDR.
+                        'dev_toolbar_allowed' => DevAdmin::toolbarAllowed($request),
                     ]);
                     return $response->html($overlayHtml, 500);
                 } catch (\Throwable $overlayErr) {
