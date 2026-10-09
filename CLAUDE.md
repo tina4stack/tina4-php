@@ -1360,6 +1360,7 @@ is authorised on the raw socket peer.
 |---|---|
 | `TINA4_MCP` / `TINA4_DEBUG` | Whether MCP is enabled at all (capability gate). |
 | `TINA4_MCP_REMOTE` | Set `true` to allow non-loopback MCP callers (still requires a valid token). |
+| `TINA4_DEV_ALLOWED_PEERS` | Opt-in comma-separated IP/CIDR allow-list of RAW socket peers admitted to `/__dev` (v4/v6; never a forwarded header). Default none. The documented way to reach the dev dashboard from a Docker dev box, where requests arrive from the container-network gateway, e.g. `TINA4_DEV_ALLOWED_PEERS=172.16.0.0/12` (#279). `/__dev/toolbar.css` and `/__dev/toolbar.js` are static and always load; a viewer the gate would refuse gets no toolbar injected. |
 | `TINA4_MCP_TOKEN` | Bearer token authorising a remote MCP request (fallback `TINA4_API_KEY`); accepted as `Authorization: Bearer`, `X-MCP-Token`, or `X-Api-Key`. With no token configured a remote caller is always denied; loopback never needs it. |
 
 ## Key Architecture

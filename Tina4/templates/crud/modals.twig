@@ -1,0 +1,31 @@
+{#
+  crud/modals.twig — the create, edit and delete-confirm dialogs.
+
+  Override: drop your own templates/crud/modals.twig to restyle the dialogs.
+  create_form / edit_form are the crud/form.twig renders injected here. Buttons
+  carry data-crud-action (close / confirm-delete) and are wired by the page
+  script — no inline on*= handlers (ADR-0088).
+#}
+<div class="modal-overlay" id="modal-create">
+  <div class="modal-box">
+    <h3>Create New Record</h3>
+    {{ create_form|raw }}
+  </div>
+</div>
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal-box">
+    <h3>Edit Record</h3>
+    {{ edit_form|raw }}
+  </div>
+</div>
+<div class="modal-overlay" id="modal-delete">
+  <div class="modal-box">
+    <h3>Confirm Delete</h3>
+    <p>Are you sure you want to delete this record? This action cannot be undone.</p>
+    <input type="hidden" id="delete-pk-value">
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-crud-action="close" data-crud-modal="delete">Cancel</button>
+      <button class="btn btn-danger" data-crud-action="confirm-delete">Delete</button>
+    </div>
+  </div>
+</div>
