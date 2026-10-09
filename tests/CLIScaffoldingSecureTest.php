@@ -240,23 +240,35 @@ class CLIScaffoldingSecureTest extends TestCase
 
     public function testCrudDefaultRoutesSecure(): void
     {
+        // ADR-0094: `generate crud` emits an AutoCrud-backed admin PAGE keyed off
+        // the table (doohickey). Secure by default: the page is ->secure() and
+        // the model is registered secure (public=false) — no ->noAuth() anywhere.
         $this->gen('crud Doohickey --fields "name:string"');
-        $this->assertStringNotContainsString('->noAuth()', $this->src('src/routes/doohickeys.php'));
+        $src = $this->src('src/routes/doohickey.php');
+        $this->assertStringNotContainsString('->noAuth()', $src);
+        $this->assertStringContainsString('->secure()', $src);
+        $this->assertStringContainsString('register(\Doohickey::class, false)', $src);
     }
 
     public function testCrudPublicRoutesOpenWrites(): void
     {
+        // ADR-0094: --public opens the writes via AutoCrud (public=true) and the
+        // page (no ->secure()). AutoCrud adds ->noAuth() to the route objects at
+        // runtime, so the route file itself carries none.
         $this->gen('crud Contraption --fields "name:string" --public');
-        $this->assertSame(3, substr_count($this->src('src/routes/contraptions.php'), '->noAuth()'));
+        $src = $this->src('src/routes/contraption.php');
+        $this->assertStringContainsString('register(\Contraption::class, true)', $src);
+        $this->assertStringNotContainsString('->secure()', $src);
     }
 
     public function testGeneratedCrudTestRunsGreen(): void
     {
         // R5 — the emitted CRUD test file executes green in a REAL phpunit
         // subprocess (Tina4 autoloaded via the framework bootstrap), booting the
-        // generated model + route and proving the gate (401/201/200) end-to-end.
+        // generated model + AutoCrud route and proving the gate (401/201/200)
+        // end-to-end.
         $this->gen('crud Trinket --fields "name:string,qty:int"');
-        $testFile = $this->file('tests/TrinketsTest.php');
+        $testFile = $this->file('tests/TrinketCrudTest.php');
         $this->assertFileExists($testFile);
 
         $phpunit = realpath(__DIR__ . '/../vendor/bin/phpunit');

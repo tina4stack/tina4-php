@@ -34,7 +34,7 @@
  * Generators:
  *   generate model <Name> [--fields "name:string,price:float"] [--table-name <name>]
  *   generate route <name> [--model Name] [--public]   Secure by default; --public opens writes
- *   generate crud <Name> [--fields "..."] [--public]   Model + migration + routes + form + view + test
+ *   generate crud <Name> [--fields "..."] [--public] [--no-templates]   AutoCrud-backed /admin/<table> page via Crud::toCrud + editable crud/ templates + gate test
  *   generate migration <description>
  *   generate middleware <Name>
  *   generate test <name>
@@ -433,9 +433,9 @@ const NEXT_STEPS = [
     ],
     'crud' => [
         'Apply the migration:  tina4php migrate',
-        'Try it:               tina4php serve -> curl http://localhost:7145/{route}',
-        'Visit /swagger to see the API docs',
-        'Extend routes in src/routes/{route}.php (EXTEND markers)',
+        'Open the admin UI:    tina4php serve -> http://localhost:7145/admin/{table}',
+        'Visit /swagger to see the AutoCrud API docs',
+        'Restyle the UI by editing src/templates/crud/*.twig',
     ],
     'migration' => [
         'Apply it:      tina4php migrate',
@@ -1439,7 +1439,7 @@ function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
     $booleanFlags = ['no-browser', 'no-reload', 'no-kill', 'production', 'managed', 'all', 'clear',
-                     'json', 'public', 'no-migration', 'once', 'dry-run', 'fix', 'no-install'];
+                     'json', 'public', 'no-migration', 'no-templates', 'once', 'dry-run', 'fix', 'no-install'];
 
     $flags = [];
     $positional = [];
@@ -3099,36 +3099,241 @@ PHP;
  */
 function generateCrud(string $name, array $flags, array $fieldTypeMap): void
 {
-    // Composite generator: derive the route name from the resolved table so it
-    // agrees with the model. Stay QUIET here (announce defaults to false) — the
-    // generateModel sub-call below announces the reserved-word note exactly once.
-    // `--table-name` flows through $flags to every sub-call.
+    // ADR-0094: `generate crud` scaffolds an admin PAGE rendered by
+    // \Tina4\Crud::toCrud, whose REST backend is delegated entirely to AutoCrud
+    // (no hand-written list/detail/write routes). The generated page route
+    // registers AutoCrud for the model (secure-by-default; --public opens
+    // writes) and renders toCrud; the overridable crud/*.twig templates are
+    // copied into the app so the developer can edit them immediately.
+    //
+    // The table name (e.g. "product", or "orders" for a reserved word) is the
+    // canonical path: the model declares tableName "<table>", AutoCrud serves
+    // /api/<table>, and the gate test + page route all key off it.
     $table = resolveTable($name, $flags);
-    $routeName = pluralizeTable(tableNameFromClass($name)); // single plural of the singular base (never $table . "s", which double-pluralises a reserved-word table)
     $public = !empty($flags['public']);
 
     echo "\n  Generating CRUD for {$name}...\n\n";
 
-    // 1. Model + migration (emitTest=false — crud emits its own broader gate
-    //    test at step 5, so the sub-generators stay quiet to avoid double-emit).
+    // 1. Model + migration (emitTest=false — crud emits its own gate test at
+    //    step 4, so the sub-generators stay quiet to avoid double-emit).
     generateModel($name, $flags, $fieldTypeMap, false, false);
 
-    // 2. Routes with model — secure-by-default; thread --public through so
-    //    `generate crud X --public` opens the writes (mirrors AutoCrud public=).
-    generateRoute($routeName, ['model' => $name, 'public' => $public], false);
+    // 2. Admin page route: registers AutoCrud (secure-by-default; --public
+    //    opens writes) and renders the to_crud admin UI at /admin/<table>.
+    generateCrudAdminRoute($name, $table, $public);
 
-    // 3. Form
-    generateForm($name, $flags);
+    // 3. Copy the overridable crud/*.twig templates into the app (unless
+    //    --no-templates) so the developer owns an editable copy straight away.
+    if (empty($flags['no-templates'])) {
+        copyCrudTemplates();
+    }
 
-    // 4. View (list + detail)
-    generateView($name, $flags);
-
-    // 5. Test — secure-by-default gate test (behavioural, real Router + Auth).
-    generateTest($routeName, ['model' => $name, 'secure_writes' => true, 'public' => $public]);
+    // 4. Secure-by-default gate test (behavioural, real Router + Auth + DB).
+    emitCrudGateTest($name, $table, $public);
 
     echo "\n  CRUD generation complete for {$name}.\n";
     echo "  Run: tina4php migrate\n";
-    echo "  Visit: /swagger to see the API docs\n";
+    echo "  Visit: /admin/{$table} for the admin UI, or /swagger for the API docs\n";
+}
+
+
+/**
+ * Write the admin page route (src/routes/<table>.php). It wires the AutoCrud
+ * REST backend for the model and renders the toCrud admin page — ADR-0094:
+ * toCrud owns no routes of its own, so the backend is AutoCrud and only the GET
+ * page lives here. Secure by default; $isPublic opens the page AND the writes.
+ */
+function generateCrudAdminRoute(string $model, string $table, bool $isPublic): void
+{
+    $dir = 'src/routes';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$table}.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    $pageChain = $isPublic ? '' : '->secure()';
+    $publicArg = $isPublic ? 'true' : 'false';
+    $writeDoc = $isPublic
+        ? '--public: the admin page and the writes are OPEN (no token).'
+        : 'Secure by default: the admin page AND the writes require a valid Bearer token (pass --public to open them).';
+    $pageDoc = $isPublic
+        ? ''
+        : "\n * NOTE: the admin page is secured (->secure()). A browser needs a valid token/session\n"
+        . " * to open it. The AutoCrud READ API (GET /api/{$table}, GET /api/{$table}/{id}) stays\n"
+        . " * public by AutoCrud's own default.";
+
+    $content = <<<PHP
+<?php
+
+/**
+ * {$model} admin — one server-rendered CRUD page (searchable, sortable,
+ * paginated table + create/edit/delete modals). The REST backend (GET list,
+ * GET/{id}, POST, PUT, DELETE) is AutoCrud; this file owns only the GET admin
+ * page. {$writeDoc}{$pageDoc}
+ *
+ * Restyle the UI by editing src/templates/crud/*.twig (copied into this app).
+ */
+\$crud = new \\Tina4\\AutoCrud(\\Tina4\\ORM::database());
+\$crud->register(\\{$model}::class, {$publicArg});
+\$crud->generateRoutes();
+
+\\Tina4\\Router::get("/admin/{$table}", function (\\Tina4\\Request \$request, \\Tina4\\Response \$response) {
+    return \$response->html(\\Tina4\\Crud::toCrud(\$request, ['model' => \\{$model}::class, 'title' => '{$model} Admin']));
+}){$pageChain};
+
+PHP;
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
+}
+
+
+/**
+ * Copy the framework's overridable crud/*.twig templates into the app's
+ * src/templates/crud/ so the developer can edit them in place (an app copy wins
+ * over the framework's via Crud's app-first resolution). Existing files are
+ * left untouched. The source dir is resolved from the Crud class file location,
+ * so it works from the repo, a composer install, or the extracted test harness.
+ */
+function copyCrudTemplates(): void
+{
+    $sourceDir = dirname((new \ReflectionClass(\Tina4\Crud::class))->getFileName()) . '/templates/crud';
+    $targetDir = 'src/templates/crud';
+    @mkdir($targetDir, 0755, true);
+    foreach (glob($sourceDir . '/*.twig') ?: [] as $src) {
+        $dest = $targetDir . '/' . basename($src);
+        if (file_exists($dest)) {
+            echo "  File already exists: {$dest}\n";
+            continue;
+        }
+        copy($src, $dest);
+        echo "  Created {$dest}\n";
+    }
+}
+
+
+/**
+ * Co-emit a real secure-by-default gate test for the scaffolded CRUD admin.
+ *
+ * Behavioural, no mocks: a real Router, the real auth gate, a real JWT, a real
+ * in-memory SQLite, and the REAL admin route file (which registers AutoCrud and
+ * the /admin page via Crud::toCrud). Asserts the write gate on /api/<table> and
+ * the page posture on /admin/<table>.
+ */
+function emitCrudGateTest(string $model, string $table, bool $isPublic): void
+{
+    $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $table)));
+    $dir = 'tests';
+    @mkdir($dir, 0755, true);
+    $path = "{$dir}/{$className}CrudTest.php";
+    if (file_exists($path)) {
+        echo "  File already exists: {$path}\n";
+        return;
+    }
+
+    if ($isPublic) {
+        $cases = <<<PHP
+    public function testAdminPageIsPublic(): void
+    {
+        // --public: the admin page opens to anyone -> 200 and renders the grid.
+        \$req = \\Tina4\\Request::create(method: 'GET', path: '/admin/{$table}');
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(200, \$res->getStatusCode());
+    }
+
+    public function testCreateIsPublic(): void
+    {
+        // --public: an anonymous POST to the AutoCrud backend creates -> 201.
+        \$req = \\Tina4\\Request::create(method: 'POST', path: '/api/{$table}', body: ['name' => 'test'],
+            headers: ['content-type' => 'application/json']);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(201, \$res->getStatusCode());
+    }
+PHP;
+    } else {
+        $cases = <<<PHP
+    public function testAdminPageRequiresAuth(): void
+    {
+        // Secure by default: the admin page is ->secure() -> 401 without a token.
+        \$req = \\Tina4\\Request::create(method: 'GET', path: '/admin/{$table}');
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(401, \$res->getStatusCode());
+    }
+
+    public function testCreateRequiresAuth(): void
+    {
+        // Secure by default: a tokenless POST to the AutoCrud backend -> 401.
+        \$req = \\Tina4\\Request::create(method: 'POST', path: '/api/{$table}', body: ['name' => 'test'],
+            headers: ['content-type' => 'application/json']);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(401, \$res->getStatusCode());
+    }
+
+    public function testCreateWithToken(): void
+    {
+        // A valid Bearer token passes the gate and creates -> 201.
+        \$token = \\Tina4\\Auth::getToken(['user_id' => 1], \$this->secret);
+        \$req = \\Tina4\\Request::create(method: 'POST', path: '/api/{$table}', body: ['name' => 'test'],
+            headers: ['content-type' => 'application/json', 'authorization' => "Bearer {\$token}"]);
+        \$res = \\Tina4\\Router::dispatch(\$req, new \\Tina4\\Response(true));
+        \$this->assertSame(201, \$res->getStatusCode());
+    }
+PHP;
+    }
+
+    $posture = $isPublic ? 'open (--public)' : 'gated';
+    $content = <<<PHP
+<?php
+
+/**
+ * Tests for {$model} CRUD admin (ADR-0094) — the backend is AutoCrud, writes {$posture}.
+ *
+ * Real end-to-end via the Router: no mocks — real Router, real auth gate, real
+ * JWT (Auth::getToken), a real in-memory SQLite, and the real admin route file
+ * (which registers AutoCrud and renders the /admin page via Crud::toCrud).
+ */
+
+use PHPUnit\\Framework\\TestCase;
+
+require_once __DIR__ . '/../src/orm/{$model}.php';
+
+class {$className}CrudTest extends TestCase
+{
+    private \\Tina4\\Database\\SQLite3Adapter \$db;
+    private string \$secret = 'scaffold-test-secret-0123456789ab';
+
+    protected function setUp(): void
+    {
+        \\Tina4\\Router::clear();
+        \\Tina4\\Crud::clearRegistry();
+        putenv("TINA4_SECRET={\$this->secret}");
+        \$_ENV['TINA4_SECRET'] = \$this->secret;
+        \$this->db = new \\Tina4\\Database\\SQLite3Adapter(':memory:');
+        \\Tina4\\ORM::bindDatabase(\$this->db);
+        (new {$model}())->createTable();
+        // Re-run the admin route file each test (just \\Tina4\\* calls) so it
+        // re-registers AutoCrud + the page route after Router::clear().
+        require __DIR__ . '/../src/routes/{$table}.php';
+    }
+
+    protected function tearDown(): void
+    {
+        \\Tina4\\Router::clear();
+        \\Tina4\\Crud::clearRegistry();
+        putenv('TINA4_SECRET');
+        unset(\$_ENV['TINA4_SECRET']);
+        \$this->db->close();
+    }
+
+{$cases}
+}
+
+PHP;
+
+    file_put_contents($path, $content);
+    echo "  Created {$path}\n";
 }
 
 

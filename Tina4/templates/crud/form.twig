@@ -1,0 +1,26 @@
+{#
+  crud/form.twig — the create/edit field inputs (and the public generate_form).
+
+  Override: drop your own templates/crud/form.twig to change how inputs render.
+
+  fields - one per input: { id, name, label, value, placeholder, required_attr,
+           and exactly ONE control flag: input (with type) | textarea | checkbox
+           (checked_attr) | select (options_html) }.
+  wrap        - render the <form> wrapper; form_id_attr/action/form_method set it
+  edit        - add the hidden primary-key input (edit modal)
+  modal_footer- render the Cancel/Save modal buttons; submit_button - a plain Submit
+
+  No inline styles or on*= handlers: the modal buttons carry data-crud-action and
+  are wired by the page script's delegated listener (ADR-0088).
+#}
+{% if wrap %}<form{{ form_id_attr|raw }} action="{{ action }}" method="{{ form_method }}" class="needs-validation" data-crud-form="1">{% endif %}
+{% if method_override %}<input type="hidden" name="_method" value="{{ method_override }}">{% endif %}
+{% if edit %}<input type="hidden" id="{{ mode }}-pk-value" name="{{ pk }}">{% endif %}
+{% if modal_footer %}<div class="crud-errors" data-crud-errors hidden></div>{% endif %}
+{% for field in fields %}<div class="mb-3">
+<label for="{{ field.id }}" class="form-label">{{ field.label }}</label>
+{% if field.textarea %}<textarea class="form-control" id="{{ field.id }}" name="{{ field.name }}"{{ field.required_attr|raw }}>{{ field.value }}</textarea>{% endif %}{% if field.checkbox %}<div class="form-check"><input class="form-check-input" type="checkbox" id="{{ field.id }}" name="{{ field.name }}"{{ field.checked_attr|raw }}></div>{% endif %}{% if field.select %}<select class="form-select" id="{{ field.id }}" name="{{ field.name }}"{{ field.required_attr|raw }}>{{ field.options_html|raw }}</select>{% endif %}{% if field.input %}<input type="{{ field.type }}" class="form-control" id="{{ field.id }}" name="{{ field.name }}" value="{{ field.value }}" placeholder="{{ field.placeholder }}"{{ field.required_attr|raw }}>{% endif %}
+</div>
+{% endfor %}
+{% if modal_footer %}<div class="modal-footer"><button type="button" class="btn btn-secondary" data-crud-action="close" data-crud-modal="{{ mode }}">Cancel</button><button type="button" class="btn btn-primary" data-crud-action="save" data-crud-mode="{{ mode }}">Save</button></div>{% endif %}{% if submit_button %}<button type="submit" class="btn btn-primary">Submit</button>{% endif %}
+{% if wrap %}</form>{% endif %}
