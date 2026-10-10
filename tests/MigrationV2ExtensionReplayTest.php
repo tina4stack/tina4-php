@@ -97,8 +97,9 @@ class MigrationV2ExtensionReplayTest extends TestCase
 
         // Canonical v3 table, then record the migration v2-style: migration_name
         // carries the ".sql" extension (PHP's native format / what the v2->v3
-        // backfill writes).
+        // backfill writes). #277: status() builds the table (not the constructor).
         $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->status();
         $migration->recordMigration($fileName, 1);
 
         // The applied-with-extension record must be recognised as applied → not pending.
@@ -184,6 +185,7 @@ class MigrationV2ExtensionReplayTest extends TestCase
         );
 
         $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->status(); // #277: status() builds the table (not the constructor)
         // Record only the first, v2-style WITH extension, WITHOUT running its DDL;
         // the second file is left untracked.
         $migration->recordMigration($appliedFile, 1);

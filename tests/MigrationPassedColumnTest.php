@@ -97,7 +97,8 @@ class MigrationPassedColumnTest extends TestCase
 
     public function testFreshV3TableHasPassedColumn(): void
     {
-        new Migration($this->db, $this->migrationsDir);
+        // #277: status() ensures the tracking table (the constructor no longer does).
+        (new Migration($this->db, $this->migrationsDir))->status();
         $this->assertTrue($this->db->tableExists('tina4_migration'));
 
         $cols = $this->trackingColumns();
@@ -180,7 +181,7 @@ class MigrationPassedColumnTest extends TestCase
 
     public function testPassedZeroRowReAppliesCleanlyOnMigrate(): void
     {
-        new Migration($this->db, $this->migrationsDir); // fresh v3 table
+        (new Migration($this->db, $this->migrationsDir))->status(); // #277: status() builds the fresh v3 table
         $this->assertContains('passed', $this->trackingColumns());
 
         $fileName = '20240101000000_create_gadgets.sql';
@@ -268,8 +269,9 @@ class MigrationPassedColumnTest extends TestCase
             "INSERT INTO tina4_migration (migration_id, description, passed) VALUES ('20240102000000', 'half done', 0)"
         );
 
-        // Constructing the runner performs the in-place v2 -> v3 upgrade.
+        // #277: status() performs the in-place v2 -> v3 upgrade (not the constructor).
         $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->status();
 
         // The table now carries the canonical v3 columns.
         $cols = $this->trackingColumns();
@@ -332,8 +334,9 @@ class MigrationPassedColumnTest extends TestCase
             'CREATE TABLE widgets (id INTEGER PRIMARY KEY)'
         );
 
-        // Constructing the runner performs the in-place v2 -> v3 upgrade.
+        // #277: status() performs the in-place v2 -> v3 upgrade (not the constructor).
         $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->status();
 
         // Precondition: the legacy prefix column survives the upgrade, which is
         // what makes this shape different from a fresh v3 table.
