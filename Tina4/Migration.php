@@ -286,10 +286,7 @@ class Migration
     private function acquireFileLock(): array
     {
         try {
-            if (!is_dir($this->migrationsDir)) {
-                @mkdir($this->migrationsDir, 0777, true);
-            }
-            $path = $this->migrationsDir . DIRECTORY_SEPARATOR . '.tina4_migration.lock';
+            $path = $this->fileLockPath();
             $fp = @fopen($path, 'c');
             if ($fp === false) {
                 return ['none', null];
@@ -303,6 +300,26 @@ class Migration
             Log::debug("file migration lock unavailable: {$e->getMessage()}; running unlocked");
             return ['none', null];
         }
+    }
+
+    /**
+     * Where the advisory lock file lives: the system temp directory, NOT the
+     * migrations folder. The lock is a runtime artifact, not a migration — a
+     * dotfile left in the tracked migrations/ directory gets committed by
+     * accident and blocks a plain rmdir of the folder. The name is derived from
+     * the absolute migrations directory, so every worker of the SAME app lands
+     * on the SAME file and flock() serializes them, while two different apps get
+     * two different locks. This keeps the lock scope identical to before; only
+     * the file's location changed.
+     */
+    private function fileLockPath(): string
+    {
+        $key = @realpath($this->migrationsDir);
+        if ($key === false) {
+            $key = $this->migrationsDir;
+        }
+        return sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'tina4-migration-' . hash('sha256', $key) . '.lock';
     }
 
     /**
