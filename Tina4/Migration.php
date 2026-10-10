@@ -72,20 +72,49 @@ class Migration
             $migrationsDir = 'src/migrations';
         }
         $this->migrationsDir = $migrationsDir;
-        // No adapter means the SCAFFOLDING path (create/createMigration), which
-        // only writes files. There is no tracking table to ensure and no
-        // connection to make one on.
-        if ($this->db !== null) {
-            $this->ensureMigrationsTable();
-        }
+        // The tracking table is ensured lazily by migrate()/rollback()/status()
+        // (migrate() does it UNDER the run-wide lock), not here. Two workers
+        // constructing a Migration at the same moment on a fresh database used to
+        // race on CREATE TABLE tina4_migration and collide on pg_type/pg_class —
+        // ensuring it inside the locked run serializes that too (issue #277). The
+        // SCAFFOLDING path (create/createMigration, $db === null) never touches
+        // the database and needs no table.
     }
 
+    /** Lock name shared by GET_LOCK (MySQL) and sp_getapplock (MSSQL). */
+    private const LOCK_NAME = 'tina4_migration_lock';
+
     /**
-     * Run all pending migrations.
+     * Run all pending migrations under a cross-process lock.
+     *
+     * The lock serializes concurrent startup migrations (issue #277): the hook
+     * runs per request under php -S / php-fpm and once per process on a
+     * long-lived server, so several workers or instances could reach a fresh
+     * database at once and apply the same migration more than once (a data
+     * migration then inserted its rows twice). Now the winner migrates while the
+     * rest block, then re-read the applied set and find nothing pending. Every
+     * backend auto-releases the lock when the holder's session/process dies, so a
+     * crash never deadlocks the next boot.
      *
      * @return array{applied: array<string>, skipped: array<string>, errors: array<string, string>}
      */
     public function migrate(): array
+    {
+        $lock = $this->acquireMigrationLock();
+        try {
+            $this->ensureMigrationsTable();
+            return $this->runPending();
+        } finally {
+            $this->releaseMigrationLock($lock);
+        }
+    }
+
+    /**
+     * Apply every pending migration, in order. Caller holds the run-wide lock.
+     *
+     * @return array{applied: array<string>, skipped: array<string>, errors: array<string, string>}
+     */
+    private function runPending(): array
     {
         $applied = [];
         $skipped = [];
@@ -192,8 +221,134 @@ class Migration
      * @param int $steps Number of batches to roll back (default: 1)
      * @return array{rolledBack: array<string>, errors: array<string, string>}
      */
+    /**
+     * A stable signed-64-bit key for PostgreSQL's pg_advisory_lock, derived from
+     * the lock name so it cannot collide with an application's own advisory-lock
+     * keys. It is a constant (not user input), so inlining it in the SQL is
+     * injection-safe. 'q' is a machine-order signed 64-bit int — deterministic
+     * within a process, which is all the key needs to be.
+     */
+    private function pgAdvisoryKey(): int
+    {
+        return (int) unpack('q', substr(hash('sha256', self::LOCK_NAME, true), 0, 8))[1];
+    }
+
+    /**
+     * Take the run-wide migration lock, blocking until it is held.
+     *
+     * PostgreSQL/MySQL/MSSQL use a native session-scoped advisory lock; SQLite,
+     * Firebird and anything else fall back to an OS advisory file lock on a
+     * sidecar in the migrations folder. A backend that cannot lock degrades to
+     * the file lock, and finally to running unlocked (the pre-#277 behaviour)
+     * rather than blocking boot. Returns [kind, resource] for releaseMigrationLock.
+     *
+     * @return array{0: string, 1: mixed}
+     */
+    private function acquireMigrationLock(): array
+    {
+        $engine = '';
+        try {
+            $engine = strtolower($this->db?->getDatabaseType() ?? '');
+        } catch (\Throwable) {
+            $engine = '';
+        }
+
+        try {
+            if (str_starts_with($engine, 'postgres')) {
+                $this->db->fetch('SELECT pg_advisory_lock(' . $this->pgAdvisoryKey() . ') AS locked');
+                return ['postgres', null];
+            }
+            if (str_starts_with($engine, 'mysql')) {
+                // -1 = wait indefinitely; GET_LOCK is connection-scoped.
+                $this->db->fetch("SELECT GET_LOCK('" . self::LOCK_NAME . "', -1) AS locked");
+                return ['mysql', null];
+            }
+            if ($engine === 'mssql' || $engine === 'sqlserver') {
+                $this->db->execute(
+                    "DECLARE @res INT; EXEC @res = sp_getapplock @Resource = '" . self::LOCK_NAME
+                    . "', @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = -1"
+                );
+                return ['mssql', null];
+            }
+        } catch (\Throwable $e) {
+            Log::debug("DB migration lock unavailable ({$engine}): {$e->getMessage()}; using a file lock");
+        }
+
+        return $this->acquireFileLock();
+    }
+
+    /**
+     * OS advisory file lock on a sidecar — the portable fallback (crash-safe: the
+     * kernel drops it when the process exits).
+     *
+     * @return array{0: string, 1: mixed}
+     */
+    private function acquireFileLock(): array
+    {
+        try {
+            $path = $this->fileLockPath();
+            $fp = @fopen($path, 'c');
+            if ($fp === false) {
+                return ['none', null];
+            }
+            if (!flock($fp, LOCK_EX)) {
+                fclose($fp);
+                return ['none', null];
+            }
+            return ['file', $fp];
+        } catch (\Throwable $e) {
+            Log::debug("file migration lock unavailable: {$e->getMessage()}; running unlocked");
+            return ['none', null];
+        }
+    }
+
+    /**
+     * Where the advisory lock file lives: the system temp directory, NOT the
+     * migrations folder. The lock is a runtime artifact, not a migration — a
+     * dotfile left in the tracked migrations/ directory gets committed by
+     * accident and blocks a plain rmdir of the folder. The name is derived from
+     * the absolute migrations directory, so every worker of the SAME app lands
+     * on the SAME file and flock() serializes them, while two different apps get
+     * two different locks. This keeps the lock scope identical to before; only
+     * the file's location changed.
+     */
+    private function fileLockPath(): string
+    {
+        $key = @realpath($this->migrationsDir);
+        if ($key === false) {
+            $key = $this->migrationsDir;
+        }
+        return sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'tina4-migration-' . hash('sha256', $key) . '.lock';
+    }
+
+    /**
+     * Release a lock taken by acquireMigrationLock().
+     *
+     * @param array{0: string, 1: mixed} $handle
+     */
+    private function releaseMigrationLock(array $handle): void
+    {
+        [$kind, $resource] = $handle;
+        try {
+            if ($kind === 'postgres') {
+                $this->db->fetch('SELECT pg_advisory_unlock(' . $this->pgAdvisoryKey() . ') AS released');
+            } elseif ($kind === 'mysql') {
+                $this->db->fetch("SELECT RELEASE_LOCK('" . self::LOCK_NAME . "') AS released");
+            } elseif ($kind === 'mssql') {
+                $this->db->execute("EXEC sp_releaseapplock @Resource = '" . self::LOCK_NAME . "', @LockOwner = 'Session'");
+            } elseif ($kind === 'file' && is_resource($resource)) {
+                @flock($resource, LOCK_UN);
+                @fclose($resource);
+            }
+        } catch (\Throwable $e) {
+            Log::debug("migration lock release failed ({$kind}): {$e->getMessage()}");
+        }
+    }
+
     public function rollback(int $steps = 1): array
     {
+        $this->ensureMigrationsTable();
         $rolledBack = [];
         $errors = [];
 
@@ -329,6 +484,7 @@ class Migration
      */
     public function status(): array
     {
+        $this->ensureMigrationsTable();
         $completed = $this->getAppliedMigrations();
 
         $pendingFiles = $this->getPendingMigrations();

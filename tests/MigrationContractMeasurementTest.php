@@ -92,7 +92,7 @@ class MigrationContractMeasurementTest extends TestCase
     public function testTrackingTableSchemaIsTheCanonicalSixColumns(): void
     {
         $db = $this->db();
-        new Migration($db, $this->migDir()); // constructor ensures the table
+        (new Migration($db, $this->migDir()))->status(); // #277: status() ensures the table
 
         $cols = [];
         foreach ($db->getColumns('tina4_migration') as $c) {

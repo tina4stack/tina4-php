@@ -57,7 +57,8 @@ class MigrationV3Test extends TestCase
 
     public function testMigrationsTableCreated(): void
     {
-        new Migration($this->db, $this->migrationsDir);
+        // #277: the tracking table is ensured by status()/migrate(), not the ctor.
+        (new Migration($this->db, $this->migrationsDir))->status();
         $this->assertTrue($this->db->tableExists('tina4_migration'));
     }
 
@@ -155,9 +156,11 @@ class MigrationV3Test extends TestCase
             "INSERT INTO mig_widget (name) VALUES ('alpha')"
         );
 
-        // Constructing the runner builds the bookkeeping table -- the exact call
-        // that used to throw the AUTOINCREMENT syntax error on Postgres.
+        // status() builds the bookkeeping table (#277 moved it off the
+        // constructor) -- the exact DDL that used to throw the AUTOINCREMENT
+        // syntax error on Postgres.
         $migration = new Migration($pg, $this->migrationsDir);
+        $migration->status();
         $this->assertTrue($pg->tableExists('tina4_migration'), 'bookkeeping table created on PG');
 
         $result = $migration->migrate();
@@ -230,8 +233,9 @@ class MigrationV3Test extends TestCase
         file_put_contents($this->migrationsDir . '/20240101000000_create_legacy.sql', "CREATE TABLE mig_legacy_v2 (id INTEGER)");
         file_put_contents($this->migrationsDir . '/20240102000000_create_new.sql', "CREATE TABLE mig_new_widget (id INTEGER)");
 
-        // Constructing the runner upgrades the v2 table to v3 in place.
+        // #277: status() upgrades the v2 table to v3 in place (not the constructor).
         $migration = new Migration($fb, $this->migrationsDir);
+        $migration->status();
 
         $pending = array_map('basename', $migration->getPendingMigrations());
         $this->assertNotContains('20240101000000_create_legacy.sql', $pending, 'legacy migration recorded by migration_id was re-listed as pending');
@@ -285,6 +289,7 @@ class MigrationV3Test extends TestCase
         // --- Fresh path: createV3Table() must emit Firebird DDL, not AUTOINCREMENT.
         file_put_contents($this->migrationsDir . '/20240103000000_pdo_fresh.sql', 'CREATE TABLE mig_pdo_new (id INTEGER)');
         $fresh = new Migration($fb, $this->migrationsDir);
+        $fresh->status(); // #277: ensure builds the bookkeeping table, not the ctor
         $this->assertTrue($fb->tableExists('tina4_migration'), 'bookkeeping table created on pdo_firebird');
         $cols = array_map('strtoupper', array_column($fb->getColumns('tina4_migration'), 'name'));
         $this->assertContains('MIGRATION_NAME', $cols, 'v3 bookkeeping schema created on pdo_firebird');
@@ -304,6 +309,7 @@ class MigrationV3Test extends TestCase
         $fb->execute("INSERT INTO tina4_migration (migration_id, passed) VALUES ('20240104000000', 1)");
         file_put_contents($this->migrationsDir . '/20240104000000_pdo_legacy.sql', 'CREATE TABLE mig_pdo_legacy (id INTEGER)');
         $legacy = new Migration($fb, $this->migrationsDir);
+        $legacy->status(); // #277: ensure performs the v2->v3 upgrade, not the ctor
         $applied = $legacy->getAppliedMigrations();
         $this->assertNotEmpty($applied, 'v2->v3 upgrade backfilled the legacy row on pdo_firebird');
         $this->assertArrayHasKey('migration_name', $applied[0]);
@@ -834,7 +840,8 @@ class MigrationV3Test extends TestCase
 
     public function testFreshTableHasCanonicalColumns(): void
     {
-        new Migration($this->db, $this->migrationsDir);
+        // #277: status() ensures the tracking table (the constructor no longer does).
+        (new Migration($this->db, $this->migrationsDir))->status();
         $this->assertTrue($this->db->tableExists('tina4_migration'));
 
         $cols = $this->trackingColumns();
@@ -907,8 +914,9 @@ class MigrationV3Test extends TestCase
             'CREATE TABLE fresh_widget (id INTEGER)'
         );
 
-        // Constructing the runner performs the in-place upgrade.
+        // #277: status() performs the in-place upgrade (the constructor no longer does).
         $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->status();
 
         $cols = $this->trackingColumns();
         foreach (['migration_name', 'description', 'executed_at', 'passed'] as $expected) {
@@ -956,8 +964,10 @@ class MigrationV3Test extends TestCase
         file_put_contents($this->migrationsDir . '/20240101000000_create_legacy.sql', 'CREATE TABLE v2_legacy (id INTEGER)');
         file_put_contents($this->migrationsDir . '/20240102000000_create_new.sql', 'CREATE TABLE v2_new (id INTEGER)');
 
-        // Constructing the runner upgrades the v2 table to the canonical shape.
+        // #277: status() upgrades the v2 table to the canonical shape (the
+        // constructor no longer does).
         $migration = new Migration($this->db, $this->migrationsDir);
+        $migration->status();
 
         $cols = $this->trackingColumns();
         $this->assertContains('migration_name', $cols, 'v2->v3 upgrade did not add migration_name');

@@ -118,7 +118,10 @@ class Issue115Test extends TestCase
         $this->createV2Table();
         $this->insertV2Row('20240101000000', 'create_users');
 
-        new Migration($this->db, $this->migrationsDir);
+        // #277 moved the tracking-table ensure/upgrade out of the constructor
+        // (two workers used to race on CREATE TABLE); status() is the read-only
+        // operation that now triggers it without applying any migration.
+        (new Migration($this->db, $this->migrationsDir))->status();
 
         $names = $this->columnNames();
         $this->assertContains('migration_name', $names, 'canonical migration_name column must be added');
@@ -140,7 +143,7 @@ class Issue115Test extends TestCase
             'SELECT 1'
         );
 
-        new Migration($this->db, $this->migrationsDir);
+        (new Migration($this->db, $this->migrationsDir))->status();
 
         $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
         $applied = array_column($rows, 'migration_name');
@@ -154,7 +157,7 @@ class Issue115Test extends TestCase
         $this->createV2Table();
         $this->insertV2Row('99990101000000', 'orphan_no_file');
 
-        new Migration($this->db, $this->migrationsDir);
+        (new Migration($this->db, $this->migrationsDir))->status();
 
         $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
         $applied = array_column($rows, 'migration_name');
@@ -198,15 +201,15 @@ class Issue115Test extends TestCase
 
     public function testV3SchemaUntouched(): void
     {
-        // Initialize as v3 from scratch
-        new Migration($this->db, $this->migrationsDir);
+        // Initialize as v3 from scratch (status() ensures the table)
+        (new Migration($this->db, $this->migrationsDir))->status();
         $this->db->exec(
             "INSERT INTO tina4_migration (migration_name, batch, executed_at, passed)"
             . " VALUES ('x.sql', 1, '2026-01-01T00:00:00+00:00', 1)"
         );
 
-        // Second construction must not corrupt the existing v3 data
-        new Migration($this->db, $this->migrationsDir);
+        // A second ensure on an existing v3 table must not corrupt its data
+        (new Migration($this->db, $this->migrationsDir))->status();
         $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
 
         $this->assertCount(1, $rows);
@@ -220,7 +223,7 @@ class Issue115Test extends TestCase
         $this->createV2Table();
         // No rows inserted
 
-        new Migration($this->db, $this->migrationsDir);
+        (new Migration($this->db, $this->migrationsDir))->status();
 
         $names = $this->columnNames();
         $this->assertContains('migration_name', $names);
@@ -244,7 +247,7 @@ class Issue115Test extends TestCase
         file_put_contents($this->migrationsDir . '/20240101000000_create_users.sql', 'SELECT 1');
         file_put_contents($this->migrationsDir . '/20240201000000_create_orders.sql', 'SELECT 1');
 
-        new Migration($this->db, $this->migrationsDir);
+        (new Migration($this->db, $this->migrationsDir))->status();
 
         $rows = $this->db->query(
             "SELECT migration_name, batch FROM tina4_migration ORDER BY migration_id ASC"
@@ -265,7 +268,7 @@ class Issue115Test extends TestCase
         $this->insertV2Row('20240101000000', 'create_users', passed: 1);
         $this->insertV2Row('20240201000000', 'create_orders', passed: 0);
 
-        new Migration($this->db, $this->migrationsDir);
+        (new Migration($this->db, $this->migrationsDir))->status();
 
         $rows = $this->db->query("SELECT migration_name FROM tina4_migration");
         $this->assertCount(
