@@ -320,6 +320,8 @@ class DatabaseDriversTest extends TestCase
         $this->assertContains('mssql', $schemes);
         $this->assertContains('sqlserver', $schemes);
         $this->assertContains('firebird', $schemes);
+        // #280: pgsql:// is a first-class accepted alias of postgres.
+        $this->assertContains('pgsql', $schemes);
     }
 
     public function testFactoryIsSupported(): void
@@ -331,7 +333,8 @@ class DatabaseDriversTest extends TestCase
         $this->assertTrue(Database::isSupported('mssql'));
         $this->assertTrue(Database::isSupported('sqlserver'));
         $this->assertTrue(Database::isSupported('firebird'));
-        $this->assertFalse(Database::isSupported('pgsql'));
+        // #280: pgsql:// is accepted by the factory, so it reports as supported.
+        $this->assertTrue(Database::isSupported('pgsql'));
         $this->assertFalse(Database::isSupported('oracle'));
         $this->assertFalse(Database::isSupported('cassandra'));
     }
