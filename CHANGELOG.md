@@ -6,6 +6,20 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.150 — 2026-10-11
+
+### CRUD
+- `AutoCrud` resolves its database LAZILY: the constructor DB is optional and
+  `ORM::database()` is fetched only when a request actually queries. A `generate
+  crud` route file now registers (`new AutoCrud()->register(Model)->generateRoutes()`)
+  at route-discovery time with NO database bound — matching Python/Ruby — instead
+  of throwing "No database configured". The generated route emits `new AutoCrud()`.
+
+### Dev admin
+- The dashboard AI talks to the `tina4 ai serve` gateway on :11435, not a model
+  directly; `/__dev/split` serves the shared split-preview asset; the Code
+  Landscape metrics bubbles are free to spread (zoom-out + Fit frame the layout).
+
 ## 3.13.149 — 2026-10-10
 
 ### CRUD
