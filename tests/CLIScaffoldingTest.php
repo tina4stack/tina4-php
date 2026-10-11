@@ -395,8 +395,11 @@ class CLIScaffoldingTest extends TestCase
         ob_end_clean();
 
         $src = file_get_contents('src/routes/doohickey.php');
-        // Backend is AutoCrud, registered secure-by-default (public=false).
-        $this->assertStringContainsString('new \Tina4\AutoCrud(\Tina4\ORM::database())', $src);
+        // Backend is AutoCrud, registered secure-by-default (public=false). The
+        // route takes NO DB at load — AutoCrud resolves ORM::database() lazily so
+        // the file registers during route discovery (parity with Python/Ruby).
+        $this->assertStringContainsString('new \Tina4\AutoCrud()', $src);
+        $this->assertStringNotContainsString('new \Tina4\AutoCrud(\Tina4\ORM::database())', $src);
         $this->assertStringContainsString('register(\Doohickey::class, false)', $src);
         $this->assertStringContainsString('generateRoutes()', $src);
         // The page renders via Crud::toCrud and is ->secure() by default.
