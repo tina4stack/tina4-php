@@ -41,8 +41,8 @@
     },
     {
       "path": "js/tina4-dev-admin.min.js",
-      "component": "tina4-dev-admin-21700e0",
-      "sha256": "0ca84246c26afb6a3243aafd1c65fa9486c076039e5d721b6f44661b3a59d7c2"
+      "component": "tina4-dev-admin-8c4617d",
+      "sha256": "6b05be06b5d76ee4126a11f019d104d3920c1e3234250cfe1966a33f34c1a234"
     }
   ]
 }
