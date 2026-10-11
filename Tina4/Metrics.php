@@ -83,7 +83,11 @@ class Metrics
         if ($binary === null) {
             throw new MetricsEngineException("tina4 not found on PATH - " . self::INSTALL_HINT);
         }
-        $command = escapeshellarg($binary) . " metrics --path " . escapeshellarg($path) . " --json";
+        // --no-history: a dashboard READ must never write .tina4-metrics.json.
+        // Without it every scan records history, the file watcher sees the write
+        // and reloads the page, which re-scans - a self-inflicted ~2-second
+        // reload loop that makes the dashboard unusable.
+        $command = escapeshellarg($binary) . " metrics --path " . escapeshellarg($path) . " --json --no-history";
         $process = @proc_open($command, [1 => ["pipe", "w"], 2 => ["pipe", "w"]], $pipes);
         if (!is_resource($process)) {
             throw new MetricsEngineException("could not run $binary");
