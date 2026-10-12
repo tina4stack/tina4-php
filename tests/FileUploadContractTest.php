@@ -37,6 +37,7 @@
  * to chunked bodies (HttpHardeningContractTest carries those cases).
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class FileUploadContractTest extends TestCase
@@ -123,6 +124,85 @@ class FileUploadContractTest extends TestCase
             $refusedNul = true;
         }
         $this->assertTrue($refusedDotDot && $refusedNul, 'an unusable name (.. or NUL) must be refused');
+    }
+
+    public static function linkKinds(): array
+    {
+        return [['symlink'], ['dangling'], ['hardlink']];
+    }
+
+    #[DataProvider('linkKinds')]
+    public function testSafeSaveReplacesALinkAtTheNameInsteadOfWritingThroughIt(string $link): void
+    {
+        $root = \TempPath::dir('tina4_safesave_link_');
+        $target = $root . '/uploads';
+        mkdir($target, 0755, true);
+        mkdir($root . '/outside', 0755, true);
+        file_put_contents($root . '/outside/loot', 'ORIGINAL');
+        $made = match ($link) {
+            'symlink' => @symlink($root . '/outside/loot', $target . '/pic.txt'),
+            'dangling' => @symlink($root . '/outside/new.txt', $target . '/pic.txt'),
+            'hardlink' => @link($root . '/outside/loot', $target . '/pic.txt'),
+        };
+        if (!$made) {
+            $this->markTestSkipped("this platform cannot create a {$link} here");
+        }
+
+        \Tina4\Request::saveUpload(['filename' => 'pic.txt', 'content' => 'UPLOADED'], $target);
+
+        $this->assertSame('ORIGINAL', file_get_contents($root . '/outside/loot'), 'the upload was written outside the target dir');
+        $this->assertFileDoesNotExist($root . '/outside/new.txt', 'the upload created a file outside the target dir');
+        $this->assertFalse(is_link($target . '/pic.txt'));
+        $this->assertSame('UPLOADED', file_get_contents($target . '/pic.txt'));
+        $this->assertSame(['pic.txt'], array_values(array_diff(scandir($target), ['.', '..'])));
+    }
+
+    public function testSafeSaveRewritesAPlainFileInPlaceKeepingItsMode(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('POSIX permission bits');
+        }
+        $target = \TempPath::dir('tina4_safesave_mode_') . '/uploads';
+        mkdir($target, 0755, true);
+        file_put_contents($target . '/run.sh', 'OLD CONTENT');
+        chmod($target . '/run.sh', 0755);
+
+        \Tina4\Request::saveUpload(['filename' => 'run.sh', 'content' => 'NEW'], $target);
+
+        clearstatcache();
+        $this->assertSame('NEW', file_get_contents($target . '/run.sh'));
+        $this->assertSame(0755, fileperms($target . '/run.sh') & 0777);
+    }
+
+    public function testSafeSaveRefusesAFileItMayNotWrite(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\' || (function_exists('posix_geteuid') && posix_geteuid() === 0)) {
+            $this->markTestSkipped('POSIX permission bits, not root');
+        }
+        $target = \TempPath::dir('tina4_safesave_ro_') . '/uploads';
+        mkdir($target, 0755, true);
+        file_put_contents($target . '/pic.txt', 'ORIGINAL');
+        chmod($target . '/pic.txt', 0444);
+
+        $refused = false;
+        try {
+            \Tina4\Request::saveUpload(['filename' => 'pic.txt', 'content' => 'UPLOADED'], $target);
+        } catch (\RuntimeException) {
+            $refused = true;
+        }
+
+        $this->assertTrue($refused, 'a save that cannot be written must say so');
+        $this->assertSame('ORIGINAL', file_get_contents($target . '/pic.txt'));
+    }
+
+    public function testSafeSaveTakesAnyNameTheFilesystemTakes(): void
+    {
+        $target = \TempPath::dir('tina4_safesave_long_') . '/uploads';
+        $name = str_repeat('a', 240) . '.txt';
+
+        \Tina4\Request::saveUpload(['filename' => $name, 'content' => 'UPLOADED'], $target);
+
+        $this->assertSame('UPLOADED', file_get_contents($target . '/' . $name));
     }
 
     // ── UP-CHUNKED-BYPASS: running per-chunk size guard (413) ────────────────

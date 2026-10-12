@@ -392,15 +392,33 @@ class Request
         }
         $dest = rtrim($targetDir, '/') . '/' . $base;
         // Defence in depth: the resolved parent of the destination must be
-        // exactly the resolved target dir (guards a pre-existing symlink at
-        // target/base).
+        // exactly the resolved target dir.
         $realDir = realpath($targetDir);
         $realParent = realpath(dirname($dest));
         if ($realDir === false || $realParent === false || $realParent !== $realDir) {
             throw new \InvalidArgumentException("refusing to write outside {$targetDir}: {$raw}");
         }
         $content = $file['content'] ?? '';
-        file_put_contents($dest, is_string($content) ? $content : (string)$content);
+        // Never write THROUGH a link already at target/base: a symlink (even a
+        // dangling one) leads out of targetDir, and a hard link shares its
+        // bytes with a file elsewhere. Such an entry is removed so the upload
+        // gets a file of its own; a plain file is rewritten in place and keeps
+        // its mode.
+        if (is_link($dest)) {
+            @unlink($dest);
+        }
+        $handle = @fopen($dest, 'cb');
+        if ($handle !== false && fstat($handle)['nlink'] > 1) {
+            fclose($handle);
+            @unlink($dest);
+            $handle = @fopen($dest, 'xb');
+        }
+        if ($handle === false) {
+            throw new \RuntimeException("cannot write the upload in {$targetDir}: {$raw}");
+        }
+        ftruncate($handle, 0);
+        fwrite($handle, is_string($content) ? $content : (string)$content);
+        fclose($handle);
         return $dest;
     }
 
