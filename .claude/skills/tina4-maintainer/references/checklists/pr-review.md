@@ -26,6 +26,12 @@ AND you have independently verified the work — an agent's own green run has ma
       PII, or exploit payload in the diff, tests, or PR text.
 - [ ] **CI required checks are green** — and authored by a real identity, not a bot token that
       never triggers the required checks (see the CLI packaging-PR lesson).
+- [ ] **CodeQL / code-scanning is clean on the branch.** Check the PR's security results
+      for alerts the branch INTRODUCES (`gh pr checks`, or `gh api repos/<owner>/<repo>/code-scanning/alerts?ref=refs/pull/<N>/head`).
+      A new high/critical (injection, ReDoS, path traversal, hardcoded secret) blocks merge;
+      confirm a `polynomial-redos` alert's real severity against the target engine (V8/`re`
+      backtrack, Onigmo does not). A pre-existing alert the PR doesn't touch is noted, not
+      inherited - just never let the PR ADD one.
 
 ## Merging
 
