@@ -965,6 +965,48 @@ class McpDevTools
     }
 
     /**
+     * Does $path, once its symlinks are followed, land outside $projectRoot?
+     * The trailing separator on both sides defeats the `/proj` vs `/proj-evil`
+     * prefix-match pitfall.
+     */
+    private static function landsOutside(string $path, string $projectRoot): bool
+    {
+        $rootReal = realpath($projectRoot);
+        if ($rootReal === false) {
+            return false; // a root that no longer exists holds nothing to link through
+        }
+        $real = self::realPathOf($path);
+        $rootPrefix = rtrim($rootReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return $real === false || !str_starts_with($real . DIRECTORY_SEPARATOR, $rootPrefix);
+    }
+
+    /**
+     * Where $path will land once every symlink in it is followed, including the
+     * parts that do not exist yet: a NEW file is created through its deepest
+     * existing parent, and a dangling symlink through the place it names. False
+     * when that cannot be worked out (a link loop, an unreadable link).
+     */
+    private static function realPathOf(string $path, int $hops = 0): string|false
+    {
+        $probe = $path;
+        while (!file_exists($probe) && !is_link($probe) && dirname($probe) !== $probe) {
+            $probe = dirname($probe);
+        }
+        $real = realpath($probe);
+        if ($real !== false || $hops >= 40) {
+            return $real;
+        }
+        // A dangling symlink. Its target is joined as text, not normalised, so a
+        // ".." after a linked component is resolved the way the OS will follow it.
+        $target = @readlink($probe);
+        if ($target === false) {
+            return false;
+        }
+        $base = str_starts_with($target, DIRECTORY_SEPARATOR) ? $target : dirname($probe) . DIRECTORY_SEPARATOR . $target;
+        return self::realPathOf($base . substr($path, strlen($probe)), $hops + 1);
+    }
+
+    /**
      * Register all built-in dev tools on the given McpServer.
      */
     public static function register(McpServer $server): void
@@ -1002,21 +1044,15 @@ class McpDevTools
                 $stack[] = $part;
             }
             $full = $projectRoot . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $stack);
-            // Belt-and-braces against symlink escapes: if the resolved path
-            // already exists, canonicalise it and confirm it is still inside
-            // the project root. A symlink in the tree pointing outside would
-            // otherwise let a read/write escape the sandbox even though the
-            // `..` segment guard above is clean. New paths (parent not yet
-            // created) have no realpath and rely on that segment guard. The
-            // trailing separator on both sides defeats the `/proj` vs
-            // `/proj-evil` prefix-match pitfall.
-            $real = realpath($full);
-            if ($real !== false) {
-                $rootReal = realpath($projectRoot) ?: $projectRoot;
-                $rootPrefix = rtrim($rootReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-                if (!str_starts_with($real . DIRECTORY_SEPARATOR, $rootPrefix)) {
-                    throw new \RuntimeException("Path escapes project directory: $relPath");
-                }
+            // Belt-and-braces against symlink escapes: canonicalise the deepest
+            // part of the path that already exists and confirm it is still
+            // inside the project root. A symlink in the tree pointing outside
+            // would otherwise let a read/write escape the sandbox even though
+            // the `..` segment guard above is clean, and a NEW file is created
+            // through its existing parent, so that parent is what gets checked.
+            // A dangling symlink is judged by where it points.
+            if (self::landsOutside($full, $projectRoot)) {
+                throw new \RuntimeException("Path escapes project directory: $relPath");
             }
             return $full;
         };
