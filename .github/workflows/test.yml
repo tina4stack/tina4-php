@@ -437,12 +437,12 @@ jobs:
           done
           echo "::error::mongo:8 replica set never became primary"; exit 1
 
-      - name: Install native Tina4 CLI 3.8.95
+      - name: Install native Tina4 CLI 3.8.98
         run: |
           cli_dir="$(mktemp -d)"
           trap 'rm -rf "$cli_dir"' EXIT
-          curl -fsSLo "$cli_dir/tina4-linux-amd64" https://github.com/tina4stack/tina4/releases/download/v3.8.95/tina4-linux-amd64
-          curl -fsSLo "$cli_dir/SHA256SUMS" https://github.com/tina4stack/tina4/releases/download/v3.8.95/SHA256SUMS
+          curl -fsSLo "$cli_dir/tina4-linux-amd64" https://github.com/tina4stack/tina4/releases/download/v3.8.98/tina4-linux-amd64
+          curl -fsSLo "$cli_dir/SHA256SUMS" https://github.com/tina4stack/tina4/releases/download/v3.8.98/SHA256SUMS
           (cd "$cli_dir" && grep ' tina4-linux-amd64$' SHA256SUMS | sha256sum -c -)
           sudo install -m 0755 "$cli_dir/tina4-linux-amd64" /usr/local/bin/tina4
           tina4 --version

@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Install tina4 CLI v3.8.95 (checksum-verified)
+      - name: Install tina4 CLI v3.8.98 (checksum-verified)
         run: |
           set -euo pipefail
-          ver=v3.8.95
+          ver=v3.8.98
           base="https://github.com/tina4stack/tina4/releases/download/${ver}"
           curl -fsSL -o tina4-linux-amd64 "${base}/tina4-linux-amd64"
           curl -fsSL -o SHA256SUMS "${base}/SHA256SUMS"
