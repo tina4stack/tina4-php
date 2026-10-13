@@ -32,6 +32,11 @@ AND you have independently verified the work — an agent's own green run has ma
       confirm a `polynomial-redos` alert's real severity against the target engine (V8/`re`
       backtrack, Onigmo does not). A pre-existing alert the PR doesn't touch is noted, not
       inherited - just never let the PR ADD one.
+      **Catch it BEFORE CI:** run `tina4 codeql` in the checkout before you push - it runs
+      the same GitHub "default setup (extended)" scan (the per-language security-extended
+      suite) over JS/TS, Ruby, Python and GitHub Actions locally and exits non-zero on any
+      finding, so a new alert never reaches the PR in the first place. (`tina4 install codeql`
+      / `tina4 doctor` set it up; PHP is Semgrep, not CodeQL.)
 
 ## Merging
 
