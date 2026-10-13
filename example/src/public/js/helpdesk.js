@@ -14,16 +14,13 @@
     var sendBtn = document.getElementById("helpdesk-send");
     if (!sessionList || !messagesEl) return;
 
-    // Track chat sessions: { clientId: { name, messages: [{sender, text, isAdmin, isSystem}], unread } }
-    // Prototype-safe map: keys are client IDs that arrive over the WebSocket, so
-    // they are attacker-controlled. A null prototype means a "__proto__" key can
-    // never reach Object.prototype, and isUnsafeKey() rejects the dangerous names
-    // outright at every write site (CodeQL: prototype pollution / property injection).
-    var sessions = Object.create(null);
+    // Track chat sessions, keyed by clientId -> { name, messages: [{sender, text, isAdmin, isSystem}], unread }.
+    // Keys are client IDs that arrive over the WebSocket, so they are attacker-controlled.
+    // A Map keys on arbitrary strings WITHOUT touching Object.prototype, so a "__proto__"
+    // or "constructor" key is just an ordinary entry — there is no prototype-pollution or
+    // property-injection surface to guard against (CodeQL-clean by construction).
+    var sessions = new Map();
 
-    function isUnsafeKey(key) {
-        return key === "__proto__" || key === "constructor" || key === "prototype";
-    }
     var activeSession = null;
     var chatSocket = null;
 
@@ -105,14 +102,14 @@
                     if (data.is_admin) return;
 
                     var clientId = data.client_id;
-                    if (!sessions[clientId]) {
+                    if (!sessions.has(clientId)) {
                         addSession(clientId, data.sender || clientId);
                     }
                     addMessageToSession(clientId, data.sender, data.text, data.is_admin, false);
 
                     // Mark unread if not viewing this session
                     if (activeSession !== clientId) {
-                        sessions[clientId].unread++;
+                        sessions.get(clientId).unread++;
                         renderSessionList();
                     }
                 }
@@ -132,14 +129,13 @@
     }
 
     function addSession(clientId, name) {
-        if (isUnsafeKey(clientId)) return;
-        if (sessions[clientId]) return;
-        sessions[clientId] = {
+        if (sessions.has(clientId)) return;
+        sessions.set(clientId, {
             name: name || clientId,
             messages: [],
             unread: 0,
             online: true
-        };
+        });
         renderSessionList();
 
         // Auto-select first session
@@ -149,19 +145,18 @@
     }
 
     function markSessionOffline(clientId) {
-        if (isUnsafeKey(clientId)) return;
-        if (sessions[clientId]) {
-            sessions[clientId].online = false;
+        var sess = sessions.get(clientId);
+        if (sess) {
+            sess.online = false;
             renderSessionList();
         }
     }
 
     function addMessageToSession(clientId, sender, text, isAdmin, isSystem) {
-        if (isUnsafeKey(clientId)) return;
-        if (!sessions[clientId]) {
+        if (!sessions.has(clientId)) {
             addSession(clientId, sender || clientId);
         }
-        sessions[clientId].messages.push({
+        sessions.get(clientId).messages.push({
             sender: sender,
             text: text,
             isAdmin: isAdmin,
@@ -175,9 +170,8 @@
     }
 
     function selectSession(clientId) {
-        if (isUnsafeKey(clientId)) return;
         activeSession = clientId;
-        var sess = sessions[clientId];
+        var sess = sessions.get(clientId);
         if (sess) {
             sess.unread = 0;
             chatTitle.textContent = "Chat with " + escapeHtml(sess.name);
@@ -190,26 +184,26 @@
     }
 
     function renderSessionList() {
-        var keys = Object.keys(sessions);
-        if (keys.length === 0) {
+        if (sessions.size === 0) {
             sessionList.innerHTML = '<li class="helpdesk-empty" id="no-chats-msg">Waiting for customers...</li>';
             return;
         }
 
         var html = "";
-        for (var i = 0; i < keys.length; i++) {
-            var id = keys[i];
-            var sess = sessions[id];
+        sessions.forEach(function(sess, id) {
             var isActive = activeSession === id;
             var statusClass = sess.online ? "online" : "";
             var unreadBadge = sess.unread > 0 ? '<span class="helpdesk-unread">' + sess.unread + '</span>' : '';
 
-            html += '<li class="helpdesk-session-item' + (isActive ? ' active' : '') + '" data-client-id="' + id + '">'
+            // id is the attacker-controlled clientId — escape it for the attribute.
+            // The browser decodes the entities back, so this.dataset.clientId still
+            // reads the original id in the click handler below.
+            html += '<li class="helpdesk-session-item' + (isActive ? ' active' : '') + '" data-client-id="' + escapeHtml(id) + '">'
                 + '<span class="chat-status ' + statusClass + '"></span>'
                 + '<span class="helpdesk-session-name">' + escapeHtml(sess.name) + '</span>'
                 + unreadBadge
                 + '</li>';
-        }
+        });
         sessionList.innerHTML = html;
 
         // Attach click handlers
@@ -222,12 +216,12 @@
     }
 
     function renderMessages() {
-        if (!activeSession || !sessions[activeSession]) {
+        if (!activeSession || !sessions.has(activeSession)) {
             messagesEl.innerHTML = '';
             return;
         }
 
-        var msgs = sessions[activeSession].messages;
+        var msgs = sessions.get(activeSession).messages;
         var html = "";
         for (var i = 0; i < msgs.length; i++) {
             var m = msgs[i];

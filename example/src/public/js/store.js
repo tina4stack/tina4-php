@@ -230,8 +230,12 @@ customElements.define("order-tracker", OrderTracker);
             }
 
             debounceTimer = setTimeout(function() {
+                // Pass the user's term as a GraphQL variable, never interpolated into
+                // the query string — the server binds it as a value, so there is no
+                // query-injection surface and no manual escaping to get wrong.
                 api.graphql("/api/graphql",
-                    '{ search_products(term: "' + term.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '", limit: 8) { id name slug price image_url } }'
+                    'query SearchProducts($term: String!) { search_products(term: $term, limit: 8) { id name slug price image_url } }',
+                    { term: term }
                 ).then(function(result) {
                     var data = result.data || result;
                     var errors = result.errors;
