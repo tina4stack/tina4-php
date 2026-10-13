@@ -2746,6 +2746,7 @@ class Server
     public static function parseMultipartBody(string $body, string $contentType): array
     {
         $fields = [];
+        $texts = [];
         $files = [];
 
         // Extract boundary from Content-Type header
@@ -2834,12 +2835,69 @@ class Server
                     $files[$name] = $descriptor;
                 }
             } else {
-                // Regular form field
+                $texts[] = [$name, $content];
+            }
+        }
+
+        // Text fields: `tags[]` collects a list and `user[name]` nests, as
+        // parse_str and $_POST nest the same form urlencoded. Past
+        // FORM_FIELD_LIMIT fields nothing nests, so a crafted body cannot turn
+        // each small field into a deep structure.
+        $nest = count($texts) <= self::FORM_FIELD_LIMIT;
+        foreach ($texts as [$name, $content]) {
+            if ($nest) {
+                self::nestFormField($fields, $name, $content);
+            } else {
                 $fields[$name] = $content;
             }
         }
 
         return ['fields' => $fields, 'files' => $files];
+    }
+
+    /** A form field name nested this deep or deeper keeps its flat key. */
+    private const FORM_DEPTH_LIMIT = 32;
+
+    /** A multipart form with more text fields than this is not nested at all. */
+    private const FORM_FIELD_LIMIT = 4096;
+
+    /** A form field name longer than this (in bytes) keeps its flat key. */
+    private const FORM_NAME_LIMIT = 1024;
+
+    /**
+     * Store one form field under its bracketed name the way parse_str does
+     * (`a[]` appends, `a[b]` nests, a later value wins), without parse_str's
+     * max_input_vars cut-off or its renaming of `.` and spaces in the name.
+     */
+    private static function nestFormField(array &$fields, string $name, string $value): void
+    {
+        $open = strpos($name, '[');
+        // Counted before the regex, so a name of millions of brackets is never matched out.
+        if ($open === false || $open === 0 || strlen($name) > self::FORM_NAME_LIMIT
+            || substr_count($name, '[') >= self::FORM_DEPTH_LIMIT
+            || !preg_match_all('/\G\[([^\]]*)\]/', substr($name, $open), $m)) {
+            $fields[$name] = $value;
+            return;
+        }
+        $slot = &$fields[substr($name, 0, $open)];
+        foreach ($m[1] as $key) {
+            if (!is_array($slot)) {
+                $slot = [];
+            }
+            if ($key === '') {
+                try {
+                    $slot[] = null;
+                } catch (\Error) {
+                    // `a[9223372036854775807]` then `a[]`: there is no next index.
+                    unset($slot);
+                    $fields[$name] = $value;
+                    return;
+                }
+                $key = array_key_last($slot);
+            }
+            $slot = &$slot[$key];
+        }
+        $slot = $value;
     }
 
     private function buildHeaderArray(array $headers): array
