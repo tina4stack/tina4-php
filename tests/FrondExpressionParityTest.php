@@ -136,7 +136,7 @@ class FrondExpressionParityTest extends TestCase
     {
         $corpus = $this->loadFixture("frond_expression_corpus.txt", "|");
         $expected = $this->loadFixture("frond_expression_expected.txt", "\t");
-        $this->assertCount(89, $corpus);
+        $this->assertCount(108, $corpus);
         $this->assertSame(
             array_column($corpus, 0),
             array_column($expected, 0),
@@ -353,5 +353,62 @@ class FrondExpressionParityTest extends TestCase
         // write "a\/b", and Python alone used to write "caf\u00e9".
         $this->assertStringContainsString('"u":"a/b"', $out);
         $this->assertStringContainsString("caf\u{e9}", $out);
+    }
+
+    // -- Approved-spec gaps found porting a Twig app (ranges, arithmetic, maps)
+
+    /** `a..b` and `range(a, b[, step])` include the end value and count down when start > end. */
+    public function testRangeOperatorAndFunctionIncludeBothEnds(): void
+    {
+        $ctx = ["n" => 3, "word" => "x"];
+        $this->assertSame("123", $this->engine->renderString("{% for i in 1..n %}{{ i }}{% endfor %}", $ctx));
+        $this->assertSame("321", $this->engine->renderString("{% for i in n..1 %}{{ i }}{% endfor %}", $ctx));
+        $this->assertSame("0,3,6,", $this->engine->renderString("{% for i in range(0, 6, 3) %}{{ i }},{% endfor %}", $ctx));
+        // Negative: a bound that is not a number, or a zero step, is an empty loop.
+        $this->assertSame("none", $this->engine->renderString("{% for i in 1..word %}{{ i }}{% else %}none{% endfor %}", $ctx));
+        $this->assertSame("none", $this->engine->renderString("{% for i in range(1, 3, 0) %}{{ i }}{% else %}none{% endfor %}", $ctx));
+        // Negative: a dot inside a string or a decimal is not a range.
+        $this->assertSame("a..b|1.5", $this->engine->renderString('{{ "a..b" }}|{{ 1.5 }}', $ctx));
+    }
+
+    /** `10 - 2 - 3` is 5; `n-4` needs no spaces; a `-` after another operator is a sign. */
+    public function testArithmeticChainsLeftToRightAndNeedsNoSpaces(): void
+    {
+        $ctx = ["n" => 5, "list" => ["a", "b", "c"]];
+        $this->assertSame("5|5|512", $this->engine->renderString("{{ 10 - 2 - 3 }}|{{ 100 / 10 / 2 }}|{{ 2 ** 3 ** 2 }}", $ctx));
+        $this->assertSame("1|b|-5", $this->engine->renderString("{{ n-4 }}|{{ list[n-4] }}|{{ n * -1 }}", $ctx));
+        $this->assertSame("b", $this->engine->renderString('{{ list[n-4] is defined ? list[n-4] : "-" }}', $ctx));
+        // Negative: an index past the end is not defined.
+        $this->assertSame("-", $this->engine->renderString('{{ list[n+5] is defined ? "y" : "-" }}', $ctx));
+        // Negative: a leading minus is a sign, not a subtraction.
+        $this->assertSame("-6", $this->engine->renderString("{{ -7 + 1 }}", $ctx));
+    }
+
+    /** `{a: 1}` is `{"a": 1}`, as in Twig; `{(k): 1}` evaluates `k`. */
+    public function testMapBareKeysAreStringsAndParenthesisedKeysAreEvaluated(): void
+    {
+        $ctx = ["name" => "Andre", "k" => "dyn", "a" => "WRONG"];
+        $this->assertSame("xAndre", $this->engine->renderString('{% set m = {a: "x" ~ name} %}{{ m.a }}', $ctx));
+        // Negative: a bare key never reads the variable of the same name.
+        $this->assertSame("", $this->engine->renderString('{% set m = {a: 1} %}{{ m.WRONG }}', $ctx));
+        $this->assertSame("1", $this->engine->renderString('{% set m = {(k): 1} %}{{ m.dyn }}', $ctx));
+    }
+
+    /** `~` inside `include ... with {}` used to lose every key, so an email button had no href. */
+    public function testIncludeWithAConcatenatedValuePassesTheWholeMap(): void
+    {
+        $dir = sys_get_temp_dir() . '/tina4-frond-include-with-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        try {
+            file_put_contents("$dir/cta.twig", "[{{ button_url }}|{{ button_label }}]");
+            $engine = new Frond($dir);
+            $source = "{% include 'cta.twig' with {button_url: 'https://x/' ~ code, button_label: 'Go'} %}";
+            $this->assertSame("[https://x/ABC|Go]", $engine->renderString($source, ["code" => "ABC"]));
+            // Negative: without the map the partial sees nothing.
+            $this->assertSame("[|]", $engine->renderString("{% include 'cta.twig' %}", []));
+        } finally {
+            @unlink("$dir/cta.twig");
+            @rmdir($dir);
+        }
     }
 }

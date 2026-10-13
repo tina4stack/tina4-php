@@ -8,7 +8,6 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-
 namespace Tina4;
 
 /**
@@ -121,13 +120,12 @@ class Frond
     private const RE_NOT_PREFIX = '/^not\s+(.+)$/s';
     private const RE_IS_NOT_TEST = '/^(.+?)\s+is\s+not\s+(.+)$/s';
     private const RE_IS_TEST = '/^(.+?)\s+is\s+(.+)$/s';
-    private const RE_RANGE = '/^(\d+)\.\.(\d+)$/';
     private const RE_FUNC_CALL = '/^([\w.]+)\s*\((.*)?\)$/s';
     private const RE_METHOD_CALL = '/^(\w+)\((.*)?\)$/s';
     private const RE_FILTER_WITH_ARGS = '/^(\w+)\s*\((.+)\)$/s';
     private const RE_FILTER_COMPARISON = '/^(\w+)\s*(!=|==|>=|<=|>|<)\s*(.+)$/';
     private const RE_DIVISIBLE_BY = '/^divisible\s*by\s*\(?\s*(.+?)\s*\)?$/';
-    private const RE_DICT_PAIR = '/^(?:(["\'])(.+?)\1|(\w+))\s*:\s*(.+)$/s';
+    private const RE_DICT_PAIR = '/^(?:(["\'])(.+?)\1|(\w+)|\((.+?)\))\s*:\s*(.+)$/s';
     private const RE_SLUG_STRIP = '/[^a-z0-9]+/';
 
     /**
@@ -1896,8 +1894,9 @@ class Frond
         // 1. Literals (strings, numbers, booleans, null)
         if (isset($scan['lit'])) return $scan['lit'][0];
 
-        // 2. Parenthesized sub-expression
+        // 2. Parenthesized sub-expression, or a whole collection literal
         if (isset($scan['paren'])) return $this->evaluateExpression($scan['paren'], $data);
+        if (isset($scan['collection'])) return $this->evaluateCollectionLiteral($expr, $data);
 
         // 3. Ternary (? :) and inline-if
         $v = $this->evaluateTernary($data, $scan);
@@ -2044,6 +2043,10 @@ class Frond
         if ($match !== null) return $match;
         $match = $this->scanComparison($expr, $scan);
         if ($match !== null) return $match;
+        $rangePos = $this->findRangeOp($expr);
+        if ($rangePos !== false) {
+            return $scan + ['range' => [trim(substr($expr, 0, $rangePos)), trim(substr($expr, $rangePos + 2))]];
+        }
         $match = $this->scanConcatOrFilter($expr, $scan);
         if ($match !== null) return $match;
         return $this->scanArithmetic($expr, $scan);
@@ -2059,6 +2062,12 @@ class Frond
         if (strlen($expr) >= 2 && $expr[0] === '(' && str_ends_with($expr, ')')
             && $this->matchedParens($expr)) {
             return ['paren' => substr($expr, 1, -1)];
+        }
+        // A whole [..] or {..} literal is one value: its members may hold
+        // operators (`{a: "x" ~ name}`) that must not split the literal.
+        if (strlen($expr) >= 2 && ($expr[0] === '[' || $expr[0] === '{')
+            && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
+            return ['collection' => true];
         }
         return null;
     }
@@ -2171,17 +2180,25 @@ class Frond
 
     private function scanArithmetic(string $expr, array $scan): array
     {
-        foreach ([['+', '-'], ['*', '//', '/', '%', '**']] as $operatorGroup) {
+        // Loosest level first; within a level the rightmost operator is the
+        // split point, so `10 - 2 - 3` is `(10 - 2) - 3`.
+        foreach ([['+', '-'], ['*', '//', '/', '%'], ['**']] as $operatorGroup) {
+            $splitOperator = null;
+            $splitPos = false;
             foreach ($operatorGroup as $mathOperator) {
                 $operatorPos = $this->findMathOp($expr, $mathOperator);
-                if ($operatorPos === false) continue;
-                $scan['arithmetic'] = [
-                    $mathOperator,
-                    trim(substr($expr, 0, $operatorPos)),
-                    trim(substr($expr, $operatorPos + strlen($mathOperator))),
-                ];
-                return $scan;
+                if ($operatorPos !== false && ($splitPos === false || $operatorPos > $splitPos)) {
+                    $splitOperator = $mathOperator;
+                    $splitPos = $operatorPos;
+                }
             }
+            if ($splitPos === false) continue;
+            $scan['arithmetic'] = [
+                $splitOperator,
+                trim(substr($expr, 0, $splitPos)),
+                trim(substr($expr, $splitPos + strlen($splitOperator))),
+            ];
+            return $scan;
         }
         if (str_starts_with($expr, '(')
             && $this->findMatchingParen($expr, 0) === strlen($expr) - 1) {
@@ -2446,6 +2463,13 @@ class Frond
      */
     private function evaluateArithmetic(array &$data, array $scan): mixed
     {
+        if (isset($scan['range'])) {
+            return self::frondRange(
+                $this->evaluateExpression($scan['range'][0], $data),
+                $this->evaluateExpression($scan['range'][1], $data)
+            );
+        }
+
         if (isset($scan['arithmetic'])) {
             [$op, $left, $right] = $scan['arithmetic'];
             $leftVal = $this->evaluateExpression($left, $data);
@@ -2471,6 +2495,50 @@ class Frond
         return self::NOT_MATCHED;
     }
 
+    /**
+     * Integers from $start to $end inclusive, counting down when $start is
+     * greater than $end. Backs both `range()` and `a..b`.
+     *
+     * @param mixed $start First value.
+     * @param mixed $end Last value, included.
+     * @param mixed $step Distance between values; its sign is ignored.
+     * @return array<int, int> The values, or [] for a non-numeric bound or a zero step.
+     */
+    private static function frondRange(mixed $start, mixed $end, mixed $step = 1): array
+    {
+        if (!is_numeric($start) || !is_numeric($end) || !is_numeric($step) || (int)$step === 0) {
+            return [];
+        }
+        $step = abs((int)$step);
+        // PHP's range() throws when the step is wider than the span; the other frameworks yield [start].
+        if ($step > abs((int)$end - (int)$start)) {
+            return [(int)$start];
+        }
+        return range((int)$start, (int)$end, $step);
+    }
+
+    /**
+     * Position of a top-level `..` (not part of `...`), outside quotes and brackets.
+     *
+     * @param string $expr Expression to scan.
+     * @return int|false Byte offset of the operator, or false when absent.
+     */
+    private function findRangeOp(string $expr): int|false
+    {
+        $position = $this->findOutsideQuotes($expr, '..');
+        while ($position !== false) {
+            $partOfEllipsis = str_starts_with(substr($expr, $position), '...')
+                || ($position > 0 && $expr[$position - 1] === '.');
+            if ($position > 0 && !$partOfEllipsis) {
+                // `1..4|join(",")` pipes the whole range, so leave it to the filter step.
+                return count($this->splitFilters(substr($expr, $position + 2))) > 1 ? false : $position;
+            }
+            $next = $this->findOutsideQuotes(substr($expr, $position + 2), '..');
+            $position = $next === false ? false : $position + 2 + $next;
+        }
+        return false;
+    }
+
     /** Apply a single math operator to two numeric operands. */
     private function applyMathOp(string $op, mixed $l, mixed $r): int|float
     {
@@ -2494,9 +2562,6 @@ class Frond
         }
         if (str_starts_with($expr, '{') && str_ends_with($expr, '}')) {
             return $this->parseDictLiteral(substr($expr, 1, -1), $data);
-        }
-        if (preg_match(self::RE_RANGE, $expr, $m)) {
-            return range((int)$m[1], (int)$m[2]);
         }
         return self::NOT_MATCHED;
     }
@@ -2534,7 +2599,7 @@ class Frond
         if ($funcName === 'range') {
             $args = $this->parseArgs($argsStr, $data);
             if (count($args) >= 2) {
-                return range($args[0], $args[1], $args[2] ?? 1);
+                return self::frondRange($args[0], $args[1], $args[2] ?? 1);
             }
         }
 
@@ -2942,25 +3007,27 @@ class Frond
 
     private function findMathOp(string $expr, string $op): int|false
     {
-        // Additive (+/-) binds left-to-right, so the SPLIT point is the LAST
-        // top-level operator (evaluate the right operand last). Multiplicative
-        // (*, /, //, %) takes the FIRST. Both walk the same string/paren-aware
-        // scan; only the direction and the "is this a real operator" test differ.
-        // Additive is left-associative, so the SPLIT point is the LAST top-level
-        // occurrence; multiplicative takes the FIRST. $additive also selects
-        // which "is this a real operator" test the scan applies.
+        // Every operator but `**` is left-associative, so its split point is the
+        // LAST top-level occurrence; `**` is right-associative and takes the FIRST.
+        // $additive selects which "is this a real operator" test the scan applies.
         $additive = ($op === '+' || $op === '-');
-        return $this->scanTopLevelOp($expr, $op, $additive);
+        return $this->scanTopLevelOp($expr, $op, $additive, $op === '**');
     }
 
     /**
      * Scan $expr for $op at bracket depth 0 and outside string literals.
      * Validates each candidate with the additive or multiplicative operator
-     * test; returns the first valid match, or the last for additive operators
-     * (left-associativity), or false when none qualifies. No per-call closure
-     * is allocated — this runs on a cache MISS in computeExprScan().
+     * test; returns the last valid match (the first when $firstMatch is set),
+     * or false when none qualifies. No per-call closure is allocated — this
+     * runs on a cache MISS in computeExprScan().
+     *
+     * @param string $expr Expression to scan.
+     * @param string $op Operator to find.
+     * @param bool $additive True for `+`/`-`, which may be a unary sign.
+     * @param bool $firstMatch Return the first valid match instead of the last.
+     * @return int|false Byte offset of the operator, or false when absent.
      */
-    private function scanTopLevelOp(string $expr, string $op, bool $additive): int|false
+    private function scanTopLevelOp(string $expr, string $op, bool $additive, bool $firstMatch = false): int|false
     {
         $depth = 0;
         $inStr = false;
@@ -2982,10 +3049,10 @@ class Frond
                 continue;
             }
             $valid = $additive
-                ? $this->isBinaryAdditiveOp($expr, $op, $i)
+                ? $this->isBinaryAdditiveOp($expr, $i)
                 : $this->isSingleCharMultiplicativeOp($expr, $op, $i);
             if ($valid) {
-                if (!$additive) {
+                if ($firstMatch) {
                     return $i;
                 }
                 $found = $i;
@@ -2995,19 +3062,23 @@ class Frond
         return $found;
     }
 
-    /** A +/- at $i is a binary operator, not a unary sign (start / after `(` / after `,`). */
-    private function isBinaryAdditiveOp(string $expr, string $op, int $i): bool
+    /**
+     * A +/- at $i is a binary operator only when the text before it ends in an
+     * operand (a name, number, closing bracket or quote); otherwise it is a
+     * sign, as in `-5`, `(-5)`, `f(a, -5)` or `n * -1`.
+     *
+     * @param string $expr Expression being scanned.
+     * @param int $i Byte offset of the operator.
+     * @return bool True when the operator is binary.
+     */
+    private function isBinaryAdditiveOp(string $expr, int $i): bool
     {
-        if ($op === '-' && $i === 0) {
+        $prev = rtrim(substr($expr, 0, $i));
+        if ($prev === '') {
             return false;
         }
-        if ($i > 0) {
-            $prev = trim(substr($expr, 0, $i));
-            if ($prev === '' || str_ends_with($prev, '(') || str_ends_with($prev, ',')) {
-                return false;
-            }
-        }
-        return true;
+        $last = $prev[strlen($prev) - 1];
+        return ctype_alnum($last) || str_contains('_)]\'"', $last);
     }
 
     /** A single-char `/` or `*` at $i is itself, not part of `//` (floor div) or `**` (power). */
@@ -3272,7 +3343,7 @@ class Frond
 
         switch ($testExpr) {
             case 'defined':
-                $parts = $this->parseVarPath(trim($valueExpr));
+                $parts = $this->parseVarPath(trim($valueExpr), $data);
                 if (empty($parts)) return false;
                 $current = $data;
                 foreach ($parts as $seg) {
@@ -3349,8 +3420,13 @@ class Frond
         foreach ($pairs as $pair) {
             $pair = trim($pair);
             if (preg_match(self::RE_DICT_PAIR, $pair, $m)) {
-                $key = ($m[1] !== '') ? $m[2] : $m[3];
-                $val = $this->evaluateExpression(trim($m[4]), $data);
+                // A bare key is a string; a parenthesised key is evaluated: {(name): 1}.
+                $key = match (true) {
+                    $m[1] !== '' => $m[2],
+                    $m[3] !== '' => $m[3],
+                    default => (string)$this->evaluateExpression($m[4], $data),
+                };
+                $val = $this->evaluateExpression(trim($m[5]), $data);
                 $result[$key] = $val;
             }
         }
