@@ -174,6 +174,20 @@ class FileUploadContractTest extends TestCase
         $this->assertSame(0755, fileperms($target . '/run.sh') & 0777);
     }
 
+    public function testSafeSaveCreatesAnOwnerOnlyFile(): void
+    {
+        // A freshly created upload must be owner-only (0o600): no group or other
+        // read/write bit (CWE-732). Removing the chmod leaves 0644 (umask 022)
+        // and turns this RED.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('POSIX permission bits');
+        }
+        $target = \TempPath::dir('tina4_safesave_owner_') . '/uploads';
+        $dest = \Tina4\Request::saveUpload(['filename' => 'pic.txt', 'content' => 'UPLOADED'], $target);
+        clearstatcache();
+        $this->assertSame(0, fileperms($dest) & 0077, 'upload is group/other accessible');
+    }
+
     public function testSafeSaveRefusesAFileItMayNotWrite(): void
     {
         if (DIRECTORY_SEPARATOR === '\\' || (function_exists('posix_geteuid') && posix_geteuid() === 0)) {

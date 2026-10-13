@@ -404,6 +404,12 @@ class Request
         // bytes with a file elsewhere. Such an entry is removed so the upload
         // gets a file of its own; a plain file is rewritten in place and keeps
         // its mode.
+        // A newly CREATED upload is made owner-only (0o600): no group or other
+        // read/write bit (CWE-732). PHP's fopen has no mode argument, so the
+        // file would otherwise inherit 0666 & ~umask. A plain file rewritten in
+        // place keeps its own mode, per the note above, so chmod only when we
+        // created the file (nothing, or a symlink, was at the name first).
+        $created = !is_file($dest) || is_link($dest);
         if (is_link($dest)) {
             @unlink($dest);
         }
@@ -412,6 +418,7 @@ class Request
             fclose($handle);
             @unlink($dest);
             $handle = @fopen($dest, 'xb');
+            $created = true;
         }
         if ($handle === false) {
             throw new \RuntimeException("cannot write the upload in {$targetDir}: {$raw}");
@@ -419,6 +426,9 @@ class Request
         ftruncate($handle, 0);
         fwrite($handle, is_string($content) ? $content : (string)$content);
         fclose($handle);
+        if ($created) {
+            @chmod($dest, 0600);
+        }
         return $dest;
     }
 
