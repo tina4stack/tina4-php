@@ -15,6 +15,7 @@
  * License: MPL-2.0 https://mozilla.org/MPL/2.0/
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tina4\McpProtocol;
 use Tina4\McpServer;
@@ -539,6 +540,138 @@ class MCPTest extends TestCase
         } finally {
             chdir($oldCwd);
             @rmdir($tmpDir);
+        }
+    }
+
+    public static function symlinkEscapes(): array
+    {
+        return [
+            'new file in a linked dir' => ['file_write', ['path' => 'linkdir/planted.txt', 'content' => 'PWNED']],
+            'new subdir in a linked dir' => ['file_write', ['path' => 'linkdir/sub/planted.txt', 'content' => 'PWNED']],
+            'dangling link' => ['file_write', ['path' => 'dangle.txt', 'content' => 'PWNED']],
+            'asset under a linked dir' => ['asset_upload', ['filename' => 'pub/planted.txt', 'content' => 'PWNED']],
+        ];
+    }
+
+    #[DataProvider('symlinkEscapes')]
+    public function testAWriteThroughASymlinkOutOfTheProjectIsRefused(string $tool, array $arguments): void
+    {
+        $lab = \TempPath::dir('mcp_link_');
+        mkdir($lab . '/proj/src/public', 0755, true);
+        mkdir($lab . '/outside', 0755, true);
+        if (!@symlink($lab . '/outside', $lab . '/proj/linkdir')) {
+            $this->markTestSkipped('this platform cannot create a symlink here');
+        }
+        symlink($lab . '/outside/dangle.txt', $lab . '/proj/dangle.txt');
+        symlink($lab . '/outside', $lab . '/proj/src/public/pub');
+        $server = new McpServer('/test-sandbox-link', 'Sandbox Link Test');
+        $oldCwd = getcwd();
+        chdir($lab . '/proj');
+
+        try {
+            McpDevTools::register($server);
+            $resp = json_decode($server->handleMessage([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/call',
+                'params' => ['name' => $tool, 'arguments' => $arguments],
+            ]), true);
+
+            $this->assertArrayHasKey('error', $resp, 'Expected error response for a symlink escape');
+            $this->assertSame([], array_values(array_diff(scandir($lab . '/outside'), ['.', '..'])), 'a file was written outside the project');
+        } finally {
+            chdir($oldCwd);
+        }
+    }
+
+    public static function danglingLinks(): array
+    {
+        return [
+            'to a new file inside the project' => ['data/real.txt', true],
+            'climbing out through a linked dir' => ['linkdir/../planted.txt', false],
+            'in a loop' => ['alias.txt', false],
+        ];
+    }
+
+    #[DataProvider('danglingLinks')]
+    public function testADanglingLinkIsJudgedByWhereItPoints(string $link, bool $allowed): void
+    {
+        $lab = \TempPath::dir('mcp_dangle_');
+        mkdir($lab . '/proj/data', 0755, true);
+        mkdir($lab . '/outside/deep', 0755, true);
+        if (!@symlink($lab . '/outside/deep', $lab . '/proj/linkdir')) {
+            $this->markTestSkipped('this platform cannot create a symlink here');
+        }
+        symlink($link, $lab . '/proj/alias.txt');
+        $server = new McpServer('/test-sandbox-dangle', 'Sandbox Dangle Test');
+        $oldCwd = getcwd();
+        chdir($lab . '/proj');
+
+        try {
+            McpDevTools::register($server);
+            $resp = json_decode($server->handleMessage([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/call',
+                'params' => ['name' => 'file_write', 'arguments' => ['path' => 'alias.txt', 'content' => 'WRITTEN']],
+            ]), true);
+        } finally {
+            chdir($oldCwd);
+        }
+
+        if ($allowed) {
+            $this->assertArrayNotHasKey('error', $resp);
+            $this->assertFileExists($lab . '/proj/data/real.txt');
+        } else {
+            $this->assertStringContainsString('escapes project directory', $resp['error']['message'] ?? '');
+            $this->assertFileDoesNotExist($lab . '/outside/planted.txt');
+        }
+    }
+
+    public function testAProjectDirectoryThatNoLongerExistsIsNotAProtocolError(): void
+    {
+        $root = \TempPath::dir('mcp_gone_') . '/proj';
+        mkdir($root, 0755, true);
+        $server = new McpServer('/test-sandbox-gone', 'Sandbox Gone Test');
+        $oldCwd = getcwd();
+        chdir($root);
+        try {
+            McpDevTools::register($server);
+        } finally {
+            chdir($oldCwd);
+        }
+        rmdir($root);
+
+        $resp = json_decode($server->handleMessage([
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'tools/call',
+            'params' => ['name' => 'file_list', 'arguments' => ['path' => '.']],
+        ]), true);
+
+        $this->assertArrayNotHasKey('error', $resp);
+    }
+
+    public function testAWriteToANewNestedDirectoryInsideTheProjectIsAllowed(): void
+    {
+        $lab = \TempPath::dir('mcp_nested_');
+        $server = new McpServer('/test-sandbox-nested', 'Sandbox Nested Test');
+        $oldCwd = getcwd();
+        chdir($lab);
+
+        try {
+            McpDevTools::register($server);
+            $resp = json_decode($server->handleMessage([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/call',
+                'params' => ['name' => 'file_write', 'arguments' => ['path' => 'notes/deep/ok.txt', 'content' => 'fine']],
+            ]), true);
+
+            $this->assertArrayNotHasKey('error', $resp);
+            $this->assertSame('fine', file_get_contents($lab . '/notes/deep/ok.txt'));
+        } finally {
+            chdir($oldCwd);
         }
     }
 
