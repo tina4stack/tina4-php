@@ -46,10 +46,28 @@ class AutoCrud
     /** @var array<string, bool> tableName -> public-writes flag (default secure) */
     private array $public = [];
 
+    /**
+     * @param DatabaseAdapter|null $db The adapter to use. NULL (the default) means
+     *     "resolve lazily": the DB is fetched from ORM::database() the first time a
+     *     request actually needs it (see {@see db()}), NOT at construction. This is
+     *     what lets a generated crud route file LOAD during route discovery without
+     *     a database configured - parity with Python/Ruby's register(), whose crud
+     *     routes also register without touching the DB until a request arrives.
+     */
     public function __construct(
-        private readonly DatabaseAdapter $db,
+        private ?DatabaseAdapter $db = null,
         private readonly string $prefix = '/api',
     ) {
+    }
+
+    /**
+     * The DB adapter, resolved lazily. An explicit adapter passed to the
+     * constructor wins; otherwise ORM::database() is resolved (and memoised) on
+     * first use - which is request time for the handlers, when a DB is bound.
+     */
+    private function db(): DatabaseAdapter
+    {
+        return $this->db ??= ORM::database();
     }
 
     /**
@@ -62,7 +80,9 @@ class AutoCrud
      */
     public function register(string $modelClass, bool $public = false): self
     {
-        $instance = new $modelClass($this->db);
+        // Read tableName WITHOUT a DB (the ORM constructor accepts a null adapter),
+        // so registration never forces ORM::database() at route-discovery time.
+        $instance = new $modelClass();
         $tableName = $instance->tableName;
 
         if ($tableName === '') {
@@ -182,9 +202,8 @@ class AutoCrud
      */
     private function createListHandler(string $modelClass): \Closure
     {
-        $db = $this->db;
-
-        return function (Request $request, Response $response) use ($modelClass, $db): Response {
+        return function (Request $request, Response $response) use ($modelClass): Response {
+            $db = $this->db(); // lazy: resolved at REQUEST time, not at route discovery
             $model = new $modelClass($db);
 
             [$limit, $offset] = $this->listPageBounds($request);
@@ -349,9 +368,8 @@ class AutoCrud
      */
     private function createGetHandler(string $modelClass): \Closure
     {
-        $db = $this->db;
-
-        return function (Request $request, Response $response) use ($modelClass, $db): Response {
+        return function (Request $request, Response $response) use ($modelClass): Response {
+            $db = $this->db(); // lazy: resolved at REQUEST time, not at route discovery
             $model = new $modelClass($db);
             if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
@@ -366,9 +384,8 @@ class AutoCrud
      */
     private function createCreateHandler(string $modelClass): \Closure
     {
-        $db = $this->db;
-
-        return function (Request $request, Response $response) use ($modelClass, $db): Response {
+        return function (Request $request, Response $response) use ($modelClass): Response {
+            $db = $this->db(); // lazy: resolved at REQUEST time, not at route discovery
             $rawData = is_array($request->body) ? $request->body : [];
             // CRUD-MASS-ASSIGNMENT: allow-list before the body ever reaches
             // the model (guards is_deleted + strips the PK - see the helper).
@@ -406,9 +423,8 @@ class AutoCrud
      */
     private function createUpdateHandler(string $modelClass): \Closure
     {
-        $db = $this->db;
-
-        return function (Request $request, Response $response) use ($modelClass, $db): Response {
+        return function (Request $request, Response $response) use ($modelClass): Response {
+            $db = $this->db(); // lazy: resolved at REQUEST time, not at route discovery
             $model = new $modelClass($db);
             if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
@@ -509,9 +525,8 @@ class AutoCrud
      */
     private function createDeleteHandler(string $modelClass): \Closure
     {
-        $db = $this->db;
-
-        return function (Request $request, Response $response) use ($modelClass, $db): Response {
+        return function (Request $request, Response $response) use ($modelClass): Response {
+            $db = $this->db(); // lazy: resolved at REQUEST time, not at route discovery
             $model = new $modelClass($db);
             if (!$this->loadByRouteId($model, (string)$request->params['id'])) {
                 return $response->json(['error' => 'Not Found'], 404);
@@ -536,13 +551,15 @@ class AutoCrud
      */
     private function buildExample(string $modelClass): array
     {
-        $instance = new $modelClass($this->db);
+        $instance = new $modelClass();
         $tableName = $instance->tableName;
         $primaryKey = $instance->primaryKey ?? 'id';
         $example = [];
 
         try {
-            $columns = $this->db->getColumns($tableName);
+            // db() is lazy: during route discovery (no DB) this throws and the
+            // catch below yields an empty example - the route still registers.
+            $columns = $this->db()->getColumns($tableName);
             foreach ($columns as $col) {
                 $name = $col['column_name'] ?? $col['name'] ?? '';
                 if ($name === '' || strcasecmp($name, $primaryKey) === 0) {

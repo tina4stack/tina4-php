@@ -3175,7 +3175,10 @@ function generateCrudAdminRoute(string $model, string $table, bool $isPublic): v
  *
  * Restyle the UI by editing src/templates/crud/*.twig (copied into this app).
  */
-\$crud = new \\Tina4\\AutoCrud(\\Tina4\\ORM::database());
+// No DB at load: AutoCrud resolves ORM::database() lazily, at request time, so
+// this route file registers cleanly during route discovery (parity with the
+// Python/Ruby crud routes, which also register without a live DB).
+\$crud = new \\Tina4\\AutoCrud();
 \$crud->register(\\{$model}::class, {$publicArg});
 \$crud->generateRoutes();
 

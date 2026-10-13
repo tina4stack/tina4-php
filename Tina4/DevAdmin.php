@@ -275,6 +275,19 @@ class DevAdmin
             return $response->file($jsPath, 'application/javascript; charset=utf-8');
         });
 
+        // Detached split view — dashboard/editor LEFT, live app preview RIGHT.
+        // Served from the SHARED asset (the same tina4-dev-admin-split.html the
+        // python/ruby/node frameworks serve). text() so no toolbar is injected
+        // into this plain shell page, and the container never reloads.
+        Router::get('/__dev/split', function (Request $request, Response $response) {
+            $path = dirname(__DIR__) . '/src/public/js/tina4-dev-admin-split.html';
+            if (!is_file($path)) {
+                return $response->text('tina4-dev-admin-split.html not found', 404);
+            }
+            return $response->text((string) file_get_contents($path))
+                ->header('Content-Type', 'text/html; charset=UTF-8');
+        });
+
         // Dev-toolbar assets, served as external CSS/JS so the injected
         // toolbar is CSP-clean (no inline styles, handlers, or <script>) and
         // works under a strict `default-src 'self'`. text()+header() rather
@@ -1354,16 +1367,16 @@ class DevAdmin
             };
         };
         (Router::get('/ai',     function (Request $request, Response $response) {
-            return $response->json(['service' => 'ai',     'url' => getenv('TINA4_AI_URL')     ?: 'http://localhost:11437/api/chat', 'ok' => true]);
+            return $response->json(['service' => 'ai',     'url' => getenv('TINA4_AI_URL')     ?: 'http://localhost:11435/api/chat', 'ok' => true]);
         }))->noAuth();
         (Router::get('/vision', function (Request $request, Response $response) {
-            return $response->json(['service' => 'vision', 'url' => getenv('TINA4_VISION_URL') ?: 'http://localhost:11437/api/chat', 'ok' => true]);
+            return $response->json(['service' => 'vision', 'url' => getenv('TINA4_VISION_URL') ?: 'http://localhost:11435/api/chat', 'ok' => true]);
         }))->noAuth();
         (Router::get('/embed',  function (Request $request, Response $response) {
-            return $response->json(['service' => 'embed',  'url' => getenv('TINA4_EMBED_URL')  ?: 'http://localhost:11437/api/embeddings', 'ok' => true]);
+            return $response->json(['service' => 'embed',  'url' => getenv('TINA4_EMBED_URL')  ?: 'http://localhost:11435/api/embeddings', 'ok' => true]);
         }))->noAuth();
         (Router::get('/image',  function (Request $request, Response $response) {
-            return $response->json(['service' => 'image',  'url' => getenv('TINA4_IMAGE_URL')  ?: 'http://localhost:11437/api/generate', 'ok' => true]);
+            return $response->json(['service' => 'image',  'url' => getenv('TINA4_IMAGE_URL')  ?: 'http://localhost:11435/api/generate', 'ok' => true]);
         }))->noAuth();
         (Router::get('/rag',    function (Request $request, Response $response) {
             return $response->json(['service' => 'rag',    'url' => getenv('TINA4_RAG_URL')    ?: 'http://localhost:11438', 'ok' => true]);
@@ -1378,7 +1391,7 @@ class DevAdmin
         // tina4-python. No RAG wrapping — callers supply their own
         // system message when they want it.
         (Router::post('/ai/api/chat', function (Request $request, Response $response) {
-            $aiUrl = getenv('TINA4_AI_URL') ?: 'http://localhost:11437/api/chat';
+            $aiUrl = getenv('TINA4_AI_URL') ?: 'http://localhost:11435/api/chat';
             // Body may arrive as pre-parsed array (Tina4 normalisation),
             // raw JSON string, or not at all. Handle all three.
             $payload = null;
@@ -1435,7 +1448,7 @@ class DevAdmin
         }))->noAuth();
 
         // /image/v1/images/generations — transparent passthrough to
-        // SDXL Turbo (TINA4_IMAGE_URL, default localhost:11437/api/generate).
+        // SDXL Turbo (TINA4_IMAGE_URL, default localhost:11435/api/generate).
         // The SPA's image-generation flow (aiGenerateImage in src/ai.ts)
         // hits this endpoint with the OpenAI Images API body shape.
         // Without this route the framework returns 404 and the user
@@ -1443,7 +1456,7 @@ class DevAdmin
         // Mirrors the /ai/api/chat proxy pattern: read body, forward
         // verbatim, return compact JSON.
         (Router::post('/image/v1/images/generations', function (Request $request, Response $response) {
-            $imageUrl = getenv('TINA4_IMAGE_URL') ?: 'http://localhost:11437/api/generate';
+            $imageUrl = getenv('TINA4_IMAGE_URL') ?: 'http://localhost:11435/api/generate';
             $endpoint = rtrim($imageUrl, '/') . '/v1/images/generations';
             $payload = null;
             if (isset($request->body) && is_array($request->body) && $request->body) {
