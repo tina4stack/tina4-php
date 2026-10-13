@@ -8,13 +8,13 @@
   does not reach the blocks.
 #}
 {% block title %}Redirecting…{% endblock %}
-{% block meta %}{% set safe_redirect_url = ((redirect_url|slice(0, 1) == '/' and redirect_url|slice(0, 2) != '//') or redirect_url|slice(0, 7) == 'http://' or redirect_url|slice(0, 8) == 'https://') ? redirect_url : '/' %}<meta http-equiv="refresh" content="0;url={{ safe_redirect_url }}">{% endblock %}
+{% block meta %}{% set p1 = redirect_url|slice(0,1) %}{% set p2 = redirect_url|slice(0,2) %}{% set p7 = redirect_url|slice(0,7) %}{% set p8 = redirect_url|slice(0,8) %}{% set rel = (p1 == '/') ? ((p2 == '//') ? 'no' : 'yes') : 'no' %}{% set safe_redirect_url = (rel == 'yes' or p7 == 'http://' or p8 == 'https://') ? redirect_url : '/' %}<meta http-equiv="refresh" content="0;url={{ safe_redirect_url }}">{% endblock %}
 {% block extra_styles %}
 .spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 1rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
 {% endblock %}
 {% block content %}
-    {% set safe_redirect_url = ((redirect_url|slice(0, 1) == '/' and redirect_url|slice(0, 2) != '//') or redirect_url|slice(0, 7) == 'http://' or redirect_url|slice(0, 8) == 'https://') ? redirect_url : '/' %}
+    {% set p1 = redirect_url|slice(0,1) %}{% set p2 = redirect_url|slice(0,2) %}{% set p7 = redirect_url|slice(0,7) %}{% set p8 = redirect_url|slice(0,8) %}{% set rel = (p1 == '/') ? ((p2 == '//') ? 'no' : 'yes') : 'no' %}{% set safe_redirect_url = (rel == 'yes' or p7 == 'http://' or p8 == 'https://') ? redirect_url : '/' %}
     <div class="spinner"></div>
     <div class="error-title">Redirecting…</div>
     <div class="error-msg">You are being redirected to a new location.</div>
