@@ -158,6 +158,15 @@
       document.getElementById('t4-tg-preview').classList.toggle('active', vis.preview);
       fit();
     }
+    var documentMode = false, savedPreview = true;
+    window.addEventListener('message', function (event) {
+      if (event.origin !== location.origin || event.source !== document.querySelector('#t4-left iframe').contentWindow || event.data?.type !== 'tina4:document-mode') return;
+      var active = !!event.data.active;
+      if (active && !documentMode) { savedPreview = vis.preview; vis.preview = false; }
+      if (!active && documentMode) vis.preview = savedPreview;
+      documentMode = active;
+      applyPanels();
+    });
     function toggle(name) {
       // Never hide all three - at least one stays visible.
       var n = { files: vis.files, editor: vis.editor, preview: vis.preview };
