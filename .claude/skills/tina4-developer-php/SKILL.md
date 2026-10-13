@@ -1188,7 +1188,7 @@ A feature without tests is not a feature — it's a liability.
 
 Before any deployment (staging or production), run the Carbonah tool:
 
-1. **Code correctness check** — does it pass all tests, lint clean, no deprecation warnings?
+1. **Code correctness check** — does it pass all tests, lint clean, no deprecation warnings? For a security pre-check, run `tina4 codeql` in the project before you push: it runs the same CodeQL scan (the security-extended suite) GitHub does, locally, over your JS/TS and GitHub Actions, and exits non-zero on any finding (`tina4 install codeql` sets it up). PHP itself is scanned by Semgrep in CI, not CodeQL.
 2. **CO2 emissions benchmark** — measure energy per request, compare against previous baseline
 3. **Only deploy if both pass** — a regression in correctness OR carbon efficiency blocks deployment
 
