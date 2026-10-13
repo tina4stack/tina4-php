@@ -60,6 +60,12 @@ env:
   IMAGE: docker.io/tina4stack/tina4-php
   APP_PORT: 7145
 
+# Least privilege: this workflow only builds and boots the image to verify it;
+# nothing is published here (publishing is manual, see the header), so read-only
+# repo access is all the token needs.
+permissions:
+  contents: read
+
 jobs:
   boot-gate:
     name: Image boots, binds 0.0.0.0, and reports its real version
