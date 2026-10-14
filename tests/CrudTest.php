@@ -268,4 +268,39 @@ class CrudTest extends TestCase
         $this->assertStringContainsString('name="name"', $html);
         $this->assertStringContainsString('name="email"', $html);
     }
+
+    /**
+     * The table id, form id, `required` and `checked` attributes are now emitted
+     * as quoted {% if %} attributes in the templates rather than pre-built
+     * " id=.."/" required" fragments injected with |raw (CodeQL
+     * unquoted-attribute-var). The rendered HTML must be unchanged: the ids and
+     * boolean attributes still appear on the right elements, and no raw
+     * attribute-fragment key or unrendered template marker leaks into the output.
+     */
+    public function testDeRawedFormAndTableAttributesRender(): void
+    {
+        // generateTable sets a table id ("crud-<name>"); it must render as a quoted attribute.
+        $table = Crud::generateTable([['id' => 1, 'name' => 'Alice']], 'users', 'id');
+        $this->assertMatchesRegularExpression('/<table[^>]*\sid="crud-users"/', $table);
+        $this->assertStringNotContainsString('table_id_attr', $table);
+
+        // Full page: both modal forms carry their id, de-rawed to a quoted attribute.
+        $html = Crud::toCrud($this->request(), ['model' => CrudTestModel::class, 'title' => 'Test CRUD']);
+        $this->assertStringContainsString('id="form-create"', $html);
+        $this->assertStringContainsString('id="form-edit"', $html);
+        foreach (['required_attr', 'checked_attr', 'table_id_attr', 'form_id_attr'] as $leak) {
+            $this->assertStringNotContainsString($leak, $html);
+        }
+
+        $form = Crud::generateForm([
+            ['name' => 'name', 'type' => 'string', 'label' => 'Full Name', 'required' => true],
+            ['name' => 'email', 'type' => 'string', 'label' => 'Email'],
+            ['name' => 'active', 'type' => 'boolean', 'label' => 'Active', 'value' => true],
+        ], '/api/users', 'POST');
+        $this->assertMatchesRegularExpression('/name="name"[^>]*\srequired/', $form);
+        $this->assertDoesNotMatchRegularExpression('/name="email"[^>]*\srequired/', $form);
+        $this->assertMatchesRegularExpression('/type="checkbox"[^>]*\schecked/', $form);
+        $this->assertStringNotContainsString('required_attr', $form);
+        $this->assertStringNotContainsString('checked_attr', $form);
+    }
 }

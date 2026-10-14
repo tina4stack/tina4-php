@@ -72,7 +72,7 @@ class CrudView
         $verb = strtoupper($method);
         return self::render('form', [
             'wrap' => true,
-            'form_id_attr' => '',
+            'form_id' => '',
             'action' => self::h($action),
             'form_method' => self::h($verb),
             'method_override' => in_array($verb, ['PUT', 'PATCH', 'DELETE'], true) ? $verb : null,
@@ -178,14 +178,14 @@ class CrudView
                 'value' => '',
                 'placeholder' => self::h('Enter ' . strtolower($label)),
                 'type' => 'text',
-                'required_attr' => '',
+                'required' => false,
                 'input' => true,
             ];
         }
 
         return self::render('form', [
             'wrap' => true,
-            'form_id_attr' => " id=\"form-{$mode}\"",
+            'form_id' => "form-{$mode}",
             'action' => '',
             'form_method' => 'POST',
             'method_override' => null,
@@ -264,7 +264,7 @@ class CrudView
             'readonly' => !$editable,
             'inline_script' => $inlineScript,
             'table_name' => self::h($tableName),
-            'table_id_attr' => $tableId !== null ? ' id="' . self::h($tableId) . '"' : '',
+            'table_id' => $tableId !== null ? (string)$tableId : '',
         ];
     }
 
@@ -334,12 +334,12 @@ class CrudView
             'label' => self::h((string)($field['label'] ?? ucfirst($name))),
             'value' => self::h((string)$value),
             'placeholder' => '',
-            'required_attr' => !empty($field['required']) ? ' required' : '',
+            'required' => !empty($field['required']),
         ];
 
         $type = (string)($field['type'] ?? 'string');
         if ($type === 'boolean') {
-            return $base + ['checkbox' => true, 'checked_attr' => $value ? ' checked' : ''];
+            return $base + ['checkbox' => true, 'checked' => (bool)$value];
         }
         if ($type === 'select') {
             return $base + ['select' => true, 'options_html' => self::buildOptions($field['options'] ?? [], $value)];

@@ -11,7 +11,7 @@
     empty    - true when there are no rows
     colspan  - column count + 1 (for the empty row)
     editable - inline-edit table (Save/Delete); readonly - view table (Edit/Delete)
-    table_name, table_id_attr, inline_script
+    table_name, table_id, inline_script
 
   Alignment: each header/cell carries a tina4-css class (text-start for text,
   text-end for numbers). Actions is always text-end. No inline styles (ADR-0088).
@@ -20,7 +20,7 @@
   re-renders <tbody data-crud-body> over fetch() as the user searches/sorts/pages.
 #}
 <div class="table-responsive">
-<table class="table table-striped table-hover"{{ table_id_attr|raw }}>
+<table class="table table-striped table-hover"{% if table_id %} id="{{ table_id }}"{% endif %}>
 <thead class="table-dark"><tr>
 {% for header in headers %}{% if header.sortable %}<th class="{{ header.align }}"><a class="sort-link" href="{{ header.url }}" data-crud-sort="{{ header.col }}" data-crud-dir="{{ header.next_dir }}">{{ header.label }}{{ header.indicator|raw }}</a></th>{% endif %}{% if header.plain %}<th class="{{ header.align }}">{{ header.label }}</th>{% endif %}{% endfor %}<th class="text-end">Actions</th>
 </tr></thead>
