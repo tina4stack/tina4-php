@@ -1133,10 +1133,14 @@ class MongoDBAdapter implements DatabaseAdapter
     {
         $raw = trim($raw);
 
-        if (isset($this->boundValues[$raw])) {
-            return $this->boundValues[$raw];
-        }
+        return $this->boundValues[$raw] ?? $this->castSqlLiteral($raw);
+    }
 
+    /**
+     * Cast a literal written in the SQL text itself (not a bound value).
+     */
+    private function castSqlLiteral(string $raw): mixed
+    {
         if (strtoupper($raw) === 'NULL') {
             return null;
         }
