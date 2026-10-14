@@ -23,8 +23,6 @@
  * absent, and the child reports what it found, so an environment that has the
  * driver FAILS the test instead of quietly proving nothing. No shim, no double.
  *
- *   S3 storage      aws/aws-sdk-php is not a dependency of tina4-php, so the
- *                   project's own composer autoloader cannot load it.
  *   database cache  `php -n` starts an interpreter with no php.ini, so ext-pgsql
  *                   is genuinely not loaded. The Mongo, Redis, Valkey and
  *                   Memcached cache backends speak their wire protocols over
@@ -36,9 +34,6 @@ use PHPUnit\Framework\TestCase;
 
 final class DriverMissingMessageTest extends TestCase
 {
-    private const S3_MESSAGE = "The 'aws/aws-sdk-php' package is required for S3Storage. "
-        . 'Install it with: composer require aws/aws-sdk-php';
-
     /**
      * Run a probe program in a child PHP process and decode its JSON report.
      *
@@ -86,45 +81,10 @@ final class DriverMissingMessageTest extends TestCase
         return $report;
     }
 
-    public function testS3StorageNamesThePackageAndTheInstallCommand(): void
-    {
-        $report = $this->probe(<<<'PHP'
-<?php
-require getenv('PROBE_AUTOLOAD');
-$report = ['sdk_present' => class_exists('Aws\\S3\\S3Client')];
-try {
-    new \Tina4\Realtime\S3Storage('http://127.0.0.1:1', 'key', 'secret', 'bucket');
-    $report['outcome'] = 'constructed';
-} catch (\Throwable $error) {
-    $report['outcome'] = 'raised';
-    $report['error_type'] = get_class($error);
-    $report['message'] = $error->getMessage();
-}
-echo '__PROBE__' . json_encode($report);
-PHP);
-
-        $this->assertFalse($report['sdk_present'], 'aws/aws-sdk-php is loadable here, so this test would prove nothing');
-        $this->assertSame('raised', $report['outcome']);
-        $this->assertSame(\RuntimeException::class, $report['error_type']);
-        $this->assertSame(self::S3_MESSAGE, $report['message']);
-    }
-
-    public function testStorageSelectFallbackWarningCarriesTheInstallCommand(): void
-    {
-        $report = $this->probe(<<<'PHP'
-<?php
-require getenv('PROBE_AUTOLOAD');
-$report = ['sdk_present' => class_exists('Aws\\S3\\S3Client')];
-$storage = \Tina4\Realtime\Storage::select();
-$report['selected'] = get_class($storage);
-echo '__PROBE__' . json_encode($report);
-PHP, [], ['TINA4_STORAGE_BACKEND' => 's3', 'TINA4_STORAGE_BUCKET' => 'bucket']);
-
-        $this->assertFalse($report['sdk_present'], 'aws/aws-sdk-php is loadable here, so this test would prove nothing');
-        $this->assertSame(\Tina4\Realtime\LocalStorage::class, $report['selected']);
-        $this->assertStringContainsString('falling back to local filesystem storage', $report['logged']);
-        $this->assertStringContainsString('Install it with: composer require aws/aws-sdk-php', $report['logged']);
-    }
+    // (The former S3-storage cases are gone: S3Storage no longer needs a driver
+    // — it uses Tina4's own stdlib SigV4 client — so there is no missing-package
+    // message or install command to assert for it. The live S3 round-trip lives
+    // in RealtimeTest + S3ClientTest.)
 
     private const DATABASE_CACHE_PROBE = <<<'PHP'
 <?php
