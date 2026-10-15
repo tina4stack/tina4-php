@@ -82,6 +82,9 @@ class MongoDBAdapter implements DatabaseAdapter
     /** @var string|int|null Last inserted ID */
     private string|int|null $lastId = null;
 
+    /** @var array<string, string> Bound string values of the current statement, keyed by the token standing in for each */
+    private array $boundValues = [];
+
     /**
      * @param string    $connectionString  MongoDB URL, e.g. "mongodb://localhost:27017/mydb"
      * @param string    $username          Username (used if not present in URL)
@@ -822,13 +825,13 @@ class MongoDBAdapter implements DatabaseAdapter
 
         // NOT LIKE
         if (preg_match('/^(\w+)\s+NOT\s+LIKE\s+(.+)$/i', $condition, $m)) {
-            $pattern = $this->likeToRegex(trim($m[2], "'\""));
+            $pattern = $this->likeToRegex($this->boundValues[trim($m[2])] ?? trim($m[2], "'\""));
             return [$m[1] => ['$not' => new \MongoDB\BSON\Regex($pattern, 'i')]];
         }
 
         // LIKE
         if (preg_match('/^(\w+)\s+LIKE\s+(.+)$/i', $condition, $m)) {
-            $pattern = $this->likeToRegex(trim($m[2], "'\""));
+            $pattern = $this->likeToRegex($this->boundValues[trim($m[2])] ?? trim($m[2], "'\""));
             return [$m[1] => new \MongoDB\BSON\Regex($pattern, 'i')];
         }
 
@@ -1070,9 +1073,11 @@ class MongoDBAdapter implements DatabaseAdapter
      *
      * This is needed because MongoDB operations are not SQL — we resolve the
      * parameters into the SQL string so the parser sees concrete values.
+     * String values go in as opaque tokens (see quoteValue()), never as text.
      */
     private function substitutePlaceholders(string $sql, array $params): string
     {
+        $this->boundValues = [];
         if (empty($params)) {
             return $sql;
         }
@@ -1098,6 +1103,12 @@ class MongoDBAdapter implements DatabaseAdapter
 
     /**
      * Quote a PHP value for inline substitution into SQL text.
+     *
+     * Numbers, booleans and NULL are written inline. Anything else is replaced
+     * by a quoted token with no quote, space, comma or keyword inside it, and the
+     * value is looked up again where literals are read (castLiteralValue(),
+     * LIKE). The parser splits the text on all of those, so a value pasted into
+     * it could otherwise change the statement it belongs to.
      */
     private function quoteValue(mixed $value): string
     {
@@ -1110,8 +1121,9 @@ class MongoDBAdapter implements DatabaseAdapter
         if (is_int($value) || is_float($value)) {
             return (string) $value;
         }
-        // Escape single quotes
-        return "'" . str_replace("'", "\\'", (string) $value) . "'";
+        $token = "'\0" . count($this->boundValues) . "\0'";
+        $this->boundValues[$token] = (string) $value;
+        return $token;
     }
 
     /**
@@ -1121,6 +1133,14 @@ class MongoDBAdapter implements DatabaseAdapter
     {
         $raw = trim($raw);
 
+        return $this->boundValues[$raw] ?? $this->castSqlLiteral($raw);
+    }
+
+    /**
+     * Cast a literal written in the SQL text itself (not a bound value).
+     */
+    private function castSqlLiteral(string $raw): mixed
+    {
         if (strtoupper($raw) === 'NULL') {
             return null;
         }
