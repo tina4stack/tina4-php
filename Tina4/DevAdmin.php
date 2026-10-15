@@ -2000,7 +2000,7 @@ class DevAdmin
             $name = trim($body['name'] ?? '');
             // Composer package names: vendor/package with lowercase
             // letters, digits, hyphens, and underscores. Period allowed
-            // in vendor prefix (e.g. `tina4stack/tina4-php`).
+            // in vendor prefix (e.g. `tina4stack/tina4php`).
             if (!preg_match('#^[a-z0-9][a-z0-9._\-]*/[a-z0-9][a-z0-9._\-]*$#', $name)) {
                 return $response->json(['ok' => false, 'error' => 'invalid package name'], 400);
             }
@@ -3463,7 +3463,7 @@ CSS;
                 if (breaking) {
                     el.innerHTML += '<div class="t4-err t4-note">&#9888; Major/minor version change &mdash; check the <a href="https://github.com/tina4stack/tina4-php/releases" target="_blank" class="t4-link">changelog</a> for breaking changes before upgrading.</div>';
                 } else {
-                    el.innerHTML += '<div class="t4-warn t4-note">Patch update available. Run: <code class="t4-code">composer update tina4stack/tina4-php</code></div>';
+                    el.innerHTML += '<div class="t4-warn t4-note">Patch update available. Run: <code class="t4-code">composer update tina4stack/tina4php</code></div>';
                 }
             } else if (isAhead) {
                 el.className = 't4-purple';
