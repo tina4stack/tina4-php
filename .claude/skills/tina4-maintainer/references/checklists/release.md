@@ -1,5 +1,8 @@
 # Checklist: cutting a framework release
 
+
+> The canonical, end-to-end release flow is documented at https://tina4.com/general/releasing - the four release tracks, the version-bearing files per repo, the skills bundle, EV signing and the gates. This checklist is the maintainer's working quick-reference; when the two differ, the documentation is the source of truth.
+
 A release is tagged, not merged — **merging never publishes; the tag does.** A tag matching
 `[0-9]*.*.*` (e.g. `3.13.146`, no `v`) triggers the publish workflow from the protected
 `release` environment (required reviewer `tina4stack`). Do FEWER, BIGGER releases — bundle many
