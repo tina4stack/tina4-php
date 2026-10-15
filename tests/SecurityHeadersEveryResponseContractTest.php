@@ -39,7 +39,7 @@ require_once __DIR__ . '/SecurityEntryProject.php';
 class SecurityHeadersEveryResponseContractTest extends TestCase
 {
     private const CANONICAL = ['x-frame-options', 'x-content-type-options', 'content-security-policy',
-        'referrer-policy', 'x-xss-protection', 'permissions-policy'];
+        'referrer-policy', 'x-xss-protection', 'permissions-policy', 'cross-origin-opener-policy'];
     private const ROUTE_CSP = "default-src 'none'; img-src 'self'";
 
     private ?SecurityEntryProject $project = null;

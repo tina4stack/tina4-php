@@ -36,6 +36,7 @@ use Tina4\Response;
  *   TINA4_CSP                 — Content-Security-Policy (default: "default-src 'self'")
  *   TINA4_REFERRER_POLICY     — Referrer-Policy (default: "strict-origin-when-cross-origin")
  *   TINA4_PERMISSIONS_POLICY  — Permissions-Policy (default: "camera=(), microphone=(), geolocation=()")
+ *   TINA4_COOP                — Cross-Origin-Opener-Policy (default: "same-origin-allow-popups")
  */
 class SecurityHeadersMiddleware
 {
@@ -92,7 +93,7 @@ class SecurityHeadersMiddleware
         // Csp holder so it matches the nonce the HTML body stamps on its inline
         // elements. Works for the default policy and for a user-set TINA4_CSP.
         $canonical['Content-Security-Policy'] = \Tina4\Csp::resolveCspHeader(\Tina4\Csp::currentCspNonce());
-        foreach (['Content-Security-Policy', 'Referrer-Policy', 'X-XSS-Protection', 'Permissions-Policy'] as $name) {
+        foreach (['Content-Security-Policy', 'Referrer-Policy', 'X-XSS-Protection', 'Permissions-Policy', 'Cross-Origin-Opener-Policy'] as $name) {
             $response->header($name, $canonical[$name]);
         }
 
@@ -116,6 +117,7 @@ class SecurityHeadersMiddleware
             'Referrer-Policy' => (string)DotEnv::getEnv('TINA4_REFERRER_POLICY', 'strict-origin-when-cross-origin'),
             'X-XSS-Protection' => '0',
             'Permissions-Policy' => (string)DotEnv::getEnv('TINA4_PERMISSIONS_POLICY', 'camera=(), microphone=(), geolocation=()'),
+            'Cross-Origin-Opener-Policy' => (string)DotEnv::getEnv('TINA4_COOP', 'same-origin-allow-popups'),
         ];
     }
 

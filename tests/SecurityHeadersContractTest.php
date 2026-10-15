@@ -62,6 +62,7 @@ class SecurityHeadersContractTest extends TestCase
         'referrer-policy' => 'strict-origin-when-cross-origin',
         'x-xss-protection' => '0',
         'permissions-policy' => 'camera=(), microphone=(), geolocation=()',
+        'cross-origin-opener-policy' => 'same-origin-allow-popups',
     ];
     private const HSTS = '31536000';
 
@@ -84,7 +85,8 @@ class SecurityHeadersContractTest extends TestCase
     private function clearEnv(): void
     {
         foreach (['TINA4_HSTS', 'TINA4_CSP', 'TINA4_FRAME_OPTIONS',
-                  'TINA4_REFERRER_POLICY', 'TINA4_PERMISSIONS_POLICY', 'TINA4_CSRF'] as $key) {
+                  'TINA4_REFERRER_POLICY', 'TINA4_PERMISSIONS_POLICY', 'TINA4_CSRF',
+                  'TINA4_COOP'] as $key) {
             putenv($key);
             unset($_ENV[$key], $_SERVER[$key]);
         }
@@ -157,6 +159,20 @@ class SecurityHeadersContractTest extends TestCase
         $this->assertSame(1, preg_match("/'nonce-([^']+)'/", $first, $m1), $first);
         $this->assertSame(1, preg_match("/'nonce-([^']+)'/", $second, $m2), $second);
         $this->assertNotSame($m1[1], $m2[1], "nonce was reused across responses: {$m1[1]}");
+    }
+
+    public function testCoopDefaultsToSameOriginAllowPopups(): void
+    {
+        // COOP isolates the page from whoever opened it while leaving popups the
+        // page opens (OAuth/payment) able to post back. Full isolation is opt-in.
+        $this->assertSame('same-origin-allow-popups', $this->dispatch()['cross-origin-opener-policy'] ?? null);
+    }
+
+    public function testTina4CoopOverridesTheCrossOriginOpenerPolicy(): void
+    {
+        // TINA4_COOP replaces the default — same-origin for full isolation.
+        $this->setEnv('TINA4_COOP', 'same-origin');
+        $this->assertSame('same-origin', $this->dispatch()['cross-origin-opener-policy'] ?? null);
     }
 
     /**
