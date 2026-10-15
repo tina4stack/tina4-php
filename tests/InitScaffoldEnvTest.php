@@ -39,4 +39,19 @@ class InitScaffoldEnvTest extends TestCase
         $this->assertSame(0, $exit, $output);
         $this->assertStringContainsString('LOGGED', $output);
     }
+
+    public function testTheScaffoldedComposerJsonRequiresThePublishedPackage(): void
+    {
+        $dir = sys_get_temp_dir() . '/tina4_init_' . uniqid();
+        mkdir($dir, 0755, true);
+        $cli = realpath(__DIR__ . '/../bin/tina4php');
+        exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($cli) . ' init ' . escapeshellarg($dir) . ' 2>&1', $initOutput, $initExit);
+        $this->assertSame(0, $initExit, implode("\n", $initOutput));
+
+        // The scaffold must require the package this repo publishes, or `composer install` fails.
+        $published = json_decode((string)file_get_contents(__DIR__ . '/../composer.json'), true)['name'];
+        $scaffold = json_decode((string)file_get_contents($dir . '/composer.json'), true);
+        $tina4 = array_values(array_filter(array_keys($scaffold['require'] ?? []), fn($n) => str_starts_with($n, 'tina4stack/')));
+        $this->assertSame([$published], $tina4);
+    }
 }
