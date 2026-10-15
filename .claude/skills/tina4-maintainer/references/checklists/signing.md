@@ -1,5 +1,8 @@
 # Checklist: signing the skills installer (`install-skills.ps1`)
 
+
+> The release flow that frames this - where signing sits in the order and why it comes last - is documented at https://tina4.com/general/releasing. This checklist is the signing detail.
+
 `install-skills.ps1` is served to users at a tag and must carry a VALID Code Infinity
 Authenticode (EV) signature. BOTH the CI gate (`.github/workflows/ci.yml`, which validates it on
 `windows-latest` with `Get-AuthenticodeSignature`) and the tina4.com runtime shim reject it
