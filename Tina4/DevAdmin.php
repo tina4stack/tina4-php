@@ -3152,6 +3152,22 @@ class DevAdmin
     public const DEV_PUBLIC_ASSETS = ['/__dev/toolbar.css', '/__dev/toolbar.js'];
 
     /**
+     * Dev-admin routes that live outside /__dev: the AI gateway proxies and the
+     * service probes the dashboard calls. They take the same gate as /__dev.
+     */
+    public const DEV_EXTRA_PATHS = [
+        '/ai/api/chat', '/image/v1/images/generations',
+        '/ai', '/vision', '/embed', '/image', '/rag',
+    ];
+
+    /** True when $path (already slash-collapsed) is served by the dev admin. */
+    public static function isDevAdminPath(string $path): bool
+    {
+        return str_starts_with($path, '/__dev')
+            || in_array(strtolower(rtrim($path, '/')), self::DEV_EXTRA_PATHS, true);
+    }
+
+    /**
      * True when raw peer $ip falls inside $entry (a bare IP or a CIDR). IPv4 and
      * IPv6; an IPv4-mapped IPv6 peer (::ffff:a.b.c.d) is matched as IPv4. $entry
      * and $ip are operator config / the raw socket peer, never a forwarded header.
