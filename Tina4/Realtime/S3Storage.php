@@ -12,17 +12,19 @@
 namespace Tina4\Realtime;
 
 /**
- * S3-compatible store (AWS S3, MinIO, ...). Opt-in; needs the AWS SDK
- * (aws/aws-sdk-php). Presigned GET URLs let clients fetch large blobs straight
+ * S3-compatible store (AWS S3, MinIO, Garage, ...). Opt-in, zero dependencies.
+ *
+ * Talks to S3 through Tina4's own stdlib SigV4 client ({@see S3Client}) — no
+ * aws/aws-sdk-php. Presigned GET URLs let clients fetch large blobs straight
  * from object storage instead of streaming through the app.
  *
  * Constructed only when TINA4_STORAGE_BACKEND=s3; Storage::select() falls back
- * to LocalStorage (with a logged warning) if the SDK is missing or the config
- * is incomplete — a real store, never a silent no-op (mirrors Python S3Storage).
+ * to LocalStorage (with a logged warning) if the config is incomplete — a real
+ * store, never a silent no-op (mirrors Python S3Storage).
  */
 class S3Storage implements StorageBackend
 {
-    private object $client;
+    private S3Client $client;
     private string $bucket;
 
     public function __construct(
@@ -32,45 +34,33 @@ class S3Storage implements StorageBackend
         ?string $bucket = null,
         ?string $region = null
     ) {
-        $clientClass = 'Aws\\S3\\S3Client';
-        if (!class_exists($clientClass)) {
-            throw new \RuntimeException(
-                "The 'aws/aws-sdk-php' package is required for S3Storage. "
-                . 'Install it with: composer require aws/aws-sdk-php'
-            );
-        }
-        $this->bucket = $bucket ?: (getenv('TINA4_STORAGE_BUCKET') ?: '');
+        $this->bucket = self::opt($bucket, 'TINA4_STORAGE_BUCKET', '');
         if ($this->bucket === '') {
             throw new \InvalidArgumentException('S3Storage requires TINA4_STORAGE_BUCKET');
         }
-        $config = [
-            'version' => 'latest',
-            'region' => $region ?: (getenv('TINA4_STORAGE_REGION') ?: 'us-east-1'),
-            'credentials' => [
-                'key' => $key ?: getenv('TINA4_STORAGE_KEY'),
-                'secret' => $secret ?: getenv('TINA4_STORAGE_SECRET'),
-            ],
-        ];
-        $url = $endpoint ?: getenv('TINA4_STORAGE_URL');
-        if ($url) {
-            $config['endpoint'] = $url;
-            $config['use_path_style_endpoint'] = true;   // MinIO / S3-compatible
-        }
-        $this->client = new $clientClass($config);
+        $this->client = new S3Client(
+            self::opt($endpoint, 'TINA4_STORAGE_URL', '') ?: null,
+            self::opt($key, 'TINA4_STORAGE_KEY', ''),
+            self::opt($secret, 'TINA4_STORAGE_SECRET', ''),
+            self::opt($region, 'TINA4_STORAGE_REGION', 'us-east-1')
+        );
+    }
+
+    /** Resolve a setting: the explicit value, else the env var, else the default. */
+    private static function opt(?string $value, string $env, string $default): string
+    {
+        return $value ?: (getenv($env) ?: $default);
     }
 
     public function put(string $key, string $data, string $mime = 'application/octet-stream'): void
     {
-        $this->client->putObject([
-            'Bucket' => $this->bucket, 'Key' => $key, 'Body' => $data, 'ContentType' => $mime,
-        ]);
+        $this->client->putObject($this->bucket, $key, $data, $mime);
     }
 
     public function get(string $key): ?string
     {
         try {
-            $result = $this->client->getObject(['Bucket' => $this->bucket, 'Key' => $key]);
-            return (string)$result['Body'];
+            return $this->client->getObject($this->bucket, $key);
         } catch (\Throwable) {
             return null;
         }
@@ -78,14 +68,13 @@ class S3Storage implements StorageBackend
 
     public function url(string $key, int $ttl = 3600): ?string
     {
-        $cmd = $this->client->getCommand('GetObject', ['Bucket' => $this->bucket, 'Key' => $key]);
-        return (string)$this->client->createPresignedRequest($cmd, "+{$ttl} seconds")->getUri();
+        return $this->client->presignedGetUrl($this->bucket, $key, $ttl);
     }
 
     public function delete(string $key): void
     {
         try {
-            $this->client->deleteObject(['Bucket' => $this->bucket, 'Key' => $key]);
+            $this->client->deleteObject($this->bucket, $key);
         } catch (\Throwable $e) {
             \Tina4\Log::error("S3Storage delete failed for {$key}: " . $e->getMessage());
         }
@@ -94,7 +83,8 @@ class S3Storage implements StorageBackend
     public function exists(string $key): bool
     {
         try {
-            return (bool)$this->client->doesObjectExist($this->bucket, $key);
+            $this->client->headObject($this->bucket, $key);
+            return true;
         } catch (\Throwable) {
             return false;
         }

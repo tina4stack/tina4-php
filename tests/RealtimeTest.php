@@ -17,6 +17,8 @@ use Tina4\ORM;
 use Tina4\Realtime\Realtime;
 use Tina4\Realtime\Storage;
 use Tina4\Realtime\LocalStorage;
+use Tina4\Realtime\S3Storage;
+use Tina4\Realtime\S3Client;
 use Tina4\Realtime\StorageBackend;
 use Tina4\Realtime\Workspace;
 use Tina4\Realtime\Channel;
@@ -62,10 +64,78 @@ class RealtimeTest extends TestCase
             @rmdir($this->storeDir);
         }
         foreach (['TINA4_RTC_STUN_URLS', 'TINA4_RTC_TURN_URL', 'TINA4_RTC_TURN_SECRET',
-                  'TINA4_RTC_TURN_TTL', 'TINA4_STORAGE_BACKEND', 'TINA4_STORAGE_BUCKET'] as $k) {
+                  'TINA4_RTC_TURN_TTL', 'TINA4_STORAGE_BACKEND', 'TINA4_STORAGE_BUCKET',
+                  'TINA4_STORAGE_URL', 'TINA4_STORAGE_KEY', 'TINA4_STORAGE_SECRET',
+                  'TINA4_STORAGE_REGION'] as $k) {
             putenv($k);
             unset($_ENV[$k]);
         }
+    }
+
+    // ── S3Storage against a real S3 server (skipped if unreachable) ──
+    //
+    // CI provisions MinIO on localhost:9100 (minioadmin). The zero-dependency
+    // SigV4 client is also proven against Garage and AWS; only a reachable
+    // endpoint is needed, no driver, and nothing is ever mocked.
+    private const S3_HOST = 'localhost';
+    private const S3_PORT = 9100;
+    private const S3_BUCKET = 'tina4-rt-test';
+
+    private function s3Reachable(): bool
+    {
+        $connection = @fsockopen(self::S3_HOST, self::S3_PORT, $errno, $errstr, 0.5);
+        if ($connection === false) {
+            return false;
+        }
+        fclose($connection);
+        return true;
+    }
+
+    private function selectS3Store(): S3Storage
+    {
+        putenv('TINA4_STORAGE_BACKEND=s3');
+        putenv('TINA4_STORAGE_URL=http://' . self::S3_HOST . ':' . self::S3_PORT);
+        putenv('TINA4_STORAGE_KEY=minioadmin');
+        putenv('TINA4_STORAGE_SECRET=minioadmin');
+        putenv('TINA4_STORAGE_BUCKET=' . self::S3_BUCKET);
+        putenv('TINA4_STORAGE_REGION=us-east-1');
+        $store = Storage::select();
+        $this->assertInstanceOf(S3Storage::class, $store);
+        // Ensure the bucket exists (idempotent) via a direct client — no driver.
+        (new S3Client('http://' . self::S3_HOST . ':' . self::S3_PORT,
+            'minioadmin', 'minioadmin', 'us-east-1'))->createBucket(self::S3_BUCKET);
+        return $store;
+    }
+
+    public function testRealS3RoundtripAndPresignedUrl(): void
+    {
+        if (!$this->s3Reachable()) {
+            $this->markTestSkipped('MinIO not reachable at localhost:9100 (real S3, never mocked)');
+        }
+        $store = $this->selectS3Store();
+        $key = Storage::key('photo.png');
+        $blob = "\x89PNG-real-bytes";
+        $store->put($key, $blob, 'image/png');
+        $this->assertTrue($store->exists($key));
+        $this->assertSame($blob, $store->get($key));
+
+        $url = $store->url($key, 120);
+        $this->assertStringStartsWith('http', $url);
+        $this->assertStringContainsString($key, $url);
+        $this->assertSame($blob, file_get_contents($url));   // the presigned URL really fetches it
+
+        $store->delete($key);
+        $this->assertFalse($store->exists($key));
+    }
+
+    public function testStorageSelectReturnsS3WhenConfigured(): void
+    {
+        if (!$this->s3Reachable()) {
+            $this->markTestSkipped('MinIO not reachable at localhost:9100 (real S3, never mocked)');
+        }
+        $store = $this->selectS3Store();
+        $this->assertInstanceOf(S3Storage::class, $store);
+        $this->assertInstanceOf(StorageBackend::class, $store);
     }
 
     // ── ICE config (STUN + ephemeral TURN) ──────────────────────────

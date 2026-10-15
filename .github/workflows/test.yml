@@ -455,6 +455,38 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
+      # MinIO for the live S3 storage tests (tests/RealtimeTest.php dials
+      # localhost:9100). S3Storage is zero-dependency (Tina4's own SigV4 client,
+      # no aws/aws-sdk-php), so only a reachable S3 server is needed. The
+      # official community image is no longer published, so build the official
+      # source at an immutable commit (same pin as the other frameworks).
+      - name: Build and start MinIO from pinned official source (S3 on 9100)
+        timeout-minutes: 15
+        run: |
+          context=$(mktemp -d)
+          cat > "$context/Dockerfile" <<'DOCKERFILE'
+          FROM golang:1.24.13-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac AS build
+          WORKDIR /src
+          RUN git init . && git remote add origin https://github.com/minio/minio.git && git fetch --depth=1 origin 7aac2a2c5b7c882e68c1ce017d8256be2feea27f && git checkout --detach FETCH_HEAD && test "$(git rev-parse HEAD)" = 7aac2a2c5b7c882e68c1ce017d8256be2feea27f
+          RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOMEMLIMIT=1GiB go build -p 2 -trimpath -o /minio .
+          FROM scratch
+          COPY --from=build /minio /minio
+          COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+          COPY --from=build /src/LICENSE /licenses/minio-LICENSE
+          EXPOSE 9000
+          ENTRYPOINT ["/minio"]
+          CMD ["server", "/data"]
+          DOCKERFILE
+          docker build --progress=plain -t tina4-ci-minio:7aac2a2 "$context"
+          docker run -d --name tina4-minio -p 9100:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            tina4-ci-minio:7aac2a2
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9100/minio/health/live && exit 0
+            sleep 2
+          done
+          echo "MinIO never became healthy"; docker logs tina4-minio; exit 1
+
       # ADR-0054: the framework owns only the handoff. CI installs the released
       # native engine above and proves that boundary instead of excluding it.
       - name: Run tests
