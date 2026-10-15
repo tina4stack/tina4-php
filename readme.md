@@ -65,7 +65,7 @@ Open http://localhost:7145
 
 ---
 
-## What's Built In (55 Features)
+## What's Built In (140 Features)
 
 Every feature is built from scratch -- no bloated vendor trees, no third-party runtime dependencies in core.
 
