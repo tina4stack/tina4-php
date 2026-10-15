@@ -27,9 +27,16 @@ class S3Client
 {
     private const ALGORITHM = 'AWS4-HMAC-SHA256';
     private const SERVICE = 's3';
+    // Retry policy, as for the AI client (ADR-0053): HTTP 429, any 5xx (S3's
+    // SlowDown is a 503) and a dropped connection are sent again, a bounded
+    // number of times, honouring Retry-After. Every operation here is idempotent.
+    private const MAX_RETRIES = 2;
+    private const BACKOFF_BASE = 0.5;   // seconds; retry n waits up to base * 2**n, jittered
+    private const BACKOFF_CAP = 20.0;
 
     private string $scheme;
     private string $host;
+    private string $prefix; // path an endpoint carries (https://host/s3 -> "/s3"), '' if none
     private string $region;
     private string $accessKey;
     private string $secretKey;
@@ -53,6 +60,9 @@ class S3Client
         if (isset($parts['port'])) {
             $this->host .= ':' . $parts['port'];
         }
+        // An endpoint behind a path (https://host/s3) keeps it in front of every
+        // request path, and in what is signed.
+        $this->prefix = rtrim($parts['path'] ?? '', '/');
     }
 
     // -- public API (the subset S3Storage uses) --------------------------------
@@ -82,7 +92,7 @@ class S3Client
     public function createBucket(string $bucket): void
     {
         try {
-            $this->request('PUT', '/' . self::uriEncode($bucket, true), '');
+            $this->request('PUT', $this->prefix . '/' . self::uriEncode($bucket, true), '');
         } catch (S3Exception $e) {
             if ($e->status !== 409) {
                 throw $e;
@@ -93,6 +103,7 @@ class S3Client
     /** A URL that fetches the object directly, signed via SigV4 query params. */
     public function presignedGetUrl(string $bucket, string $key, int $expires = 3600): string
     {
+        $this->requireCredentials();
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $amzDate = $now->format('Ymd\THis\Z');
         $dateStamp = $now->format('Ymd');
@@ -118,7 +129,31 @@ class S3Client
 
     private function canonicalUri(string $bucket, string $key): string
     {
-        return '/' . self::uriEncode($bucket, true) . '/' . self::uriEncode($key, true);
+        return $this->prefix . '/' . self::uriEncode($bucket, true) . '/' . self::uriEncode($key, true);
+    }
+
+    /**
+     * Signing with an empty key only earns a 403 from the server, which says
+     * nothing about the cause. Name the settings instead, before sending.
+     */
+    private function requireCredentials(): void
+    {
+        if ($this->accessKey === '' || $this->secretKey === '') {
+            throw new S3ConfigException(
+                'S3 credentials are not set: set TINA4_STORAGE_KEY and TINA4_STORAGE_SECRET'
+            );
+        }
+    }
+
+    /** Seconds from a Retry-After header in its delta-seconds form, else null. */
+    private static function retryAfterSeconds(array $headers): ?float
+    {
+        foreach ($headers as $line) {
+            if (preg_match('#^retry-after:\s*(\d+(?:\.\d+)?)\s*$#i', $line, $m)) {
+                return max(0.0, (float)$m[1]);
+            }
+        }
+        return null;
     }
 
     /**
@@ -159,10 +194,42 @@ class S3Client
     }
 
     /**
+     * Sign and send, retrying a transient failure (429, any 5xx, or a dropped
+     * connection = status 0) twice at most, honouring Retry-After; a final 4xx
+     * is never retried. Each attempt is signed afresh (x-amz-date moves on).
+     *
      * @return array{0:int,1:string} status and body
-     * @throws S3Exception on a non-2xx response
+     * @throws S3Exception on a non-2xx final response
+     * @throws S3ConfigException when credentials are not set
      */
     private function request(string $method, string $canonicalUri, string $body, array $extraHeaders = []): array
+    {
+        $this->requireCredentials();
+        for ($attempt = 0; ; $attempt++) {
+            $last = $attempt === self::MAX_RETRIES;
+            $delay = null;
+            try {
+                return $this->send($method, $canonicalUri, $body, $extraHeaders);
+            } catch (S3Exception $e) {
+                // status 0 = transport failure (no response), treated as a drop.
+                $transient = $e->status === 0 || $e->status === 429 || $e->status >= 500;
+                if ($last || !$transient) {
+                    throw $e;
+                }
+                $delay = $e->retryAfter;
+            }
+            if ($delay === null) {
+                $delay = (mt_rand(0, 1000) / 1000.0) * (self::BACKOFF_BASE * (2 ** $attempt));
+            }
+            usleep((int)(min($delay, self::BACKOFF_CAP) * 1_000_000));
+        }
+    }
+
+    /**
+     * @return array{0:int,1:string} status and body
+     * @throws S3Exception on a non-2xx response or a transport failure (status 0)
+     */
+    private function send(string $method, string $canonicalUri, string $body, array $extraHeaders = []): array
     {
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $amzDate = $now->format('Ymd\THis\Z');
@@ -208,9 +275,19 @@ class S3Client
         $url = "{$this->scheme}://{$this->host}{$canonicalUri}";
         $http_response_header = [];
         $response = @file_get_contents($url, false, $context);
-        $status = $this->statusFromHeaders($http_response_header ?? []);
+        $headers = $http_response_header ?? [];
+        $status = $this->statusFromHeaders($headers);
+        // No status line AND no body => the connection failed (refused, reset,
+        // timed out): nothing was answered. Report it as status 0 so the retry
+        // loop treats it as a dropped connection, not a 4xx.
+        if ($status === 0) {
+            $error = new S3Exception(0, "{$method} {$canonicalUri}: connection failed");
+            throw $error;
+        }
         if ($status < 200 || $status >= 300) {
-            throw new S3Exception($status, "{$method} {$canonicalUri}: HTTP {$status}");
+            $error = new S3Exception($status, "{$method} {$canonicalUri}: HTTP {$status}");
+            $error->retryAfter = self::retryAfterSeconds($headers);
+            throw $error;
         }
         return [$status, $response === false ? '' : $response];
     }

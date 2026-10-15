@@ -14,6 +14,8 @@ namespace Tina4\Realtime;
 class S3Exception extends \RuntimeException
 {
     public int $status;
+    /** Seconds from a Retry-After header in its delta-seconds form, else null. */
+    public ?float $retryAfter = null;
 
     public function __construct(int $status, string $message)
     {
