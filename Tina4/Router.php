@@ -127,6 +127,9 @@ class Router
     /** @var string Method of the last registered route */
     private static ?string $lastRouteMethod = null;
 
+    /** @var bool True while devAdminRoutes() runs: routes added then are the dev dashboard's own */
+    private static bool $registeringDevAdmin = false;
+
     /**
      * Memoised continuations for string middleware specs ("ResponseCache:300")
      * so one ResponseCache instance (and its backend) is reused across requests
@@ -288,6 +291,25 @@ class Router
 
         self::$groupPrefix = $previousPrefix;
         self::$groupMiddleware = $previousMiddleware;
+    }
+
+    /**
+     * Register the dev dashboard's own routes.
+     *
+     * A route added inside the callback skips the auth gate, as the dashboard
+     * needs. Only these routes do: a route of the application's own keeps the
+     * normal auth rules, whatever its path (/__developer, /__dev/anything).
+     *
+     * @param callable $callback Closure that registers the dashboard routes
+     */
+    public static function devAdminRoutes(callable $callback): void
+    {
+        self::$registeringDevAdmin = true;
+        try {
+            $callback();
+        } finally {
+            self::$registeringDevAdmin = false;
+        }
     }
 
     /**
@@ -2137,7 +2159,8 @@ class Router
     /**
      * Enforce the secure-by-default auth gate for a matched route.
      *
-     * Dev admin routes (/__dev/) are always public. Write routes
+     * The dev dashboard's own routes (registered through devAdminRoutes())
+     * are always public. Write routes
      * (POST/PUT/PATCH/DELETE) are secure by default - use ->noAuth() or
      * @noauth to opt out. GET/HEAD/OPTIONS are open by default - use
      * ->secure() or @secured to require a token.
@@ -2155,7 +2178,7 @@ class Router
     private static function enforceRouteAuth(Request $request, Response $response, array $route): ?Response
     {
         // ── Auth enforcement ──────────────────────────────────────
-        // Dev admin routes (/__dev/) are always public — no auth required.
+        // The dev dashboard's own routes are always public — no auth required.
         // Write routes (POST/PUT/PATCH/DELETE) are secure by default.
         // Use ->noAuth() or @noauth to opt out.
         // GET/HEAD/OPTIONS are open by default; use ->secure() or @secured to require auth.
@@ -2166,16 +2189,15 @@ class Router
         // attached. Middleware is now purely additive — developers
         // explicitly open routes with ->noAuth() and lock GETs with
         // ->secure().
-        // Match on $request->path (the path portion, e.g. "/__dev/api/reload"),
-        // NOT $request->url (the full "scheme://host/path" — which never starts
-        // with "/__dev" so the bypass silently never fired and write routes
-        // under /__dev returned 401). The trailing-slash redirect branch above
-        // already uses $request->path; this aligns with it.
+        // A route is the dashboard's when DevAdmin registered it, not when its
+        // path starts with "/__dev": that prefix test also opened any write
+        // route of the application's own named /__developer, /__devices or
+        // /__dev/anything.
         // ADR-0082: the gallery demo routes skip auth ONLY in debug mode. In
         // production a route under /gallery/ or /api/gallery/ is an ordinary
         // route and takes the normal auth rules.
         $isDebugMode = DotEnv::isTruthy(DotEnv::getEnv('TINA4_DEBUG', 'false'));
-        $isDevAdmin = str_starts_with($request->path, '/__dev')
+        $isDevAdmin = !empty($route['devAdmin'])
             || ($isDebugMode && (str_starts_with($request->path, '/api/gallery/') || str_starts_with($request->path, '/gallery/')));
         $isWriteMethod = in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
         $requiresAuth = false;
@@ -2967,6 +2989,7 @@ class Router
             'cache' => false,
             'secure' => $secure,
             'noAuth' => $noAuth,
+            'devAdmin' => self::$registeringDevAdmin,
             'catchAll' => $parsed['catchAll'],
             'catchAllName' => $parsed['catchAllName'],
             'swagger' => $swagger,

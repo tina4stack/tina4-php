@@ -274,20 +274,21 @@ class RouterAuthSourcesTest extends TestCase
         $this->assertEquals('test-value', $response->getHeader('X-Custom'));
     }
 
-    // ── /__dev auth-bypass path check ────────────────────────────
-    // Dev admin routes (/__dev/...) are always public — the DevReload
-    // CLI POSTs /__dev/api/reload with no token. The public-route guard
-    // must test $request->path, NOT $request->url: the latter is the
-    // full "http://host/__dev/api/reload" which never starts with
-    // "/__dev", so the bypass silently never fired and a write route
-    // under /__dev got 401'd by the secure-by-default write gate.
+    // ── Dev dashboard auth bypass ────────────────────────────────
+    // The dashboard's own routes are always public — the DevReload CLI
+    // POSTs /__dev/api/reload with no token. A route is the dashboard's
+    // when it is registered through Router::devAdminRoutes() (as
+    // DevAdmin::register() does), not when its path starts with "/__dev";
+    // see DevAdminAuthScopeTest.
 
     public function testDevWriteRouteBypassesAuthGate(): void
     {
         // Registered WITHOUT ->noAuth(): a POST is secure-by-default, so
-        // if the /__dev bypass doesn't fire this 401s. The fix makes it run.
-        Router::post('/__dev/api/reload', function ($request, $response) {
-            return $response->json(['reloaded' => true]);
+        // if the dashboard bypass doesn't fire this 401s.
+        Router::devAdminRoutes(function (): void {
+            Router::post('/__dev/api/reload', function ($request, $response) {
+                return $response->json(['reloaded' => true]);
+            });
         });
 
         // No Authorization header, no formToken, no session token.
@@ -324,7 +325,7 @@ class RouterAuthSourcesTest extends TestCase
     public function testNonDevWriteRouteStillRequiresAuth(): void
     {
         // Control: a normal write route with no token still 401s — the
-        // path-based bypass must not accidentally open everything.
+        // dashboard bypass must not accidentally open everything.
         Router::post('/api/items', fn($rq, $rs) => $rs->json(['ok' => true]));
 
         $request = $this->createRequest('POST', '/api/items');
