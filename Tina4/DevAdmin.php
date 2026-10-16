@@ -229,8 +229,19 @@ class DevAdmin
 
     /**
      * Register all /__dev routes. Call from App::start() when in development mode.
+     *
+     * They are registered as the dashboard's own, so they skip the auth gate; a
+     * route the application registers under the same prefix does not.
      */
     public static function register(): void
+    {
+        Router::devAdminRoutes(static fn () => self::registerDashboardRoutes());
+    }
+
+    /**
+     * Register the dashboard's routes, middleware and supporting handlers.
+     */
+    private static function registerDashboardRoutes(): void
     {
         // Register PHP error/exception handlers so they are captured in the Error Tracker
         ErrorTracker::register();
