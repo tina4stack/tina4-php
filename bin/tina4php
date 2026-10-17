@@ -34,7 +34,7 @@
  * Generators:
  *   generate model <Name> [--fields "name:string,price:float"] [--table-name <name>]
  *   generate route <name> [--model Name] [--public]   Secure by default; --public opens writes
- *   generate crud <Name> [--fields "..."] [--public] [--no-templates]   AutoCrud-backed /admin/<table> page via Crud::toCrud + editable crud/ templates + gate test
+ *   generate crud <Name> [--fields "..."] [--public] [--no-templates] [--skip-model]   AutoCrud-backed /admin/<table> page via Crud::toCrud + editable crud/ templates + gate test
  *   generate migration <description>
  *   generate middleware <Name>
  *   generate test <name>
@@ -1225,11 +1225,7 @@ function runResolvedGenerator(
 ): void {
     // v1.1 (ADR-0063): the resolvable set covers all 15 scaffolders, so
     // every verb speaks the same envelope contract.
-    $resolvable = [
-        'model', 'route', 'crud', 'migration', 'middleware', 'test',
-        'form', 'view', 'auth', 'service', 'queue', 'validator',
-        'seeder', 'websocket', 'listener',
-    ];
+    $resolvable = TINA4_RESOLVABLE_GENERATORS;
     $wantsJson = !empty($genFlags['json']);
     $dryRun = !empty($genFlags['dry-run']);
     $resolution = null;
@@ -1439,7 +1435,7 @@ function parseFlags(array $args): array
 {
     // Boolean-only flags that never take a value argument
     $booleanFlags = ['no-browser', 'no-reload', 'no-kill', 'production', 'managed', 'all', 'clear',
-                     'json', 'public', 'no-migration', 'no-templates', 'once', 'dry-run', 'fix', 'no-install'];
+                     'json', 'public', 'no-migration', 'no-templates', 'skip-model', 'once', 'dry-run', 'fix', 'no-install'];
 
     $flags = [];
     $positional = [];
@@ -1586,8 +1582,11 @@ function resolveHostPort(?string $cliArg = null): array
 // there is no second list to keep in sync. Mirrors the Python master's
 // COMMANDS / GENERATORS registries (tina4_python/cli/__init__.py).
 //
-//   $TINA4_GENERATORS[name] = ['usage' => str, 'summary' => str]
+//   $TINA4_GENERATORS[name] = ['flags' => [...], 'usage' => str, 'summary' => str]
 //   $TINA4_COMMANDS[name]   = ['summary' => str,
+//                              'flags'?       => [name => bool], // options accepted; true = takes a value.
+//                                                                // Absent = none, null = not checked (help);
+//                                                                // queue/generate: per subcommand
 //                              'usage'?       => str,    // human-help arg hint only
 //                              'args'?        => [str],  // positional args -> manifest ("x?" = optional)
 //                              'subcommands'? => [str]]   // sub-names -> manifest (generate)
@@ -1868,48 +1867,222 @@ function tina4RenderCommands(array $manifest): string
     return implode("\n", $lines) . "\n";
 }
 
+// ── Per-command help and option checking ──────────────────────────────────
+//
+// `--help` / `-h` anywhere after a command prints that command's usage and
+// touches nothing. Handlers never looked for it, so it ran the command for real:
+// `generate model --help` wrote a model named `--help`, `lint --help` installed
+// phpcs, `serve --help` started a server. Each registry entry declares its
+// options (name => takes a value), and every option is checked before any
+// handler runs. Mirrors the Python master's _command_help / _check_options.
+
+const TINA4_HELP_FLAGS = ['--help', '-h'];
+
+// Generators that speak the ADR-0063 resolution envelope (all fifteen), and the
+// options each of them accepts on top of its own.
+const TINA4_RESOLVABLE_GENERATORS = [
+    'model', 'route', 'crud', 'migration', 'middleware', 'test',
+    'form', 'view', 'auth', 'service', 'queue', 'validator',
+    'seeder', 'websocket', 'listener',
+];
+const TINA4_RESOLUTION_FLAGS = ['json' => false, 'dry-run' => false];
+
+// similar_text() percentage a misspelt option needs to earn a "Did you mean".
+const TINA4_OPTION_MATCH_PERCENT = 60.0;
+
+/**
+ * Render the usage for one command, or for one generator, from the same
+ * registries that drive dispatch and the full help.
+ *
+ * `generate <kind> --help` describes that generator; `generate --help` with no
+ * (or an unknown) kind lists every generator.
+ *
+ * @param string $command A command registered in $commands.
+ * @param list<string> $args The arguments after the command.
+ * @param array<string, array<string, mixed>> $commands The $TINA4_COMMANDS registry.
+ * @param array<string, array<string, mixed>> $generators The $TINA4_GENERATORS registry.
+ * @return string The usage text, newline-terminated.
+ */
+function tina4CommandHelp(string $command, array $args, array $commands, array $generators): string
+{
+    if ($command === 'generate') {
+        $kind = null;
+        foreach ($args as $arg) {
+            if (!str_starts_with($arg, '-')) {
+                $kind = strtolower($arg);
+                break;
+            }
+        }
+        if ($kind !== null && isset($generators[$kind])) {
+            $spec = $generators[$kind];
+            return rtrim("Usage: tina4php generate {$kind} " . ($spec['usage'] ?? '')) . "\n\n  {$spec['summary']}\n";
+        }
+        $pad = max(array_map('strlen', array_keys($generators)));
+        $lines = ['Usage: tina4php generate <what> <name> [options]', '', 'Generators:'];
+        foreach ($generators as $name => $spec) {
+            $lines[] = '  ' . str_pad($name, $pad) . '  ' . $spec['summary'];
+        }
+        return implode("\n", $lines) . "\n";
+    }
+    $spec = $commands[$command];
+    $text = rtrim("Usage: tina4php {$command} " . ($spec['usage'] ?? '')) . "\n\n  {$spec['summary']}\n";
+    if (!empty($spec['subcommands'])) {
+        $text .= '  Subcommands: ' . implode(', ', $spec['subcommands']) . "\n";
+    }
+    return $text;
+}
+
+/**
+ * The options a command accepts (name => takes a value), or null when its
+ * arguments are not checked here: `help` prints the full reference whatever
+ * follows, and an unknown generator or queue subcommand is reported by its own
+ * handler.
+ *
+ * @param string $command A command registered in $commands.
+ * @param list<string> $args The arguments after the command.
+ * @param array<string, array<string, mixed>> $commands The $TINA4_COMMANDS registry.
+ * @param array<string, array<string, mixed>> $generators The $TINA4_GENERATORS registry.
+ * @param array<string, array<string, bool>> $queueFlags The $TINA4_QUEUE_FLAGS map.
+ * @return array<string, bool>|null Accepted options, or null when unchecked.
+ */
+function tina4AcceptedOptions(string $command, array $args, array $commands, array $generators, array $queueFlags): ?array
+{
+    $sub = strtolower($args[0] ?? '');
+    if ($command === 'generate') {
+        if (!isset($generators[$sub])) {
+            return null;
+        }
+        $accepted = $generators[$sub]['flags'] ?? [];
+        if (in_array($sub, TINA4_RESOLVABLE_GENERATORS, true)) {
+            $accepted += TINA4_RESOLUTION_FLAGS;
+        }
+        return $accepted;
+    }
+    if ($command === 'queue') {
+        return $queueFlags[$sub] ?? null;
+    }
+    // 'flags' => null: not checked (`help` prints the full reference whatever follows).
+    return array_key_exists('flags', $commands[$command]) ? $commands[$command]['flags'] : [];
+}
+
+/**
+ * The accepted option closest to a misspelt one, or null when none is close.
+ *
+ * @param string $name The option as typed, without its dashes.
+ * @param list<string> $candidates The accepted option names.
+ * @return string|null The closest candidate scoring at least TINA4_OPTION_MATCH_PERCENT.
+ */
+function tina4ClosestOption(string $name, array $candidates): ?string
+{
+    $best = null;
+    $bestPercent = 0.0;
+    foreach ($candidates as $candidate) {
+        similar_text($name, $candidate, $percent);
+        if ($percent > $bestPercent) {
+            $best = $candidate;
+            $bestPercent = $percent;
+        }
+    }
+    return $bestPercent >= TINA4_OPTION_MATCH_PERCENT ? $best : null;
+}
+
+/**
+ * Check a command's arguments against the options it accepts.
+ *
+ * Refuses an option the command doesn't have (with a did-you-mean when one is
+ * close), any single-dash option, and a value option given no value. Both used
+ * to slip through: `--feilds` was silently dropped (the model came out without
+ * its fields) and a bare `--fields` crashed. `--name=value` counts as a value.
+ *
+ * @param string $command The command name.
+ * @param list<string> $args The arguments after the command.
+ * @param array<string, bool>|null $accepted From tina4AcceptedOptions(); null skips the check.
+ * @return string|null The error to print (exit 1), or null when the arguments are fine.
+ */
+function tina4OptionError(string $command, array $args, ?array $accepted): ?string
+{
+    if ($accepted === null) {
+        return null;
+    }
+    $label = in_array($command, ['generate', 'queue'], true) ? $command . ' ' . strtolower($args[0]) : $command;
+    $count = count($args);
+    for ($i = 0; $i < $count; $i++) {
+        $arg = $args[$i];
+        if (!str_starts_with($arg, '-') || $arg === '-') {
+            continue;
+        }
+        $parts = explode('=', ltrim($arg, '-'), 2);
+        $name = $parts[0];
+        $hasValue = count($parts) === 2;
+        if (!str_starts_with($arg, '--') || !array_key_exists($name, $accepted)) {
+            $option = explode('=', $arg, 2)[0];
+            $closest = tina4ClosestOption($name, array_keys($accepted));
+            return "Unknown option {$option} for \"{$label}\"."
+                . ($closest !== null ? " Did you mean --{$closest}?" : '') . "\n"
+                . "Run \"tina4php {$label} --help\" for its options.\n";
+        }
+        if ($accepted[$name] && !$hasValue) {
+            if ($i + 1 >= $count || str_starts_with($args[$i + 1], '-')) {
+                return "Option --{$name} for \"{$label}\" needs a value: --{$name} <value>\n";
+            }
+            $i++;
+        }
+    }
+    return null;
+}
+
 // Sub-dispatch table for the top-level `queue` command — the single source for
 // its subcommands (drives tina4Queue() dispatch AND the manifest's
-// queue.subcommands). Mirrors the Python master's _QUEUE_SUBCOMMANDS.
-$TINA4_QUEUE_SUBCOMMANDS = ['work', 'stats', 'retry', 'clear'];
+// queue.subcommands) and their options (name => takes a value, checked before
+// dispatch). Mirrors the Python master's _QUEUE_SUBCOMMANDS / _QUEUE_FLAGS.
+$TINA4_QUEUE_FLAGS = [
+    'work'  => ['once' => false, 'poll' => true, 'services' => true],
+    'stats' => ['json' => false],
+    'retry' => [],
+    'clear' => [],
+];
+$TINA4_QUEUE_SUBCOMMANDS = array_keys($TINA4_QUEUE_FLAGS);
 
 $TINA4_GENERATORS = [
-    'model'      => ['usage' => '<Name> [--fields "name:string,price:float"] [--table-name <name>]', 'summary' => 'ORM model + matching migration'],
-    'route'      => ['usage' => '<name> [--model Name] [--public]',            'summary' => 'CRUD route file, secure by default (--public opens writes)'],
-    'crud'       => ['usage' => '<Name> [--fields "..."] [--public]',           'summary' => 'Model + migration + routes + form + view + test'],
-    'migration'  => ['usage' => '<description>',                                'summary' => 'Timestamped migration file'],
-    'middleware' => ['usage' => '<Name>',                                       'summary' => 'Middleware with before/after hooks'],
-    'test'       => ['usage' => '<name> [--model Name]',                        'summary' => 'PHPUnit test file'],
-    'form'       => ['usage' => '<Name> [--fields "..."]',                      'summary' => 'Form template with typed inputs'],
-    'view'       => ['usage' => '<Name> [--fields "..."]',                      'summary' => 'List + detail view templates'],
-    'auth'       => ['usage' => '',                                            'summary' => 'Login/register routes + User model + templates'],
-    'service'    => ['usage' => '<Name> [--every 5m | --cron "..."]',           'summary' => 'Scheduled ServiceRunner task (src/services/)'],
-    'queue'      => ['usage' => '<topic>',                                      'summary' => 'Producer + consumer worker (src/services/)'],
-    'validator'  => ['usage' => '<Name>',                                       'summary' => 'Request-body Validator (src/validators/)'],
-    'seeder'     => ['usage' => '<Model>',                                      'summary' => 'FakeData seeder (src/seeds/)'],
-    'websocket'  => ['usage' => '<path>',                                       'summary' => 'Router::websocket handler (src/routes/)'],
-    'listener'   => ['usage' => '<event>',                                      'summary' => 'Events::on listener (src/listeners/)'],
+    'model'      => ['flags' => ['fields' => true, 'table-name' => true, 'no-migration' => false], 'usage' => '<Name> [--fields "name:string,price:float"] [--table-name <name>]', 'summary' => 'ORM model + matching migration'],
+    'route'      => ['flags' => ['model' => true, 'public' => false], 'usage' => '<name> [--model Name] [--public]',            'summary' => 'CRUD route file, secure by default (--public opens writes)'],
+    'crud'       => ['flags' => ['fields' => true, 'table-name' => true, 'public' => false, 'no-templates' => false, 'no-migration' => false, 'skip-model' => false], 'usage' => '<Name> [--fields "..."] [--public] [--no-templates] [--skip-model]', 'summary' => 'Model + migration + routes + form + view + test'],
+    'migration'  => ['flags' => ['fields' => true], 'usage' => '<description>',                                'summary' => 'Timestamped migration file'],
+    'middleware' => ['flags' => [], 'usage' => '<Name>',                                       'summary' => 'Middleware with before/after hooks'],
+    'test'       => ['flags' => ['model' => true, 'public' => false], 'usage' => '<name> [--model Name]',                        'summary' => 'PHPUnit test file'],
+    'form'       => ['flags' => ['fields' => true, 'table-name' => true], 'usage' => '<Name> [--fields "..."]',                      'summary' => 'Form template with typed inputs'],
+    'view'       => ['flags' => ['fields' => true, 'table-name' => true], 'usage' => '<Name> [--fields "..."]',                      'summary' => 'List + detail view templates'],
+    'auth'       => ['flags' => [], 'usage' => '',                                            'summary' => 'Login/register routes + User model + templates'],
+    'service'    => ['flags' => ['every' => true, 'cron' => true], 'usage' => '<Name> [--every 5m | --cron "..."]',           'summary' => 'Scheduled ServiceRunner task (src/services/)'],
+    'queue'      => ['flags' => [], 'usage' => '<topic>',                                      'summary' => 'Producer + consumer worker (src/services/)'],
+    'validator'  => ['flags' => [], 'usage' => '<Name>',                                       'summary' => 'Request-body Validator (src/validators/)'],
+    'seeder'     => ['flags' => ['table-name' => true], 'usage' => '<Model>',                                      'summary' => 'FakeData seeder (src/seeds/)'],
+    'websocket'  => ['flags' => [], 'usage' => '<path>',                                       'summary' => 'Router::websocket handler (src/routes/)'],
+    'listener'   => ['flags' => [], 'usage' => '<event>',                                      'summary' => 'Events::on listener (src/listeners/)'],
 ];
+
+$TINA4_SERVE_FLAGS = ['port' => true, 'host' => true, 'no-browser' => false, 'no-reload' => false,
+                      'no-kill' => false, 'production' => false, 'managed' => false];
 
 $TINA4_COMMANDS = [
     'init'             => ['usage' => '[dir]',            'args' => ['dir?'],        'summary' => 'Scaffold a new project'],
-    'serve'            => ['usage' => '[host:port|port]',                            'summary' => 'Start dev server (default: 0.0.0.0:7145)'],
-    'start'            => [                                                          'summary' => 'Alias for serve'],
+    'serve'            => ['flags' => $TINA4_SERVE_FLAGS, 'usage' => '[host:port|port]', 'summary' => 'Start dev server (default: 0.0.0.0:7145)'],
+    'start'            => ['flags' => $TINA4_SERVE_FLAGS,                            'summary' => 'Alias for serve'],
     'migrate'          => [                                                          'summary' => 'Run pending migrations'],
-    'migrate:create'   => ['usage' => '<desc>',           'args' => ['description'], 'summary' => 'Create a new migration file'],
+    'migrate:create'   => ['flags' => ['fields' => true] + TINA4_RESOLUTION_FLAGS, 'usage' => '<desc>', 'args' => ['description'], 'summary' => 'Create a new migration file'],
     'migrate:rollback' => [                                                          'summary' => 'Rollback last batch'],
     'migrate:status'   => [                                                          'summary' => 'Show migration status'],
     'seed'             => [                                                          'summary' => 'Run seeders from src/seeds/'],
     'routes'           => [                                                          'summary' => 'List all registered routes'],
-    'test'             => [                                                          'summary' => 'Run test suite'],
-    'lint'             => ['usage' => '[--fix] [--no-install]',                      'summary' => 'Lint src/ + index.php (phpcs, installed dev-only on demand; else php -l syntax check)'],
+    'test'             => ['flags' => null, 'usage' => '[phpunit options]',           'summary' => 'Run test suite'],
+    'lint'             => ['flags' => ['fix' => false, 'no-install' => false], 'usage' => '[--fix] [--no-install]', 'summary' => 'Lint src/ + index.php (phpcs, installed dev-only on demand; else php -l syntax check)'],
     'queue'            => ['usage' => '<work|stats|retry|clear> [topic]', 'subcommands' => $TINA4_QUEUE_SUBCOMMANDS, 'summary' => 'Run queue workers and manage jobs'],
-    'build'            => ['usage' => '[--tag NAME] [--file PATH]',                   'summary' => 'Build the deployable Docker image'],
+    'build'            => ['flags' => ['tag' => true, 'file' => true], 'usage' => '[--tag NAME] [--file PATH]', 'summary' => 'Build the deployable Docker image'],
     'generate'         => ['usage' => '<what> <name> [options]', 'subcommands' => array_keys($TINA4_GENERATORS), 'summary' => 'Generate scaffolding (see Generators below)'],
-    'ai'               => ['usage' => '[--all]',                                     'summary' => 'Detect AI tools and install context'],
+    'ai'               => ['flags' => ['all' => false], 'usage' => '[--all]',          'summary' => 'Detect AI tools and install context'],
     'console'          => [                                                          'summary' => 'Interactive PHP REPL with Tina4 loaded'],
-    'commands'         => ['usage' => '[--json]',                                    'summary' => 'List available commands (add --json for machine form)'],
-    'help'             => [                                                          'summary' => 'Show this help'],
+    'commands'         => ['flags' => ['json' => false], 'usage' => '[--json]',        'summary' => 'List available commands (add --json for machine form)'],
+    'help'             => ['flags' => null,                                          'summary' => 'Show this help'],
 ];
 
 // Commands the `tina4` client OWNS and this CLI reaches by delegation — see the
@@ -1945,6 +2118,23 @@ if (!isset($TINA4_COMMANDS[$command])) {
     echo "Unknown command: {$command}\n";
     echo tina4RenderHelp($TINA4_COMMANDS, $TINA4_GENERATORS, $TINA4_DELEGATED);
     exit(TINA4_EXIT_UNKNOWN_COMMAND);
+}
+
+// `--help` / `-h` after a command prints its usage and touches nothing; every
+// option is checked before any handler runs. Delegated commands never get here:
+// the tina4 client answers their --help itself.
+if ($command !== 'help' && array_intersect($args, TINA4_HELP_FLAGS) !== []) {
+    echo tina4CommandHelp($command, $args, $TINA4_COMMANDS, $TINA4_GENERATORS);
+    exit(0);
+}
+$optionError = tina4OptionError(
+    $command,
+    $args,
+    tina4AcceptedOptions($command, $args, $TINA4_COMMANDS, $TINA4_GENERATORS, $TINA4_QUEUE_FLAGS)
+);
+if ($optionError !== null) {
+    echo $optionError;
+    exit(1);
 }
 
 switch ($command) {
@@ -2522,13 +2712,16 @@ DOCKERFILE;
         // External suite stage — propagate the PHPUnit / smoke runner's exit code
         // so `tina4php test || exit 1` CI gates fail on a red suite (python#96
         // parity). passthru's second by-ref arg captures the child exit code.
+        // Arguments go to PHPUnit untouched (`tina4php test --filter Product`),
+        // as `tina4python test` hands its own to pytest. They used to be dropped.
         $testExit = 0;
         $ranSuite = false;
+        $passOn = implode('', array_map(fn($a) => ' ' . escapeshellarg($a), $args));
         if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
             passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'), $testExit);
             $ranSuite = true;
         } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
-            passthru($cwd . '/vendor/bin/phpunit tests --colors=always', $testExit);
+            passthru($cwd . '/vendor/bin/phpunit tests --colors=always' . $passOn, $testExit);
             $ranSuite = true;
         }
 
@@ -2627,14 +2820,16 @@ DOCKERFILE;
         // pre-refactor behaviour). The helper handles resolvable verbs +
         // reports --json/--dry-run misuse on non-resolvable ones; unknown
         // verbs get the explicit "Unknown generator" message here.
-        $resolvable = [
-            'model', 'route', 'crud', 'migration', 'middleware', 'test',
-            'form', 'view', 'auth', 'service', 'queue', 'validator',
-            'seeder', 'websocket', 'listener',
-        ];
-        if (!in_array($what, $resolvable, true)) {
+        if (!in_array($what, TINA4_RESOLVABLE_GENERATORS, true)) {
             echo "Unknown generator: {$what}\n";
             echo "  Available: {$allGenerators}\n";
+            exit(1);
+        }
+
+        // A name that is really a mistyped option (`--fields` with no name
+        // before it) would otherwise become a file called `--fields`.
+        if (!in_array($what, $noNameGenerators, true) && str_starts_with($genName, '-')) {
+            echo "Invalid {$what} name: '{$genName}' - names can't start with '-'.\n";
             exit(1);
         }
 
@@ -2649,7 +2844,7 @@ DOCKERFILE;
     // AI — Install AI context files
     // ────────────────────────────────────────────
     case 'ai':
-        if (isset($args[0]) && strtolower($args[0]) === 'all') {
+        if (isset($args[0]) && in_array(strtolower($args[0]), ['all', '--all'], true)) {
             \Tina4\AITools::installAll($cwd);
         } else {
             $selection = \Tina4\AITools::showMenu($cwd);
@@ -3116,7 +3311,10 @@ function generateCrud(string $name, array $flags, array $fieldTypeMap): void
 
     // 1. Model + migration (emitTest=false — crud emits its own gate test at
     //    step 4, so the sub-generators stay quiet to avoid double-emit).
-    generateModel($name, $flags, $fieldTypeMap, false, false);
+    //    --skip-model: the model already exists (`generate model` suggests this).
+    if (empty($flags['skip-model'])) {
+        generateModel($name, $flags, $fieldTypeMap, false, false);
+    }
 
     // 2. Admin page route: registers AutoCrud (secure-by-default; --public
     //    opens writes) and renders the to_crud admin UI at /admin/<table>.

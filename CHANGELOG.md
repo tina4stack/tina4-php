@@ -6,6 +6,27 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## Unreleased
+
+### Fixed
+- CLI: `--help` / `-h` on any command prints that command's usage and changes
+  nothing. Before, handlers never looked for it and ran for real:
+  `generate model --help` wrote a model named `--help`, `init --help` scaffolded
+  a project, `lint --help` installed phpcs, `serve --help` started a server.
+- CLI: an unknown option is refused with a did-you-mean (`--feilds` ->
+  `--fields`) instead of being silently dropped, and a value option given no
+  value is refused instead of being ignored (`--fields`, `--every`).
+  `--name=value` works as well as `--name value`.
+- CLI: `test` hands its arguments to PHPUnit (`tina4php test --filter Product`),
+  as `tina4python test` does to pytest. They used to be dropped, so
+  `test --filter x` silently ran the whole suite.
+- CLI: `generate` refuses a name that starts with `-`.
+- CLI: `ai --all` installs every context file, as its help says; it opened the
+  menu before (`ai all` still works).
+- CLI: `generate crud <Name> --skip-model` works. `generate model` has always
+  suggested it, but no generator had the option; it was silently ignored and
+  would now be refused.
+
 ## 3.13.151 - 2026-10-15
 
 ### Security
