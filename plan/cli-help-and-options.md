@@ -79,10 +79,10 @@ Other broken switches found by the same tests:
 | middleware, auth, queue, validator, websocket, listener | none |
 
 ### Differences from Python (and why)
-- `test` is checked with no options. Python's `test` hands its arguments to
-  pytest (`None`); PHP's never passed them to PHPUnit, so `test --filter x`
-  silently ran the whole suite. It is now refused. Forwarding to PHPUnit would be
-  the parity move; left as a follow-up.
+- `test` hands its arguments to PHPUnit (`'flags' => null`), matching Python's
+  `test` and pytest. PHP's never passed them on, so `test --filter x` silently
+  ran the whole suite; the first version of this change refused them, and the
+  follow-up commit forwards them instead.
 - `serve` / `start`: positional `host:port` (PHP) plus the options it reads;
   `managed` is accepted because the `tina4` client runs `tina4php serve --managed`.
 - `init` takes no options (Python: `--ai`, `--production`); PHP's init reads none.
@@ -113,7 +113,9 @@ Command and generator lists come from the real `commands --json` manifest.
 - [x] `help`, `help --help`, `help -h`: exit 0, full reference, no "Unknown option"
 - [x] a name that looks like an option is refused, nothing written
 - [x] misspelled options refused with the right suggestion, nothing written
-- [x] short and foreign options refused (incl. `--x=y`, `test --filter`)
+- [x] short and foreign options refused (incl. `--x=y`)
+- [x] `test --filter testOne` runs one of two real PHPUnit tests (fails without
+      the forwarding: the old code ran both)
 - [x] value option without a value refused, no PHP fatal / stack trace
 - [x] `--fields price:float` and `--fields=price:float` both reach the model
 - [x] `ai --all` and `ai all` write CLAUDE.md + AGENTS.md without the menu

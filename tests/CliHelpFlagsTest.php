@@ -311,7 +311,6 @@ class CliHelpFlagsTest extends TestCase
             'lint --everything' => [['lint', '--everything'], '--everything', 'lint'],
             'migrate --force'   => [['migrate', '--force'], '--force', 'migrate'],
             '--x=y form'        => [['build', '--platform=linux/amd64'], '--platform', 'build'],
-            'test --filter'     => [['test', '--filter', 'one'], '--filter', 'test'],
         ];
     }
 
@@ -325,6 +324,36 @@ class CliHelpFlagsTest extends TestCase
         $this->assertStringContainsString("Unknown option {$option} for \"{$label}\".", $out);
         $this->assertStringNotContainsString('Did you mean', $out);
         $this->assertSame($before, self::snapshot($project));
+    }
+
+    /**
+     * `test` hands its arguments to PHPUnit, as `tina4python test` does to
+     * pytest. It used to drop them, so `test --filter x` ran the whole suite.
+     * The project's vendor/bin/phpunit is this repo's real PHPUnit.
+     */
+    public function testTestPassesItsArgumentsToPhpunit(): void
+    {
+        $project = $this->project();
+        mkdir($project . '/tests');
+        mkdir($project . '/vendor/bin', 0755, true);
+        symlink(dirname(__DIR__) . '/vendor/bin/phpunit', $project . '/vendor/bin/phpunit');
+        foreach (['One', 'Two'] as $name) {
+            file_put_contents(
+                "{$project}/tests/{$name}Test.php",
+                "<?php\nuse PHPUnit\\Framework\\TestCase;\n"
+                . "final class {$name}Test extends TestCase\n{\n"
+                . "    public function test{$name}(): void { \$this->assertTrue(true); }\n}\n"
+            );
+        }
+
+        [$all, , $allExit] = $this->runCli(['test']);
+        $this->assertSame(0, $allExit, $all);
+        $this->assertStringContainsString('OK (2 tests', $all);
+
+        [$out, $err, $exit] = $this->runCli(['test', '--filter', 'testOne']);
+        $this->assertSame(0, $exit, $out . $err);
+        $this->assertStringNotContainsString('Unknown option', $out);
+        $this->assertStringContainsString('OK (1 test', $out);
     }
 
     public static function missingValues(): array

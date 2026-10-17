@@ -2074,7 +2074,7 @@ $TINA4_COMMANDS = [
     'migrate:status'   => [                                                          'summary' => 'Show migration status'],
     'seed'             => [                                                          'summary' => 'Run seeders from src/seeds/'],
     'routes'           => [                                                          'summary' => 'List all registered routes'],
-    'test'             => [                                                          'summary' => 'Run test suite'],
+    'test'             => ['flags' => null, 'usage' => '[phpunit options]',           'summary' => 'Run test suite'],
     'lint'             => ['flags' => ['fix' => false, 'no-install' => false], 'usage' => '[--fix] [--no-install]', 'summary' => 'Lint src/ + index.php (phpcs, installed dev-only on demand; else php -l syntax check)'],
     'queue'            => ['usage' => '<work|stats|retry|clear> [topic]', 'subcommands' => $TINA4_QUEUE_SUBCOMMANDS, 'summary' => 'Run queue workers and manage jobs'],
     'build'            => ['flags' => ['tag' => true, 'file' => true], 'usage' => '[--tag NAME] [--file PATH]', 'summary' => 'Build the deployable Docker image'],
@@ -2712,13 +2712,16 @@ DOCKERFILE;
         // External suite stage — propagate the PHPUnit / smoke runner's exit code
         // so `tina4php test || exit 1` CI gates fail on a red suite (python#96
         // parity). passthru's second by-ref arg captures the child exit code.
+        // Arguments go to PHPUnit untouched (`tina4php test --filter Product`),
+        // as `tina4python test` hands its own to pytest. They used to be dropped.
         $testExit = 0;
         $ranSuite = false;
+        $passOn = implode('', array_map(fn($a) => ' ' . escapeshellarg($a), $args));
         if (file_exists($cwd . '/tests/test_v3_smoke.php')) {
             passthru('php ' . escapeshellarg($cwd . '/tests/test_v3_smoke.php'), $testExit);
             $ranSuite = true;
         } elseif (file_exists($cwd . '/vendor/bin/phpunit')) {
-            passthru($cwd . '/vendor/bin/phpunit tests --colors=always', $testExit);
+            passthru($cwd . '/vendor/bin/phpunit tests --colors=always' . $passOn, $testExit);
             $ranSuite = true;
         }
 

@@ -16,9 +16,10 @@ https://tina4.com/php/36-releases
 - CLI: an unknown option is refused with a did-you-mean (`--feilds` ->
   `--fields`) instead of being silently dropped, and a value option given no
   value is refused instead of being ignored (`--fields`, `--every`).
-  `--name=value` works as well as `--name value`. `test` takes no options (it
-  never passed them to PHPUnit), so `test --filter x` is refused rather than
-  silently running the whole suite.
+  `--name=value` works as well as `--name value`.
+- CLI: `test` hands its arguments to PHPUnit (`tina4php test --filter Product`),
+  as `tina4python test` does to pytest. They used to be dropped, so
+  `test --filter x` silently ran the whole suite.
 - CLI: `generate` refuses a name that starts with `-`.
 - CLI: `ai --all` installs every context file, as its help says; it opened the
   menu before (`ai all` still works).
