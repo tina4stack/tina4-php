@@ -260,6 +260,15 @@ plan** as new `[ ]` items. A genuinely new feature → **scope it and state the 
 create `plan/<feature>.md` and start. Additional features are never side-quests — they are just new
 checkboxes in a plan.
 
+### Spec-first — acceptance criteria before code
+Before you scope the work, write the SPEC at the top of the feature plan: the user goal, then the
+behaviour as numbered `AC-N` given/when/then lines, then the non-goals. Each `AC-N` is one claim a
+real test will make red or green — so the acceptance criteria ARE your test list (step 4), one test
+per criterion, positive and negative. Keep the spec current: when behaviour moves, change the `AC-N`
+first, then the code and its test. The spec is the source of truth; code that disagrees with it is
+the bug. This mirrors how the framework itself is built (Spec-Driven Development in `tina4-maintainer`)
+and carries down the journeys `tina4-architect` mapped.
+
 ### 3. The plan folder — a master plan over feature plans
 `plan/` holds a **master plan** (`plan/MASTER.md`) that carries the overview — every feature and its
 status at a glance — plus one detailed plan per feature. The master plan is the dashboard; each
@@ -295,14 +304,21 @@ A feature plan has four parts — a Scope checklist, the Tests, a Bugs section, 
 ```markdown
 # Feature: Product Search API
 
+## Spec — acceptance criteria (write these FIRST, before any code)
+- AC-1: given a product "Widget", when GET /api/products?q=wid, then it is in the results
+- AC-2: given no match, when GET /api/products?q=zzz, then the body is [] with status 200 (never 500)
+- AC-3: given ?min=5&max=20, when listing, then only products priced 5–20 come back
+- Non-goals: fuzzy/typo matching, relevance ranking
+
 ## Scope
 - [x] Product model (id, name, price, created_at)
 - [x] GET /api/products?q= — search by name
 - [ ] Price-range filter (?min= &max=)
 
-## Tests (written first, real — no mocks)
-- [x] search returns matching products   (real SQLite, seeded rows)
-- [ ] price-range filter narrows results
+## Tests (written first, real — no mocks) — ONE per acceptance criterion
+- [x] AC-1 search returns matching products   (real SQLite, seeded rows)
+- [ ] AC-2 empty result returns [] not 500
+- [ ] AC-3 price-range filter narrows results
 
 ## Bugs
 - [x] q= containing % broke the LIKE — escaped the wildcards (a1b2c3d)

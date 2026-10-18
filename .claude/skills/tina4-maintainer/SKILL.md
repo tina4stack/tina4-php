@@ -266,6 +266,40 @@ one checker per pluggable subsystem), ADR-0041 (explicit argument beats the envi
 (the messenger uid is the IMAP UID, never a sequence number), ADR-0043 (the paginate envelope is
 seven snake_case keys derived from the query, no arguments). The full list is `DECISIONS.md`.
 
+## Spec-Driven Development (SDD) — the spec is the executable contract
+
+Tina4 is already most of the way to Spec-Driven Development (SDD): the ADR says WHY, the contract
+fixture is that decision made EXECUTABLE, and `audit-contract-fixtures.py` proves all four frameworks
+obey it. SDD adds the missing front-end - one canonical, human-readable spec per feature that every
+framework, and every agent, builds from. It does NOT replace the ADR/fixture backbone; it sits on top
+of it.
+
+**Every feature has a spec: `tina4-documentation/plan/v3/specs/NNN-<feature>.md`.** It carries:
+
+- **Intent** - what the feature does and why, in two or three lines, citing the governing ADR(s).
+- **Acceptance criteria** - the behaviour as numbered `AC-N` given/when/then lines. Each `AC-N` is one
+  claim a single test can turn red or green.
+- **Non-goals** - what the feature deliberately does NOT do (the discipline that stops scope creep).
+- **Tasks** - the per-framework work, Python reference first, each linking its `<repo>/plan/<task>.md`.
+
+**The spec and the fixture are one system, mapped 1:1.** Every `AC-N` maps to a case in
+`fixtures/<feature>_contract.json`: the AC is the human form, the fixture case is the executable form,
+and they can never drift - `audit-spec-coverage.py` fails the build when an AC has no fixture case or a
+case no AC (the same gate shape as `audit-truth` / `audit-contract-fixtures`). "Proven/owed" becomes
+per-CRITERION, not per-feature: `CONTRACT-MAP.md` can say AC-3 is proven in Ruby and owed in Node.
+
+**The spec is the source of truth; the code is derived from it.** When behaviour must change, change
+the SPEC first (add or amend an `AC-N`), supersede the ADR if a decision moves, update the fixture,
+then fix the four frameworks to the new criterion - never the reverse. A spec that disagrees with the
+code is the bug, exactly like a doc that disagrees with the code (the First Principle). `MASTER-SPEC.md`
+retires into per-feature specs; its stale numbers were the drift this closes.
+
+**A NEW feature starts from the spec, not from code.** Write the spec (intent + acceptance criteria +
+non-goals) and the ADR before you measure or build anything; for an EXISTING feature you are advancing,
+confirm or extend its spec first. This is the spec-first discipline `tina4-architect` applies to a new
+project's journeys, carried down to a single framework feature - and `tina4-developer-*` applies the
+same acceptance-criteria-before-code rule to app features built ON Tina4.
+
 ## Independent Verification & Honest Claims — Prove It, Then Qualify It
 
 When work is produced by a subagent, a parallel agent, or a workflow — or even by a prior step in
@@ -1050,16 +1084,19 @@ holds only that language's task plans; the cross-framework work is central.
 | Path (under `tina4-documentation/plan/v3/`) | Content |
 |-----|---------|
 | `98-feature-audit.md` | Master audit tracker: audit every feature, pick the best implementation (ADR-0004), park a plan |
+| `specs/NNN-<feature>.md` | The canonical per-feature SPEC: intent, `AC-N` acceptance criteria, non-goals, tasks; each `AC-N` maps 1:1 to a fixture case (`audit-spec-coverage.py` gates it). The source of truth; code is derived |
 | `features/NNN-*.md` | One parked plan per feature (pattern + methodology + tests to write) |
-| `fixtures/*_contract.json` + `CONTRACT-MAP.md` | Executable consolidations - the SAME bytes drive all four runners; mapped feature -> fixture -> ADR -> proven/owed |
+| `fixtures/*_contract.json` + `CONTRACT-MAP.md` | Executable consolidations - the SAME bytes drive all four runners; mapped spec `AC-N` -> fixture case -> ADR -> proven/owed |
 | `DECISIONS.md` + `decisions/ADR-*.md` | ADR log; supersede explicitly, never silently |
 | `scripts/audit-contract-fixtures.py` | The proven/owed source of truth - never hand-count (MASTER-SPEC numbers are stale) |
 
-**To advance a feature:** pick from the parity backlog -> MEASURE all four (no mocks,
-on the lab) -> DECIDE + write/supersede an ADR on a contract change -> write the
-fixture + fix divergences in ALL FOUR with named +/- regressions -> flip owed->proven
-via `audit-contract-fixtures.py` + update `CONTRACT-MAP.md` -> verify at HEAD on the
-lab -> ship `feature/release<ver>` -> `v3` -> tag. Plan edits into tina4-documentation
+**To advance a feature:** pick from the parity backlog -> write/confirm its SPEC
+(intent + `AC-N` acceptance criteria + non-goals, `specs/NNN-<feature>.md`) ->
+MEASURE all four (no mocks, on the lab) -> DECIDE + write/supersede an ADR on a
+contract change -> write the fixture (one case per `AC-N`) + fix divergences in ALL
+FOUR with named +/- regressions -> flip owed->proven per criterion via
+`audit-contract-fixtures.py` + `audit-spec-coverage.py` + update `CONTRACT-MAP.md` ->
+verify at HEAD on the lab -> ship `feature/release<ver>` -> `v3` -> tag. Plan edits into tina4-documentation
 MERGE, never rebase (the subtree graft + the PDF-sync bot).
 
 **The specs** - deep detail beyond the bundled references:
