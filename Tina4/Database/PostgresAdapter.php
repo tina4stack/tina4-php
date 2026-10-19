@@ -81,6 +81,11 @@ class PostgresAdapter implements DatabaseAdapter
     /** @var int Rows affected by the most recent write (pg_affected_rows()). */
     private int $affectedRows = 0;
 
+    /** True between startTransaction() and commit()/rollback(). Gates the
+     * reconnect so a drop INSIDE an explicit transaction surfaces instead of
+     * being silently retried on a fresh link (#244). */
+    private bool $inTransaction = false;
+
     /**
      * @param string $connectionString DSN: "host=... port=... dbname=... user=... password=..."
      *                                  or URL: "pgsql://user:pass@host:port/dbname"
@@ -181,12 +186,7 @@ class PostgresAdapter implements DatabaseAdapter
             }
             $pgSql = empty($params) ? $sql : $this->convertPlaceholders($sql);
 
-            if (empty($params)) {
-                $result = @pg_query($this->db, $pgSql);
-            } else {
-                $values = $this->flattenParams($params);
-                $result = @pg_query_params($this->db, $pgSql, $values);
-            }
+            $result = $this->execWithReconnect($pgSql, $params);
 
             if ($result === false) {
                 $this->lastError = pg_last_error($this->db);
@@ -300,12 +300,7 @@ class PostgresAdapter implements DatabaseAdapter
             }
             $pgSql = empty($params) ? $sql : $this->convertPlaceholders($sql);
 
-            if (empty($params)) {
-                $result = @pg_query($this->db, $pgSql);
-            } else {
-                $values = $this->flattenParams($params);
-                $result = @pg_query_params($this->db, $pgSql, $values);
-            }
+            $result = $this->execWithReconnect($pgSql, $params);
 
             if ($result === false) {
                 // FAIL LOUD: capture the cause on error() AND raise — execute()
@@ -458,6 +453,7 @@ class PostgresAdapter implements DatabaseAdapter
             throw new DatabaseException('PostgreSQL BEGIN failed: ' . $this->lastError);
         }
         $this->lastError = null;
+        $this->inTransaction = true;
     }
 
     public function commit(): void
@@ -468,6 +464,7 @@ class PostgresAdapter implements DatabaseAdapter
             throw new DatabaseException('PostgreSQL COMMIT failed: ' . $this->lastError);
         }
         $this->lastError = null;
+        $this->inTransaction = false;
     }
 
     public function rollback(): void
@@ -478,6 +475,7 @@ class PostgresAdapter implements DatabaseAdapter
             throw new DatabaseException('PostgreSQL ROLLBACK failed: ' . $this->lastError);
         }
         $this->lastError = null;
+        $this->inTransaction = false;
     }
 
     public function error(): ?string
@@ -507,7 +505,67 @@ class PostgresAdapter implements DatabaseAdapter
     {
         if ($this->db === null) {
             $this->open();
+            return;
         }
+        // Rebuild a link the server dropped BEFORE a statement runs on it, so a
+        // prior failed reconnect does not leave every later statement failing on
+        // a dead resource (#244). Never mid-transaction - there the drop surfaces.
+        if (!$this->inTransaction && $this->connectionIsDead()) {
+            $this->reconnect();
+        }
+    }
+
+    /**
+     * True when the server has dropped the link under us (failover, idle reap,
+     * pg_terminate_backend). A caller-closed adapter has $db === null and is not
+     * "dead" - it stays closed.
+     */
+    private function connectionIsDead(): bool
+    {
+        return $this->db !== null && @pg_connection_status($this->db) === PGSQL_CONNECTION_BAD;
+    }
+
+    /**
+     * Replace a dropped link with a fresh one opened from the original connect
+     * arguments. A reconnect that itself fails leaves $db === null, so the next
+     * statement's ensureOpen() reopens and recovers once a server returns (#244,
+     * parity with the Python master #236/#242).
+     */
+    private function reconnect(): void
+    {
+        if ($this->db !== null) {
+            @pg_close($this->db);
+        }
+        $this->db = null;
+        $this->open();
+    }
+
+    /**
+     * Run a pg query, reconnecting and retrying ONCE when a dropped link - not a
+     * real SQL error - made it fail, and only when no explicit transaction owns
+     * the link. Returns the pg result, or false (a genuine error the caller
+     * reports exactly as before).
+     *
+     * @param array<int|string, mixed> $params
+     * @return \PgSql\Result|resource|false
+     */
+    private function execWithReconnect(string $pgSql, array $params)
+    {
+        $run = function () use ($pgSql, $params) {
+            if (empty($params)) {
+                return @pg_query($this->db, $pgSql);
+            }
+            return @pg_query_params($this->db, $pgSql, $this->flattenParams($params));
+        };
+        $result = $run();
+        if ($result !== false) {
+            return $result;
+        }
+        if ($this->inTransaction || !$this->connectionIsDead()) {
+            return false;
+        }
+        $this->reconnect();
+        return $run();
     }
 
     /**
