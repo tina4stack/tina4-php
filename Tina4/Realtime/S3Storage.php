@@ -30,7 +30,7 @@ class S3Storage implements StorageBackend
     public function __construct(
         ?string $endpoint = null,
         ?string $key = null,
-        ?string $secret = null,
+        #[\SensitiveParameter] ?string $secret = null,
         ?string $bucket = null,
         ?string $region = null
     ) {
