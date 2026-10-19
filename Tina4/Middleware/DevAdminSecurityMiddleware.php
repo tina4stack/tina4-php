@@ -36,7 +36,9 @@ use Tina4\Response;
  * ADR-0082: every /__dev request, reads included, also passes a Host
  * allow-list (loopback names + TINA4_HOST) against DNS rebinding. The path is
  * normalised first, so `//__dev/...` cannot slip past the prefix match.
- * The deliberately cross-origin /__feedback widget and the /ai proxy are untouched.
+ * The dev-admin routes outside /__dev (the AI proxies and service probes,
+ * DevAdmin::DEV_EXTRA_PATHS) take the same gate. The deliberately cross-origin
+ * /__feedback widget is untouched.
  * Registered only on the dev path (DevAdmin::register), so production never
  * carries the middleware at all.
  */
@@ -54,7 +56,7 @@ class DevAdminSecurityMiddleware
     public static function beforeDevAdmin(Request $request, Response $response): Response|array
     {
         $path = (string) preg_replace('#/+#', '/', (string) ($request->path ?? ''));
-        if (!str_starts_with($path, '/__dev')) {
+        if (!DevAdmin::isDevAdminPath($path)) {
             return [$request, $response];
         }
         $denial = DevAdmin::guardRequest($request);
