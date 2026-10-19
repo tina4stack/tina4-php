@@ -414,7 +414,7 @@ class Auth
      *             to match Python (tina4_python.auth.get_token) and Ruby. Existing callers
      *             passing seconds will produce tokens that live ~60x longer than intended.
      */
-    public static function getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60, ?string $algorithm = null): string
+    public static function getToken(array $payload, #[\SensitiveParameter] string|int|null $secret = null, int $expiresIn = 60, ?string $algorithm = null): string
     {
         // Back-compat: if secret is an int it was passed as expiresIn (old 2-arg form)
         if (is_int($secret)) {
@@ -467,7 +467,7 @@ class Auth
      * falsy. Callers that want the payload no longer need a separate
      * `getPayload($t)` call.
      */
-    public static function validToken(string $token, ?string $secret = null, ?string $algorithm = null): ?array
+    public static function validToken(string $token, #[\SensitiveParameter] ?string $secret = null, ?string $algorithm = null): ?array
     {
         $secret = $secret ?? (getenv('TINA4_SECRET') ?: ($_ENV['TINA4_SECRET'] ?? '')) ?: '';
         if ($secret === '') {
@@ -800,7 +800,7 @@ class Auth
      * @throws \InvalidArgumentException When $algorithm is not a supported algorithm, or when
      *   an RSA algorithm is given a secret that is not a usable PEM private key
      */
-    private static function sign(string $message, string $secret, string $algorithm): string
+    private static function sign(string $message, #[\SensitiveParameter] string $secret, string $algorithm): string
     {
         if (in_array($algorithm, self::RSA_ALGORITHMS, true)) {
             // Availability is gated in resolveAlgorithm(), the single entry point

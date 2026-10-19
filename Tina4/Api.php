@@ -1195,7 +1195,7 @@ class Api
      * @return array{0: resource, 1: int, 2: array<string,string>}
      * @throws ApiStreamError|ApiStreamTimeoutError
      */
-    private function openStreamSocket(string $url, string $method, array $headers, ?string $content, float $deadline, float $connectTimeout): array
+    private function openStreamSocket(#[\SensitiveParameter] string $url, string $method, array $headers, ?string $content, float $deadline, float $connectTimeout): array
     {
         $parts = parse_url($url);
         if (!is_array($parts) || empty($parts['host'])) {
