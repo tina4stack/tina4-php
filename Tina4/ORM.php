@@ -384,6 +384,18 @@ abstract class ORM
     /** @var bool Whether this record exists in the database */
     private bool $_exists = false;
 
+    /**
+     * @var array<string, mixed> The undeclared properties as they were read from
+     * the database. save() compares against it so that a column a typed model
+     * does not declare can come back on a load and be saved again untouched,
+     * while a value the caller assigned to it is reported rather than silently
+     * dropped.
+     */
+    private array $_hydratedDynamicProps = [];
+
+    /** @var array<string, true> "Class::property" pairs already warned about by save() */
+    private static array $undeclaredWarned = [];
+
     /** @var array<string, mixed> Relationship cache for lazy loading */
     private array $_relCache = [];
 
@@ -555,11 +567,14 @@ abstract class ORM
     public function __set(string $name, mixed $value): void
     {
         $this->_dynamicProps[$name] = $value;
-        // #165: an undeclared column set dynamically counts as a caller
-        // assignment, so an explicit null is written as NULL on INSERT rather
-        // than omitted. (Declared public properties bypass __set — their
-        // assignment is recorded in fill(); a directly-assigned no-default typed
-        // property is recovered via noDefaultColumns() in getDbData().)
+        // #165: on a model that declares no fields, an undeclared column set
+        // dynamically counts as a caller assignment, so an explicit null is
+        // written as NULL on INSERT rather than omitted. On a model that declares
+        // fields it is not a column of the model at all (ADR-0069 G2) and is never
+        // written; save() logs a warning instead (warnUndeclaredAssignments()).
+        // (Declared public properties bypass __set — their assignment is
+        // recorded in fill(); a directly-assigned no-default typed property is
+        // recovered via noDefaultColumns() in getDbData().)
         $this->_assignedFields[$name] = true;
     }
 
@@ -853,6 +868,11 @@ abstract class ORM
             return false;
         }
 
+        // A model that declares fields writes only those (ADR-0069 G2). A value
+        // assigned to an undeclared property is dropped from the write - say so,
+        // once per model property per process, rather than drop it silently.
+        $this->warnUndeclaredAssignments();
+
         $this->_relCache = [];
         $pkValue = $this->getPrimaryKeyValue();
 
@@ -1038,7 +1058,7 @@ abstract class ORM
 
         $model = new static($db);
         $model->fill($row);
-        $model->_exists = true;
+        $model->markHydrated();
         if ($include !== null) {
             $instances = [$model];
             static::eagerLoad($instances, $include, $db);
@@ -1097,7 +1117,7 @@ abstract class ORM
             $this->$prop = $value;
         }
 
-        $this->_exists = true;
+        $this->markHydrated();
         return true;
     }
 
@@ -1237,7 +1257,7 @@ abstract class ORM
         foreach ($rows as $row) {
             $model = new static($db);
             $model->fill($row);
-            $model->_exists = true;
+            $model->markHydrated();
             $models[] = $model;
         }
 
@@ -1279,7 +1299,7 @@ abstract class ORM
         foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
-            $model->_exists = true;
+            $model->markHydrated();
             $models[] = $model;
         }
 
@@ -1616,6 +1636,63 @@ abstract class ORM
     }
 
     /**
+     * Undeclared properties on a model that declares fields whose value the
+     * caller set - anything other than the value read from the database. These
+     * are the assignments getDbData() drops. Empty for a model that declares no
+     * fields (its dynamic properties resolve against the real columns).
+     *
+     * @return array<int, string>
+     */
+    private function undeclaredAssignments(): array
+    {
+        if ($this->_dynamicProps === [] || $this->declaredColumnDefinitions() === []) {
+            return [];
+        }
+        $found = [];
+        foreach ($this->_dynamicProps as $name => $value) {
+            $name = (string)$name;
+            if (!array_key_exists($name, $this->_hydratedDynamicProps)
+                || $this->_hydratedDynamicProps[$name] !== $value
+            ) {
+                $found[] = $name;
+            }
+        }
+        return $found;
+    }
+
+    /**
+     * Log a warning for each undeclared assignment save() is about to drop.
+     * Warned once per model class and property per process, so a loop of saves
+     * does not flood the log. Needs no database round trip.
+     */
+    private function warnUndeclaredAssignments(): void
+    {
+        foreach ($this->undeclaredAssignments() as $property) {
+            $key = static::class . '::' . $property;
+            if (isset(self::$undeclaredWarned[$key])) {
+                continue;
+            }
+            self::$undeclaredWarned[$key] = true;
+            Log::warning(
+                static::class . "::save() did not write undeclared property '{$property}': "
+                . static::class . ' declares its fields, so only declared public properties are saved.'
+                . " Declare \${$property} on the model if it is a column.",
+                ['table' => $this->tableName, 'property' => $property]
+            );
+        }
+    }
+
+    /**
+     * Mark this model as read from the database, recording its undeclared
+     * properties as read so save() can tell them from caller assignments.
+     */
+    private function markHydrated(): void
+    {
+        $this->_exists = true;
+        $this->_hydratedDynamicProps = $this->_dynamicProps;
+    }
+
+    /**
      * The table's real column names, for a model that declares no fields.
      * Cached per connection + model class; an empty answer (table not created
      * yet, introspection failed) is not cached, so it is retried next time.
@@ -1721,7 +1798,7 @@ abstract class ORM
         foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
-            $model->_exists = true;
+            $model->markHydrated();
             $models[] = $model;
         }
 
@@ -1750,7 +1827,7 @@ abstract class ORM
         }
         $model = new static($this->_db);
         $model->fill($row);
-        $model->_exists = true;
+        $model->markHydrated();
         if ($include !== null) {
             $instances = [$model];
             static::eagerLoad($instances, $include, $this->_db);
@@ -1788,7 +1865,7 @@ abstract class ORM
         foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
-            $model->_exists = true;
+            $model->markHydrated();
             $models[] = $model;
         }
 
@@ -1904,7 +1981,7 @@ abstract class ORM
         foreach (is_array($result) ? ($result['data'] ?? $result) : $result->records as $row) {
             $model = new static($this->_db);
             $model->fill($row);
-            $model->_exists = true;
+            $model->markHydrated();
             $models[] = $model;
         }
 
@@ -3584,7 +3661,7 @@ abstract class ORM
                 foreach ($rows as $row) {
                     $model = new $relatedClass($db);
                     $model->fill($row);
-                    $model->_exists = true;
+                    $model->markHydrated();
                     $related[] = $model;
                 }
                 $offset += $limit;
