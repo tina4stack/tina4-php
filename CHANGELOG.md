@@ -6,9 +6,14 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
-## Unreleased
+## 3.13.152 - 2026-10-20
 
 ### Fixed
+- Database: the PostgreSQL adapter reconnects after the server drops the
+  connection (failover, idle reap, pg_terminate_backend) instead of failing
+  every statement until a restart, and surfaces transaction-control failures
+  raw so the connection pool can discard a dead connection - parity with the
+  Python master (#244).
 - CLI: `--help` / `-h` on any command prints that command's usage and changes
   nothing. Before, handlers never looked for it and ran for real:
   `generate model --help` wrote a model named `--help`, `init --help` scaffolded
