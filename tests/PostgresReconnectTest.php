@@ -101,4 +101,50 @@ final class PostgresReconnectTest extends TestCase
         $this->dropTheConnection($this->backendPid($this->db));
         $this->assertSame(1, (int) $this->db->query('SELECT 1 AS one')[0]['one']);
     }
+
+    // NEGATIVE: a real SQL error is NOT a dropped link - it surfaces and must not
+    // trigger a reconnect (the backend stays the same). Guards the reconnect
+    // against swallowing or masking genuine query errors.
+    public function testARealSqlErrorSurfacesAndDoesNotReconnect(): void
+    {
+        $before = $this->backendPid($this->db);
+
+        $threw = false;
+        try {
+            $this->db->execute('INSERT INTO a_table_that_does_not_exist_244 (x) VALUES (1)');
+        } catch (\Throwable) {
+            $threw = true;
+        }
+
+        $this->assertTrue($threw, 'a real SQL error must surface, not be swallowed as a drop');
+        $this->assertSame($before, $this->backendPid($this->db), 'a SQL error must NOT trigger a reconnect');
+    }
+
+    // NEGATIVE: a drop INSIDE an explicit transaction surfaces (never silently
+    // retried on a fresh link), and the next statement after rollback recovers.
+    // A ROLLBACK that fails on the dead link must still clear the in-transaction
+    // state so recovery is not wedged.
+    public function testADropInsideATransactionSurfacesThenRecovers(): void
+    {
+        $this->db->startTransaction();
+        $this->dropTheConnection($this->backendPid($this->db));
+
+        $surfaced = false;
+        try {
+            $this->db->execute('INSERT INTO ' . self::TABLE . ' (note) VALUES (?)', ['in-txn']);
+        } catch (\Throwable) {
+            $surfaced = true;
+        }
+        $this->assertTrue($surfaced, 'a drop inside a transaction must surface, not retry on a new link');
+
+        try {
+            $this->db->rollback();
+        } catch (\Throwable) {
+            // ROLLBACK on a dead link may fail - the in-transaction flag must still clear
+        }
+
+        $this->db->execute('INSERT INTO ' . self::TABLE . ' (note) VALUES (?)', ['after-txn-drop']);
+        $rows = $this->db->query('SELECT note FROM ' . self::TABLE . " WHERE note = 'after-txn-drop'");
+        $this->assertCount(1, $rows, 'the next statement after rollback must recover');
+    }
 }
