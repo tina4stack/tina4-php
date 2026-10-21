@@ -1043,8 +1043,9 @@ if (function_exists('mysqli_report')) {
 // Compared as real paths with one separator: Windows reports the loaded file with backslashes.
 $norm = fn(string $path): string => str_replace('\\', '/', (string) realpath($path));
 $fromCopy = str_starts_with($norm((new ReflectionClass(\Tina4\Database\Database::class))->getFileName()), $norm($copy) . '/');
-echo json_encode(['leaks' => array_keys($leaks), 'seen' => array_keys($seen), 'ticks' => $ticks,
-    'adapters' => $adapters, 'outcomes' => $outcomes, 'fromCopy' => $fromCopy]);
+// On a line of its own and marked: the adapters log to stdout too (Firebird warns when ext-interbase is loaded).
+echo "\nTINA4_FLOW_RESULT " . json_encode(['leaks' => array_keys($leaks), 'seen' => array_keys($seen), 'ticks' => $ticks,
+    'adapters' => $adapters, 'outcomes' => $outcomes, 'fromCopy' => $fromCopy]) . "\n";
 CHILD;
         $file = sys_get_temp_dir() . '/tina4_flow_leak_' . bin2hex(random_bytes(4)) . '.php';
         file_put_contents($file, $child);
@@ -1078,7 +1079,7 @@ CHILD;
             @unlink($file);
         }
         $this->assertFalse($timedOut, 'the data-flow probe exceeded 120s');
-        $result = json_decode($out, true);
+        $result = preg_match('/^TINA4_FLOW_RESULT (.+)$/m', $out, $line) === 1 ? json_decode($line[1], true) : null;
         $this->assertIsArray($result, "the probe printed no result:\n" . $out . $err);
         $this->assertTrue($result['fromCopy'], 'the probe must run the ticked copy, not the original source');
         $this->assertGreaterThan(500, $result['ticks'], 'the probe must have executed the connection path');
