@@ -71,7 +71,7 @@
 # ---------------------------------------------------------------------------
 
 # -- Stage 1: composer install ----------------------------------------------
-FROM php:8.4-cli-alpine3.23 AS composer-stage
+FROM php:8.4.27-cli-alpine3.23 AS composer-stage
 WORKDIR /build
 RUN apk add --no-cache unzip git
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -88,7 +88,7 @@ COPY . .
 RUN composer dump-autoload --no-dev --optimize
 
 # -- Stage 2: lean Alpine runtime -------------------------------------------
-FROM php:8.4-cli-alpine3.23
+FROM php:8.4.27-cli-alpine3.23
 COPY LICENSE NOTICE COMMERCIAL-LICENSE.md /usr/share/licenses/tina4/
 
 WORKDIR /app
