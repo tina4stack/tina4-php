@@ -90,9 +90,9 @@ class MySQLAdapter implements DatabaseAdapter
      * @param bool|null $autoCommit Whether to auto-commit
      */
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         private readonly string $username = '',
-        private readonly string $password = '',
+        #[\SensitiveParameter] private readonly string $password = '',
         private readonly string $database = '',
         private readonly int $port = 3306,
         ?bool $autoCommit = null,
@@ -527,7 +527,7 @@ class MySQLAdapter implements DatabaseAdapter
      * MySQL's default port is 3306; the parse is otherwise the shared URL/host
      * decomposition ({@see ParsesConnectionTrait::parseUrlConnection()}).
      */
-    private function parseConnection(string $input): array
+    private function parseConnection(#[\SensitiveParameter] string $input): array
     {
         return $this->parseUrlConnection($input, 3306);
     }
@@ -545,8 +545,11 @@ class MySQLAdapter implements DatabaseAdapter
      * Only rewrite when a non-zero port is specified — if the user wrote
      * ``mysql:///db`` with no port, they almost certainly want the
      * default Unix socket path; preserve that behaviour.
+     *
+     * $host is #[\SensitiveParameter]: a connection string without "://"
+     * is taken whole as the host (ParsesConnectionTrait), password and all.
      */
-    public static function rewriteHostForTcp(string $host, ?int $port): string
+    public static function rewriteHostForTcp(#[\SensitiveParameter] string $host, ?int $port): string
     {
         if ($host === 'localhost' && $port !== null && $port > 0) {
             return '127.0.0.1';

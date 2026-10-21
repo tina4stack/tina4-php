@@ -139,9 +139,9 @@ class FirebirdAdapter implements DatabaseAdapter
      * @param bool|null $autoCommit Whether to auto-commit
      */
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         private readonly string $username = 'SYSDBA',
-        private readonly string $password = 'masterkey',
+        #[\SensitiveParameter] private readonly string $password = 'masterkey',
         ?string $charset = null,
         ?bool $autoCommit = null,
     ) {
@@ -713,7 +713,7 @@ class FirebirdAdapter implements DatabaseAdapter
      *    {@see normalizeDbIdentifier()} — accepts every sensible variant
      *    (single/double slash, drive letter, alias).
      */
-    private function parseConnection(string $input): array
+    private function parseConnection(#[\SensitiveParameter] string $input): array
     {
         return self::parseFirebirdConnection($input, $this->username, $this->password);
     }
@@ -736,7 +736,7 @@ class FirebirdAdapter implements DatabaseAdapter
      * @param string $password Fallback password when the URL omits one
      * @return array{host:string, port:int, username:string, password:string, database:string}
      */
-    public static function parseFirebirdConnection(string $input, string $username, string $password): array
+    public static function parseFirebirdConnection(#[\SensitiveParameter] string $input, string $username, #[\SensitiveParameter] string $password): array
     {
         $envOverride = \Tina4\DotEnv::getEnv('TINA4_DATABASE_FIREBIRD_PATH');
 
@@ -804,7 +804,7 @@ class FirebirdAdapter implements DatabaseAdapter
      * connection, so it is unit-testable without a live Firebird server. Shared
      * by both the native ext-interbase adapter and PdoFirebirdAdapter.
      */
-    public static function resolveCharset(string $connectionString, ?string $charsetArg = null): string
+    public static function resolveCharset(#[\SensitiveParameter] string $connectionString, ?string $charsetArg = null): string
     {
         $urlCharset = null;
         if (str_contains($connectionString, '://')) {

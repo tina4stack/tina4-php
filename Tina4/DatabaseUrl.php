@@ -108,7 +108,7 @@ class DatabaseUrl implements \JsonSerializable
      * @param string $url The database URL to parse
      * @throws \InvalidArgumentException If the URL format is invalid
      */
-    public function __construct(string $url)
+    public function __construct(#[\SensitiveParameter] string $url)
     {
         // Handle sqlite special cases — :memory: check must come first
         // `sqlite3:` is accepted input and normalises to `sqlite:`. The driver is
@@ -307,7 +307,7 @@ class DatabaseUrl implements \JsonSerializable
      * @param string $connectionString A URL, a libpq/ODBC DSN, or junk
      * @return string The same string with every credential replaced by ***
      */
-    public static function redact(string $connectionString): string
+    public static function redact(#[\SensitiveParameter] string $connectionString): string
     {
         $value = trim($connectionString);
 

@@ -122,12 +122,16 @@ trait ConnectTimeoutTrait
      *
      * @param string $engine Adapter label for the message (e.g. "PostgresAdapter").
      * @param string $target What it tried to reach, as "host:port".
+     *                       #[\SensitiveParameter]: a connection string without "://"
+     *                       is taken whole as the host, password and all, and ODBC
+     *                       passes its whole connection string. $cause too: a driver's
+     *                       message can repeat that host.
      * @param string|\Throwable|null $cause The driver's own failure, kept as the cause.
      */
     protected function throwIfConnectTimedOut(
         string $engine,
-        string $target,
-        string|\Throwable|null $cause = null
+        #[\SensitiveParameter] string $target,
+        #[\SensitiveParameter] string|\Throwable|null $cause = null
     ): void {
         $elapsed = microtime(true) - $this->connectStartedAt;
         $driverSaid = $cause instanceof \Throwable ? $cause->getMessage() : (string) $cause;

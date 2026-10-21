@@ -1899,7 +1899,7 @@ HTML;
      * @param bool|null $autoCommit Override auto-commit setting
      * @return Database\Database The created Database wrapper
      */
-    public static function createDatabase(string $url, ?bool $autoCommit = null): Database\Database
+    public static function createDatabase(#[\SensitiveParameter] string $url, ?bool $autoCommit = null): Database\Database
     {
         $db = Database\Database::create($url, $autoCommit);
         self::$database = $db;

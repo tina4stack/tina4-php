@@ -85,6 +85,9 @@ class MongoDBAdapter implements DatabaseAdapter
     /** @var array<string, string> Bound string values of the current statement, keyed by the token standing in for each */
     private array $boundValues = [];
 
+    /** Set in the constructor: promoting it would repeat the sibling adapters' signature line for line. */
+    private readonly string $password;
+
     /**
      * @param string    $connectionString  MongoDB URL, e.g. "mongodb://localhost:27017/mydb"
      * @param string    $username          Username (used if not present in URL)
@@ -92,11 +95,12 @@ class MongoDBAdapter implements DatabaseAdapter
      * @param bool|null $autoCommit        Override auto-commit setting
      */
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         private readonly string $username = '',
-        private readonly string $password = '',
+        #[\SensitiveParameter] string $password = '',
         ?bool $autoCommit = null,
     ) {
+        $this->password = $password;
         if (!extension_loaded('mongodb')) {
             throw new DatabaseDriverMissing(
                 "The mongodb PHP extension is required for MongoDB connections. "
@@ -1319,7 +1323,7 @@ class MongoDBAdapter implements DatabaseAdapter
      *
      * @return array{dsn: string, database: string, username: string, password: string}
      */
-    private function parseConnectionString(string $url): array
+    private function parseConnectionString(#[\SensitiveParameter] string $url): array
     {
         // Normalise pymongo scheme
         $url = preg_replace('/^pymongo:\/\//i', 'mongodb://', $url);

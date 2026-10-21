@@ -85,7 +85,7 @@ class GraphUrl
      * @param string $url The graph URL to parse
      * @throws \InvalidArgumentException When the scheme is not a supported graph engine
      */
-    public function __construct(string $url)
+    public function __construct(#[\SensitiveParameter] string $url)
     {
         $this->raw = $url;
         $parts = parse_url($url);

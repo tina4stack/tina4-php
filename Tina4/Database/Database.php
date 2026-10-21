@@ -148,7 +148,7 @@ class Database implements DatabaseAdapter
      * @param string $password Database password
      * @param int $pool Number of pooled connections (0 = single connection, N>0 = round-robin pool)
      */
-    public function __construct(string $url, ?bool $autoCommit = null, string $username = '', string $password = '', int $pool = 0)
+    public function __construct(#[\SensitiveParameter] string $url, ?bool $autoCommit = null, string $username = '', #[\SensitiveParameter] string $password = '', int $pool = 0)
     {
         $this->url = $url;
         $this->autoCommit = $autoCommit;
@@ -188,7 +188,7 @@ class Database implements DatabaseAdapter
      * @throws \InvalidArgumentException If the URL scheme is unsupported
      * @throws \RuntimeException If the required PHP extension is missing
      */
-    public static function create(string $url, ?bool $autoCommit = null, string $username = '', string $password = '', int $pool = 0): self
+    public static function create(#[\SensitiveParameter] string $url, ?bool $autoCommit = null, string $username = '', #[\SensitiveParameter] string $password = '', int $pool = 0): self
     {
         return new self($url, $autoCommit, $username, $password, $pool);
     }
@@ -2025,7 +2025,7 @@ class Database implements DatabaseAdapter
      * otherwise it's looked up via DotEnv. Falls back to in-memory SQLite
      * when no URL can be resolved.
      */
-    public static function getConnection(string $urlOrEnvKey = 'TINA4_DATABASE_URL', ?bool $autoCommit = null, string $username = '', string $password = '', int $pool = 0): self
+    public static function getConnection(#[\SensitiveParameter] string $urlOrEnvKey = 'TINA4_DATABASE_URL', ?bool $autoCommit = null, string $username = '', #[\SensitiveParameter] string $password = '', int $pool = 0): self
     {
         // Treat anything with a scheme separator as a URL; otherwise it's
         // an env var name to look up.
@@ -2093,7 +2093,7 @@ class Database implements DatabaseAdapter
      *
      * @param  string $url Connection URL of the database being wrapped
      */
-    private static function wrapWithCache(DatabaseAdapter $adapter, string $url): DatabaseAdapter
+    private static function wrapWithCache(DatabaseAdapter $adapter, #[\SensitiveParameter] string $url): DatabaseAdapter
     {
         $persistent = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_DB_CACHE') ?? 'false');
         $requestScoped = \Tina4\DotEnv::isTruthy(\Tina4\DotEnv::getEnv('TINA4_AUTO_CACHING') ?? 'false');
@@ -2185,7 +2185,7 @@ class Database implements DatabaseAdapter
      *
      * @throws \RuntimeException When neither ext-pgsql nor pdo_pgsql is present.
      */
-    private static function makePostgres(string $url, ?bool $autoCommit, string $username, string $password): DatabaseAdapter
+    private static function makePostgres(#[\SensitiveParameter] string $url, ?bool $autoCommit, string $username, #[\SensitiveParameter] string $password): DatabaseAdapter
     {
         if (function_exists('pg_connect')) {
             return new PostgresAdapter($url, $autoCommit, username: $username, password: $password);
@@ -2217,7 +2217,7 @@ class Database implements DatabaseAdapter
      *
      * @throws \RuntimeException When the requested — or the only remaining — driver is unavailable.
      */
-    private static function makeFirebird(string $url, string $username, string $password, ?bool $autoCommit): DatabaseAdapter
+    private static function makeFirebird(#[\SensitiveParameter] string $url, string $username, #[\SensitiveParameter] string $password, ?bool $autoCommit): DatabaseAdapter
     {
         $hasInterbase = function_exists('ibase_connect') || function_exists('fbird_connect');
         // Guard the PDO class: it can be absent (e.g. under `php -n`, or a build
@@ -2282,7 +2282,7 @@ class Database implements DatabaseAdapter
      * Returns 'pdo', 'interbase', or '' (auto). `ibase` is accepted as a synonym
      * for 'interbase'.
      */
-    private static function firebirdDriverPreference(string $url): string
+    private static function firebirdDriverPreference(#[\SensitiveParameter] string $url): string
     {
         $raw = '';
         if (str_contains($url, '://')) {
@@ -2312,7 +2312,7 @@ class Database implements DatabaseAdapter
      * @throws \InvalidArgumentException If the URL scheme is unsupported
      * @throws \RuntimeException If the required PHP extension is missing
      */
-    private static function createAdapter(string $url, ?bool $autoCommit = null, string $username = '', string $password = ''): DatabaseAdapter
+    private static function createAdapter(#[\SensitiveParameter] string $url, ?bool $autoCommit = null, string $username = '', #[\SensitiveParameter] string $password = ''): DatabaseAdapter
     {
         // `sqlite3:` is a documented alias for `sqlite:`. Normalise it FIRST:
         // the guards below all test `sqlite:`, which is FALSE for `sqlite3:`,
