@@ -659,10 +659,10 @@ class DatabaseCredentialLeakTest extends TestCase
      * payload would put the password on disk. This test is what keeps that
      * true, so the boundary is enforced rather than merely documented.
      *
-     * (print_r on an EXCEPTION also leaks, because PHP stores constructor
-     * arguments in the stack trace. Not reachable through Tina4: both
-     * getTrace() consumers - ErrorOverlay.php:67 and DevAdmin.php:3895 - read
-     * only file/line/class/type/function and never touch args. Verified.)
+     * (A stack trace also carries arguments, and App's uncaught-exception
+     * handler logs getTraceAsString(). Covered separately: the connection
+     * path marks its secrets #[\SensitiveParameter] - see
+     * testEveryConnectionSecretParameterIsMarkedSensitive.)
      */
     public function testNoFrameworkCodeSerializesOrVarExportsADatabaseUrl(): void
     {
@@ -780,5 +780,352 @@ class DatabaseCredentialLeakTest extends TestCase
             @unlink($dir . '/.env');
             @rmdir($dir);
         }
+    }
+
+
+    /**
+     * A stack trace shows each frame's string arguments. PHP's built-in
+     * defaults (no php.ini - the official Docker image ships none) print the
+     * first 15 characters of each, so `Database::create('postgres://u:Zq...')`
+     * gave away the start of the password whenever the user name was short,
+     * and a password passed on its own (TINA4_DATABASE_PASSWORD) appeared
+     * whole. App's uncaught-exception handler logs getTraceAsString() to
+     * logs/ and the dev error tracker, so this reached disk.
+     *
+     * Run in a child PHP with argument capture forced on and no length cap,
+     * so the result does not depend on this machine's php.ini, and so ANY
+     * frame that still carries the secret is caught, not only the first 15
+     * characters of it.
+     */
+    public function testAConnectionFailureTraceDoesNotCarryThePassword(): void
+    {
+        $secret = 'Zq9TraceSecret';
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $script = '<?php require ' . var_export($autoload, true) . ';'
+            . '$cases = ['
+            . '  ["postgres://u:' . $secret . '@127.0.0.1:1/app", "", ""],'
+            . '  ["mysql://u:' . $secret . '@127.0.0.1:1/app", "", ""],'
+            . '  ["mssql://sa:' . $secret . '@127.0.0.1:1/app", "", ""],'
+            . '  ["firebird://u:' . $secret . '@127.0.0.1:1//db.fdb", "", ""],'
+            . '  ["odbc:///DSN=nosuch;UID=u;PWD=' . $secret . '", "", ""],'
+            . '  ["nosuchengine://u:' . $secret . '@127.0.0.1/app", "", ""],'
+            . '  ["postgres://127.0.0.1:1/app", "u", "' . $secret . '"],'
+            . '];'
+            . 'foreach ($cases as [$url, $user, $pass]) {'
+            . '  try { \Tina4\Database\Database::create($url, null, $user, $pass); echo "connected?\n"; }'
+            . '  catch (\Throwable $e) { echo $e->getTraceAsString(), "\n"; }'
+            . '  try { \Tina4\App::createDatabase($url); } catch (\Throwable $e) { echo $e->getTraceAsString(), "\n"; }'
+            . '}'
+            // Graph databases take the same secrets: a missing driver, or a bad
+            // scheme, throws beneath GraphDatabase::create() and GraphUrl.
+            . 'foreach (["bolt", "ultipa", "arangodb", "nosuchgraph"] as $scheme) {'
+            . '  foreach ([[$scheme . "://u:' . $secret . '@127.0.0.1:1/g", ""], [$scheme . "://127.0.0.1:1/g", "' . $secret . '"]] as [$url, $pass]) {'
+            . '    try { \Tina4\Graph\GraphDatabase::create($url, "u", $pass); echo "connected?\n"; }'
+            . '    catch (\Throwable $e) { for ($t = $e; $t; $t = $t->getPrevious()) { echo $t->getTraceAsString(), "\n"; } }'
+            . '  }'
+            . '}'
+            // And the MQTT broker: a refused connection throws from inside the constructor.
+            . 'foreach ([["mqtt://u:' . $secret . '@127.0.0.1:1", null, null], ["mqtt://127.0.0.1:1", "u", "' . $secret . '"]] as [$url, $user, $pass]) {'
+            . '  try { new \Tina4\Mqtt($url, null, $user, $pass, null, null, null, true, null, null, 0, false, 1.0); echo "connected?\n"; }'
+            . '  catch (\Throwable $e) { echo $e->getTraceAsString(), "\n"; }'
+            . '}'
+            . 'try { new \Tina4\Messenger("127.0.0.1", 1, "u", "' . $secret . '", encryption: "bogus"); } catch (\Throwable $e) { echo $e->getTraceAsString(), "\n"; }';
+        $file = sys_get_temp_dir() . '/tina4_trace_leak_' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($file, $script);
+        try {
+            $cmd = [PHP_BINARY, '-d', 'zend.exception_ignore_args=0',
+                '-d', 'zend.exception_string_param_max_len=1000000', $file];
+            $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            $this->assertIsResource($proc);
+            $out = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+        } finally {
+            @unlink($file);
+        }
+
+        $this->assertStringContainsString('Database::create(', $out, 'the traces must actually have been printed: ' . $out);
+        $this->assertStringContainsString('Tina4\\Mqtt->__construct(', $out, 'the MQTT traces must actually have been printed: ' . $out);
+        $this->assertStringContainsString('GraphDatabase::create(', $out, 'the graph traces must actually have been printed: ' . $out);
+        $this->assertStringContainsString('SensitiveParameterValue', $out, 'frames must still be shown, with the secret replaced');
+        $this->assertStringNotContainsString(substr($secret, 0, 3), $out, "a stack trace carries the database password:\n" . $out);
+    }
+
+    /**
+     * The property behind the test above, so a new adapter or factory cannot
+     * reopen it: every parameter on the connection path that receives a
+     * connection URL, DSN or password is marked #[\SensitiveParameter].
+     *
+     * This one goes by parameter NAME, so it also covers code no test below
+     * can execute. It cannot see a secret under any other name; the data-flow
+     * test after it can.
+     */
+    public function testEveryConnectionSecretParameterIsMarkedSensitive(): void
+    {
+        $secretNames = ['url', 'password', 'connectionString', 'dsn', 'urlOrEnvKey', 'input'];
+        $classes = [\Tina4\DatabaseUrl::class];
+        foreach (['Database', 'Graph'] as $dir) {
+            foreach (glob(__DIR__ . '/../Tina4/' . $dir . '/*.php') as $path) {
+                $class = 'Tina4\\' . $dir . '\\' . basename($path, '.php');
+                if (class_exists($class) || trait_exists($class)) {
+                    $classes[] = $class;
+                }
+            }
+        }
+        $methods = [new \ReflectionMethod(\Tina4\App::class, 'createDatabase')];
+        foreach ($classes as $class) {
+            foreach ((new \ReflectionClass($class))->getMethods() as $method) {
+                if ($method->getDeclaringClass()->getName() === $class) {
+                    $methods[] = $method;
+                }
+            }
+        }
+
+        $checked = 0;
+        $unmarked = [];
+        foreach ($methods as $method) {
+            foreach ($method->getParameters() as $param) {
+                if (!in_array($param->getName(), $secretNames, true)) {
+                    continue;
+                }
+                $type = $param->getType();
+                if (!$type instanceof \ReflectionNamedType || $type->getName() !== 'string') {
+                    continue;
+                }
+                $checked++;
+                if ($param->getAttributes(\SensitiveParameter::class) === []) {
+                    $unmarked[] = $method->class . '::' . $method->getName() . '($' . $param->getName() . ')';
+                }
+            }
+        }
+
+        $this->assertGreaterThan(20, $checked, 'the scan must reach the connection path');
+        $this->assertSame([], $unmarked, "these parameters show a credential in any stack trace:\n  - " . implode("\n  - ", $unmarked));
+    }
+
+    /**
+     * The same property by data flow rather than by name: run the real
+     * connection path of the factory, App::createDatabase and every driver
+     * adapter with a sentinel password, and at EVERY statement executed in
+     * Tina4 code look at every frame on the stack. Any frame whose arguments
+     * still hold the password - whatever the parameter is called, however
+     * deep - would print it if anything beneath it threw.
+     *
+     * Tina4's sources are copied with declare(ticks=1) added and autoloaded
+     * from the copy in a child PHP, so the tick function runs after each
+     * statement. Adapters whose driver is not installed are entered through
+     * open() on an instance built without its constructor (the constructor
+     * is where the driver check lives); the URL is parsed before the driver
+     * is first touched, so the parsing helpers are still reached.
+     */
+    public function testNoFrameOnTheConnectionPathHoldsThePasswordUnmarked(): void
+    {
+        $child = <<<'CHILD'
+<?php
+[, $src, $autoload, $secret] = $argv;
+$copy = sys_get_temp_dir() . '/tina4_ticks_' . bin2hex(random_bytes(4));
+$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($src, FilesystemIterator::SKIP_DOTS));
+foreach ($files as $f) {
+    if ($f->getExtension() !== 'php') { continue; }
+    $code = file_get_contents($f->getPathname());
+    $pos = preg_match('/declare\s*\(\s*strict_types\s*=\s*1\s*\)\s*;/', $code, $m, PREG_OFFSET_CAPTURE)
+        ? $m[0][1] + strlen($m[0][0]) : strpos($code, '<?php') + 5;
+    $code = substr($code, 0, $pos) . ' declare(ticks=1); ' . substr($code, $pos);
+    // And sample on entry to every function body, so a frame is checked even
+    // when it completes no statement of its own (a one-line `return ...;`).
+    $out = '';
+    $state = 0; $depth = 0;
+    foreach (PhpToken::tokenize($code) as $t) {
+        $out .= $t->text;
+        if ($t->is(T_FUNCTION)) { $state = 1; continue; }
+        if ($state === 1 && $t->text === '(') { $state = 2; $depth = 1; continue; }
+        if ($state === 2) {
+            if ($t->text === '(') { $depth++; } elseif ($t->text === ')' && --$depth === 0) { $state = 3; }
+            continue;
+        }
+        if ($state === 3) {
+            if ($t->text === '{') { $out .= ' \__tina4_flow_probe(); '; $state = 0; }
+            elseif ($t->text === ';') { $state = 0; }
+        }
+    }
+    $dest = $copy . substr($f->getPathname(), strlen($src));
+    @mkdir(dirname($dest), 0777, true);
+    file_put_contents($dest, $out);
+}
+require $autoload;
+spl_autoload_register(function ($class) use ($copy) {
+    if (str_starts_with($class, 'Tina4\\')) {
+        $path = $copy . '/' . str_replace('\\', '/', substr($class, 6)) . '.php';
+        if (is_file($path)) { require $path; }
+    }
+}, true, true);
+
+$leaks = []; $seen = []; $ticks = 0;
+function __tina4_flow_probe(): void
+{
+    global $secret, $leaks, $seen, $ticks;
+    $ticks++;
+    foreach (debug_backtrace() as $frame) {
+        $fn = ($frame['class'] ?? '') . ($frame['type'] ?? '') . $frame['function'];
+        $seen[$fn] = true;
+        foreach ($frame['args'] ?? [] as $i => $arg) {
+            if (is_string($arg) && str_contains($arg, $secret)) {
+                $leaks[$fn . ' (argument ' . ($i + 1) . ')'] = true;
+            }
+        }
+    }
+}
+register_tick_function('__tina4_flow_probe');
+
+$urls = [];
+foreach (['postgres', 'mysql', 'mssql', 'firebird', 'mongodb', 'nosuchengine'] as $scheme) {
+    $urls[] = $scheme . '://u:' . $secret . '@127.0.0.1:1/app';
+}
+$urls[] = 'odbc:///DSN=nosuch;UID=u;PWD=' . $secret;
+$urls[] = 'u:' . $secret . '@127.0.0.1:1/app';
+foreach ($urls as $url) {
+    try { \Tina4\Database\Database::create($url); } catch (\Throwable $e) {}
+    try { \Tina4\App::createDatabase($url); } catch (\Throwable $e) {}
+}
+try { \Tina4\Database\Database::create('postgres://127.0.0.1:1/app', null, 'u', $secret); } catch (\Throwable $e) {}
+
+$adapters = []; $outcomes = [];
+foreach (glob($copy . '/Database/*Adapter.php') as $path) {
+    $rc = new ReflectionClass('Tina4\\Database\\' . basename($path, '.php'));
+    if ($rc->isInstantiable() && $rc->hasProperty('connectionString')) {
+        $adapters[] = $rc->getName();
+        $shapes = [
+            ['x://u:' . $secret . '@127.0.0.1:1/app', 'u', ''],
+            ['DSN=nosuch;UID=u;PWD=' . $secret, 'u', ''],
+            ['127.0.0.1:1/app', 'u', $secret],
+        ];
+        foreach ($shapes as [$cs, $user, $pass]) {
+            $adapter = $rc->newInstanceWithoutConstructor();
+            (function () use ($cs, $user, $pass) {
+                $this->connectionString = $cs;
+                if (property_exists($this, 'username')) { $this->username = $user; }
+                if (property_exists($this, 'password')) { $this->password = $pass; }
+                // What the constructor would have set, short of its driver check.
+                foreach ((new ReflectionMethod($this, '__construct'))->getParameters() as $param) {
+                    if ($param->isPromoted() && $param->isDefaultValueAvailable()) {
+                        $prop = new ReflectionProperty($this, $param->getName());
+                        if (!$prop->isInitialized($this)) { $prop->setValue($this, $param->getDefaultValue()); }
+                    }
+                }
+                foreach ((new ReflectionObject($this))->getProperties() as $prop) {
+                    if (!$prop->isStatic() && !$prop->isInitialized($this) && $prop->getType()?->allowsNull()) {
+                        $prop->setValue($this, null);
+                    }
+                }
+            })->call($adapter);
+            $before = $ticks;
+            $outcome = 'returned';
+            try { $adapter->open(); } catch (\Throwable $e) { $outcome = get_class($e) . (get_class($e) === "Error" ? ": " . $e->getMessage() : ""); }
+            $outcomes[$rc->getName()][] = $ticks > $before ? 'reached' : $outcome;
+        }
+    }
+}
+// With mysqli's exceptions off, a failed connect reports through connect_error, a string
+// that names the host -- the whole connection string when it has no "://".
+if (function_exists('mysqli_report')) {
+    mysqli_report(MYSQLI_REPORT_OFF);
+    try { new \Tina4\Database\MySQLAdapter('DSN=nosuch;UID=u;PWD=' . $secret, 'u', ''); } catch (\Throwable $e) {}
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+}
+$fromCopy = str_starts_with((new ReflectionClass(\Tina4\Database\Database::class))->getFileName(), $copy);
+exec('rm -rf ' . escapeshellarg($copy));
+echo json_encode(['leaks' => array_keys($leaks), 'seen' => array_keys($seen), 'ticks' => $ticks,
+    'adapters' => $adapters, 'outcomes' => $outcomes, 'fromCopy' => $fromCopy]);
+CHILD;
+        $file = sys_get_temp_dir() . '/tina4_flow_leak_' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($file, $child);
+        try {
+            $cmd = [PHP_BINARY, '-d', 'zend.exception_ignore_args=0',
+                '-d', 'zend.exception_string_param_max_len=1000000', $file,
+                realpath(__DIR__ . '/../Tina4'), realpath(__DIR__ . '/../vendor/autoload.php'), 'Zq9FlowSecret'];
+            $proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            $this->assertIsResource($proc);
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            $out = '';
+            $err = '';
+            $deadline = microtime(true) + 120;
+            while (!feof($pipes[1]) && microtime(true) < $deadline) {
+                $r = [$pipes[1], $pipes[2]];
+                $w = $x = null;
+                if (stream_select($r, $w, $x, 1) > 0) {
+                    $out .= (string) stream_get_contents($pipes[1]);
+                    $err .= (string) stream_get_contents($pipes[2]);
+                }
+            }
+            $timedOut = !feof($pipes[1]);
+            if ($timedOut) {
+                proc_terminate($proc, 9);
+            }
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+        } finally {
+            @unlink($file);
+        }
+        $this->assertFalse($timedOut, 'the data-flow probe exceeded 120s');
+        $result = json_decode($out, true);
+        $this->assertIsArray($result, "the probe printed no result:\n" . $out . $err);
+        $this->assertTrue($result['fromCopy'], 'the probe must run the ticked copy, not the original source');
+        $this->assertGreaterThan(500, $result['ticks'], 'the probe must have executed the connection path');
+
+        // Reach: the factory, App, and every adapter's own open() and URL
+        // parsing ran, so an empty leak list means something.
+        $this->assertContains('Tina4\Database\Database::create', $result['seen']);
+        $this->assertContains('Tina4\App::createDatabase', $result['seen']);
+        $this->assertGreaterThanOrEqual(7, count($result['adapters']), 'every driver adapter must be probed');
+        // An adapter either ran Tina4 code with the secret in hand, or refused
+        // at its driver check before the connection string reached any frame.
+        foreach ($result['adapters'] as $adapter) {
+            foreach ($result['outcomes'][$adapter] as $outcome) {
+                $this->assertContains($outcome, ['reached', 'Tina4\Database\DatabaseDriverMissing'],
+                    "$adapter's connect path was neither reached nor refused for a missing driver");
+            }
+        }
+        foreach (['MySQLAdapter->parseConnection', 'MSSQLAdapter->parseConnection',
+            'FirebirdAdapter->parseConnection', 'PdoFirebirdAdapter->parseConnection',
+            'MySQLAdapter->parseUrlConnection', 'PostgresAdapter->buildDsn', 'PostgresAdapter::quoteDsnValue'] as $fn) {
+            $this->assertContains('Tina4\Database\\' . $fn, $result['seen'], "$fn was not reached");
+        }
+
+        $this->assertSame([], $result['leaks'], "these frames hold the database password unmarked and would print it in a stack trace:\n  - "
+            . implode("\n  - ", $result['leaks']));
+    }
+
+
+    /**
+     * MQTT and mail take secrets the same way, so the same rule holds. Named
+     * explicitly: these classes also have many string parameters that are not
+     * secrets, so a scan by name would be noise.
+     */
+    public function testMqttAndMessengerSecretParametersAreMarkedSensitive(): void
+    {
+        $expected = [
+            [\Tina4\Mqtt::class, '__construct', ['url', 'password']],
+            [\Tina4\Mqtt::class, 'parseUrl', ['url']],
+            [\Tina4\Mqtt::class, 'percentDecode', ['value']],
+            [\Tina4\Mqtt::class, 'mqttString', ['value']],
+            [\Tina4\Messenger::class, '__construct', ['password', 'imapPassword']],
+        ];
+        $unmarked = [];
+        foreach ($expected as [$class, $method, $params]) {
+            $byName = [];
+            foreach ((new \ReflectionMethod($class, $method))->getParameters() as $param) {
+                $byName[$param->getName()] = $param;
+            }
+            foreach ($params as $name) {
+                $this->assertArrayHasKey($name, $byName, "$class::$method has no \$$name");
+                if ($byName[$name]->getAttributes(\SensitiveParameter::class) === []) {
+                    $unmarked[] = "$class::$method(\$$name)";
+                }
+            }
+        }
+        $this->assertSame([], $unmarked, "these parameters show a credential in any stack trace:\n  - " . implode("\n  - ", $unmarked));
     }
 }

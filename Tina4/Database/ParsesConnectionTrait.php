@@ -52,7 +52,7 @@ trait ParsesConnectionTrait
      * @param int    $defaultPort The engine's default port when the URL omits one
      * @return array{host:string, port:int, username:string, password:string, database:string}
      */
-    private function parseUrlConnection(string $input, int $defaultPort): array
+    private function parseUrlConnection(#[\SensitiveParameter] string $input, int $defaultPort): array
     {
         if (str_contains($input, '://')) {
             $parts = parse_url($input);

@@ -85,9 +85,9 @@ class MSSQLAdapter implements DatabaseAdapter
      * @param bool|null $autoCommit Whether to auto-commit
      */
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         private readonly string $username = '',
-        private readonly string $password = '',
+        #[\SensitiveParameter] private readonly string $password = '',
         private readonly string $database = '',
         private readonly int $port = 1433,
         ?bool $autoCommit = null,
@@ -595,7 +595,7 @@ class MSSQLAdapter implements DatabaseAdapter
      * MSSQL's default port is 1433; the parse is otherwise the shared URL/host
      * decomposition ({@see ParsesConnectionTrait::parseUrlConnection()}).
      */
-    private function parseConnection(string $input): array
+    private function parseConnection(#[\SensitiveParameter] string $input): array
     {
         return $this->parseUrlConnection($input, 1433);
     }

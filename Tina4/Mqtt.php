@@ -147,10 +147,10 @@ final class Mqtt
      * @throws MqttError                 on a connection / handshake failure (when $connect is true)
      */
     public function __construct(
-        ?string $url = null,
+        #[\SensitiveParameter] ?string $url = null,
         ?string $clientId = null,
         ?string $username = null,
-        ?string $password = null,
+        #[\SensitiveParameter] ?string $password = null,
         ?string $caFile = null,
         ?bool $tlsVerify = null,
         ?int $keepalive = null,
@@ -224,7 +224,7 @@ final class Mqtt
      * @return array{host: string, port: int, tls: bool, username: ?string, password: ?string}
      * @throws \InvalidArgumentException on an empty url, an unsupported scheme, or a malformed host/port
      */
-    public static function parseUrl(string $url): array
+    public static function parseUrl(#[\SensitiveParameter] string $url): array
     {
         $raw = trim($url);
         // Every error below names the url; a url may carry a password.
@@ -311,7 +311,7 @@ final class Mqtt
      * @param string $value the raw (still-encoded) userinfo component
      * @return string the decoded value
      */
-    private static function percentDecode(string $value): string
+    private static function percentDecode(#[\SensitiveParameter] string $value): string
     {
         return rawurldecode($value);
     }
@@ -917,7 +917,7 @@ final class Mqtt
      * @return string the length-prefixed bytes
      * @throws \InvalidArgumentException when the string exceeds 65535 bytes
      */
-    private static function mqttString(string $value): string
+    private static function mqttString(#[\SensitiveParameter] string $value): string
     {
         if (strlen($value) > 0xFFFF) {
             throw new \InvalidArgumentException('MQTT string is longer than 65535 bytes');

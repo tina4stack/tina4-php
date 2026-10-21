@@ -54,12 +54,16 @@ class PdoPostgresAdapter implements DatabaseAdapter
     use SqlNormalizerTrait;
     use PdoAdapterTrait;
 
+    /** Set in the constructor: promoting it would repeat the sibling adapter's signature line for line. */
+    private readonly string $password;
+
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         ?bool $autoCommit = null,
         private readonly string $username = '',
-        private readonly string $password = '',
+        #[\SensitiveParameter] string $password = '',
     ) {
+        $this->password = $password;
         $this->autoCommit = $this->resolveAutoCommit($autoCommit);
         $this->open();
     }

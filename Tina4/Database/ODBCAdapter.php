@@ -72,9 +72,9 @@ class ODBCAdapter implements DatabaseAdapter
      * @param bool|null $autoCommit   Whether to auto-commit (default based on env TINA4_AUTOCOMMIT)
      */
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         private readonly string $username = '',
-        private readonly string $password = '',
+        #[\SensitiveParameter] private readonly string $password = '',
         ?bool $autoCommit = null,
     ) {
         $envAutoCommit = \Tina4\DotEnv::getEnv('TINA4_AUTOCOMMIT');

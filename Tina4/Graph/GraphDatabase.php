@@ -74,7 +74,7 @@ class GraphDatabase
      * @throws \InvalidArgumentException When the URL scheme is not a graph engine
      * @throws GraphError When no adapter exists for the engine, or its driver is not installed
      */
-    public static function create(string $url, string $username = '', string $password = ''): GraphAdapter
+    public static function create(#[\SensitiveParameter] string $url, string $username = '', #[\SensitiveParameter] string $password = ''): GraphAdapter
     {
         $graphUrl = new GraphUrl($url);
 

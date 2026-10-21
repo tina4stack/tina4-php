@@ -56,7 +56,7 @@ class ArangoGraphAdapter extends GraphAdapter
      * @param string $username Fallback username when the URL omits one
      * @param string $password Fallback password when the URL omits one
      */
-    public function __construct(GraphUrl $graphUrl, string $username = '', string $password = '')
+    public function __construct(GraphUrl $graphUrl, string $username = '', #[\SensitiveParameter] string $password = '')
     {
         $this->url = $graphUrl;
 

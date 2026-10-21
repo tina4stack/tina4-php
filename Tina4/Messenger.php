@@ -129,7 +129,7 @@ class Messenger
         ?string $host = null,
         ?int $port = null,
         ?string $username = null,
-        ?string $password = null,
+        #[\SensitiveParameter] ?string $password = null,
         ?string $fromAddress = null,
         ?string $fromName = null,
         ?string $encryption = null,
@@ -137,7 +137,7 @@ class Messenger
         ?string $imapHost = null,
         ?int $imapPort = null,
         ?string $imapUsername = null,
-        ?string $imapPassword = null,
+        #[\SensitiveParameter] ?string $imapPassword = null,
         ?string $imapEncryption = null,
         ?int $timeout = null,
     ) {

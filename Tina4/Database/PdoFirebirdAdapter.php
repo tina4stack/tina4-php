@@ -74,9 +74,9 @@ class PdoFirebirdAdapter implements DatabaseAdapter
     private string $charset;
 
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         private readonly string $username = 'SYSDBA',
-        private readonly string $password = 'masterkey',
+        #[\SensitiveParameter] private readonly string $password = 'masterkey',
         ?string $charset = null,
         ?bool $autoCommit = null,
     ) {
@@ -331,7 +331,7 @@ class PdoFirebirdAdapter implements DatabaseAdapter
      *
      * @return array{host: string, port: int, username: string, password: string, database: string}
      */
-    private function parseConnection(string $input): array
+    private function parseConnection(#[\SensitiveParameter] string $input): array
     {
         return FirebirdAdapter::parseFirebirdConnection($input, $this->username, $this->password);
     }
