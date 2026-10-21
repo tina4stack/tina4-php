@@ -10,6 +10,7 @@ Even if the skill text is not currently loaded, these are non-negotiable:
 - Plan-driven: track work in `plan/<task>.md` (Scope / Parity / Tests / Bugs / Commits).
 - Verify before claiming: re-run the FULL suite green yourself on CI or the lab at the exact HEAD — never trust an unrun green.
 - Dashboard reporting: status as tables, terse.
+- Stay on skill: check every move against this floor as you work; the moment you - or work you are reviewing - drift, warn in one line (name the rule + the correction) and steer back the same turn. Warn, do not block.
 
 The full discipline lives in `.claude/skills/tina4-maintainer/SKILL.md`; this block is the always-on floor.
 
