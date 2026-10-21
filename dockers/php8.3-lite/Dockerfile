@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 php:8.3-cli
+FROM --platform=linux/amd64 php:8.3.36-cli
 
 RUN apt-get update \
     && apt-get install -y apt-transport-https gnupg2 libpng-dev libzip-dev nano unzip unixodbc  \
