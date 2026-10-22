@@ -66,6 +66,17 @@ trait PdoAdapterTrait
     /** @var int Rows affected by the most recent write (PDOStatement::rowCount()). */
     private int $affectedRows = 0;
 
+    /**
+     * True only between startTransaction() and its commit()/rollback(). It gates
+     * the dropped-link reconnect: a statement that fails on a dead link is
+     * retried on a fresh one ONLY outside an explicit transaction, because a
+     * half-applied transaction must never be silently replayed (#245, parity
+     * with PostgresAdapter #319 / the Python master #236/#242). commit() and
+     * rollback() clear it in a `finally` so a ROLLBACK that itself fails on the
+     * dead link still lets the next statement recover.
+     */
+    private bool $inExplicitTransaction = false;
+
     /** Human-readable engine name for error messages (e.g. "SQLite (PDO)"). */
     abstract protected function engineLabel(): string;
 
@@ -172,6 +183,52 @@ trait PdoAdapterTrait
     }
 
     /**
+     * Whether a PDOException means the SERVER dropped the link (failover, idle
+     * reap, pg_terminate_backend) rather than a genuine SQL error. Default
+     * false: SQLite opens a local file and never loses a network link, so it
+     * never reconnects. Network engines (PdoPostgresAdapter) override this.
+     */
+    protected function connectionWasLost(\PDOException $exception): bool
+    {
+        return false;
+    }
+
+    /**
+     * Replace a dropped link with a fresh one. A reopen that itself fails throws
+     * and leaves $pdo null, so the next statement's ensureOpen() reopens and
+     * recovers once a server returns (#245, parity with PostgresAdapter #319).
+     */
+    private function reconnect(): void
+    {
+        $this->pdo = null;
+        $this->open();
+    }
+
+    /**
+     * Run a prepared-statement closure, reconnecting and retrying it ONCE when a
+     * dropped link - not a real SQL error - made it throw, and only when no
+     * explicit transaction owns the link. A genuine SQL error, or a drop inside
+     * a transaction, propagates unchanged to the caller's existing handling. The
+     * closure reads $this->pdo at call time, so the retry runs on the fresh link.
+     *
+     * @template T
+     * @param callable():T $run
+     * @return T
+     */
+    private function runWithReconnect(callable $run): mixed
+    {
+        try {
+            return $run();
+        } catch (\PDOException $exception) {
+            if ($this->inExplicitTransaction || !$this->connectionWasLost($exception)) {
+                throw $exception;
+            }
+            $this->reconnect();
+            return $run();
+        }
+    }
+
+    /**
      * Run a query and return coerced associative rows.
      *
      * Mirrors the native adapters' query() contract: on a driver error it
@@ -185,35 +242,37 @@ trait PdoAdapterTrait
         $this->lastError = null;
 
         try {
-            if (!empty($params)) {
-                // PDO speaks ? positionally; the ORM/QueryBuilder may emit
-                // :named — translate to ? and reorder params, exactly as the
-                // native adapters do.
-                [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
-            }
-            $params = $this->normalizeParams(array_values($params));
+            return $this->runWithReconnect(function () use ($sql, $params): array {
+                if (!empty($params)) {
+                    // PDO speaks ? positionally; the ORM/QueryBuilder may emit
+                    // :named — translate to ? and reorder params, exactly as the
+                    // native adapters do.
+                    [$sql, $params] = \Tina4\SQLTranslator::namedToPositional($sql, $params);
+                }
+                $params = $this->normalizeParams(array_values($params));
 
-            $stmt = $this->pdo->prepare($sql);
-            $this->bindValues($stmt, $params);
-            $stmt->execute();
+                $stmt = $this->pdo->prepare($sql);
+                $this->bindValues($stmt, $params);
+                $stmt->execute();
 
-            $columnCount = $stmt->columnCount();
-            if ($columnCount === 0) {
-                // Non-result statement (DDL / DML without RETURNING).
-                return [];
-            }
+                $columnCount = $stmt->columnCount();
+                if ($columnCount === 0) {
+                    // Non-result statement (DDL / DML without RETURNING).
+                    return [];
+                }
 
-            // Capture column metadata BEFORE fetching so per-engine coercion
-            // (PG native_type casters, Firebird BLOB/CHAR handling) never
-            // depends on the cursor still being open.
-            $meta = [];
-            for ($i = 0; $i < $columnCount; $i++) {
-                $meta[] = $stmt->getColumnMeta($i) ?: [];
-            }
+                // Capture column metadata BEFORE fetching so per-engine coercion
+                // (PG native_type casters, Firebird BLOB/CHAR handling) never
+                // depends on the cursor still being open.
+                $meta = [];
+                for ($i = 0; $i < $columnCount; $i++) {
+                    $meta[] = $stmt->getColumnMeta($i) ?: [];
+                }
 
-            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-            return $this->coerceRows($rows, $meta);
+                return $this->coerceRows($rows, $meta);
+            });
         } catch (\PDOException $e) {
             $this->lastError = $e->getMessage();
             return [];
@@ -280,35 +339,37 @@ trait PdoAdapterTrait
         $this->lastError = null;
 
         try {
-            // Per-engine DDL translation on the way in (identity by default;
-            // PdoFirebirdAdapter maps SQLite-canonical DDL to Firebird dialect)
-            // so a generated migration or ORM::createTable() statement applies.
-            $execSql = $this->translateDdl($sql);
-            if (!empty($params)) {
-                [$execSql, $params] = \Tina4\SQLTranslator::namedToPositional($execSql, $params);
-            }
-            $params = $this->normalizeParams(array_values($params));
-
-            $stmt = $this->pdo->prepare($execSql);
-            $this->bindValues($stmt, $params);
-            $stmt->execute();
-            // rowCount() is the canonical PDO affected-row count for a write.
-            $this->affectedRows = $stmt->rowCount();
-
-            if ($this->hasReturning($execSql)) {
-                // RETURNING row carries the new id (PostgreSQL/Firebird).
-                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-                if (is_array($row) && $row !== []) {
-                    $first = reset($row);
-                    if ($first !== false) {
-                        $this->lastId = $this->normalizeReturnedId($first);
-                    }
+            return $this->runWithReconnect(function () use ($sql, $params): bool {
+                // Per-engine DDL translation on the way in (identity by default;
+                // PdoFirebirdAdapter maps SQLite-canonical DDL to Firebird dialect)
+                // so a generated migration or ORM::createTable() statement applies.
+                $execSql = $this->translateDdl($sql);
+                if (!empty($params)) {
+                    [$execSql, $params] = \Tina4\SQLTranslator::namedToPositional($execSql, $params);
                 }
-            } else {
-                $this->captureLastIdAfterWrite($execSql);
-            }
+                $params = $this->normalizeParams(array_values($params));
 
-            return true;
+                $stmt = $this->pdo->prepare($execSql);
+                $this->bindValues($stmt, $params);
+                $stmt->execute();
+                // rowCount() is the canonical PDO affected-row count for a write.
+                $this->affectedRows = $stmt->rowCount();
+
+                if ($this->hasReturning($execSql)) {
+                    // RETURNING row carries the new id (PostgreSQL/Firebird).
+                    $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                    if (is_array($row) && $row !== []) {
+                        $first = reset($row);
+                        if ($first !== false) {
+                            $this->lastId = $this->normalizeReturnedId($first);
+                        }
+                    }
+                } else {
+                    $this->captureLastIdAfterWrite($execSql);
+                }
+
+                return true;
+            });
         } catch (\PDOException $e) {
             // FAIL LOUD: capture the cause on error() AND raise — never swallow.
             $this->affectedRows = 0;
@@ -445,16 +506,23 @@ trait PdoAdapterTrait
         if (!$this->pdo->inTransaction()) {
             $this->pdo->beginTransaction();
         }
+        $this->inExplicitTransaction = true;
     }
 
     public function commit(): void
     {
         $this->ensureOpen();
-        if ($this->pdo->inTransaction()) {
-            $this->pdo->commit();
-        }
-        if ($this->transactionsNeedAutocommitToggle()) {
-            $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, true);
+        try {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->commit();
+            }
+        } finally {
+            // Clear the transaction gate even if COMMIT raised, so the next
+            // statement can reconnect after a dropped link (#245).
+            $this->inExplicitTransaction = false;
+            if ($this->transactionsNeedAutocommitToggle()) {
+                $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, true);
+            }
         }
     }
 
@@ -470,6 +538,9 @@ trait PdoAdapterTrait
             // (parity with the native adapters).
             $this->lastError = $e->getMessage();
         } finally {
+            // Clear the transaction gate even when ROLLBACK failed on a dead
+            // link, so the next statement reconnects and recovers (#245).
+            $this->inExplicitTransaction = false;
             if ($this->transactionsNeedAutocommitToggle()) {
                 $this->pdo->setAttribute(\PDO::ATTR_AUTOCOMMIT, true);
             }

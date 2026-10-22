@@ -70,6 +70,44 @@ class PdoPostgresAdapter implements DatabaseAdapter
     }
 
     /**
+     * True when a PDOException means the server dropped the link — a reconnect
+     * candidate, not a real SQL error (#245, parity with PostgresAdapter #319).
+     *
+     * SQLSTATE class 08 is "connection exception"; 57P01/02/03 are admin
+     * shutdown, crash shutdown and cannot_connect_now (what pg_terminate_backend
+     * and a failover produce). pdo_pgsql does not always map a mid-flight drop to
+     * a clean SQLSTATE — it surfaces as HY000 "server closed the connection
+     * unexpectedly" / "no connection to the server" / "terminating connection due
+     * to administrator command" — so the message is matched as well. A genuine
+     * SQL error (42P01 undefined_table, 23505 unique_violation, ...) matches
+     * none of these and surfaces unchanged.
+     */
+    protected function connectionWasLost(\PDOException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+        if (str_starts_with($sqlState, '08')
+            || in_array($sqlState, ['57P01', '57P02', '57P03'], true)) {
+            return true;
+        }
+
+        $message = $exception->getMessage();
+        foreach ([
+            'server closed the connection unexpectedly',
+            'no connection to the server',
+            'terminating connection due to administrator command',
+            'connection not open',
+            'SSL connection has been closed unexpectedly',
+            'could not connect to server',
+        ] as $needle) {
+            if (stripos($message, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Bound the connect with PDO::ATTR_TIMEOUT — NOT with connect_timeout in
      * the DSN.
      *
