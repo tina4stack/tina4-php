@@ -150,6 +150,14 @@ class Csp
             foreach ($directives as $index => [$name, $value]) {
                 if ($name === $directive) {
                     $found = true;
+                    // ADR-0100: the app opted this directive into inline via
+                    // 'unsafe-inline'. A browser ignores 'unsafe-inline' the
+                    // moment a nonce joins the same directive (CSP Level 2+), so
+                    // adding the nonce would silently block the inline the app
+                    // asked for. The app's explicit choice wins.
+                    if (in_array("'unsafe-inline'", preg_split('/\s+/', trim($value)) ?: [], true)) {
+                        break;
+                    }
                     if (!in_array($token, preg_split('/\s+/', trim($value)) ?: [], true)) {
                         $directives[$index][1] = trim($value . ' ' . $token);
                     }
@@ -158,6 +166,12 @@ class Csp
             }
             if (!$found) {
                 $base = $defaultValue !== '' ? $defaultValue : "'self'";
+                // ADR-0100: a directive derived from an 'unsafe-inline'
+                // default-src must not be spawned with a nonce - it would cancel
+                // the inline the app allowed through default-src.
+                if (in_array("'unsafe-inline'", preg_split('/\s+/', trim($base)) ?: [], true)) {
+                    continue;
+                }
                 $directives[] = [$directive, trim($base . ' ' . $token)];
             }
         }
