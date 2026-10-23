@@ -6,6 +6,38 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.154 - 2026-10-23
+
+### BREAKING
+- Realtime (WebRTC): `GET /api/rtc/config` (which mints ephemeral TURN
+  credentials) and the `/ws/rtc/{room}` signalling socket now require a valid
+  token by default (ADR-0101, tina4-python#252). They were public, with no way
+  for an app to close them, so the TURN relay was an open resource. Opt out with
+  `TINA4_RTC_REQUIRE_AUTH=false` (or `0`/`no`/`off`) for anonymous calling; any
+  other value keeps them secured. If your app relied on the open routes, set
+  that env var.
+
+### Fixed
+- Frond: a bare reference to a zero-argument `Closure` global is now invoked and
+  its return value used for both `{{ g }}` output and `{% if g %}` truthiness,
+  matching Node (ADR-0085, tina4-documentation#90). `g()` still calls exactly
+  once; a non-callable global and a `Closure` that declares parameters are
+  unchanged.
+- CSP: the per-response nonce is no longer injected into a `script-src` /
+  `style-src` directive that already carries `'unsafe-inline'` (ADR-0100, #330).
+  A browser ignores `'unsafe-inline'` once a nonce joins the same directive, so
+  inline content an app deliberately allowed through `TINA4_CSP` was silently
+  blocked from 3.13.143 on. The app's explicit choice now wins; the strict
+  default policy is still nonced.
+- PostgreSQL: `PdoPostgresAdapter` reconnects after the server drops the link,
+  so the next statement recovers instead of failing (#245).
+- Security: connection secrets are kept out of stack traces (#326).
+
+### Changed
+- Docker: the shipped image is pinned to patched PHP 8.4.27 for
+  CVE-2026-109618 / CVE-2026-109619 (#325).
+- Skills: the maintainer skill gains an off-skill self-audit reflex.
+
 ## 3.13.153 - 2026-10-21
 
 ### Fixed
