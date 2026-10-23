@@ -92,10 +92,10 @@ class PostgresAdapter implements DatabaseAdapter
      * @param bool|null $autoCommit Whether to auto-commit
      */
     public function __construct(
-        private readonly string $connectionString,
+        #[\SensitiveParameter] private readonly string $connectionString,
         ?bool $autoCommit = null,
         private readonly string $username = '',
-        private readonly string $password = '',
+        #[\SensitiveParameter] private readonly string $password = '',
     ) {
         if (!function_exists('pg_connect')) {
             throw new DatabaseDriverMissing(
@@ -581,7 +581,7 @@ class PostgresAdapter implements DatabaseAdapter
      * failure with the password "s3ntinel-Pa55 word" logged
      * "password=*** word".
      */
-    private function safeDsn(string $dsn): string
+    private function safeDsn(#[\SensitiveParameter] string $dsn): string
     {
         return trim(\Tina4\DatabaseUrl::redact($dsn));
     }
@@ -594,7 +594,7 @@ class PostgresAdapter implements DatabaseAdapter
      * @param string $dsn The conninfo string handed to pg_connect().
      * @return string The target as "host:port", using libpq's own defaults.
      */
-    private static function dsnTarget(string $dsn): string
+    private static function dsnTarget(#[\SensitiveParameter] string $dsn): string
     {
         $value = static function (string $key) use ($dsn): string {
             if (!preg_match("/\b{$key}=(?:'([^']*)'|([^\s']+))/", $dsn, $matches)) {
@@ -622,7 +622,7 @@ class PostgresAdapter implements DatabaseAdapter
      * grammar, so quoting is total - there is no character left that can end
      * the value early.
      */
-    private static function quoteDsnValue(string $value): string
+    private static function quoteDsnValue(#[\SensitiveParameter] string $value): string
     {
         return "'" . str_replace(['\\', "'"], ['\\\\', "\\'"], $value) . "'";
     }
@@ -630,7 +630,7 @@ class PostgresAdapter implements DatabaseAdapter
     /**
      * Build a libpq-style DSN from either a URL or key=value string.
      */
-    private function buildDsn(string $input): string
+    private function buildDsn(#[\SensitiveParameter] string $input): string
     {
         // Already a key=value DSN — the caller wrote it, so it is theirs to quote.
         if (str_contains($input, '=') && !str_contains($input, '://')) {

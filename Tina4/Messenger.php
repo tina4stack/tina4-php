@@ -129,7 +129,7 @@ class Messenger
         ?string $host = null,
         ?int $port = null,
         ?string $username = null,
-        ?string $password = null,
+        #[\SensitiveParameter] ?string $password = null,
         ?string $fromAddress = null,
         ?string $fromName = null,
         ?string $encryption = null,
@@ -137,7 +137,7 @@ class Messenger
         ?string $imapHost = null,
         ?int $imapPort = null,
         ?string $imapUsername = null,
-        ?string $imapPassword = null,
+        #[\SensitiveParameter] ?string $imapPassword = null,
         ?string $imapEncryption = null,
         ?int $timeout = null,
     ) {
@@ -1146,12 +1146,12 @@ class Messenger
      * Send a command and validate the response code.
      *
      * @param resource   $socket  Socket resource
-     * @param string     $command SMTP command
+     * @param string     $command SMTP command; #[\SensitiveParameter]: AUTH LOGIN sends the password through here
      * @param int|array  $expect  Expected response code(s)
      * @return string Full server response
      * @throws \RuntimeException On unexpected response
      */
-    private function sendCommand($socket, string $command, int|array $expect): string
+    private function sendCommand($socket, #[\SensitiveParameter] string $command, int|array $expect): string
     {
         fwrite($socket, $command . "\r\n");
         return $this->readResponse($socket, $expect);

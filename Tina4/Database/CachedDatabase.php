@@ -100,7 +100,7 @@ class CachedDatabase implements DatabaseAdapter
      */
     private string $url;
 
-    public function __construct(DatabaseAdapter $adapter, ?bool $enabled = null, ?int $ttl = null, string $url = '')
+    public function __construct(DatabaseAdapter $adapter, ?bool $enabled = null, ?int $ttl = null, #[\SensitiveParameter] string $url = '')
     {
         $this->adapter = $adapter;
         $this->url = $url;
@@ -170,7 +170,7 @@ class CachedDatabase implements DatabaseAdapter
      * @param  string $url Connection URL of the database
      * @return string Stable, credential-free identity
      */
-    public static function cacheIdentity(string $url): string
+    public static function cacheIdentity(#[\SensitiveParameter] string $url): string
     {
         try {
             $parsed = new \Tina4\DatabaseUrl($url);
