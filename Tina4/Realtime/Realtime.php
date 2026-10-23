@@ -72,6 +72,29 @@ final class Realtime
     }
 
     /**
+     * ADR-0101: the config route mints TURN credentials and the signalling
+     * socket relays calls, so both require a valid token UNLESS the app opts out
+     * with TINA4_RTC_REQUIRE_AUTH=false (anonymous calling). Secure-by-default:
+     * only an explicit false/0/no/off opens them, so a typo stays secured.
+     */
+    private static function rtcRequireAuth(): bool
+    {
+        $raw = getenv('TINA4_RTC_REQUIRE_AUTH');
+        $raw = strtolower(trim($raw === false ? 'true' : (string)$raw));
+        return !in_array($raw, ['false', '0', 'no', 'off'], true);
+    }
+
+    /** Secure the config route by default, or open it when the app opts out. */
+    private static function applyRtcConfigAuth(Router $route): void
+    {
+        if (self::rtcRequireAuth()) {
+            $route->secure();
+        } else {
+            $route->noAuth();
+        }
+    }
+
+    /**
      * Mount the realtime surface and return the resolved path map.
      *
      * @param array{media?:mixed,storage?:StorageBackend,authorize?:callable,features?:string[]} $options
@@ -107,7 +130,7 @@ final class Realtime
 
         // ── Self-describing bootstrap ──
         if (isset($paths['config'])) {
-            Router::get($paths['config'], function ($request, $response) use ($paths, $features) {
+            $configRoute = Router::get($paths['config'], function ($request, $response) use ($paths, $features) {
                 $body = ['backend' => 'mesh'];
                 if (in_array('calls', $features, true)) {
                     $body['iceServers'] = self::iceServers();
@@ -121,7 +144,10 @@ final class Realtime
                     $body['files'] = $paths['files'];
                 }
                 return $response($body);
-            })->noAuth();
+            });
+            // ADR-0101: the config route mints TURN credentials, so it is secured
+            // by default; opt out with TINA4_RTC_REQUIRE_AUTH=false.
+            self::applyRtcConfigAuth($configRoute);
         }
 
         // ── calls: WebRTC signalling relay (mesh) ──
@@ -139,7 +165,7 @@ final class Realtime
                     // server never parses the SDP, peers filter by `to`.
                     $connection->broadcastToRoom($key, (string)$data, true);
                 }
-            });
+            }, secure: self::rtcRequireAuth());  // ADR-0101
         }
 
         // ── chat: persistent channels + presence/typing/receipts ──
