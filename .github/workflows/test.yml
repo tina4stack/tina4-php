@@ -32,7 +32,11 @@ jobs:
         run: ./scripts/check-no-symlinks.sh
 
   test:
-    runs-on: ubuntu-latest
+    # Pinned to 24.04: the ubuntu-latest label migrated to Ubuntu 26.04 (from
+    # 2026-10-19), where the mongo:8 (8.3.x rapid-release) replica-set container
+    # exits on startup; the gate was last green on 24.04 (2026-10-23). Revisit
+    # when mongo:8 runs cleanly on 26.04 (pin mongo to the 8.0 LTS line too).
+    runs-on: ubuntu-24.04
 
     # Real-service test gate. Every backend the suite can touch runs for real in
     # CI so the integration tests execute instead of skipping (the gap that let
