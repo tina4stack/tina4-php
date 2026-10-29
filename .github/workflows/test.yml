@@ -432,7 +432,13 @@ jobs:
       # green on the standalone. This leg keeps that from regressing.
       - name: Start MongoDB 8 replica set (27018)
         run: |
-          docker run -d --name tina4-mongo8-rs -p 27018:27018 mongo:8.0 \
+          # GLIBC_TUNABLES=glibc.pthread.rseq=1: mongo 8.x refuses to start on
+          # Linux kernel >= 6.19 (SERVER-121912) — the kernel's rseq change breaks
+          # tcmalloc's per-CPU caches. Letting glibc own rseq restores per-thread
+          # caches and mongod boots. The GitHub ubuntu-24.04 runner kernel crossed
+          # 6.19, which is why this leg started failing (mongo:7 lacks the guard).
+          docker run -d --name tina4-mongo8-rs -p 27018:27018 \
+            -e GLIBC_TUNABLES=glibc.pthread.rseq=1 mongo:8.0 \
             mongod --replSet rs0 --bind_ip_all --port 27018
           for i in $(seq 1 30); do
             docker exec tina4-mongo8-rs mongosh --port 27018 --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break
