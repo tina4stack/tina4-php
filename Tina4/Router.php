@@ -425,6 +425,26 @@ class Router
     }
 
     /**
+     * Opt a route OUT of CSRF form-token validation.
+     *
+     * For server-to-server endpoints (webhooks, payment callbacks) that carry no
+     * browser session and so have no cross-site-request-forgery surface. ->noAuth()
+     * no longer skips CSRF (#265): a public form must be able to be both open to
+     * anonymous visitors AND protected against cross-site posts, so a form token is
+     * still validated on an anonymous write route. CSRF (origin) and auth (identity)
+     * are orthogonal — pair ->noCsrf() with ->noAuth() for a public webhook.
+     *
+     * @return $this
+     */
+    public function noCsrf(): self
+    {
+        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
+            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['noCsrf'] = true;
+        }
+        return $this;
+    }
+
+    /**
      * RBAC: require ONE of the named roles (OR). Reads the verified JWT `roles`
      * claim. Stack ->role()/->can() for AND. Implies auth. Feature 138 / ADR-0058.
      *

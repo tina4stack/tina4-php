@@ -191,9 +191,20 @@ All state-changing forms must include a CSRF token. Tina4 provides this built-in
 ```
 
 `{{ formToken() }}` (and its snake_case alias `{{ form_token() }}`) renders a hidden input with a
-secure token. The framework validates it automatically on POST/PUT/DELETE requests. If the token is
-missing or invalid, the request is rejected. Need just the raw token string (e.g. for a meta tag or
-a fetch header)? Use `{{ formTokenValue() }}` / `{{ form_token_value() }}`.
+secure, session-bound token. Enable CSRF with `TINA4_CSRF=true`; the framework then validates the
+token on POST/PUT/DELETE and rejects a missing/invalid one with 403. Need just the raw token string
+(e.g. for a meta tag or a fetch header)? Use `{{ formTokenValue() }}` / `{{ form_token_value() }}`.
+
+A form token proves ORIGIN (this write came from a form you rendered), not identity. CSRF and
+`->noAuth()` are orthogonal:
+
+- **Public form** (contact, sign-up): `->noAuth()` route + `{{ form_token() }}` in the form. It posts
+  with no login AND stays CSRF-protected. `->noAuth()` no longer skips CSRF.
+- **Protected form**: a real identity token authenticates the write (frond.js sends it as the
+  `Authorization: Bearer` header). A form token is not an identity, so a protected route 401s without
+  one - send the login token, do not drop `->noAuth()`.
+- **Webhook / server-to-server** (no browser, no form): chain `->noCsrf()` (with `->noAuth()`) to opt
+  out of the form-token check.
 
 ### In frond.js
 frond.js's `saveForm(...)` / `sendRequest(...)` pick up the form token automatically. If you POST by

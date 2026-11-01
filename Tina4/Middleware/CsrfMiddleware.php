@@ -25,16 +25,19 @@ use Tina4\Response;
 /**
  * CSRF middleware — validates form tokens on state-changing requests.
  *
- * OFF by default: with TINA4_CSRF unset the middleware is NOT attached at boot
- * (see attachFromEnv()), so a default app has no CSRF gate. Set TINA4_CSRF=true
- * (or 1/yes/on) and the framework auto-attaches it at boot so every write is
- * gated; or register it explicitly via Router::use(CsrfMiddleware::class). Once
- * attached, TINA4_CSRF=false (or 0/no) is the kill switch that disables
- * enforcement again.
+ * NOT attached by default: with TINA4_CSRF unset the middleware is NOT attached
+ * at boot (see attachFromEnv()), so a default app has no CSRF gate. Set
+ * TINA4_CSRF=true (or 1/yes/on) and the framework auto-attaches it at boot so
+ * every write is gated; or register it explicitly via
+ * Router::use(CsrfMiddleware::class). Once attached it enforces unless the kill
+ * switch TINA4_CSRF=false (or 0/no) is set — so with it attached but TINA4_CSRF
+ * unset, enforcement is ON (the attach is the opt-in).
  *
  * Behaviour:
  *   - Skips GET, HEAD, OPTIONS requests.
- *   - Skips routes marked with ->noAuth() / @noauth().
+ *   - Skips routes that opt out with ->noCsrf() / @no_csrf() (webhooks).
+ *     ->noAuth() does NOT skip CSRF (#265): a public form can be open to
+ *     anonymous visitors AND still protected against cross-site posts.
  *   - Fails CLOSED: with TINA4_SECRET unset the signing secret resolves to
  *     blank (there is NO built-in default), and a blank HMAC key is publicly
  *     reproducible — so no token can be trusted and every write is rejected
@@ -71,16 +74,23 @@ class CsrfMiddleware
             return [$request, $response];
         }
 
-        // Skip routes marked @noauth()
+        // Skip routes that explicitly opt OUT of CSRF with ->noCsrf() / @no_csrf() —
+        // the escape hatch for server-to-server endpoints (webhooks, callbacks) that
+        // carry no browser session and so have no cross-site-forgery surface.
+        // ->noAuth() no longer skips CSRF (#265): a PUBLIC form must be able to be
+        // both open to anonymous visitors AND protected against cross-site posts, so
+        // a form token is still validated on an anonymous write route. noAuth controls
+        // IDENTITY (who), CSRF controls ORIGIN (did our own form send it) — they are
+        // orthogonal, and a webhook opts out of CSRF explicitly.
         $handler = $request->handler ?? null;
         if ($handler !== null) {
-            $noAuth = false;
-            if (is_array($handler) && isset($handler['noAuth'])) {
-                $noAuth = (bool)$handler['noAuth'];
-            } elseif (is_object($handler) && property_exists($handler, 'noAuth')) {
-                $noAuth = (bool)$handler->noAuth;
+            $noCsrf = false;
+            if (is_array($handler) && isset($handler['noCsrf'])) {
+                $noCsrf = (bool)$handler['noCsrf'];
+            } elseif (is_object($handler) && property_exists($handler, 'noCsrf')) {
+                $noCsrf = (bool)$handler->noCsrf;
             }
-            if ($noAuth) {
+            if ($noCsrf) {
                 return [$request, $response];
             }
         }
