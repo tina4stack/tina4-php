@@ -152,6 +152,42 @@ class KafkaIntegrationTest extends TestCase
     }
 
     /**
+     * #264: push(raw=true) produces the value with NO Tina4 envelope and no
+     * injected id, so a non-Tina4 consumer reads the exact top-level schema. Read
+     * the raw bytes back with the low-level KafkaBackend::dequeue — what a foreign
+     * consumer sees off the wire — and assert there is no payload/priority/
+     * attempts/id wrapper around it.
+     */
+    public function testRawPushEmitsUnenvelopedValue(): void
+    {
+        $url = getenv('TINA4_TEST_KAFKA_URL');
+        $schema = [
+            'event_type' => 'order.created',
+            'order_id' => 4242,
+            'amount' => 9.99,
+            'nonce' => bin2hex(random_bytes(4)),
+        ];
+
+        $queue = new Queue('kafka', [], $this->topic);
+        $queue->push($schema, 0, 0, true);
+
+        $reader = new \Tina4\Queue\KafkaBackend(['brokers' => $url]);
+        $value = null;
+        for ($i = 0; $i < 10; $i++) {
+            $value = $reader->dequeue($this->topic);
+            if ($value !== null) {
+                break;
+            }
+            usleep(400000);
+        }
+
+        $this->assertIsArray($value, 'the raw record must be readable off the wire');
+        $this->assertSame($schema, $value, 'a raw produce must carry the value exactly as given');
+        $this->assertArrayNotHasKey('payload', $value, 'raw must omit the {payload,...} envelope');
+        $this->assertArrayNotHasKey('id', $value, 'raw must not inject an id into the value');
+    }
+
+    /**
      * NEGATIVE: a push to an unreachable broker (a real closed port) RAISES; it
      * never returns an id as if the job had been accepted. The positive twin is
      * testRealProduceConsumeRoundTrip against the live broker.

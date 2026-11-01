@@ -6,6 +6,25 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.156 - 2026-11-01
+
+### Added
+- Kafka queue: `Queue::push($payload, $priority, $delay, raw: true)` (and
+  `produce(..., raw: true)`) now produces the value with NO Tina4 envelope
+  (`{payload, priority, attempts}`) and no injected `id`, so a non-Tina4 service
+  consuming the topic receives the exact top-level schema it expects
+  (tina4-php#264). It is a Kafka-only option; the file/rabbitmq/mongodb backends
+  refuse `raw=true` by name (the envelope is internal bookkeeping that
+  pop/retries/dead-lettering depend on). The default path is unchanged.
+
+### Fixed
+- Kafka queue: the consumer's `auto.offset.reset` was hardcoded to `earliest`,
+  so a new consumer group could not opt into `latest`. It now reads
+  `TINA4_KAFKA_AUTO_OFFSET_RESET` (then the bare `KAFKA_AUTO_OFFSET_RESET`),
+  defaulting to `earliest` so current behaviour is unchanged (tina4-php#263).
+  Surfaced on the declared consumer config for parity; this backend's raw fetch
+  path reads from the earliest retained offset.
+
 ## 3.13.155 - 2026-10-29
 
 Version bump for cross-framework parity. No PHP framework changes this release —

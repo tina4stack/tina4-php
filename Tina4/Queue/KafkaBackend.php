@@ -92,9 +92,32 @@ class KafkaBackend implements QueueBackend
             'bootstrap.servers' => $this->brokers,
             'client.id' => $this->clientId,
             'group.id' => $this->groupId,
-            'auto.offset.reset' => 'earliest',
+            'auto.offset.reset' => self::offsetReset(),
             'enable.auto.commit' => 'false',
         ] + $this->security;
+    }
+
+    /**
+     * Resolve the consumer's auto.offset.reset policy from the environment.
+     *
+     * Where a NEW consumer group (one with no committed offset) starts reading:
+     * 'earliest' (the default, unchanged) replays the retained backlog; 'latest'
+     * skips it. Read from the Tina4-namespaced env var first
+     * (TINA4_KAFKA_AUTO_OFFSET_RESET), then the bare librdkafka-convention name
+     * (KAFKA_AUTO_OFFSET_RESET) — the same precedence the TLS/SASL keys use. A
+     * blank value falls through to the default (tina4-php#263). It is surfaced on
+     * the declared consumer config for parity/introspection; this backend's raw
+     * fetch path reads from the earliest retained offset regardless.
+     *
+     * Mirrors tina4_python/queue_backends/kafka_backend.py::_offset_reset.
+     */
+    public static function offsetReset(): string
+    {
+        $value = getenv('TINA4_KAFKA_AUTO_OFFSET_RESET');
+        if ($value === false || $value === '') {
+            $value = getenv('KAFKA_AUTO_OFFSET_RESET');
+        }
+        return ($value === false || $value === '') ? 'earliest' : $value;
     }
 
     /**
@@ -194,7 +217,7 @@ class KafkaBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
-    public function enqueue(string $topic, array $message): string
+    public function enqueue(string $topic, array $message, bool $raw = false): string
     {
         if ((int)($message['priority'] ?? 0) > 0) {
             throw new \RuntimeException(
@@ -216,6 +239,18 @@ class KafkaBackend implements QueueBackend
 
         $this->ensureConnected();
         $this->ensureTopicMetadata($topic);
+
+        if ($raw) {
+            // Emit the value exactly as given — no {payload, priority, attempts}
+            // envelope and no injected id — so a non-Tina4 consumer reading the
+            // topic gets the schema it expects (tina4-php#264). A record key is
+            // still generated for partitioning; it is never part of the value.
+            // The symmetric unwrap is already on dequeue (payload ?? whole record).
+            $id = bin2hex(random_bytes(8));
+            $value = json_encode($message['payload'] ?? $message);
+            $this->sendProduce($topic, $id, $value);
+            return $id;
+        }
 
         $id = $message['id'] ?? bin2hex(random_bytes(8));
         $message['id'] = $id;
