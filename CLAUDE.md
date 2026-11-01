@@ -16,7 +16,7 @@ The full discipline lives in `.claude/skills/tina4-maintainer/SKILL.md`; this bl
 
 # Tina4 PHP
 
-Version 3.13.155 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.156 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -802,7 +802,10 @@ non-zero (`exit(1)`) so CI gets a failing exit code.
 use Tina4\Queue;
 
 $queue = new Queue(string $backend = 'file', array $config = [], string $topic = 'default');
-$queue->push(mixed $payload, int $priority = 0, int $delay = 0): string  // returns job id
+$queue->push(mixed $payload, int $priority = 0, int $delay = 0, bool $raw = false): string  // returns job id
+    // $raw=true is Kafka-only: produce the value with NO envelope and no injected id, for a
+    // non-Tina4 consumer. file/rabbitmq/mongodb refuse $raw=true by name. TINA4_KAFKA_AUTO_OFFSET_RESET
+    // (earliest default, or latest) sets where a NEW consumer group starts.
 $queue->pop(): ?Job          // a Job, not an array - see the note below
 $queue->popBatch(int $count): array   // array<int, Job>
 $queue->popById(string $id): ?Job

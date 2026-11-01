@@ -92,9 +92,23 @@ class KafkaBackend implements QueueBackend
             'bootstrap.servers' => $this->brokers,
             'client.id' => $this->clientId,
             'group.id' => $this->groupId,
-            'auto.offset.reset' => 'earliest',
+            'auto.offset.reset' => self::offsetReset(),
             'enable.auto.commit' => 'false',
         ] + $this->security;
+    }
+
+    /**
+     * Consumer auto.offset.reset from env: TINA4_KAFKA_AUTO_OFFSET_RESET, then
+     * bare KAFKA_AUTO_OFFSET_RESET, default 'earliest' (tina4-php#263). Surfaced on
+     * the declared consumer config; the raw fetch path reads from earliest anyway.
+     */
+    public static function offsetReset(): string
+    {
+        $value = getenv('TINA4_KAFKA_AUTO_OFFSET_RESET');
+        if ($value === false || $value === '') {
+            $value = getenv('KAFKA_AUTO_OFFSET_RESET');
+        }
+        return ($value === false || $value === '') ? 'earliest' : $value;
     }
 
     /**
@@ -194,7 +208,7 @@ class KafkaBackend implements QueueBackend
     }
 
     /** {@inheritDoc} */
-    public function enqueue(string $topic, array $message): string
+    public function enqueue(string $topic, array $message, bool $raw = false): string
     {
         if ((int)($message['priority'] ?? 0) > 0) {
             throw new \RuntimeException(
@@ -216,6 +230,15 @@ class KafkaBackend implements QueueBackend
 
         $this->ensureConnected();
         $this->ensureTopicMetadata($topic);
+
+        if ($raw) {
+            // Emit the value as given — no envelope, no injected id — for a
+            // non-Tina4 consumer (tina4-php#264). A record key is still generated.
+            $id = bin2hex(random_bytes(8));
+            $value = json_encode($message['payload'] ?? $message);
+            $this->sendProduce($topic, $id, $value);
+            return $id;
+        }
 
         $id = $message['id'] ?? bin2hex(random_bytes(8));
         $message['id'] = $id;

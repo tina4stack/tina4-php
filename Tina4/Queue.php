@@ -144,11 +144,15 @@ class Queue
      * Push a job onto the queue.
      *
      * @param mixed $payload       Job data
-     * @param int   $delay         Delay in seconds before job becomes available
      * @param int   $priority      Job priority (higher = processed first)
+     * @param int   $delay         Delay in seconds before job becomes available
+     * @param bool  $raw           Kafka-only (tina4-php#264): produce the value with
+     *                             NO Tina4 envelope and no injected id, for a non-Tina4
+     *                             consumer. The file/rabbitmq/mongodb backends refuse
+     *                             $raw=true by name. Default false = unchanged.
      * @return string Job ID
      */
-    public function push(mixed $payload, int $priority = 0, int $delay = 0): string
+    public function push(mixed $payload, int $priority = 0, int $delay = 0, bool $raw = false): string
     {
         // ONE message shape for every backend. The external branch used to build
         // its own, omitting priority and delay_seconds, so both were dropped on
@@ -162,10 +166,10 @@ class Queue
         ];
 
         if ($this->externalBackend !== null) {
-            return $this->externalBackend->enqueue($this->topic, $message);
+            return $this->externalBackend->enqueue($this->topic, $message, $raw);
         }
 
-        return $this->liteBackend->enqueue($this->topic, $message);
+        return $this->liteBackend->enqueue($this->topic, $message, $raw);
     }
 
     /**
@@ -640,9 +644,10 @@ class Queue
      * @param mixed  $payload      Job data
      * @param int    $priority     Priority (higher = dequeued first, default 0)
      * @param int    $delaySeconds Delay in seconds before job becomes available
+     * @param bool   $raw          Kafka-only (tina4-php#264): un-enveloped produce. See push().
      * @return string Job ID
      */
-    public function produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0): string
+    public function produce(string $topic, mixed $payload, int $priority = 0, int $delaySeconds = 0, bool $raw = false): string
     {
         if ($this->externalBackend !== null) {
             $message = [
@@ -650,7 +655,7 @@ class Queue
                 'payload' => $payload,
                 'topic'   => $topic,
             ];
-            return $this->externalBackend->enqueue($topic, $message);
+            return $this->externalBackend->enqueue($topic, $message, $raw);
         }
 
         $message = [
@@ -659,7 +664,7 @@ class Queue
             'priority'      => $priority,
             'delay_seconds' => $delaySeconds,
         ];
-        return $this->liteBackend->enqueue($topic, $message);
+        return $this->liteBackend->enqueue($topic, $message, $raw);
     }
 
     /**

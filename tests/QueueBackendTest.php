@@ -53,12 +53,14 @@ class QueueBackendTest extends TestCase
         $this->assertTrue(interface_exists(QueueBackend::class));
 
         // The interface itself declares every required method with the exact
-        // arity the facade relies on (enqueue/acknowledge/requeue/deadLetter take
-        // 2, dequeue takes 1; size takes 2 (topic + optional status, for size('dead')), close takes 0) and the return-type contract
-        // (enqueue->string, dequeue nullable, size->int, close->void).
+        // arity the facade relies on (enqueue takes 3 — topic, message, and the
+        // optional raw flag (tina4-php#264); acknowledge/requeue/deadLetter take 2,
+        // dequeue takes 1; size takes 2 (topic + optional status, for size('dead')),
+        // close takes 0) and the return-type contract (enqueue->string, dequeue
+        // nullable, size->int, close->void).
         $ref = new \ReflectionClass(QueueBackend::class);
         $expected = [
-            'enqueue' => ['params' => 2, 'return' => 'string', 'nullable' => false],
+            'enqueue' => ['params' => 3, 'return' => 'string', 'nullable' => false],
             'dequeue' => ['params' => 1, 'return' => 'array', 'nullable' => true],
             'acknowledge' => ['params' => 2, 'return' => 'void', 'nullable' => false],
             'requeue' => ['params' => 2, 'return' => 'void', 'nullable' => false],
@@ -75,10 +77,14 @@ class QueueBackendTest extends TestCase
             $this->assertSame($spec['return'], $rt->getName(), "{$name}() return type drifted");
             $this->assertSame($spec['nullable'], $rt->allowsNull(), "{$name}() nullability drifted");
         }
-        // enqueue's parameters are named (topic, message) — the facade binds by order.
+        // enqueue's parameters are named (topic, message, raw) — the facade binds by
+        // order. raw is the optional Kafka-only un-enveloped-produce flag (#264).
         $enqueue = $ref->getMethod('enqueue')->getParameters();
         $this->assertSame('topic', $enqueue[0]->getName());
         $this->assertSame('message', $enqueue[1]->getName());
+        $this->assertSame('raw', $enqueue[2]->getName());
+        $this->assertTrue($enqueue[2]->isOptional(), 'raw must stay optional (non-breaking)');
+        $this->assertSame(2, $ref->getMethod('enqueue')->getNumberOfRequiredParameters());
 
         // Every concrete backend implements the interface AND exposes connect().
         foreach (self::BACKEND_CLASSES as $name => $class) {

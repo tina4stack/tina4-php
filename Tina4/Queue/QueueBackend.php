@@ -26,9 +26,13 @@ interface QueueBackend
      *
      * @param string $topic   The queue/topic name
      * @param array  $message Message data (will be JSON-encoded)
+     * @param bool   $raw     Kafka-only (tina4-php#264): emit the bare payload with
+     *                        no Tina4 envelope and no injected id. The file/mongodb/
+     *                        rabbitmq backends refuse $raw=true by name — the envelope
+     *                        is internal bookkeeping pop()/retries/dead-lettering need.
      * @return string Message ID
      */
-    public function enqueue(string $topic, array $message): string;
+    public function enqueue(string $topic, array $message, bool $raw = false): string;
 
     /**
      * Pop a message from a topic/queue.
