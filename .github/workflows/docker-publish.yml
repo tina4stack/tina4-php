@@ -1,0 +1,173 @@
+# Copyright (c) 2026 Code Infinity
+# SPDX-License-Identifier: MPL-2.0
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Build and PUSH the multi-arch tina4-php base image to Docker Hub on a release
+# tag. This closes tina4-php#327: before this, nothing in CI pushed the image --
+# docker-image.yml only BUILD-VERIFIES it -- so the published tina4stack/tina4-php
+# `v3`/`latest` tags drifted for months and a Dockerfile security pin (e.g. the
+# CVE-2026-109618 PHP 8.4.27 bump, #325) never reached a `docker pull` until
+# someone rebuilt + pushed by hand.
+#
+# Separate from docker-image.yml ON PURPOSE: that workflow is credential-free so
+# it can never leak a token, and it stays the PR gate. The Docker Hub credential
+# lives ONLY in this job, behind the protected `release` environment (the same
+# required-reviewer gate the package publish uses), so the account-wide write
+# primitive a Docker Hub push token represents is never exposed to PR code or to
+# third-party actions on untrusted events.
+#
+# This job re-runs the boot + version-match gate on the amd64 image BEFORE it
+# pushes (mirroring tina4-documentation/scripts/publish-docker-images.sh), so a
+# tag that misreports its own contents is never published.
+#
+# Registry is Docker Hub (docker.io), because `FROM tina4stack/tina4-php:v3` has
+# no registry prefix and every documented `docker pull` already resolves there.
+#
+# Required repo/org secrets (set these before the first run; a per-repository or
+# org-scoped Docker Hub token, NOT an account-wide one copied per repo):
+#   DOCKERHUB_USERNAME  -- a Docker Hub account/robot with push to tina4stack/tina4-php
+#   DOCKERHUB_TOKEN     -- a scoped access token for that account
+name: Docker publish
+
+on:
+  push:
+    tags: ['[0-9]*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to build + push (e.g. 3.13.156). Must match the image's own reported version."
+        required: true
+
+env:
+  IMAGE: docker.io/tina4stack/tina4-php
+  APP_PORT: 7145
+
+# Least privilege: the push uses the Docker Hub token, not the GITHUB_TOKEN, so
+# read-only repo access is all this needs.
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Verify and push the multi-arch image
+    runs-on: ubuntu-latest
+    # The protected environment gates the push behind a required reviewer and is
+    # the ONLY place the Docker Hub credential is readable.
+    environment: release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Resolve the version to publish
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF#refs/tags/}"
+          fi
+          if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::'$version' is not a release version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publishing $IMAGE at version $version (+ v3, latest)"
+
+      # ── Verify the amd64 image BEFORE pushing ──────────────────────────────
+      # Same gate as docker-image.yml: the tag is a claim about the contents, so
+      # prove it instead of trusting it. Build amd64 natively, boot it, require a
+      # 200 on /health through a PUBLISHED port (proves it booted AND bound
+      # 0.0.0.0), require it still alive, and require its reported version to
+      # MATCH the tag. Only then do we push.
+      - name: Build amd64 for the pre-push gate
+        run: docker build -t "$IMAGE:verify" .
+
+      - name: Boot the container
+        # ADR-0079: a production image refuses to boot without a >=32-byte
+        # TINA4_SECRET. Throwaway one for this verification boot only.
+        run: docker run -d --name gate -e TINA4_SECRET=ci-docker-publish-verification-secret-0123456789 -p 8080:$APP_PORT "$IMAGE:verify"
+
+      - name: Require HTTP 200 on /health through the published port
+        run: |
+          for i in $(seq 1 45); do
+            if curl -fsS -m 2 -o /dev/null "http://127.0.0.1:8080/health"; then
+              echo "served after ${i}s"
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' gate)" != "true" ]; then
+              echo "::error::container exited before serving a request"
+              docker logs gate
+              exit 1
+            fi
+            if [ "$i" = "45" ]; then
+              echo "::error::no 200 on /health within 45s -- failed to boot or bound 127.0.0.1 instead of 0.0.0.0"
+              docker logs gate
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Require the container to still be alive
+        run: |
+          if [ "$(docker inspect -f '{{.State.Running}}' gate)" != "true" ]; then
+            echo "::error::container died after serving; OOMKilled=$(docker inspect -f '{{.State.OOMKilled}}' gate)"
+            docker logs gate
+            exit 1
+          fi
+
+      - name: Require the reported version to MATCH the tag
+        run: |
+          # ADR-0078 hides `version` from a production /health, so read it from the
+          # image's own resolver (also catches the 0.0.0 fallback sentinel).
+          version=$(docker exec gate php -r 'require "vendor/autoload.php"; echo \Tina4\App::$VERSION;')
+          echo "reported version: '$version'"
+          want="${{ steps.ver.outputs.version }}"
+          if [ -z "$version" ] || [ "$version" = "0.0.0" ]; then
+            echo "::error::image reports no real version ('$version') -- refusing to publish"
+            exit 1
+          fi
+          if [ "$version" != "$want" ]; then
+            echo "::error::version mismatch -- publishing $want but the image serves $version. Refusing to push a tag that misreports its contents."
+            exit 1
+          fi
+          echo "version $version matches the tag -- safe to push"
+
+      - name: Clean up the gate container
+        if: always()
+        run: docker rm -f gate || true
+
+      # ── Push the multi-arch manifest ───────────────────────────────────────
+      - name: Log in to Docker Hub
+        run: |
+          if [ -z "${DOCKERHUB_USERNAME}" ] || [ -z "${DOCKERHUB_TOKEN}" ]; then
+            echo "::error::DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets are not set on this repo (or the release environment). Add a scoped Docker Hub token for tina4stack/tina4-php and re-run."
+            exit 1
+          fi
+          echo "${DOCKERHUB_TOKEN}" | docker login docker.io -u "${DOCKERHUB_USERNAME}" --password-stdin
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push amd64 + arm64
+        run: |
+          docker buildx create --use --name tina4-publish >/dev/null 2>&1 || docker buildx use tina4-publish
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --pull --push \
+            -t "$IMAGE:${{ steps.ver.outputs.version }}" \
+            -t "$IMAGE:v3" \
+            -t "$IMAGE:latest" \
+            .
+
+      - name: Verify the pushed version tag exists on Docker Hub
+        run: |
+          docker buildx imagetools inspect "$IMAGE:${{ steps.ver.outputs.version }}" \
+            | grep -qiE 'linux/amd64' \
+            && docker buildx imagetools inspect "$IMAGE:${{ steps.ver.outputs.version }}" | grep -qiE 'linux/arm64' \
+            && echo "pushed $IMAGE:${{ steps.ver.outputs.version }} with both amd64 + arm64" \
+            || { echo "::error::pushed manifest is missing an architecture"; exit 1; }
+
+      - name: Log out
+        if: always()
+        run: docker logout docker.io || true
