@@ -212,8 +212,8 @@ class AuthTokenContractTest extends TestCase
 
     public function testAFormTokenStillPassesCsrf(): void
     {
-        // CSRF skips noAuth routes, so the realistic case is a logged-in user
-        // (auth token in the session) posting a rendered form.
+        // A logged-in user (auth token in the session) posting a rendered form:
+        // the form token satisfies CSRF and the session token provides identity.
         Router::post('/contract/csrf', function (Request $request, Response $response) {
             return $response(['user' => $request->user]);
         })->middleware([CsrfMiddleware::class]);

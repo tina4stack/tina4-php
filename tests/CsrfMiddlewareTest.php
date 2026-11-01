@@ -33,7 +33,8 @@
  *   - POST/PUT/PATCH/DELETE require a valid formToken
  *   - Token accepted in request->body["formToken"] or X-Form-Token header
  *   - Token rejected if sent in query params (security risk)
- *   - Routes marked ->noAuth() / @noauth skip CSRF
+ *   - Routes marked ->noCsrf() / @no_csrf skip CSRF (webhook opt-out)
+ *   - ->noAuth() does NOT skip CSRF (#265 / CSRF-DEC-03): a public form stays gated
  *   - Requests with a valid Authorization: Bearer skip CSRF
  *   - Session binding: token session_id must match the request session
  *   - TINA4_CSRF=false (or 0/no) disables all checks
@@ -372,28 +373,53 @@ class CsrfMiddlewareTest extends TestCase
         $this->assertRejected($res);
     }
 
-    // ── ->noAuth() / @noauth routes skip CSRF (real handler metadata) ──
-    // The handler metadata is exactly what Router::dispatch sets on the
-    // request (an array with a `noAuth` key). Before $request->handler was
-    // wired in dispatch, this bypass was DEAD CODE and a @noauth POST guarded
-    // by CsrfMiddleware was wrongly blocked.
+    // ── ->noAuth() stays CSRF-gated; ->noCsrf() is the opt-out (#265) ──
+    // CSRF-DEC-03: noAuth controls IDENTITY (who), not ORIGIN (did our own form
+    // send it). A PUBLIC form (->noAuth() + {{ form_token() }}) must be open to
+    // anonymous visitors AND still protected against cross-site posts, so
+    // ->noAuth() no longer skips CSRF. The explicit opt-out for server-to-server
+    // endpoints is ->noCsrf(). The handler metadata is what Router::dispatch
+    // sets on the request (an array carrying the flags).
 
-    public function testNoAuthWriteRouteSkipsCsrf(): void
+    public function testNoAuthWriteRouteWithoutTokenIsRejected(): void
     {
-        // No token at all, but the route is marked noAuth → must pass.
+        // The #265 regression: a noAuth POST with NO form token used to pass
+        // (CSRF skipped); it must now be blocked 403 like any other write.
         [, $res, $passed] = $this->dispatchCsrf(
             $this->makeRequest('POST', handler: ['noAuth' => true])
+        );
+        $this->assertFalse($passed);
+        $this->assertRejected($res);
+    }
+
+    public function testNoAuthWriteRouteWithValidFormTokenPasses(): void
+    {
+        // The public-form happy path: noAuth + a real form token → 200. Open to
+        // anonymous visitors (no identity) AND CSRF-protected.
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', body: ['formToken' => $this->formToken()], handler: ['noAuth' => true])
         );
         $this->assertTrue($passed);
         $this->assertPassed($res);
     }
 
-    public function testNonNoAuthWriteRouteStillRequiresCsrf(): void
+    public function testNoCsrfWriteRouteSkipsCsrf(): void
     {
-        // A plain handler (noAuth=false) with no token is blocked — proving the
-        // skip is specific to noAuth, not a blanket pass for any handler.
+        // The webhook opt-out: ->noCsrf() skips CSRF even with no token, so a
+        // server-to-server POST does not regress to 403 when TINA4_CSRF=true.
         [, $res, $passed] = $this->dispatchCsrf(
-            $this->makeRequest('POST', handler: ['noAuth' => false])
+            $this->makeRequest('POST', handler: ['noCsrf' => true])
+        );
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    public function testNonNoCsrfWriteRouteStillRequiresCsrf(): void
+    {
+        // A plain handler (no noCsrf) with no token is blocked — proving the
+        // skip is specific to noCsrf, not a blanket pass for any handler.
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', handler: ['noCsrf' => false])
         );
         $this->assertFalse($passed);
         $this->assertRejected($res);
@@ -563,8 +589,8 @@ class CsrfMiddlewareTest extends TestCase
 
     // ── End-to-end wiring guard ───────────────────────────────────
     // Locks in the source fix: Router::dispatch must populate
-    // $request->handler with the matched route's metadata (carrying noAuth)
-    // BEFORE per-route middleware runs, so CsrfMiddleware's noAuth bypass is
+    // $request->handler with the matched route's metadata (carrying noCsrf)
+    // BEFORE per-route middleware runs, so CsrfMiddleware's noCsrf bypass is
     // live in production — not dead code. Drives the real dispatch path.
 
     public function testDispatchPopulatesHandlerMetadataForMiddleware(): void
@@ -574,23 +600,23 @@ class CsrfMiddlewareTest extends TestCase
             $captured = $request->handler;
             return $response(['ok' => true]);
         };
-        Router::post('/__csrf_e2e_noauth', $handler, [CsrfMiddleware::class])->noAuth();
+        Router::post('/__csrf_e2e_nocsrf', $handler, [CsrfMiddleware::class])->noAuth()->noCsrf();
 
-        // POST with NO token. The framework's write-auth gate is opted out by
-        // noAuth, and CsrfMiddleware must ALSO skip (via $request->handler), so
-        // the handler runs and returns 200 — not a 403 from a dead bypass.
+        // POST with NO token. The write-auth gate is opted out by noAuth, and
+        // CsrfMiddleware must ALSO skip (via $request->handler carrying noCsrf),
+        // so the handler runs and returns 200 — not a 403 from a dead bypass.
         $request = new Request(
             method: 'POST',
-            path: '/__csrf_e2e_noauth',
+            path: '/__csrf_e2e_nocsrf',
             body: [],
             headers: ['content-type' => 'application/json'],
             ip: '127.0.0.1',
         );
         $response = Router::dispatch($request, new Response(true));
 
-        $this->assertSame(200, $response->getStatusCode(), 'noAuth POST guarded by CsrfMiddleware must reach the handler');
+        $this->assertSame(200, $response->getStatusCode(), 'noCsrf POST guarded by CsrfMiddleware must reach the handler');
         $this->assertIsArray($captured, '$request->handler must be populated before middleware runs');
-        $this->assertTrue($captured['noAuth'] ?? false, 'route metadata must carry the noAuth flag');
+        $this->assertTrue($captured['noCsrf'] ?? false, 'route metadata must carry the noCsrf flag');
         $this->assertSame('{"ok":true}', $response->getBody());
     }
 
@@ -685,11 +711,29 @@ class CsrfMiddlewareTest extends TestCase
         $this->assertRejected($res);
     }
 
-    // csrf-noauth-exempt
-    public function testANoauthWriteRouteSkipsCsrf(): void
+    // csrf-noauth-still-gated (CSRF-DEC-03, supersedes csrf-noauth-exempt)
+    public function testANoauthWriteRouteWithoutATokenIsRejected(): void
+    {
+        [, $res] = $this->dispatchCsrf(
+            $this->makeRequest('POST', handler: ['noAuth' => true])
+        );
+        $this->assertRejected($res);
+    }
+
+    public function testANoauthWriteRouteWithAValidFormTokenPasses(): void
     {
         [, $res, $passed] = $this->dispatchCsrf(
-            $this->makeRequest('POST', handler: ['noAuth' => true])
+            $this->makeRequest('POST', body: ['formToken' => $this->formToken()], handler: ['noAuth' => true])
+        );
+        $this->assertTrue($passed);
+        $this->assertPassed($res);
+    }
+
+    // csrf-no-csrf-exempt (CSRF-DEC-03)
+    public function testANoCsrfWriteRouteSkipsCsrf(): void
+    {
+        [, $res, $passed] = $this->dispatchCsrf(
+            $this->makeRequest('POST', handler: ['noCsrf' => true])
         );
         $this->assertTrue($passed);
         $this->assertPassed($res);
