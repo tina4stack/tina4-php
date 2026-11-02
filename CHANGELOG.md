@@ -6,6 +6,14 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.157 - 2026-11-02
+
+### Added
+- Parity regression guard for the Frond malformed-`{% endblock %}` contract
+  (`tests/FrondMalformedEndblockHangTest.php`). PHP's token-bounded template
+  parser is already immune to the hang fixed in tina4-python#271; this locks the
+  contract. Version bump keeps all four frameworks in lockstep.
+
 ## 3.13.156 - 2026-11-01
 
 ### Added
