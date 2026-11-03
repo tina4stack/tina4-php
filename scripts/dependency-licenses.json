@@ -338,7 +338,7 @@
     {
       "ecosystem": "composer",
       "name": "symfony/yaml",
-      "version": "v7.4.15",
+      "version": "v7.4.22",
       "platform": "",
       "lock_license": "MIT",
       "upstream_declaration": "MIT",
