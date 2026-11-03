@@ -357,6 +357,73 @@ class QueryBuilderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // 10b. skip() / offset() / take() — chainable pagination verbs
+    //      (an AI harness reached for ->skip() and it did not exist; tina4#skip)
+    // -------------------------------------------------------------------------
+
+    public function testSkipSkipsLeadingRows(): void
+    {
+        $result = QueryBuilder::fromTable('users', $this->db)
+            ->orderBy('id ASC')
+            ->skip(2)
+            ->limit(2)
+            ->get();
+
+        // Skips Alice + Bob, returns Charlie + Diana
+        $this->assertSame('Charlie', $result['data'][0]['name']);
+        $this->assertSame('Diana', $result['data'][1]['name']);
+    }
+
+    public function testOffsetIsTheSqlNativeAlias(): void
+    {
+        $result = QueryBuilder::fromTable('users', $this->db)
+            ->orderBy('id ASC')
+            ->offset(2)
+            ->limit(2)
+            ->get();
+
+        $this->assertSame('Charlie', $result['data'][0]['name']);
+    }
+
+    public function testTakeSetsTheLimit(): void
+    {
+        $result = QueryBuilder::fromTable('users', $this->db)
+            ->orderBy('id ASC')
+            ->take(3)
+            ->get();
+
+        $this->assertCount(3, $result['data']);
+        $this->assertSame('Charlie', $result['data'][2]['name']);
+    }
+
+    public function testSkipPastTheEndReturnsEmptyNotError(): void
+    {
+        // Negative: skipping beyond the row count yields no rows, not a fatal.
+        $result = QueryBuilder::fromTable('users', $this->db)
+            ->orderBy('id ASC')
+            ->skip(99)
+            ->limit(5)
+            ->get();
+
+        $this->assertCount(0, $result['data']);
+    }
+
+    public function testSkipFlowsIntoToMongo(): void
+    {
+        // The Mongo path already names this concept "skip" — the SQL verb agrees.
+        $mongo = QueryBuilder::fromTable('users', $this->db)->skip(5)->toMongo();
+        $this->assertSame(5, $mongo['skip']);
+    }
+
+    public function testSkipOffsetTakeReturnBuilder(): void
+    {
+        $qb = QueryBuilder::fromTable('users', $this->db);
+        $this->assertSame($qb, $qb->skip(1));
+        $this->assertSame($qb, $qb->offset(1));
+        $this->assertSame($qb, $qb->take(1));
+    }
+
+    // -------------------------------------------------------------------------
     // 11. toSql() generates correct SQL
     // -------------------------------------------------------------------------
 
