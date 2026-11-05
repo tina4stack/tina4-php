@@ -214,6 +214,15 @@ var _frondModule = (() => {
           } else if (el.type !== "radio") {
             fd.append(el.name, "0");
           }
+        } else if (el.type === "select-multiple") {
+          const options = el.selectedOptions;
+          for (let o = 0; o < options.length; o++) {
+            const option = options[o];
+            const group = option.parentElement;
+            if (option.disabled) continue;
+            if (group instanceof HTMLOptGroupElement && group.disabled) continue;
+            fd.append(el.name, option.value);
+          }
         } else {
           fd.append(el.name, el.value === "" ? "" : el.value);
         }
