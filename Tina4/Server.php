@@ -2097,9 +2097,16 @@ class Server
 
         // ADR-0082: the dev reload socket answers only a loopback / TINA4_HOST
         // Host, the same rule the /__dev HTTP gate applies (DNS rebinding).
-        if (str_starts_with((string) preg_replace('#/+#', '/', (string) ($headers['_path'] ?? '/')), '/__dev')
-            && !DevAdmin::devHostAllowed($headers)) {
+        $devPath = str_starts_with((string) preg_replace('#/+#', '/', (string) ($headers['_path'] ?? '/')), '/__dev');
+        if ($devPath && !DevAdmin::devHostAllowed($headers)) {
             $this->sendHttpError($client, 403, 'Forbidden: Host not allowed');
+            return;
+        }
+
+        // ...and only from a raw socket peer the /__dev HTTP gate would let in,
+        // so a remote caller that claims "Host: localhost" cannot open it.
+        if ($devPath && !DevAdmin::devPeerAllowed($this->peerNames[(int) $client] ?? '')) {
+            $this->sendHttpError($client, 403, 'Forbidden: peer not allowed');
             return;
         }
 
