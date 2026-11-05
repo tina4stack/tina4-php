@@ -1007,16 +1007,32 @@ class KafkaBackend implements QueueBackend
     private const COORDINATOR_ERRORS = [14, 15, 16];
 
     /**
+     * How many times an offset op re-resolves the coordinator on a coordinator
+     * error before giving up, and the per-attempt backoff. A single retry is not
+     * enough: on a fresh cluster the coordinator is still being elected after
+     * __consumer_offsets is created, so a re-resolved broker can still answer
+     * NOT_COORDINATOR (16) for a short while.
+     */
+    private const COORDINATOR_RETRIES = 10;
+    private const COORDINATOR_BACKOFF_US = 200000;
+
+    /**
      * Durably commit the group's offset for a partition (the next record to
      * read, i.e. the acknowledged record's offset + 1). A coordinator error
-     * drops the cached coordinator and retries once.
+     * drops the cached coordinator and re-resolves, with a bounded backoff.
      */
     private function commitOffset(string $topic, int $partition, int $offset): void
     {
-        $error = $this->offsetCommitOnce($this->coordinator(), $topic, $partition, $offset);
-        if (in_array($error, self::COORDINATOR_ERRORS, true)) {
-            $this->dropCoordinator();
+        $error = 0;
+        for ($attempt = 0; $attempt < self::COORDINATOR_RETRIES; $attempt++) {
+            if ($attempt > 0) {
+                $this->dropCoordinator();
+                usleep(self::COORDINATOR_BACKOFF_US * $attempt);
+            }
             $error = $this->offsetCommitOnce($this->coordinator(), $topic, $partition, $offset);
+            if (!in_array($error, self::COORDINATOR_ERRORS, true)) {
+                break;
+            }
         }
         if ($error !== 0) {
             throw new \RuntimeException(
@@ -1028,14 +1044,22 @@ class KafkaBackend implements QueueBackend
     /**
      * Read the group's committed offset for a partition — the next record to
      * read, or 0 when the group has committed nothing yet (a brand-new group
-     * starts at the earliest retained record).
+     * starts at the earliest retained record). A coordinator error re-resolves
+     * the coordinator with a bounded backoff.
      */
     private function fetchCommittedOffset(string $topic, int $partition): int
     {
-        [$offset, $error] = $this->offsetFetchOnce($this->coordinator(), $topic, $partition);
-        if (in_array($error, self::COORDINATOR_ERRORS, true)) {
-            $this->dropCoordinator();
+        $offset = 0;
+        $error = 0;
+        for ($attempt = 0; $attempt < self::COORDINATOR_RETRIES; $attempt++) {
+            if ($attempt > 0) {
+                $this->dropCoordinator();
+                usleep(self::COORDINATOR_BACKOFF_US * $attempt);
+            }
             [$offset, $error] = $this->offsetFetchOnce($this->coordinator(), $topic, $partition);
+            if (!in_array($error, self::COORDINATOR_ERRORS, true)) {
+                break;
+            }
         }
         if ($error !== 0) {
             throw new \RuntimeException(
