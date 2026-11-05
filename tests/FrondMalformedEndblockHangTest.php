@@ -10,19 +10,17 @@
 
 use PHPUnit\Framework\TestCase;
 use Tina4\Frond;
+use Tina4\FrondSyntaxError;
 
 /**
- * Parity guard for tina4#271. A child template whose last {% endblock %} is
- * malformed (its closing } missing) must not hang the render.
- *
- * Python's extractBlocks looped forever on this (its inner `while...else`
- * skipped the `else` that advances past a malformed open tag on `break`). PHP's
- * template compiler parses the token stream with a `while ($pos < $count)` loop
- * bounded by the finite token array -- a malformed `{% endblock %` is not
- * tokenised as an endblock tag, so `parse(until: 'endblock')` simply runs to the
- * end and returns -- so PHP is structurally immune. The contract must stay locked
- * in all four frameworks, so this renders the exact malformed template and
- * asserts it returns. No mocks: real .twig files in a real temp dir, real engine.
+ * Parity guard for tina4#271 + tina4#286/#290. A child template whose
+ * {% block %} is never closed — or whose last {% endblock %} is cut short to
+ * `{% endblock %` (its closing `}` missing, so the tokenizer never produces the
+ * tag) — must FAIL LOUD (tina4#286/#290), and must still be bounded so a
+ * reintroduced hang cannot lock the render (tina4#271). PHP's template compiler
+ * parses a finite token array, so it was already hang-immune; the change here is
+ * that an absent endblock now raises instead of silently dropping the body.
+ * No mocks: real .twig files in a real temp dir, real engine.
  */
 class FrondMalformedEndblockHangTest extends TestCase
 {
@@ -33,14 +31,25 @@ class FrondMalformedEndblockHangTest extends TestCase
         return $dir;
     }
 
-    public function testMalformedEndblockInChildDoesNotHang(): void
+    public function testMalformedEndblockInChildFailsLoud(): void
     {
         $dir = $this->tempDir();
         file_put_contents("$dir/base.twig", '<html>{% block content %}default{% endblock %}</html>');
         // The final tag is missing its closing brace: `{% endblock %` not `%}`.
         file_put_contents("$dir/page.twig", "{% extends \"base.twig\" %}\n{% block content %}\n<p>hi</p>\n{% endblock %");
-        $out = (new Frond($dir))->render('page.twig', []);
-        $this->assertIsString($out);
+        $this->expectException(FrondSyntaxError::class);
+        $this->expectExceptionMessageMatches('/content/');
+        (new Frond($dir))->render('page.twig', []);
+    }
+
+    public function testUnclosedBlockFailsLoud(): void
+    {
+        $dir = $this->tempDir();
+        file_put_contents("$dir/base.twig", '<html>{% block content %}default{% endblock %}</html>');
+        // No {% endblock %} at all.
+        file_put_contents("$dir/page.twig", "{% extends \"base.twig\" %}\n{% block content %}\n<p>hi</p>\n");
+        $this->expectException(FrondSyntaxError::class);
+        (new Frond($dir))->render('page.twig', []);
     }
 
     public function testWellFormedChildStillSubstitutes(): void

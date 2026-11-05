@@ -929,6 +929,15 @@ class Frond
         $name = trim($name);
         $pos++; // skip {% block name %}
         $body = $this->parse($tokens, $pos, 'endblock');
+        // parse() stops either on the endblock token or at end-of-input. If the
+        // endblock is absent (unclosed block), or cut short to `{% endblock %`
+        // so the tokenizer never produced the tag, fail loud (tina4#286/#290)
+        // rather than silently dropping the body.
+        if ($pos >= count($tokens) || !$this->tagMatches($tokens[$pos]['value'] ?? '', 'endblock')) {
+            throw new FrondSyntaxError(
+                "{% block {$name} %} is never closed (missing or malformed {% endblock %})"
+            );
+        }
         $pos++; // skip endblock
         return ['type' => 'block', 'name' => $name, 'body' => $body];
     }
@@ -3561,6 +3570,48 @@ class Frond
 
     /* ───────────────────── built-in filters ───────────────────── */
 
+    /**
+     * Translate a strftime format into a PHP date() format string (ADR-0103).
+     *
+     * The `date` filter is Twig-compatible and natively takes PHP date() letters
+     * (`Y-m-d`). This lets a strftime-style format (`%Y-%m-%d`), the spelling the
+     * other three Tina4 frameworks grew up on, keep working too: each `%X` code
+     * becomes its date() equivalent and every literal alphabetic character is
+     * backslash-escaped so date() does not reinterpret it. An unknown `%X` code
+     * degrades to the literal letter.
+     *
+     * @param string $fmt A strftime-style format (one containing `%`).
+     * @return string The equivalent PHP date() format.
+     */
+    public static function strftimeToPhpDate(string $fmt): string
+    {
+        $map = [
+            'Y' => 'Y', 'y' => 'y', 'm' => 'm', 'd' => 'd', 'H' => 'H',
+            'M' => 'i', 'S' => 's', 'I' => 'h', 'p' => 'A',
+            'B' => 'F', 'b' => 'M', 'A' => 'l', 'a' => 'D',
+        ];
+        $out = '';
+        $n = strlen($fmt);
+        for ($i = 0; $i < $n; $i++) {
+            $c = $fmt[$i];
+            if ($c === '%' && $i + 1 < $n) {
+                $code = $fmt[++$i];
+                if ($code === '%') {
+                    $out .= '%';
+                } elseif (isset($map[$code])) {
+                    $out .= $map[$code];
+                } else {
+                    $out .= '\\' . $code;
+                }
+            } elseif (ctype_alpha($c)) {
+                $out .= '\\' . $c;   // literal letter — never a date() code
+            } else {
+                $out .= $c;
+            }
+        }
+        return $out;
+    }
+
     private function registerBuiltinFilters(): void
     {
         // Text filters
@@ -3617,6 +3668,11 @@ class Frond
 
         // Date
         $this->filters['date'] = function($v, $format = 'Y-m-d') {
+            // A strftime-style format (any with %) is translated to PHP date()
+            // letters so it matches the Python/Ruby/Node spelling (ADR-0103).
+            if (strpos((string)$format, '%') !== false) {
+                $format = self::strftimeToPhpDate((string)$format);
+            }
             if ($v instanceof \DateTimeInterface) {
                 return $v->format($format);
             }

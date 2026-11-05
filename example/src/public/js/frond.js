@@ -204,6 +204,13 @@ var _frondModule = (() => {
           } else if (el.type !== "radio") {
             fd.append(el.name, "0");
           }
+        } else if (el.tagName === "SELECT" && el.multiple) {
+          // A <select multiple> yields only its FIRST selected option via
+          // el.value; iterate selectedOptions so every chosen value is sent
+          // (tina4-php#348). name="x[]" then round-trips all values.
+          for (let o = 0; o < el.selectedOptions.length; o++) {
+            fd.append(el.name, el.selectedOptions[o].value);
+          }
         } else {
           fd.append(el.name, el.value === "" ? "" : el.value);
         }
