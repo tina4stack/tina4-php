@@ -705,6 +705,11 @@ class Server
      */
     private function acceptLoop(): void
     {
+            // Raw TCP services (feature 142, ADR-0102 D1) fold into THIS accept
+            // loop — same process as HTTP, no second loop, no forked worker per
+            // connection. Each binds its own port; a worker that finds the port
+            // already bound skips silently (single-owner, SO_REUSEPORT off).
+            Tcp::startAll($this->host);
             while ($this->running) {
                 // Dispatch pending signals
                 if (function_exists('pcntl_signal_dispatch')) {
@@ -752,6 +757,10 @@ class Server
                 if ($this->aiSocket !== null) {
                     $read[] = $this->aiSocket;
                 }
+                // Raw TCP service listen + client sockets share this select set.
+                foreach (Tcp::readResources() as $tcpResourceId => $tcpSocket) {
+                    $read[$tcpResourceId] = $tcpSocket;
+                }
                 $write = null;
                 $except = null;
 
@@ -780,6 +789,9 @@ class Server
                     $this->wsBackplane?->poll();
                     $this->reapIdleWebSocketClients();
                     $this->reapIdleHttpClients();
+                    // Raw TCP services: flush pending writes + reap idle device
+                    // connections on the same idle tick.
+                    Tcp::onIdleAll();
 
                     // Check for pending reload from Rust CLI (POST /__dev/api/reload)
                     if (DevAdmin::$pendingReload) {
@@ -794,6 +806,15 @@ class Server
                     // and a handler can close its own client, so a handle chosen by
                     // stream_select may already be gone by the time we reach it.
                     if (!is_resource($socket)) {
+                        continue;
+                    }
+
+                    // Raw TCP service traffic (accept on a listener, read on a
+                    // client) is dispatched before the HTTP branches and never
+                    // forks — the handler runs synchronously in this loop.
+                    $tcpService = Tcp::serviceForSocket($socket);
+                    if ($tcpService !== null) {
+                        $tcpService->handleReadable($socket);
                         continue;
                     }
 
@@ -879,6 +900,8 @@ class Server
         $this->shutdownTimeout = self::resolveShutdownTimeout();
 
         $this->closeListeners();
+        // Raw TCP listeners stop accepting at the same moment as HTTP.
+        Tcp::stopAcceptingAll();
         // Drop our identity marker so a later takeover does not match a dead PID.
         PortTakeover::removePidfile($this->port);
 
@@ -2995,6 +3018,10 @@ class Server
         $this->buffers = [];
         $this->peerNames = [];
         $this->aiPortConnections = [];
+
+        // Raw TCP services drain their live device connections (firing on_close)
+        // alongside the HTTP drain, within the same deadline.
+        Tcp::drainAll();
 
         // Normally already closed by stop(); this covers the paths that reach
         // cleanup() without a signal.
