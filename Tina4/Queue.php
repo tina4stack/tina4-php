@@ -184,6 +184,24 @@ class Queue
     }
 
     /**
+     * Dequeue a record for consumption, preferring a backend's dequeueRecord()
+     * when it offers one. A backend that ties a popped record to a durable
+     * position (Kafka's consumer-group offset) returns a job dict carrying the id
+     * acknowledge() needs — and, for an externally-produced record with no Tina4
+     * envelope, the id that makes it consumable at all. Every other backend has
+     * no dequeueRecord() and uses dequeue() exactly as before.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function recordDequeue(object $backend, string $topic): ?array
+    {
+        if (method_exists($backend, 'dequeueRecord')) {
+            return $backend->dequeueRecord($topic);
+        }
+        return $backend->dequeue($topic);
+    }
+
+    /**
      * Pop the next available job from the queue.
      *
      * Returns a Job, not the raw array. Until 3.13.95 it returned the backend
@@ -202,7 +220,7 @@ class Queue
     {
         // Delegate to external backend if configured
         if ($this->externalBackend !== null) {
-            return $this->asJob($this->externalBackend->dequeue($this->topic));
+            return $this->asJob($this->recordDequeue($this->externalBackend, $this->topic));
         }
 
         return $this->asJob($this->liteBackend->dequeue($this->topic));
@@ -225,7 +243,7 @@ class Queue
         // Fallback for external backends
         $jobs = [];
         for ($i = 0; $i < $count; $i++) {
-            $job = $backend->dequeue($this->topic);
+            $job = $this->recordDequeue($backend, $this->topic);
             if ($job === null) break;
             $jobs[] = $this->asJob($job);
         }
@@ -294,7 +312,7 @@ class Queue
         } else {
             while ($maxJobs === null || $processed < $maxJobs) {
                 $data = $this->externalBackend !== null
-                    ? $this->externalBackend->dequeue($queue)
+                    ? $this->recordDequeue($this->externalBackend, $queue)
                     : $this->liteBackend->dequeue($queue);
                 if ($data === null) {
                     break;
@@ -741,7 +759,7 @@ class Queue
         } else {
             while (true) {
                 $data = $this->externalBackend !== null
-                    ? $this->externalBackend->dequeue($topic)
+                    ? $this->recordDequeue($this->externalBackend, $topic)
                     : $this->liteBackend->dequeue($topic);
                 if ($data === null) {
                     if ($pollInterval <= 0) {
