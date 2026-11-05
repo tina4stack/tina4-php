@@ -16,7 +16,7 @@ The full discipline lives in `.claude/skills/tina4-maintainer/SKILL.md`; this bl
 
 # Tina4 PHP
 
-Version 3.13.157 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
+Version 3.13.158 - Full Tina4 PHP framework and application scaffold. See https://tina4.com for full documentation.
 
 ## Build & Test
 
@@ -429,8 +429,9 @@ $total = QueryBuilder::fromTable("orders")
 $results = (new User())->query()->where("age > ?", [18])->orderBy("name")->get();
 
 // Methods: fromTable(), select(), where(), orWhere(), join(), leftJoin(),
-//          groupBy(), having(), orderBy(), limit(), get(), first(), count(),
-//          exists(), toSql(), toMongo()
+//          groupBy(), having(), orderBy(), limit(), offset(), skip(), take(),
+//          get(), first(), count(), exists(), toSql(), toMongo()
+//          (skip()/take() are the Mongo/Eloquent aliases of offset()/limit())
 ```
 
 NoSQL support: `toMongo()` generates MongoDB query documents from the same fluent API.

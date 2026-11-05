@@ -48,6 +48,21 @@ class KafkaBackend implements QueueBackend
     /** @var array<string, bool> Topics we have sent initial metadata for */
     private array $knownTopics = [];
 
+    /**
+     * Records polled but not yet acknowledged, keyed by the id the Queue layer
+     * will hand back to acknowledge(), valued by the record's Kafka offset. A
+     * durable OffsetCommit of offset+1 is what keeps complete()/reject() from
+     * replaying on a restart (ADR-0022 decisions 2 + 4). Keyed by id, not a
+     * single "last record" slot (decision 3): a Tina4 record carries its own id,
+     * an external record is wrapped under its topic:partition:offset coordinate.
+     *
+     * @var array<string, int>
+     */
+    private array $inFlight = [];
+
+    /** @var resource|null Socket to the group coordinator, for OffsetCommit/OffsetFetch. */
+    private $coordinatorSocket = null;
+
     /** @var array<string, string> Resolved SSL/SASL client config (empty = PLAINTEXT). */
     private array $security = [];
 
@@ -158,13 +173,6 @@ class KafkaBackend implements QueueBackend
     public function connect(): void
     {
         $brokerList = explode(',', $this->brokers);
-        $connected = false;
-
-        // Honour the resolved security config: an SSL/SASL_SSL security.protocol
-        // means the transport is TLS — open a tls:// socket (with the optional
-        // ssl.ca.location CA bundle) instead of a plain TCP one.
-        $protocol = strtoupper($this->security['security.protocol'] ?? 'PLAINTEXT');
-        $useTls = str_contains($protocol, 'SSL');
 
         foreach ($brokerList as $broker) {
             $broker = trim($broker);
@@ -172,39 +180,57 @@ class KafkaBackend implements QueueBackend
             $host = $parts[0];
             $port = (int)($parts[1] ?? 9092);
 
-            if ($useTls) {
-                $sslOpts = ['verify_peer' => true, 'verify_peer_name' => true];
-                if (!empty($this->security['ssl.ca.location'])) {
-                    $sslOpts['cafile'] = $this->security['ssl.ca.location'];
-                }
-                $context = stream_context_create(['ssl' => $sslOpts]);
-                $this->socket = @stream_socket_client(
-                    "tls://{$host}:{$port}",
-                    $errno,
-                    $errstr,
-                    10,
-                    STREAM_CLIENT_CONNECT,
-                    $context
-                );
-            } else {
-                $this->socket = @fsockopen($host, $port, $errno, $errstr, 10);
-            }
-
-            if ($this->socket) {
-                stream_set_timeout($this->socket, 30);
-                $connected = true;
-                break;
+            $socket = $this->openSocket($host, $port);
+            if ($socket !== null) {
+                $this->socket = $socket;
+                return;
             }
         }
 
-        if (!$connected) {
-            // Reset to null, never leave the FALSE the last attempt returned:
-            // ensureConnected() reconnects only when the socket is null, so a
-            // stored false made every later call fwrite(false, ...) and die with
-            // a TypeError instead of this clean, reconnectable exception.
-            $this->socket = null;
-            throw new \RuntimeException("Kafka connection failed: could not connect to any broker in [{$this->brokers}]");
+        // Reset to null, never leave the FALSE the last attempt returned:
+        // ensureConnected() reconnects only when the socket is null, so a
+        // stored false made every later call fwrite(false, ...) and die with
+        // a TypeError instead of this clean, reconnectable exception.
+        $this->socket = null;
+        throw new \RuntimeException("Kafka connection failed: could not connect to any broker in [{$this->brokers}]");
+    }
+
+    /**
+     * Open one TCP (or TLS) socket to a broker, honouring the resolved security
+     * config: an SSL/SASL_SSL security.protocol means the transport is TLS (with
+     * the optional ssl.ca.location CA bundle) instead of a plain TCP socket.
+     *
+     * @return resource|null The connected socket, or null if the connect failed.
+     */
+    private function openSocket(string $host, int $port)
+    {
+        $protocol = strtoupper($this->security['security.protocol'] ?? 'PLAINTEXT');
+        $useTls = str_contains($protocol, 'SSL');
+
+        if ($useTls) {
+            $sslOpts = ['verify_peer' => true, 'verify_peer_name' => true];
+            if (!empty($this->security['ssl.ca.location'])) {
+                $sslOpts['cafile'] = $this->security['ssl.ca.location'];
+            }
+            $context = stream_context_create(['ssl' => $sslOpts]);
+            $socket = @stream_socket_client(
+                "tls://{$host}:{$port}",
+                $errno,
+                $errstr,
+                10,
+                STREAM_CLIENT_CONNECT,
+                $context
+            );
+        } else {
+            $socket = @fsockopen($host, $port, $errno, $errstr, 10);
         }
+
+        if ($socket) {
+            stream_set_timeout($socket, 30);
+            return $socket;
+        }
+
+        return null;
     }
 
     /** {@inheritDoc} */
@@ -252,28 +278,104 @@ class KafkaBackend implements QueueBackend
     /** {@inheritDoc} */
     public function dequeue(string $topic): ?array
     {
+        // The value exactly as it sits on the wire — a Tina4 envelope as
+        // produced, an external record as its bare bytes (tina4#264). The Queue
+        // facade consumes through dequeueRecord() instead, which also normalises
+        // and tracks the offset for acknowledge().
+        $next = $this->fetchNext($topic);
+        return $next === null ? null : $next['message'];
+    }
+
+    /**
+     * Consume the next record AND make it acknowledge-able: return a normalised
+     * job dict and remember its offset so acknowledge() can commit it.
+     *
+     * A record carrying a "payload" key is a Tina4 envelope, left as-is with its
+     * own id kept (a missing/blank id falls back to the record coordinate). A
+     * record without one is externally produced (Debezium CDC and friends, no
+     * envelope, no id — tina4#274): it is wrapped so its bytes stay the untouched
+     * payload and the topic:partition:offset coordinate becomes its id. Either
+     * way the Queue facade gets the id Job requires (a bare value would crash
+     * pop()), and the id is what acknowledge() maps back to the offset.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function dequeueRecord(string $topic): ?array
+    {
+        $next = $this->fetchNext($topic);
+        if ($next === null) {
+            return null;
+        }
+
+        $recordOffset = $next['offset'];
+        $coordinate = "{$topic}:0:{$recordOffset}";
+        $decoded = $next['message'];
+
+        if (array_key_exists('payload', $decoded)) {
+            $message = $decoded;
+            if (!isset($message['id']) || $message['id'] === '') {
+                $message['id'] = $coordinate;
+            }
+        } else {
+            $message = ['id' => $coordinate, 'payload' => $decoded, 'attempts' => 0];
+        }
+
+        $this->inFlight[(string) $message['id']] = $recordOffset;
+
+        return $message;
+    }
+
+    /**
+     * Fetch the next record, resuming from the durably committed offset on the
+     * FIRST read of a topic in this process so a restart continues where the
+     * group left off instead of replaying the whole log from 0 (ADR-0022
+     * decision 4). With nothing committed yet the fetch starts at 0 (earliest),
+     * exactly as before. deadLetters() seeds offsets[$dlq]=0 explicitly, so the
+     * resume never runs for a dead-letter read.
+     *
+     * The in-memory cursor advances on every read; the DURABLE committed offset
+     * only moves on acknowledge(), so it lags the cursor and a crash before the
+     * acknowledge replays from the last completed record (at-least-once).
+     *
+     * @return array{message: array<string, mixed>, offset: int}|null
+     */
+    private function fetchNext(string $topic): ?array
+    {
         $this->ensureConnected();
         $this->ensureTopicMetadata($topic);
 
-        $offset = $this->offsets[$topic] ?? 0;
-        $result = $this->sendFetch($topic, $offset);
+        if (!array_key_exists($topic, $this->offsets)) {
+            $this->offsets[$topic] = $this->fetchCommittedOffset($topic, 0);
+        }
 
+        $result = $this->sendFetch($topic, $this->offsets[$topic]);
         if ($result === null) {
             return null;
         }
 
-        // Advance offset
         $this->offsets[$topic] = $result['nextOffset'];
 
-        return $result['message'];
+        return [
+            'message' => $result['message'],
+            'offset' => $result['nextOffset'] - 1,
+        ];
     }
 
     /** {@inheritDoc} */
     public function acknowledge(string $topic, string $messageId): void
     {
-        // In this simple implementation, offset advancement in dequeue
-        // serves as acknowledgment. For full Kafka consumer group support,
-        // OffsetCommit would be sent here.
+        // Commit the offset JUST PAST the acknowledged record so the group never
+        // re-reads it, even across a restart (ADR-0022 decisions 2 + 4). The
+        // offset is the one dequeue() recorded against this message's id; an id
+        // we never dequeued (or already acked) is a no-op, not an error.
+        if (!array_key_exists($messageId, $this->inFlight)) {
+            return;
+        }
+
+        $offset = $this->inFlight[$messageId];
+        unset($this->inFlight[$messageId]);
+
+        $this->commitOffset($topic, 0, $offset + 1);
     }
 
     /** {@inheritDoc} */
@@ -411,6 +513,10 @@ class KafkaBackend implements QueueBackend
             fclose($this->socket);
             $this->socket = null;
         }
+        if ($this->coordinatorSocket) {
+            fclose($this->coordinatorSocket);
+            $this->coordinatorSocket = null;
+        }
     }
 
     // ── Kafka Protocol Implementation ────────────────────────────
@@ -439,7 +545,19 @@ class KafkaBackend implements QueueBackend
      */
     private function readResponse(): string
     {
-        $header = fread($this->socket, 4);
+        return $this->readResponseFrom($this->socket);
+    }
+
+    /**
+     * Read a Kafka response from a specific socket (the main broker socket, or
+     * the coordinator socket for offset ops).
+     *
+     * @param resource $socket
+     * @return string The response payload (after length + correlationId)
+     */
+    private function readResponseFrom($socket): string
+    {
+        $header = fread($socket, 4);
         if (strlen($header) < 4) {
             throw new \RuntimeException('Failed to read Kafka response length');
         }
@@ -449,7 +567,7 @@ class KafkaBackend implements QueueBackend
         $remaining = $length;
 
         while ($remaining > 0) {
-            $chunk = fread($this->socket, min($remaining, 8192));
+            $chunk = fread($socket, min($remaining, 8192));
             if ($chunk === false || $chunk === '') {
                 throw new \RuntimeException('Failed to read Kafka response payload');
             }
@@ -476,8 +594,18 @@ class KafkaBackend implements QueueBackend
      */
     private function sendRequest(string $data): void
     {
+        $this->sendRequestTo($this->socket, $data);
+    }
+
+    /**
+     * Send a complete Kafka request (with length prefix) on a specific socket.
+     *
+     * @param resource $socket
+     */
+    private function sendRequestTo($socket, string $data): void
+    {
         $frame = pack('N', strlen($data)) . $data;
-        fwrite($this->socket, $frame);
+        fwrite($socket, $frame);
     }
 
     /**
@@ -859,5 +987,262 @@ class KafkaBackend implements QueueBackend
             'message' => $message,
             'nextOffset' => $record['offset'] + 1,
         ];
+    }
+
+    // ── Consumer-group offsets (OffsetCommit / OffsetFetch) ──────────
+    //
+    // Durable, broker-side offsets keyed by TINA4_KAFKA_GROUP_ID, using the
+    // "simple consumer" pattern (generation_id -1, empty member_id) so the
+    // group's committed offset survives a restart WITHOUT a full
+    // JoinGroup/SyncGroup/Heartbeat membership. Non-flexible protocol versions
+    // (FindCoordinator v1, OffsetCommit v2, OffsetFetch v1) so the existing
+    // int16/int32 string helpers apply -- the lowest versions that avoid the
+    // tagged-field/compact-string "flexible" encoding, the same spirit as the
+    // Produce v3 / Fetch v4 floor above. Offset ops MUST reach the group
+    // coordinator (anything else answers NOT_COORDINATOR), so they run on a
+    // dedicated socket resolved via FindCoordinator; in a single-broker cluster
+    // that is the connected broker reached on a second socket.
+
+    /** @var int[] COORDINATOR_LOAD_IN_PROGRESS, COORDINATOR_NOT_AVAILABLE, NOT_COORDINATOR. */
+    private const COORDINATOR_ERRORS = [14, 15, 16];
+
+    /**
+     * How many times an offset op re-resolves the coordinator on a coordinator
+     * error before giving up, and the per-attempt backoff. A single retry is not
+     * enough: on a fresh cluster the coordinator is still being elected after
+     * __consumer_offsets is created, so a re-resolved broker can still answer
+     * NOT_COORDINATOR (16) for a short while.
+     */
+    private const COORDINATOR_RETRIES = 10;
+    private const COORDINATOR_BACKOFF_US = 200000;
+
+    /**
+     * Durably commit the group's offset for a partition (the next record to
+     * read, i.e. the acknowledged record's offset + 1). A coordinator error
+     * drops the cached coordinator and re-resolves, with a bounded backoff.
+     */
+    private function commitOffset(string $topic, int $partition, int $offset): void
+    {
+        $error = 0;
+        for ($attempt = 0; $attempt < self::COORDINATOR_RETRIES; $attempt++) {
+            if ($attempt > 0) {
+                $this->dropCoordinator();
+                usleep(self::COORDINATOR_BACKOFF_US * $attempt);
+            }
+            $error = $this->offsetCommitOnce($this->coordinator(), $topic, $partition, $offset);
+            if (!in_array($error, self::COORDINATOR_ERRORS, true)) {
+                break;
+            }
+        }
+        if ($error !== 0) {
+            throw new \RuntimeException(
+                "Kafka rejected the offset commit for {$topic}:{$partition}: error code {$error}"
+            );
+        }
+    }
+
+    /**
+     * Read the group's committed offset for a partition — the next record to
+     * read, or 0 when the group has committed nothing yet (a brand-new group
+     * starts at the earliest retained record). A coordinator error re-resolves
+     * the coordinator with a bounded backoff.
+     */
+    private function fetchCommittedOffset(string $topic, int $partition): int
+    {
+        $offset = 0;
+        $error = 0;
+        for ($attempt = 0; $attempt < self::COORDINATOR_RETRIES; $attempt++) {
+            if ($attempt > 0) {
+                $this->dropCoordinator();
+                usleep(self::COORDINATOR_BACKOFF_US * $attempt);
+            }
+            [$offset, $error] = $this->offsetFetchOnce($this->coordinator(), $topic, $partition);
+            if (!in_array($error, self::COORDINATOR_ERRORS, true)) {
+                break;
+            }
+        }
+        if ($error !== 0) {
+            throw new \RuntimeException(
+                "Kafka rejected the offset fetch for {$topic}:{$partition}: error code {$error}"
+            );
+        }
+        return $offset < 0 ? 0 : $offset;
+    }
+
+    /**
+     * The group-coordinator socket, resolved and cached on first use. OffsetCommit
+     * and OffsetFetch go here; a non-coordinator broker answers NOT_COORDINATOR.
+     *
+     * @return resource
+     */
+    private function coordinator()
+    {
+        if ($this->coordinatorSocket !== null) {
+            return $this->coordinatorSocket;
+        }
+        $this->ensureConnected();
+        [$host, $port] = $this->findCoordinator();
+        $socket = $this->openSocket($host, (int) $port);
+        if ($socket === null) {
+            throw new \RuntimeException(
+                "Kafka group coordinator at {$host}:{$port} is not reachable for offset commits"
+            );
+        }
+        $this->coordinatorSocket = $socket;
+        return $socket;
+    }
+
+    /** Drop the cached coordinator socket so the next offset op re-resolves it. */
+    private function dropCoordinator(): void
+    {
+        if ($this->coordinatorSocket) {
+            fclose($this->coordinatorSocket);
+        }
+        $this->coordinatorSocket = null;
+    }
+
+    /**
+     * FindCoordinator v1 for the consumer group, on the main broker socket.
+     * Retried while the coordinator is still loading: a fresh cluster creates
+     * the internal __consumer_offsets topic on the first call and answers
+     * COORDINATOR_NOT_AVAILABLE (15) / LOAD_IN_PROGRESS (14) until it is ready.
+     *
+     * @return array{0: string, 1: int} [host, port]
+     */
+    private function findCoordinator(): array
+    {
+        for ($attempt = 0; $attempt < 30; $attempt++) {
+            $header = $this->requestHeader(10, 1);
+            $body = $this->kafkaString($this->groupId) . pack('C', 0); // key_type 0 = group
+            $this->sendRequest($header . $body);                       // main socket
+            $r = $this->readResponse();
+
+            $pos = 4;                                                  // throttle_time_ms
+            $error = unpack('n', substr($r, $pos, 2))[1];
+            $pos += 2;
+            $pos = $this->skipNullableString($r, $pos);                // error_message
+            $pos += 4;                                                 // node_id
+            [$host, $pos] = $this->readKafkaString($r, $pos);
+            $port = unpack('N', substr($r, $pos, 4))[1];
+
+            if ($error === 0 && $host !== '') {
+                return [$host, $port];
+            }
+            if (!in_array($error, [14, 15], true)) {
+                throw new \RuntimeException(
+                    "Kafka FindCoordinator failed for group {$this->groupId}: error code {$error}"
+                );
+            }
+            usleep(300000); // coordinator still loading — back off and retry
+        }
+        throw new \RuntimeException(
+            "Kafka group coordinator for {$this->groupId} did not become available"
+        );
+    }
+
+    /**
+     * One OffsetCommit v2 round trip. Returns the partition error code (0 = ok);
+     * an empty topics/partitions array (this broker is not the coordinator)
+     * reports as NOT_COORDINATOR (16) so the caller re-resolves.
+     *
+     * @param resource $socket
+     */
+    private function offsetCommitOnce($socket, string $topic, int $partition, int $offset): int
+    {
+        $header = $this->requestHeader(8, 2);
+        $body = $this->kafkaString($this->groupId)
+            . pack('N', -1)                           // generation_id -1 (simple consumer)
+            . $this->kafkaString('')                  // member_id ""
+            . pack('J', -1)                           // retention_time -1 (broker default)
+            . pack('N', 1)                            // 1 topic
+            . $this->kafkaString($topic)
+            . pack('N', 1)                            // 1 partition
+            . pack('N', $partition)
+            . pack('J', $offset)                      // committed offset
+            . pack('n', 0xFFFF);                      // committed_metadata = null
+
+        $this->sendRequestTo($socket, $header . $body);
+        $r = $this->readResponseFrom($socket);
+
+        $pos = 0;
+        $topicCount = unpack('N', substr($r, $pos, 4))[1];
+        $pos += 4;
+        if ($topicCount === 0) {
+            return 16;                                // not the coordinator
+        }
+        [, $pos] = $this->readKafkaString($r, $pos);  // topic name
+        $partCount = unpack('N', substr($r, $pos, 4))[1];
+        $pos += 4;
+        if ($partCount === 0) {
+            return 16;
+        }
+        $pos += 4;                                    // partition index
+        return unpack('n', substr($r, $pos, 2))[1];   // error_code
+    }
+
+    /**
+     * One OffsetFetch v1 round trip. Returns [committedOffset, errorCode];
+     * committedOffset is -1 when the group has committed nothing, and an empty
+     * topics/partitions array (not the coordinator) reports as NOT_COORDINATOR.
+     *
+     * @param resource $socket
+     * @return array{0: int, 1: int}
+     */
+    private function offsetFetchOnce($socket, string $topic, int $partition): array
+    {
+        $header = $this->requestHeader(9, 1);
+        $body = $this->kafkaString($this->groupId)
+            . pack('N', 1)                            // 1 topic
+            . $this->kafkaString($topic)
+            . pack('N', 1)                            // 1 partition
+            . pack('N', $partition);
+
+        $this->sendRequestTo($socket, $header . $body);
+        $r = $this->readResponseFrom($socket);
+
+        $pos = 0;
+        $topicCount = unpack('N', substr($r, $pos, 4))[1];
+        $pos += 4;
+        if ($topicCount === 0) {
+            return [-1, 16];                          // not the coordinator
+        }
+        [, $pos] = $this->readKafkaString($r, $pos);  // topic name
+        $partCount = unpack('N', substr($r, $pos, 4))[1];
+        $pos += 4;
+        if ($partCount === 0) {
+            return [-1, 16];
+        }
+        $pos += 4;                                    // partition index
+        $offset = unpack('J', substr($r, $pos, 8))[1];
+        $pos += 8;
+        $pos = $this->skipNullableString($r, $pos);   // metadata
+        $error = unpack('n', substr($r, $pos, 2))[1];
+        return [$offset, $error];
+    }
+
+    /**
+     * Read an int16-length-prefixed Kafka string.
+     *
+     * @return array{0: string, 1: int} [string, newPosition]
+     */
+    private function readKafkaString(string $buf, int $pos): array
+    {
+        $len = unpack('n', substr($buf, $pos, 2))[1];
+        $pos += 2;
+        if ($len === 0xFFFF) {                        // -1 = null
+            return ['', $pos];
+        }
+        return [substr($buf, $pos, $len), $pos + $len];
+    }
+
+    /** Skip a nullable (int16 length, -1 = null) string field; returns the new position. */
+    private function skipNullableString(string $buf, int $pos): int
+    {
+        $len = unpack('n', substr($buf, $pos, 2))[1];
+        $pos += 2;
+        if ($len !== 0xFFFF) {
+            $pos += $len;
+        }
+        return $pos;
     }
 }

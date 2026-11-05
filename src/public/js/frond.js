@@ -23,6 +23,13 @@ var _frondModule = (() => {
     frond: () => frond
   });
   var _token = null;
+  function _sameOrigin(url) {
+    try {
+      return new URL(url, window.location.href).origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
   function request(url, options) {
     let opts;
     if (typeof options === "function") {
@@ -33,7 +40,8 @@ var _frondModule = (() => {
     const method = (opts.method || "GET").toUpperCase();
     const xhr = new XMLHttpRequest();
     xhr.open(method, url, true);
-    if (_token !== null) {
+    const sameOrigin = _sameOrigin(url);
+    if (_token !== null && sameOrigin) {
       xhr.setRequestHeader("Authorization", "Bearer " + _token);
     }
     if (opts.headers) {
@@ -57,7 +65,8 @@ var _frondModule = (() => {
     }
     xhr.onload = function() {
       const freshToken = xhr.getResponseHeader("FreshToken");
-      if (freshToken && freshToken !== "") {
+      const answeredBySameOrigin = sameOrigin && (!xhr.responseURL || _sameOrigin(xhr.responseURL));
+      if (freshToken && freshToken !== "" && answeredBySameOrigin) {
         _token = freshToken;
       }
       let content = xhr.response;
@@ -169,8 +178,12 @@ var _frondModule = (() => {
      * Collect all form field values into a FormData object.
      *
      * Handles inputs, selects, textareas, file uploads (including
-     * multi-file), checkboxes, and radio buttons. Updates formToken
-     * hidden fields automatically.
+     * multi-file), checkboxes, and radio buttons.
+     *
+     * A `formToken` field is sent as the server rendered it. frond never
+     * writes the bearer into it: the bearer travels in the Authorization
+     * header (own origin only), and the server accepts only a form token in
+     * the formToken slot.
      *
      * @param formId - DOM id of the form (without '#').
      * @returns Populated FormData instance.
@@ -180,9 +193,6 @@ var _frondModule = (() => {
       const elements = document.querySelectorAll("#" + formId + " select, #" + formId + " input, #" + formId + " textarea");
       for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
-        if (el.name === "formToken" && _token !== null) {
-          el.value = _token;
-        }
         if (!el.name) continue;
         if (el.type === "file") {
           const files = el.files;
@@ -203,6 +213,15 @@ var _frondModule = (() => {
             fd.append(el.name, el.value);
           } else if (el.type !== "radio") {
             fd.append(el.name, "0");
+          }
+        } else if (el.type === "select-multiple") {
+          const options = el.selectedOptions;
+          for (let o = 0; o < options.length; o++) {
+            const option = options[o];
+            const group = option.parentElement;
+            if (option.disabled) continue;
+            if (group instanceof HTMLOptGroupElement && group.disabled) continue;
+            fd.append(el.name, option.value);
           }
         } else {
           fd.append(el.name, el.value === "" ? "" : el.value);

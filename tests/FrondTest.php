@@ -2416,4 +2416,60 @@ TPL;
         );
         $this->assertSame('2026-05-05', $out);
     }
+
+    // ── Date Filter: both conventions (ADR-0103, #292) ─────────
+    // 2026-03-29 14:05:09 is a Sunday.
+
+    public function testDatePhpLettersYmd(): void
+    {
+        $this->assertSame(
+            '2026-03-29',
+            $this->engine->renderString('{{ v|date("Y-m-d") }}', ['v' => '2026-03-29'])
+        );
+    }
+
+    public function testDateStrftimeNowWorks(): void
+    {
+        // The strftime spelling used to print "%2026-03-29"; now it matches.
+        $this->assertSame(
+            '2026-03-29',
+            $this->engine->renderString('{{ v|date("%Y-%m-%d") }}', ['v' => '2026-03-29'])
+        );
+    }
+
+    public function testDateBothConventionsAgree(): void
+    {
+        $php = $this->engine->renderString('{{ v|date("Y-m-d H:i:s") }}', ['v' => '2026-03-29 14:05:09']);
+        $strf = $this->engine->renderString('{{ v|date("%Y-%m-%d %H:%M:%S") }}', ['v' => '2026-03-29 14:05:09']);
+        $this->assertSame($php, $strf);
+        $this->assertSame('2026-03-29 14:05:09', $php);
+    }
+
+    public function testDatePhpLettersNames(): void
+    {
+        $out = $this->engine->renderString(
+            '{{ v|date("l, F j, Y") }}',
+            ['v' => '2026-03-29 14:05:09']
+        );
+        $this->assertSame('Sunday, March 29, 2026', $out);
+    }
+
+    public function testDateStrftimeNamesMatchPhp(): void
+    {
+        // A strftime format with literal words keeps the words literal (%A at %H)
+        // rather than letting date() reinterpret the 'a'/'t' of " at ".
+        $out = $this->engine->renderString(
+            '{{ v|date("%A at %H:%M") }}',
+            ['v' => '2026-03-29 14:05:09']
+        );
+        $this->assertSame('Sunday at 14:05', $out);
+    }
+
+    public function testDateUnparseableReturnsValue(): void
+    {
+        $this->assertSame(
+            'not a date',
+            $this->engine->renderString('{{ v|date("Y-m-d") }}', ['v' => 'not a date'])
+        );
+    }
 }

@@ -127,6 +127,10 @@ class DevReloadWsTest extends TestCase
         Router::websocket($path, function ($connection, $data, $event) {
         });
         [$near, $far] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        // Production records the raw peer at accept(); a socket pair has none,
+        // so record the loopback peer a local browser would have.
+        $peers = new \ReflectionProperty(Server::class, 'peerNames');
+        $peers->setValue($server, [(int) $near => '127.0.0.1'] + $peers->getValue($server));
 
         (new \ReflectionMethod(Server::class, 'handleWebSocketUpgrade'))->invoke($server, $near, [
             '_method' => 'GET',
@@ -189,6 +193,63 @@ class DevReloadWsTest extends TestCase
 
         $this->assertNotNull($matched, '/__dev_reload must be a registered WS route');
         $this->assertSame('/__dev_reload', $matched['path']);
+    }
+
+    /**
+     * Upgrade /__dev_reload through the server's own handshake from a socket
+     * whose raw peer is $peer and whose Host header says localhost; return the
+     * status line the server answers.
+     */
+    private function reloadUpgradeStatus(Server $server, string $peer): string
+    {
+        Router::websocket('/__dev_reload', function ($connection, $data, $event) {
+        });
+        [$near, $far] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        $peers = new \ReflectionProperty(Server::class, 'peerNames');
+        $peers->setValue($server, [(int) $near => $peer] + $peers->getValue($server));
+
+        (new \ReflectionMethod(Server::class, 'handleWebSocketUpgrade'))->invoke($server, $near, [
+            '_method' => 'GET',
+            '_path' => '/__dev_reload',
+            'host' => 'localhost:7145',
+            'upgrade' => 'websocket',
+            'connection' => 'Upgrade',
+            'sec-websocket-key' => 'dGhlIHNhbXBsZSBub25jZQ==',
+            'sec-websocket-version' => '13',
+        ]);
+
+        stream_set_blocking($far, false);
+        $line = '';
+        $deadline = microtime(true) + 1.0;
+        while (!str_contains($line, "\r\n") && microtime(true) < $deadline) {
+            $line .= (string)@fread($far, 1);
+        }
+        fclose($far);
+        return trim($line);
+    }
+
+    // ── Peer gate: the Host header is the caller's, the raw peer is not ──
+
+    public function testARemotePeerCannotOpenTheReloadSocketByClaimingLocalhost(): void
+    {
+        $server = new Server('127.0.0.1', 0);
+        $this->resetServerInstance($server);
+
+        $this->assertSame('HTTP/1.1 403 Forbidden', $this->reloadUpgradeStatus($server, '203.0.113.9'));
+        $this->assertSame('HTTP/1.1 101 Switching Protocols', $this->reloadUpgradeStatus($server, '127.0.0.1'));
+    }
+
+    public function testAnAllowedPeerCanStillOpenTheReloadSocket(): void
+    {
+        $server = new Server('127.0.0.1', 0);
+        $this->resetServerInstance($server);
+
+        $_ENV['TINA4_DEV_ALLOWED_PEERS'] = '203.0.113.0/24';
+        try {
+            $this->assertSame('HTTP/1.1 101 Switching Protocols', $this->reloadUpgradeStatus($server, '203.0.113.9'));
+        } finally {
+            unset($_ENV['TINA4_DEV_ALLOWED_PEERS']);
+        }
     }
 
     // ── Broadcast: code change -> {type:reload} on /__dev_reload ──────

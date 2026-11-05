@@ -9,12 +9,12 @@
     {
       "path": "js/frond.min.js",
       "component": "tina4-css",
-      "sha256": "4cbaf2131492225d87205d8982c4af5035538e9812e704b43f217f4ac4a5dafc"
+      "sha256": "1c46dc669fe6ebed980bef6ecab197b73fc0697488aff5746ee4fe6e8a64d7cd"
     },
     {
       "path": "js/frond.js",
       "component": "tina4-css",
-      "sha256": "77560a0800034d91f8ccb5d726b69ff763881b96e39c5d0b6ee7186060c2d27a"
+      "sha256": "471cdcf1eae45142dce5a9755ce4d89e4e816989f3534ae2af56308ec4dcae65"
     },
     {
       "path": "js/tina4.min.js",
