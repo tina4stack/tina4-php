@@ -3576,10 +3576,26 @@ function generateMigration(
     $fields = $fieldsOverride ?? parseFields($flags['fields'] ?? '');
     $isCreate = str_starts_with($name, 'create_') || $fieldsOverride !== null;
 
+    // A `create_*_view` name is a VIEW, not a table. Emitting a runnable
+    // `CREATE TABLE <name>_view` made migrate build a table and never the view,
+    // silently, and the "add columns" hint pointed the wrong way (#297). A view
+    // needs a SELECT, so scaffold one — with tina4:edit markers so startup
+    // auto-migrate keeps it pending until it is written (#288).
+    $isView = $isCreate && $fieldsOverride === null && str_ends_with($table, '_view');
+
     $filename = "{$timestamp}_{$name}.sql";
     $path = "{$dir}/{$filename}";
 
-    if ($isCreate) {
+    if ($isView) {
+        // A view needs a SELECT, not columns — scaffold it as commented guidance
+        // so startup auto-migrate keeps it pending (no executable SQL) until it
+        // is written, instead of silently building a table (#297 / #288).
+        $upSql = "-- tina4:edit  write the CREATE VIEW statement, then remove the\n"
+               . "-- tina4:edit lines. For example:\n"
+               . "-- CREATE VIEW {$table} AS\n"
+               . "--     SELECT id, /* columns */ FROM source_table WHERE /* ... */;";
+        $downSql = "DROP VIEW IF EXISTS {$table};";
+    } elseif ($isCreate) {
         $colLines = ["    id INTEGER PRIMARY KEY AUTOINCREMENT"];
         foreach ($fields as [$fname, $ftype]) {
             $info = $fieldTypeMap[$ftype] ?? $fieldTypeMap['string'];
@@ -3634,10 +3650,11 @@ SQL;
     file_put_contents($downPath, $downContent);
     echo "  Created {$downPath}\n";
 
-    // Co-emit a real apply-UP / rollback-DOWN test — only for CREATE migrations,
-    // whose UP SQL is real DDL to assert against (a placeholder ALTER has none).
+    // Co-emit a real apply-UP / rollback-DOWN test — only for CREATE TABLE
+    // migrations, whose UP SQL is real DDL to assert against (a placeholder
+    // ALTER, or a VIEW stub that still needs its SELECT, has none).
     // Drives the REAL \Tina4\Migration runner, not hand-rolled SQL.
-    if ($emitTest && $isCreate) {
+    if ($emitTest && $isCreate && !$isView) {
         emitMigrationTest($name, $table, $filename, $downFilename);
     }
 }
@@ -4451,9 +4468,11 @@ function emitRouteStubTest(string $route): void
  * Routing test for {$route} — no mocks, real Router.
  *
  * Generated with src/routes/{$route}.php by `tina4php generate route {$route}`
- * (no --model). The handlers are AI-FILL stubs that throw until you implement
- * them, so this tests what IS live on generation: all five routes register on
- * the REAL Router, and the list handler fails loud until filled.
+ * (no --model). The handlers start as AI-FILL stubs that throw until you
+ * implement them. This tests what is live on generation: all five routes
+ * register on the REAL Router, and the list handler is wired and callable. It
+ * stays GREEN whether the stub still throws OR you have filled it in —
+ * implementing the handler never turns this suite red.
  */
 
 use PHPUnit\\Framework\\TestCase;
@@ -4484,9 +4503,12 @@ class {$class}Test extends TestCase
         \$this->assertContains('DELETE /{$route}/{id}', \$paths);
     }
 
-    public function testListHandlerIsALiveStub(): void
+    public function testListHandlerIsWired(): void
     {
-        // The scaffolded handler throws until filled (fails loud, good DX).
+        // The list handler is registered and callable. It starts as a loud
+        // AI-FILL stub (throws RuntimeException); once you implement it this
+        // test STILL passes — it asserts wiring, never that the stub is
+        // unfinished, so doing the work never turns the suite red.
         \$list = null;
         foreach (Router::getRoutes() as \$r) {
             if (\$r['method'] === 'GET' && \$r['path'] === '/{$route}') {
@@ -4494,8 +4516,13 @@ class {$class}Test extends TestCase
             }
         }
         \$this->assertNotNull(\$list);
-        \$this->expectException(\\RuntimeException::class);
-        (\$list['callback'])(Request::create(method: 'GET', path: '/{$route}', headers: []), new Response(true));
+        \$this->assertIsCallable(\$list['callback']);
+        try {
+            \$result = (\$list['callback'])(Request::create(method: 'GET', path: '/{$route}', headers: []), new Response(true));
+        } catch (\\RuntimeException \$e) {
+            return; // still the scaffold stub — expected until filled in
+        }
+        \$this->assertNotNull(\$result); // filled in: must hand back a response
     }
 }
 
@@ -4603,11 +4630,18 @@ class {$class}ServiceTest extends TestCase
         \$this->assertArrayHasKey('{$snake}', ServiceRunner::list());
     }
 
-    public function testTaskIsALiveStub(): void
+    public function testTaskIsWired(): void
     {
+        // The task handler is callable. It starts as a loud AI-FILL stub
+        // (throws RuntimeException); once you implement it this test STILL
+        // passes, so doing the work never turns the suite red.
         \$desc = require __DIR__ . '/../src/services/{$snake}.php';
-        \$this->expectException(\\RuntimeException::class);
-        (\$desc['handler'])(null);
+        \$this->assertIsCallable(\$desc['handler']);
+        try {
+            (\$desc['handler'])(null);
+        } catch (\\RuntimeException \$e) {
+            // still the scaffold stub — expected until filled in
+        }
     }
 }
 
@@ -4654,11 +4688,18 @@ class {$class}QueueTest extends TestCase
         \$this->assertSame('{$topic}-consumer', \$desc['name']);
     }
 
-    public function testHandleIsALiveStub(): void
+    public function testHandleIsWired(): void
     {
+        // handle_{$slug} is callable. It starts as a loud AI-FILL stub (throws
+        // RuntimeException); once you implement it this test STILL passes, so
+        // doing the work never turns the suite red.
         \$desc = require __DIR__ . '/../src/services/{$slug}_consumer.php';
-        \$this->expectException(\\RuntimeException::class);
-        (\$desc['handle'])([]);
+        \$this->assertIsCallable(\$desc['handle']);
+        try {
+            (\$desc['handle'])([]);
+        } catch (\\RuntimeException \$e) {
+            // still the scaffold stub — expected until filled in
+        }
     }
 }
 
@@ -4812,10 +4853,17 @@ class {$class}Test extends TestCase
         \$this->assertNull((\$this->handler)(null, null, 'close'));
     }
 
-    public function testMessageBranchIsALiveStub(): void
+    public function testMessageBranchIsWired(): void
     {
-        \$this->expectException(\\RuntimeException::class);
-        (\$this->handler)(null, 'hi', 'message');
+        // The "message" branch starts as a loud AI-FILL stub (throws
+        // RuntimeException); once you implement it this test STILL passes, so
+        // doing the work never turns the suite red.
+        try {
+            (\$this->handler)(null, 'hi', 'message');
+        } catch (\\RuntimeException \$e) {
+            return; // still the scaffold stub — expected until filled in
+        }
+        \$this->assertTrue(true); // filled in: handler ran without throwing
     }
 }
 
@@ -4864,9 +4912,15 @@ class {$class}ListenerTest extends TestCase
 
     public function testEmitReachesTheListener(): void
     {
-        // emitStrict re-raises the stub error, proving the listener ran.
-        \$this->expectException(\\RuntimeException::class);
-        Events::emitStrict('{$event}', ['id' => 1]);
+        // Emitting the event reaches the listener. It starts as a loud AI-FILL
+        // stub (strict emit re-raises RuntimeException); once you implement it
+        // this test STILL passes, so doing the work never turns the suite red.
+        try {
+            \$results = Events::emitStrict('{$event}', ['id' => 1]);
+        } catch (\\RuntimeException \$e) {
+            return; // still the scaffold stub — expected until filled in
+        }
+        \$this->assertNotNull(\$results); // filled in: the listener ran and returned
     }
 }
 

@@ -6,6 +6,21 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.159 - 2026-11-06
+
+### Fixed
+- `generate route/service/queue/websocket/listener` co-emitted a test that asserted the
+  stub still threw `RuntimeException`, so filling the handler in correctly turned the
+  project's own suite red. The generated test now asserts the handler is wired and stays
+  green both as the scaffold stub and once implemented (#270).
+- `tina4php migrate` applied a freshly scaffolded comment-only migration and recorded it
+  passed, so the real SQL written later under the same filename never ran. The runner now
+  keeps a migration pending while it still bears a `tina4:edit` marker and has no
+  executable SQL; a scaffolded `CREATE TABLE` is real DDL and still applies (#288).
+- `migrate:create create_*_view` scaffolded a runnable `CREATE TABLE <name>_view`, so
+  `migrate` built a table and never the view. A `*_view` name now scaffolds commented
+  `CREATE VIEW` guidance that is kept pending until written (#297).
+
 ## 3.13.158 - 2026-11-05
 
 ### Added
