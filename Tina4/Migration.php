@@ -132,6 +132,24 @@ class Migration
         foreach ($pending as $migration) {
             $fileName = basename($migration);
 
+            // An empty, unedited scaffold migration — one that still bears a
+            // tina4:edit marker AND has no executable statement (the comment-only
+            // ALTER stub from a non-create migrate:create, or the view stub) —
+            // is unfinished. Applying it (and recording it passed) runs nothing
+            // and leaves the real SQL, written later under the same filename,
+            // never applied, with `tina4php migrate` reporting nothing pending
+            // (#288, #297). Keep it pending until it is written. A scaffolded
+            // CREATE TABLE carries the same hint but IS real DDL, so it applies
+            // normally — the ordinary generate-model -> migrate flow is untouched.
+            $rawForMarker = @file_get_contents($migration);
+            if ($rawForMarker !== false && $this->isUnappliedScaffold($fileName, $rawForMarker)) {
+                $skipped[] = $fileName;
+                Log::warning("Migration {$fileName} is still an unedited scaffold (a "
+                    . "'tina4:edit' placeholder with no SQL yet) — skipped and kept pending. "
+                    . "Write the migration and remove the tina4:edit line(s), then migrate again.");
+                continue;
+            }
+
             // PHP class-based migration
             if (str_ends_with($fileName, '.php')) {
                 $this->db->startTransaction();
@@ -1458,6 +1476,40 @@ class Migration
      * @return array<int, string> The trimmed statements, in order, with
      *                            terminators and `SET TERM` directives removed.
      */
+    /**
+     * True if a migration is still the unedited scaffold placeholder: it bears a
+     * `tina4:edit` marker AND (for a .sql file) has no executable statement. A
+     * .php scaffold qualifies on the marker alone. Used to keep an empty
+     * placeholder pending rather than apply it as a silent no-op (#288/#297).
+     *
+     * @param string $fileName The migration file name (its extension matters).
+     * @param string $raw      The raw file contents.
+     * @return bool            True when the migration should be kept pending.
+     */
+    private function isUnappliedScaffold(string $fileName, string $raw): bool
+    {
+        if (!preg_match('~(?:#|//|--|/\*|\{#)\s*tina4:edit\b~i', $raw)) {
+            return false;
+        }
+        if (str_ends_with($fileName, '.php')) {
+            return true;
+        }
+        return !$this->hasExecutableSql($raw);
+    }
+
+    /**
+     * True if any executable statement remains once SQL comments are stripped.
+     *
+     * @param string $sql The raw migration script.
+     * @return bool        False when the body is comments/whitespace only.
+     */
+    private function hasExecutableSql(string $sql): bool
+    {
+        $body = preg_replace('~/\*.*?\*/~s', '', $sql);          // block comments
+        $body = preg_replace('~--[^\n]*~', '', (string)$body);   // -- line comments
+        return trim((string)$body, " \t\r\n;") !== '';
+    }
+
     private function splitStatements(string $sql): array
     {
         // Normalize smart/curly quotes to straight ASCII first, so SQL pasted
