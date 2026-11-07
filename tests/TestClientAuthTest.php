@@ -85,9 +85,15 @@ class TestClientAuthTest extends TestCase
     // ── The core contract: a tokenless write is rejected ─────────────
     public function testTokenlessWriteIsRejected(): void
     {
-        $res = (new TestClient())->post('/tc-secure-write', json: ['name' => 'Alice']);
+        // An API client (Accept: application/json) gets the negotiated JSON
+        // envelope now (ERR-DEC-02, #342) — `error` is the boolean envelope flag,
+        // not the old literal string. The browser-HTML branch is covered in
+        // ErrorNegotiation401Middleware500Test.
+        $res = (new TestClient())->post('/tc-secure-write', json: ['name' => 'Alice'], headers: ['Accept' => 'application/json']);
         $this->assertEquals(401, $res->status, 'tokenless write must 401, not silently succeed');
-        $this->assertEquals('Unauthorized', $res->json()['error'] ?? null);
+        $body = $res->json();
+        $this->assertTrue($body['error'] ?? null);
+        $this->assertSame('UNAUTHORIZED', $body['code'] ?? null);
     }
 
     // ── A valid Bearer token passes ──────────────────────────────────

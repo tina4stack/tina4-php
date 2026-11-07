@@ -227,9 +227,14 @@ final class MiddlewarePipelineCharacterisationTest extends TestCase
     /** a throwing before hook becomes a clean 500 */
     public function testAThrowingBeforeHookBecomesAClean500(): void
     {
-        [, $response] = Middleware::runBefore([PipelineThrowingBeforeMw::class], $this->request(), new Response(testing: true));
+        // An API client so the negotiated 500 (ERR-DEC-02, #342) returns the JSON
+        // envelope rather than the HTML error page.
+        $request = Request::create(method: 'GET', path: '/pipeline', headers: ['Accept' => 'application/json']);
+        [, $response] = Middleware::runBefore([PipelineThrowingBeforeMw::class], $request, new Response(testing: true));
         $this->assertSame(500, $response->getStatusCode());
-        $this->assertSame('Internal Server Error', $response->getJsonBody()['error'] ?? null);
+        $body = $response->getJsonBody();
+        $this->assertTrue($body['error'] ?? null);
+        $this->assertSame('INTERNAL_SERVER_ERROR', $body['code'] ?? null);
 
         PipelineTrace::reset();
         Middleware::use(PipelineThrowingBeforeMw::class);

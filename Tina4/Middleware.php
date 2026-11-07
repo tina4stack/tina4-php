@@ -133,7 +133,7 @@ class Middleware
                     $result = $class::$method($request, $response);
                 } catch (\Throwable $error) {
                     // Throwing before* → logged clean 500, short-circuit.
-                    $response = self::middleware500($response, $class, $method, $error);
+                    $response = self::middleware500($response, $class, $method, $error, $request);
                     return [$request, $response, $response];
                 }
 
@@ -201,7 +201,7 @@ class Middleware
                     $result = $class::$method($request, $response);
                 } catch (\Throwable $error) {
                     // Throwing after* → logged clean 500, keep running the rest.
-                    $response = self::middleware500($response, $class, $method, $error);
+                    $response = self::middleware500($response, $class, $method, $error, $request);
                     continue;
                 }
 
@@ -271,16 +271,22 @@ class Middleware
      * Produce the deterministic, logged clean 500 for a middleware that threw.
      *
      * Logs via Log::error with the class + method + error type/message, then
-     * returns a 500 JSON response with the canonical body shape
-     * ``{"error":"Internal Server Error","status":500}`` so all 4 frameworks
-     * emit identical output (Python's Middleware.middleware_500 is the twin).
-     * Public so the Router's per-route middleware dispatch shares the exact
-     * same 500 contract.
+     * answers a clean 500 through the SAME negotiation every other framework
+     * error uses (ERR-DEC-02, #342): errors/500.twig for a browser, the JSON
+     * envelope {error, code, message, status, request_id} for an API client —
+     * the real exception kept out of the body (CWE-209). It used to return an
+     * unconditional {"error":"Internal Server Error","status":500} JSON body, so
+     * a browser whose middleware threw got raw JSON instead of the 500 page and
+     * no request_id. $request is optional only for backward compatibility; the
+     * framework always passes it, and without it the JSON envelope is used.
+     * Python's Middleware.middleware_500 is the twin. Public so the Router's
+     * per-route middleware dispatch shares the exact same 500 contract.
      *
-     * @param string $class Middleware class name (or a short label like "Closure")
-     * @param string $method The before* / after* method that threw
+     * @param string       $class   Middleware class name (or a short label like "Closure")
+     * @param string       $method  The before* / after* method that threw
+     * @param Request|null $request The incoming request (for Accept negotiation + request id)
      */
-    public static function middleware500(Response $response, string $class, string $method, \Throwable $error): Response
+    public static function middleware500(Response $response, string $class, string $method, \Throwable $error, ?Request $request = null): Response
     {
         $shortClass = class_exists($class)
             ? (new \ReflectionClass($class))->getShortName()
@@ -297,7 +303,9 @@ class Middleware
         } catch (\Throwable) {
             // Logging must never block the 500 we owe the client.
         }
-        return $response->json(['error' => 'Internal Server Error', 'status' => 500], 500);
+        // CWE-209: generic message + forced-empty error_message — the real
+        // exception stays in the log, never in the body (either representation).
+        return Router::negotiatedError($response, 500, 'Internal Server Error', $request, ['error_message' => '']);
     }
 
     /**

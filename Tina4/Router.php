@@ -1998,7 +1998,7 @@ class Router
         try {
             return [$mw($request, $response)];
         } catch (\Throwable $error) {
-            return Middleware::middleware500($response, 'Closure', '__invoke', $error);
+            return Middleware::middleware500($response, 'Closure', '__invoke', $error, $request);
         }
     }
 
@@ -2028,7 +2028,7 @@ class Router
             try {
                 $mwResult = $className::$method($request, $response);
             } catch (\Throwable $error) {
-                return Middleware::middleware500($response, $className, $method, $error);
+                return Middleware::middleware500($response, $className, $method, $error, $request);
             }
 
             $shortCircuit = Middleware::applyHookResult(
@@ -2264,14 +2264,17 @@ class Router
                     continue;
                 }
                 if ($candidatePayload === null) {
-                    return $response->json(['error' => 'Unauthorized'], 401);
+                    // ERR-DEC-02 (#342): a browser gets errors/401.twig, an API
+                    // client the JSON envelope — the same negotiation every other
+                    // framework error uses. Was an unconditional JSON body.
+                    return self::renderError($response, 401, 'Unauthorized', $request);
                 }
                 [$payload, $tokenSource, $token] = [$candidatePayload, $source, $candidate];
                 break;
             }
 
             if ($payload === null) {
-                return $response->json(['error' => 'Unauthorized'], 401);
+                return self::renderError($response, 401, 'Unauthorized', $request);
             }
 
             // Attach decoded JWT payload to the request for downstream use
@@ -2383,7 +2386,7 @@ class Router
                 }
             }
             if (!$ok) {
-                return $response->json(['error' => 'Forbidden'], 403);
+                return self::renderError($response, 403, 'Forbidden', $request);
             }
         }
 
@@ -2397,7 +2400,7 @@ class Router
                 }
             }
             if (!$ok) {
-                return $response->json(['error' => 'Forbidden'], 403);
+                return self::renderError($response, 403, 'Forbidden', $request);
             }
         }
         return null;
@@ -2759,7 +2762,8 @@ class Router
 
     /** Machine-readable error codes for the negotiated JSON envelope (ERR-DEC-02). */
     private const ERROR_CODE_NAMES = [
-        403 => 'FORBIDDEN', 404 => 'NOT_FOUND', 405 => 'METHOD_NOT_ALLOWED', 500 => 'INTERNAL_SERVER_ERROR',
+        401 => 'UNAUTHORIZED', 403 => 'FORBIDDEN', 404 => 'NOT_FOUND',
+        405 => 'METHOD_NOT_ALLOWED', 500 => 'INTERNAL_SERVER_ERROR',
     ];
 
     /**
@@ -2845,6 +2849,32 @@ class Router
 
         // 3. JSON fallback (no template found at all)
         return $response->json(self::errorJsonBody($code, $message, $requestId), $code);
+    }
+
+    /**
+     * Public negotiated-error renderer for callers outside Router (ERR-DEC-02,
+     * #342).
+     *
+     * {@see renderError()} stays private; this is its one cross-class door, used
+     * by {@see Middleware::middleware500()}, which owns no renderer of its own.
+     * With a Request it negotiates HTML-vs-JSON exactly like the 403/404/405/500
+     * paths; with none (a bare/legacy call) it returns the JSON envelope so the
+     * old no-request behaviour still holds.
+     *
+     * @param Response     $response  The response object
+     * @param int          $code      HTTP status code
+     * @param string       $message   Generic message (never the real exception)
+     * @param Request|null $request   The incoming request, or null for JSON-only
+     * @param array        $extraData Additional template variables
+     * @return Response
+     */
+    public static function negotiatedError(Response $response, int $code, string $message, ?Request $request = null, array $extraData = []): Response
+    {
+        if ($request === null) {
+            $requestId = $extraData['request_id'] ?? (Log::getRequestId() ?? '');
+            return $response->json(self::errorJsonBody($code, $message, $requestId), $code);
+        }
+        return self::renderError($response, $code, $message, $request, $extraData);
     }
 
     /**
