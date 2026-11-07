@@ -420,15 +420,18 @@ class MiddlewareEventsTest extends TestCase
 
     public function testBeforeThrowYieldsClean500AndSkipsHandler(): void
     {
+        // An API client so the negotiated 500 (ERR-DEC-02, #342) returns the JSON
+        // envelope rather than the HTML error page.
         [$request, $response] = Middleware::runBefore(
             [MwBeforeBoom::class],
-            $this->makeRequest(),
+            Request::create(method: 'GET', path: '/test', headers: ['Accept' => 'application/json']),
             new Response(),
         );
 
         $this->assertSame(500, $response->getStatusCode());
         $body = json_decode($response->getBody(), true);
-        $this->assertSame('Internal Server Error', $body['error']);
+        $this->assertTrue($body['error']);
+        $this->assertSame('INTERNAL_SERVER_ERROR', $body['code']);
         $this->assertSame(500, $body['status']);
 
         $log = $this->logContents();
