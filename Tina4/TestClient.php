@@ -36,6 +36,36 @@ namespace Tina4;
 class TestClient
 {
     /**
+     * Load .env the way App::start() does (#296).
+     *
+     * TestClient dispatches through the real front controller but never calls
+     * App::start(), which is where the live server loads .env. So a test that
+     * did not boot the app got the project's routes with the environment UNSET
+     * — a route that signs a token threw though .env set a valid TINA4_SECRET.
+     *
+     * The load is overwrite:false (FIRST-WINS, .env.local then .env, rooted at
+     * the working directory), so a variable the test set in the real process
+     * environment is never clobbered — the test still wins.
+     */
+    public function __construct()
+    {
+        $root = getcwd() ?: '.';
+
+        $envLocal = $root . DIRECTORY_SEPARATOR . '.env.local';
+        if (is_file($envLocal)) {
+            DotEnv::loadEnv($envLocal, overwrite: false);
+        }
+
+        $envFileName = DotEnv::getEnv('TINA4_ENV_FILE') ?? '.env';
+        $envFile = ($envFileName !== '' && $envFileName[0] === DIRECTORY_SEPARATOR)
+            ? $envFileName
+            : $root . DIRECTORY_SEPARATOR . $envFileName;
+        if (is_file($envFile)) {
+            DotEnv::loadEnv($envFile, overwrite: false);
+        }
+    }
+
+    /**
      * Send a GET request.
      */
     public function get(string $path, ?array $headers = null): TestResponse
@@ -216,6 +246,22 @@ class TestResponse
     public function getList(string $name): array
     {
         return $this->headerList[strtolower($name)] ?? [];
+    }
+
+    /**
+     * The single value sent for $name (case-insensitive), or null (#300).
+     *
+     * HTTP header names are case-insensitive (RFC 9110), and getList() already
+     * treats them that way. A PHP array cannot be subscripted case-insensitively
+     * — $headers['Location'] misses a header stored as 'location' — so this is
+     * the case-insensitive single-value accessor (the sibling of getList()):
+     * header('Location') finds it. When the header was sent more than once this
+     * returns the LAST value, matching the $headers view.
+     */
+    public function header(string $name): ?string
+    {
+        $values = $this->headerList[strtolower($name)] ?? [];
+        return $values === [] ? null : $values[array_key_last($values)];
     }
 
     /**
