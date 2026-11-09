@@ -6,6 +6,13 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.161 - 2026-11-09
+
+### Fixed
+
+- TestClient now loads `.env` the way the app does (first-wins, `.env.local` then `.env`), so a test that does not boot the app still sees `TINA4_SECRET` and other variables instead of failing with a misleading error that points at `.env` (#296).
+- `TestResponse` response-header lookups are now case-insensitive, matching `getList()`: a new `header()` accessor reads a single header by any case (`header('Location')`), since a PHP array cannot be subscripted case-insensitively (#300).
+
 ## 3.13.160 - 2026-11-07
 
 ### Fixed
