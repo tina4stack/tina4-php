@@ -348,9 +348,24 @@ class KafkaBackend implements QueueBackend
             $this->offsets[$topic] = $this->fetchCommittedOffset($topic, 0);
         }
 
-        $result = $this->sendFetch($topic, $this->offsets[$topic]);
-        if ($result === null) {
-            return null;
+        while (true) {
+            $offset = $this->offsets[$topic];
+            $result = $this->sendFetch($topic, $offset);
+            if ($result === null) {
+                return null;
+            }
+            if ($result['message'] !== null) {
+                break;
+            }
+            // A tombstone (null-value record: Debezium deletes, compacted-topic
+            // delete markers) carries no job. Step past it and read on; returning
+            // null without moving the offset re-fetched it for ever, so nothing
+            // after it was delivered. Stop if the offset would not move, so a
+            // batch that hands back an earlier record can never spin this loop.
+            if ($result['nextOffset'] <= $offset) {
+                return null;
+            }
+            $this->offsets[$topic] = $result['nextOffset'];
         }
 
         $this->offsets[$topic] = $result['nextOffset'];
@@ -848,9 +863,11 @@ class KafkaBackend implements QueueBackend
      *
      * Returns null when the blob holds no usable record -- an empty batch, a
      * control batch (transaction markers, which carry no user payload), or a
-     * record whose value is not the JSON this queue writes.
+     * record whose value is not the JSON this queue writes. A tombstone (null
+     * value) or an empty value comes back with value null and its offset, so
+     * the caller can step past it.
      *
-     * @return array{value: string, offset: int}|null
+     * @return array{value: ?string, offset: int}|null
      */
     private function decodeFirstRecord(string $records): ?array
     {
@@ -897,8 +914,8 @@ class KafkaBackend implements QueueBackend
         }
 
         $valueLen = self::readVarint($records, $pos);
-        if ($valueLen <= 0) {
-            return null;                        // null or empty value
+        if ($valueLen <= 0) {                   // null (tombstone) or empty value
+            return ['value' => null, 'offset' => $baseOffset + $offsetDelta];
         }
 
         return [
@@ -912,7 +929,9 @@ class KafkaBackend implements QueueBackend
      * dropped v0-v3 along with the old message formats) and decode the first
      * record out of the returned RecordBatch v2.
      *
-     * @return array{message: array, nextOffset: int}|null
+     * message is null for a tombstone (null or empty value).
+     *
+     * @return array{message: ?array, nextOffset: int}|null
      */
     private function sendFetch(string $topic, int $offset): ?array
     {
@@ -976,6 +995,9 @@ class KafkaBackend implements QueueBackend
         $record = $this->decodeFirstRecord(substr($response, $pos, $recordsSize));
         if ($record === null) {
             return null;
+        }
+        if ($record['value'] === null) {
+            return ['message' => null, 'nextOffset' => $record['offset'] + 1];
         }
 
         $message = json_decode($record['value'], true);

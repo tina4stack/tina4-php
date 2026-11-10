@@ -152,6 +152,88 @@ class KafkaIntegrationTest extends TestCase
     }
 
     /**
+     * Produce ONE record with the broker's own console producer, in its own
+     * batch (the client decodes only the first record of a fetched batch). A
+     * value equal to the null marker is written as null: a real tombstone, the
+     * record Debezium writes after a delete.
+     */
+    private function produceRecord(string $key, string $value): void
+    {
+        $this->produceLines("{$key},{$value}");
+    }
+
+    /** Produce newline-separated key,value lines in one console-producer run (one batch). */
+    private function produceLines(string $lines): void
+    {
+        $out = [];
+        $rc = 0;
+        exec(sprintf(
+            'printf %%s %s | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE 2>&1',
+            escapeshellarg($lines),
+            escapeshellarg($this->container),
+            escapeshellarg($this->topic)
+        ), $out, $rc);
+        $this->assertSame(0, $rc, 'console producer failed: ' . implode(' ', $out));
+    }
+
+    /**
+     * A tombstone (null-value record) is stepped over: the record after it is
+     * delivered. The fetch answered a null value with "no message" and never
+     * moved its offset, so every later pop() fetched the tombstone again and
+     * nothing after it was ever consumed -- silently, with no error.
+     */
+    public function testATombstoneIsSteppedOverAndTheNextRecordDelivered(): void
+    {
+        $this->produceRecord('k1', '{"n":1}');
+        $this->produceRecord('k1', 'TOMBSTONE');
+        $this->produceRecord('k2', '{"n":2}');
+
+        $queue = new Queue('kafka', [], $this->topic);
+        $got = [];
+        for ($i = 0; $i < 10 && count($got) < 2; $i++) {
+            $job = $queue->pop();
+            if ($job === null) {
+                usleep(400000);
+                continue;
+            }
+            $got[] = $job->payload['n'] ?? null;
+            $job->complete();
+        }
+
+        $this->assertSame([1, 2], $got, 'the consumer stopped at the tombstone');
+    }
+
+    /**
+     * A tombstone batched ahead of a record must not loop the fetch. The broker
+     * returns the whole batch and the client decodes its first record, so the
+     * tombstone can come back at an offset already passed; stepping over it must
+     * then stop rather than fetch the same offset for ever. An alarm caps the
+     * test so a regression fails here instead of hanging the suite.
+     */
+    public function testATombstoneThatCannotBeSteppedOverDoesNotSpin(): void
+    {
+        if (!function_exists('pcntl_alarm')) {
+            $this->markTestSkipped('pcntl not loaded: cannot cap a possible infinite loop.');
+        }
+        $this->produceLines("k1,TOMBSTONE\nk2,{\"n\":1}\n");
+
+        $queue = new Queue('kafka', [], $this->topic);
+        pcntl_async_signals(true);
+        pcntl_signal(SIGALRM, function (): void {
+            throw new \RuntimeException('pop() spun on the tombstone for 30s');
+        });
+        pcntl_alarm(30);
+        try {
+            $queue->pop();
+            $queue->pop();
+        } finally {
+            pcntl_alarm(0);
+            pcntl_signal(SIGALRM, SIG_DFL);
+        }
+        $this->addToAssertionCount(1); // returned: no spin
+    }
+
+    /**
      * #264: push(raw=true) produces the value with NO Tina4 envelope and no
      * injected id, so a non-Tina4 consumer reads the exact top-level schema. Read
      * the raw bytes back with the low-level KafkaBackend::dequeue — what a foreign
