@@ -6,6 +6,12 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.162 - 2026-11-10
+
+### Changed
+
+- Version bump to keep all four frameworks (Python, PHP, Ruby, Node.js) on one version line. The substantive fix in 3.13.162 is the Kafka tombstone (null-value) consumer crash in the Python and Ruby consumers (tina4-python#303). PHP's pure-protocol Kafka decoder already guards a null value-length field, so PHP was never affected — this is a version-only bump for PHP.
+
 ## 3.13.161 - 2026-11-09
 
 ### Fixed
