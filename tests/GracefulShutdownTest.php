@@ -349,21 +349,27 @@ class GracefulShutdownTest extends TestCase
     {
         $logDir = sys_get_temp_dir() . '/tina4_strictlog_' . bin2hex(random_bytes(6));
         mkdir($logDir, 0755, true);
-        // error.log as a DIRECTORY: fopen(..., 'a') fails with EISDIR even as root,
-        // so the strict log write genuinely raises — no permission games needed.
-        mkdir($logDir . '/error.log', 0755, true);
+        // The error sink's per-write LOCK file as a DIRECTORY. The sink OPENS fine
+        // at boot (directory layout: tina4.log + error.log), so the server starts
+        // and serves /ping — but the error sink is only WRITTEN for WARNING+, and
+        // each write first does fopen('<error.log>.pid-lock', 'c'), which fails on
+        // a directory even for root. Boot logs are INFO (main sink only), so the
+        // broken lock is untouched until shutdown emits a WARNING. Deterministic
+        // and permission-independent — no EISDIR-at-open, no chmod games.
+        mkdir($logDir . '/error.log.pid-lock', 0755, true);
 
         try {
+            // TINA4_SHUTDOWN_TIMEOUT=-5 makes stop() log the invalid-timeout
+            // WARNING, which routes to the error sink and raises under strict —
+            // a real throw inside the async SIGTERM handler. No in-flight request
+            // needed: the throw is on the stop() path itself.
             $this->startServer(env: [
                 'TINA4_LOG_STRICT'       => 'true',
                 'TINA4_LOG_OUTPUT'       => 'both',
                 'TINA4_LOG_DIR'          => $logDir,
                 'TINA4_SHUTDOWN_TIMEOUT' => '-5',
             ]);
-            $inFlight = $this->beginSlowRequest();
-            usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
             $this->signalServer(SIGTERM);
-            $this->readResponse($inFlight);
             $status = $this->awaitExit();
 
             $this->assertFalse(
@@ -378,7 +384,7 @@ class GracefulShutdownTest extends TestCase
                 . $this->readLog()
             );
         } finally {
-            @rmdir($logDir . '/error.log');
+            @rmdir($logDir . '/error.log.pid-lock');
             foreach (glob($logDir . '/*') ?: [] as $leftover) {
                 @unlink($leftover);
             }
