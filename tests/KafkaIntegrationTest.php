@@ -373,16 +373,31 @@ class KafkaIntegrationTest extends TestCase
         $this->assertSame(0, $warm?->payload['n'] ?? null);
         $warm->complete();
 
-        // Tombstones for ~10 s, one console-producer run each so every one lands
-        // in its own batch (one producer reading stdin packs several per batch,
-        // and the decoder reads only a batch's first record).
+        // Tombstones for up to 60 s, one console-producer run each so every one
+        // lands in its own batch (one producer reading stdin packs several per
+        // batch, and the decoder reads only a batch's first record).
         $feeder = proc_open(sprintf(
-            'end=$((SECONDS+10)); while [ $SECONDS -lt $end ]; do printf %%s k,TOMBSTONE | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE >/dev/null 2>&1; done',
+            'end=$((SECONDS+60)); while [ $SECONDS -lt $end ]; do printf %%s k,TOMBSTONE | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE >/dev/null 2>&1; done',
             escapeshellarg($this->container),
             escapeshellarg($this->topic)
         ), [], $pipes);
         try {
-            sleep(3); // the first tombstones are on the topic and more are coming
+            // Start timing only once the first tombstone is on the topic: each
+            // console-producer run starts a JVM, which can take seconds on a busy
+            // runner, and a pop() on an empty topic waits out the broker's 5 s
+            // long-poll on any code.
+            $probe = new \Tina4\Queue\KafkaBackend(['brokers' => getenv('TINA4_TEST_KAFKA_URL')]);
+            foreach (['ensureConnected' => [], 'ensureTopicMetadata' => [$this->topic]] as $name => $args) {
+                $call = new \ReflectionMethod($probe, $name);
+                $call->setAccessible(true);
+                $call->invoke($probe, ...$args);
+            }
+            $fetch = new \ReflectionMethod($probe, 'sendFetch');
+            $fetch->setAccessible(true);
+            $waitUntil = microtime(true) + 45;
+            while ($fetch->invoke($probe, $this->topic, 1, 200) === null) {
+                $this->assertLessThan($waitUntil, microtime(true), 'no tombstone reached the topic in 45 s');
+            }
             $started = microtime(true);
             $job = $queue->pop();
             $took = microtime(true) - $started;
