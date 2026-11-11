@@ -373,30 +373,28 @@ class KafkaIntegrationTest extends TestCase
         $this->assertSame(0, $warm?->payload['n'] ?? null);
         $warm->complete();
 
-        // Tombstones for up to 60 s, one console-producer run each so every one
-        // lands in its own batch (one producer reading stdin packs several per
-        // batch, and the decoder reads only a batch's first record).
+        // Up to 60 tombstones, one console-producer run each so every one lands
+        // in its own batch (one producer reading stdin packs several per batch,
+        // and the decoder reads only a batch's first record). A counted loop:
+        // proc_open runs /bin/sh, which is dash on Debian/Ubuntu, and dash has
+        // no $SECONDS. After each run the feeder touches a marker file: the
+        // console producer exits only once its record is acknowledged.
+        $sent = sys_get_temp_dir() . '/tina4_tomb_sent_' . bin2hex(random_bytes(6));
         $feeder = proc_open(sprintf(
-            'end=$((SECONDS+60)); while [ $SECONDS -lt $end ]; do printf %%s k,TOMBSTONE | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE >/dev/null 2>&1; done',
+            'i=0; while [ $i -lt 60 ]; do i=$((i+1)); printf %%s k,TOMBSTONE | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE >/dev/null 2>&1; : > %s; done',
             escapeshellarg($this->container),
-            escapeshellarg($this->topic)
+            escapeshellarg($this->topic),
+            escapeshellarg($sent)
         ), [], $pipes);
         try {
             // Start timing only once the first tombstone is on the topic: each
             // console-producer run starts a JVM, which can take seconds on a busy
             // runner, and a pop() on an empty topic waits out the broker's 5 s
             // long-poll on any code.
-            $probe = new \Tina4\Queue\KafkaBackend(['brokers' => getenv('TINA4_TEST_KAFKA_URL')]);
-            foreach (['ensureConnected' => [], 'ensureTopicMetadata' => [$this->topic]] as $name => $args) {
-                $call = new \ReflectionMethod($probe, $name);
-                $call->setAccessible(true);
-                $call->invoke($probe, ...$args);
-            }
-            $fetch = new \ReflectionMethod($probe, 'sendFetch');
-            $fetch->setAccessible(true);
             $waitUntil = microtime(true) + 45;
-            while ($fetch->invoke($probe, $this->topic, 1, 200) === null) {
+            while (!file_exists($sent)) {
                 $this->assertLessThan($waitUntil, microtime(true), 'no tombstone reached the topic in 45 s');
+                usleep(50000);
             }
             $started = microtime(true);
             $job = $queue->pop();
@@ -406,6 +404,7 @@ class KafkaIntegrationTest extends TestCase
         } finally {
             proc_terminate($feeder);
             proc_close($feeder);
+            @unlink($sent);
         }
     }
 
