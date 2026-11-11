@@ -326,6 +326,67 @@ class GracefulShutdownTest extends TestCase
     }
 
     /**
+     * A teardown step that THROWS during a handled signal still exits 0, not 255.
+     *
+     * The server traps SIGTERM with pcntl_async_signals(true), so the handler runs
+     * at an arbitrary VM instruction boundary. A throw from inside it escapes from
+     * that arbitrary point and, being uncatchable there, fatals the process —
+     * turning a signal that must "drain and exit 0" into exit 255. That is the
+     * exact intermittent failure that flaked release CI (a different shutdown case
+     * each run, exit 255), and the handler bodies are now exception-safe.
+     *
+     * Deterministic, root-independent, NO MOCKS: TINA4_LOG_STRICT makes a failing
+     * log sink RAISE instead of degrading, and an error.log that is a real
+     * DIRECTORY cannot be opened for writing even by root (EISDIR), so the failure
+     * is certain on every platform. TINA4_SHUTDOWN_TIMEOUT=-5 makes stop() emit the
+     * invalid-timeout WARNING, which routes to that error sink — so a real throw
+     * lands inside the real async signal handler of a real server process.
+     *
+     * Mutation proof: remove the try/catch around stop()'s body and this case goes
+     * red (the child exits 255); restore it and it is green.
+     */
+    public function testATeardownThrowDuringShutdownStillExitsZero(): void
+    {
+        $logDir = sys_get_temp_dir() . '/tina4_strictlog_' . bin2hex(random_bytes(6));
+        mkdir($logDir, 0755, true);
+        // error.log as a DIRECTORY: fopen(..., 'a') fails with EISDIR even as root,
+        // so the strict log write genuinely raises — no permission games needed.
+        mkdir($logDir . '/error.log', 0755, true);
+
+        try {
+            $this->startServer(env: [
+                'TINA4_LOG_STRICT'       => 'true',
+                'TINA4_LOG_OUTPUT'       => 'both',
+                'TINA4_LOG_DIR'          => $logDir,
+                'TINA4_SHUTDOWN_TIMEOUT' => '-5',
+            ]);
+            $inFlight = $this->beginSlowRequest();
+            usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
+            $this->signalServer(SIGTERM);
+            $this->readResponse($inFlight);
+            $status = $this->awaitExit();
+
+            $this->assertFalse(
+                (bool)$status['signaled'],
+                'a strict-log failure during shutdown must be handled, not kill the process (termsig '
+                . var_export($status['termsig'], true) . ')'
+            );
+            $this->assertSame(
+                0,
+                $status['exitcode'],
+                'a teardown step that throws must still drain and exit 0, never fatal (255); log: '
+                . $this->readLog()
+            );
+        } finally {
+            @rmdir($logDir . '/error.log');
+            foreach (glob($logDir . '/*') ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+            @rmdir($logDir);
+        }
+    }
+
+    /**
      * The database connection is really closed during shutdown, and resiliently.
      *
      * SQLite keeps its -wal/-shm sidecars for exactly as long as a connection is
