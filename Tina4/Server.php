@@ -281,6 +281,18 @@ class Server
     private bool $shuttingDown = false;
 
     /**
+     * @var bool True once cleanup() has torn the server down.
+     *
+     * pcntl_async_signals(true) lets a handler fire at ANY instruction boundary,
+     * so the SIGALRM fuse (forceShutdown -> cleanup -> exit) can fire WHILE the
+     * normal exit path is already inside cleanup(). Without this guard the second
+     * entry runs the whole teardown again over already-closed sockets and an
+     * already Log::reset()-ed sink, which fatals the process (exit 255) on a
+     * signal that was supposed to drain and exit 0. cleanup() runs its body once.
+     */
+    private bool $cleanedUp = false;
+
+    /**
      * True once start() has actually INSTALLED the SIGALRM handler.
      *
      * stop() arms pcntl_alarm() to bound the drain, but the handler that catches
@@ -897,19 +909,31 @@ class Server
         }
         $this->shuttingDown = true;
         $this->running = false;
-        $this->shutdownTimeout = self::resolveShutdownTimeout();
 
-        $this->closeListeners();
-        // Raw TCP listeners stop accepting at the same moment as HTTP.
-        Tcp::stopAcceptingAll();
-        // Drop our identity marker so a later takeover does not match a dead PID.
-        PortTakeover::removePidfile($this->port);
+        // This runs from an async signal handler (pcntl_async_signals), so a throw
+        // here would escape at an arbitrary VM point and fatal the process (exit
+        // 255) on a signal that must drain and exit 0. Degrade instead — the accept
+        // loop has already been stopped via $this->running = false, so the drain
+        // and the bounded exit still happen. console() is @-guarded (never throws).
+        // resolveShutdownTimeout() itself can log a WARNING (an invalid timeout
+        // value) which, under TINA4_LOG_STRICT with a failing sink, throws — so it
+        // lives inside the guard; $this->shutdownTimeout keeps its default if so.
+        try {
+            $this->shutdownTimeout = self::resolveShutdownTimeout();
+            $this->closeListeners();
+            // Raw TCP listeners stop accepting at the same moment as HTTP.
+            Tcp::stopAcceptingAll();
+            // Drop our identity marker so a later takeover does not match a dead PID.
+            PortTakeover::removePidfile($this->port);
 
-        Log::info(sprintf(
-            'Graceful shutdown started (%s) — not accepting new connections, draining for up to %ds',
-            $reason,
-            $this->shutdownTimeout
-        ));
+            Log::info(sprintf(
+                'Graceful shutdown started (%s) — not accepting new connections, draining for up to %ds',
+                $reason,
+                $this->shutdownTimeout
+            ));
+        } catch (\Throwable $e) {
+            self::console('Graceful shutdown step failed (continuing to drain): ' . $e->getMessage() . "\n");
+        }
 
         // Never arm a fuse we have no handler for. The SIGALRM handler is
         // installed by start(); without it the default action terminates the
@@ -958,13 +982,22 @@ class Server
      */
     private function forceShutdown(): void
     {
-        Log::warning(sprintf(
-            'Graceful shutdown exceeded TINA4_SHUTDOWN_TIMEOUT=%ds — force-closing %d connection(s) still open',
-            $this->shutdownTimeout,
-            count($this->clients)
-        ));
+        // Runs from the async SIGALRM handler. A throw here would escape at an
+        // arbitrary VM point and fatal the process (exit 255) on a handled signal;
+        // the contract is exit 0. Degrade on any teardown error and still exit 0.
+        // cleanup() is re-entrancy-guarded, so this is safe even if the normal exit
+        // path is already mid-cleanup. console() is @-guarded (never throws).
+        try {
+            Log::warning(sprintf(
+                'Graceful shutdown exceeded TINA4_SHUTDOWN_TIMEOUT=%ds — force-closing %d connection(s) still open',
+                $this->shutdownTimeout,
+                count($this->clients)
+            ));
 
-        $this->cleanup();
+            $this->cleanup();
+        } catch (\Throwable $e) {
+            self::console('Force-shutdown teardown failed (exiting cleanly): ' . $e->getMessage() . "\n");
+        }
         exit(0);
     }
 
@@ -2996,15 +3029,32 @@ class Server
     private function cleanup(): void
     {
         // The drain is over; a pending alarm must not fire into a process that
-        // has already finished shutting down.
+        // has already finished shutting down. Cancel on every entry so the async
+        // SIGALRM fuse is disarmed even on a re-entrant call.
         if (function_exists('pcntl_alarm')) {
             pcntl_alarm(0);
         }
 
+        // Run the teardown body exactly once. pcntl_async_signals(true) lets the
+        // SIGALRM fuse (forceShutdown -> cleanup -> exit) re-enter here while the
+        // normal exit path is already mid-cleanup; a second teardown over
+        // already-freed sockets and an already Log::reset()-ed sink fatals the
+        // process (exit 255) on a signal that was meant to drain and exit 0.
+        if ($this->cleanedUp) {
+            return;
+        }
+        $this->cleanedUp = true;
+
         // Tell every live WebSocket it is going away (RFC 6455 close code 1001)
-        // before its socket disappears.
+        // before its socket disappears. A half-closed socket can throw mid-send
+        // during an async teardown — a going-away notice must never be the reason
+        // a handled signal exits non-zero, so each notice degrades on failure.
         foreach (array_keys($this->wsClients) as $id) {
-            $this->sendWebSocketGoingAway($id, 'server shutting down');
+            try {
+                $this->sendWebSocketGoingAway($id, 'server shutting down');
+            } catch (\Throwable $e) {
+                Log::error('WebSocket going-away notice failed during shutdown: ' . $e->getMessage());
+            }
             $this->removeWebSocketClient($id);
         }
 
@@ -3027,8 +3077,14 @@ class Server
         // cleanup() without a signal.
         $this->closeListeners();
 
-        // Tear down the WS backplane subscription, if any.
-        $this->wsBackplane?->close();
+        // Tear down the WS backplane subscription, if any. A backplane whose
+        // transport is already gone can throw on close during an async teardown —
+        // degrade, never let it turn a handled signal into exit 255.
+        try {
+            $this->wsBackplane?->close();
+        } catch (\Throwable $e) {
+            Log::error('WebSocket backplane close failed during shutdown: ' . $e->getMessage());
+        }
 
         // Release the database connection so the engine sees a clean
         // disconnect instead of reaping an abandoned session. Resilient — a
