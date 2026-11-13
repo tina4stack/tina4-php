@@ -6,6 +6,13 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.163 - 2026-11-13
+
+### Fixed
+
+- A Kafka tombstone (a null-value record, such as a Debezium delete marker) no longer stalls the consumer. The decoder answered a tombstone with the same null it uses for "nothing", without its offset, so `fetchNext` never advanced: every `pop()` returned null, the records behind the tombstone were never read, and nothing reported an error. `pop()` now steps past a tombstone (or an empty value) and keeps reading within a 1 s deadline, capping the broker's long-poll wait to the time left once past one, and stops rather than spins if the offset would not advance. Nothing is committed on the tombstone path: acknowledging the next record commits past the skipped tombstones, so a restart gets past them too. Acknowledge, retry and dead-letter are unchanged. Verified against a live broker producing real tombstones (#357, parity with tina4-python#309, tina4-ruby#169, tina4-nodejs#194).
+- Correction to the 3.13.162 entry below: it says PHP "was never affected" by the tombstone bug. That is true of the crash only; the PHP consumer stalled at a tombstone in 3.13.162 and earlier, fixed above.
+
 ## 3.13.162 - 2026-11-10
 
 ### Changed
