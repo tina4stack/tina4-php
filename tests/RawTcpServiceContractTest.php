@@ -572,7 +572,12 @@ class RawTcpServiceContractTest extends TestCase
     {
         $this->appDir = \TempPath::dir('tina4_tcp_');
         $httpPort = \FreePort::get();
-        $tcpPort = $httpPort + 1;
+        // Its own free port, never the HTTP port + 1: on a busy runner that
+        // port is sometimes taken, the framework then (correctly) refuses it as
+        // "already bound by another worker" and the readiness wait times out.
+        do {
+            $tcpPort = \FreePort::get();
+        } while ($tcpPort === $httpPort);
         @mkdir($this->appDir . '/src/routes', 0755, true);
         $autoload = dirname(__DIR__) . '/vendor/autoload.php';
 
