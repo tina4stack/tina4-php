@@ -87,6 +87,8 @@ class KafkaBackend implements QueueBackend
      */
     private const PRODUCE_VERSION = 3;
     private const FETCH_VERSION = 4;
+    /** How long the broker long-polls an empty partition before answering. */
+    private const FETCH_MAX_WAIT_MS = 5000;
 
     public function __construct(array $config = [])
     {
@@ -348,7 +350,7 @@ class KafkaBackend implements QueueBackend
             $this->offsets[$topic] = $this->fetchCommittedOffset($topic, 0);
         }
 
-        $result = $this->sendFetch($topic, $this->offsets[$topic]);
+        $result = $this->fetchPastTombstones($topic);
         if ($result === null) {
             return null;
         }
@@ -359,6 +361,46 @@ class KafkaBackend implements QueueBackend
             'message' => $result['message'],
             'offset' => $result['nextOffset'] - 1,
         ];
+    }
+
+    /**
+     * Fetch from the cursor, stepping past tombstones, until a record with a
+     * value arrives, the topic is exhausted, or the deadline passes.
+     *
+     * A tombstone (null-value record: Debezium deletes, compacted-topic delete
+     * markers) carries no job. Returning null without moving the offset
+     * re-fetched it for ever, so nothing after it was delivered. The deadline
+     * holds while skipping, so a steady stream of tombstones cannot hold pop()
+     * (the same 1 s steady-state bound as python), and once past a tombstone the
+     * broker's long-poll wait is held to it too. Nothing is committed here:
+     * acknowledging the next record commits past the skipped tombstones, as
+     * before.
+     *
+     * @return array{message: ?array, nextOffset: int}|null the fetch result, or null for none
+     */
+    private function fetchPastTombstones(string $topic): ?array
+    {
+        $deadline = microtime(true) + 1.0;
+        $maxWaitMs = self::FETCH_MAX_WAIT_MS;
+        while (true) {
+            $offset = $this->offsets[$topic];
+            $result = $this->sendFetch($topic, $offset, $maxWaitMs);
+            if ($result === null || $result['message'] !== null) {
+                return $result;
+            }
+            // Stop if the offset would not move: the decoder reads only a
+            // batch's first record, so a tombstone that shares a batch with later
+            // records comes back again. That must never spin this loop.
+            if ($result['nextOffset'] <= $offset) {
+                return null;
+            }
+            $this->offsets[$topic] = $result['nextOffset'];
+            $remaining = $deadline - microtime(true);
+            if ($remaining <= 0) {
+                return null;
+            }
+            $maxWaitMs = (int) ($remaining * 1000);
+        }
     }
 
     /** {@inheritDoc} */
@@ -848,9 +890,11 @@ class KafkaBackend implements QueueBackend
      *
      * Returns null when the blob holds no usable record -- an empty batch, a
      * control batch (transaction markers, which carry no user payload), or a
-     * record whose value is not the JSON this queue writes.
+     * record whose value is not the JSON this queue writes. A tombstone (null
+     * value) or an empty value comes back with value null and its offset, so
+     * the caller can step past it.
      *
-     * @return array{value: string, offset: int}|null
+     * @return array{value: ?string, offset: int}|null
      */
     private function decodeFirstRecord(string $records): ?array
     {
@@ -897,8 +941,8 @@ class KafkaBackend implements QueueBackend
         }
 
         $valueLen = self::readVarint($records, $pos);
-        if ($valueLen <= 0) {
-            return null;                        // null or empty value
+        if ($valueLen <= 0) {                   // null (tombstone) or empty value
+            return ['value' => null, 'offset' => $baseOffset + $offsetDelta];
         }
 
         return [
@@ -912,14 +956,16 @@ class KafkaBackend implements QueueBackend
      * dropped v0-v3 along with the old message formats) and decode the first
      * record out of the returned RecordBatch v2.
      *
-     * @return array{message: array, nextOffset: int}|null
+     * message is null for a tombstone (null or empty value).
+     *
+     * @return array{message: ?array, nextOffset: int}|null
      */
-    private function sendFetch(string $topic, int $offset): ?array
+    private function sendFetch(string $topic, int $offset, int $maxWaitMs = self::FETCH_MAX_WAIT_MS): ?array
     {
         $header = $this->requestHeader(1, self::FETCH_VERSION);
 
         $body = "\xFF\xFF\xFF\xFF"            // replica id -1 (ordinary consumer)
-            . pack('N', 5000)                 // max wait ms
+            . pack('N', $maxWaitMs)           // max wait ms
             . pack('N', 1)                    // min bytes
             . pack('N', 52428800)             // max bytes (50MB) -- v3+
             . pack('C', 0)                    // isolation level: read_uncommitted -- v4+
@@ -974,13 +1020,25 @@ class KafkaBackend implements QueueBackend
         }
 
         $record = $this->decodeFirstRecord(substr($response, $pos, $recordsSize));
-        if ($record === null) {
-            return null;
-        }
+        return $record === null ? null : self::fetchedRecord($record);
+    }
 
-        $message = json_decode($record['value'], true);
-        if (!is_array($message)) {
-            return null;
+    /**
+     * The fetch result for a decoded record: its message and the offset after it.
+     * message is null for a tombstone (null or empty value); a value that is not
+     * the JSON this queue writes gives null (no result), as before.
+     *
+     * @param array{value: ?string, offset: int} $record
+     * @return array{message: ?array, nextOffset: int}|null
+     */
+    private static function fetchedRecord(array $record): ?array
+    {
+        $message = null;
+        if ($record['value'] !== null) {
+            $message = json_decode($record['value'], true);
+            if (!is_array($message)) {
+                return null;
+            }
         }
 
         return [

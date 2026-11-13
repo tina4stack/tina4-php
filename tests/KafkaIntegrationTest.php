@@ -152,6 +152,302 @@ class KafkaIntegrationTest extends TestCase
     }
 
     /**
+     * Produce ONE record with the broker's own console producer, in its own
+     * batch (the client decodes only the first record of a fetched batch). A
+     * value equal to the null marker is written as null: a real tombstone, the
+     * record Debezium writes after a delete.
+     */
+    private function produceRecord(string $key, string $value): void
+    {
+        $this->produceLines("{$key},{$value}");
+    }
+
+    /** Produce newline-separated key,value lines in one console-producer run (one batch). */
+    private function produceLines(string $lines): void
+    {
+        $out = [];
+        $rc = 0;
+        exec(sprintf(
+            'printf %%s %s | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE 2>&1',
+            escapeshellarg($lines),
+            escapeshellarg($this->container),
+            escapeshellarg($this->topic)
+        ), $out, $rc);
+        $this->assertSame(0, $rc, 'console producer failed: ' . implode(' ', $out));
+    }
+
+    /**
+     * A tombstone (null-value record) is stepped over: the record after it is
+     * delivered. The fetch answered a null value with "no message" and never
+     * moved its offset, so every later pop() fetched the tombstone again and
+     * nothing after it was ever consumed -- silently, with no error.
+     */
+    public function testATombstoneIsSteppedOverAndTheNextRecordDelivered(): void
+    {
+        $this->produceRecord('k1', '{"n":1}');
+        $this->produceRecord('k1', 'TOMBSTONE');
+        $this->produceRecord('k2', '{"n":2}');
+
+        // ONE pass, no retry after a null: a single-pass drain treats null as an
+        // empty queue, so the tombstone must be stepped over within the pop.
+        $queue = new Queue('kafka', [], $this->topic);
+        $got = [];
+        while (count($got) < 5 && ($job = $queue->pop()) !== null) {
+            $got[] = $job->payload['n'] ?? null;
+            $job->complete();
+        }
+
+        $this->assertSame([1, 2], $got, 'the consumer stopped at the tombstone');
+    }
+
+    /**
+     * A tombstone batched ahead of a record must not loop the fetch. The broker
+     * returns the whole batch and the client decodes only its first record, so
+     * the tombstone comes back at an offset already passed; stepping over it
+     * must then stop at once rather than fetch the same offset until the
+     * deadline. (The record after it is still not delivered by this client:
+     * that is the separate batch-decoding limit, not covered here.) An alarm
+     * caps the test so a regression fails here instead of hanging the suite.
+     */
+    public function testATombstoneThatCannotBeSteppedOverDoesNotSpin(): void
+    {
+        if (!function_exists('pcntl_alarm')) {
+            $this->markTestSkipped('pcntl not loaded: cannot cap a possible infinite loop.');
+        }
+        $this->produceLines("k1,TOMBSTONE\nk2,{\"n\":1}\n");
+
+        $queue = new Queue('kafka', [], $this->topic);
+        pcntl_async_signals(true);
+        pcntl_signal(SIGALRM, function (): void {
+            throw new \RuntimeException('pop() spun on the tombstone for 30s');
+        });
+        pcntl_alarm(30);
+        try {
+            $queue->pop(); // connects and reads the committed offset too
+            $started = microtime(true);
+            $queue->pop();
+            $took = microtime(true) - $started;
+        } finally {
+            pcntl_alarm(0);
+            pcntl_signal(SIGALRM, SIG_DFL);
+        }
+        $this->assertLessThan(0.5, $took, sprintf('pop() re-fetched the same offset for %.2fs', $took));
+    }
+
+    /**
+     * Past a tombstone the broker's long-poll wait is held to the deadline. The
+     * fetch asks the broker to wait up to 5 s for data; after stepping past
+     * tombstones to the end of the topic, the next fetch sat out the whole 5 s.
+     */
+    public function testPopKeepsItsDeadlineWhenTheTombstonesEndTheTopic(): void
+    {
+        $this->produceRecord('k0', '{"n":0}');
+        $queue = new Queue('kafka', [], $this->topic);
+        $warm = $queue->pop();
+        $this->assertSame(0, $warm?->payload['n'] ?? null);
+        $warm->complete();
+        for ($i = 0; $i < 3; $i++) {
+            $this->produceRecord('k', 'TOMBSTONE');
+        }
+
+        $started = microtime(true);
+        $this->assertNull($queue->pop());
+        $took = microtime(true) - $started;
+        $this->assertLessThan(1.6, $took, sprintf('pop() took %.1fs past the tombstones (deadline ~1s)', $took));
+    }
+
+    /**
+     * Capping the broker's wait past a tombstone must not turn it into no wait:
+     * a record produced while the capped fetch waits is delivered by that same
+     * pop(). A forked child produces it 0.4 s into the wait.
+     */
+    public function testPopStillWaitsOutItsDeadlineForARecordAfterTombstones(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('pcntl and posix needed to produce during the wait.');
+        }
+        $url = getenv('TINA4_TEST_KAFKA_URL');
+        $this->produceRecord('k0', '{"n":0}');
+        $this->produceRecord('k1', 'TOMBSTONE');
+        $this->produceRecord('k1', 'TOMBSTONE');
+        $backend = new \Tina4\Queue\KafkaBackend([
+            'brokers' => $url, 'group_id' => 'tina4_php_tomb_wait_' . bin2hex(random_bytes(4)),
+        ]);
+        $this->assertSame(0, $backend->dequeueRecord($this->topic)['payload']['n'] ?? null);
+
+        // Connected before the fork, so the child only has to send the record.
+        $producer = new \Tina4\Queue\KafkaBackend(['brokers' => $url]);
+        foreach (['ensureConnected' => [], 'ensureTopicMetadata' => [$this->topic]] as $name => $args) {
+            $call = new \ReflectionMethod($producer, $name);
+            $call->setAccessible(true);
+            $call->invoke($producer, ...$args);
+        }
+        $produce = new \ReflectionMethod($producer, 'sendProduce');
+        $produce->setAccessible(true);
+
+        $child = pcntl_fork();
+        $this->assertNotSame(-1, $child, 'fork failed');
+        if ($child === 0) {
+            try {
+                usleep(400000);
+                $produce->invoke($producer, $this->topic, 'k2', '{"n":"late"}');
+            } finally {
+                posix_kill(getmypid(), SIGKILL); // never return into PHPUnit in the child
+            }
+        }
+        try {
+            $started = microtime(true);
+            $job = $backend->dequeueRecord($this->topic);
+            $took = microtime(true) - $started;
+        } finally {
+            pcntl_waitpid($child, $status);
+        }
+        $this->assertSame('late', $job['payload']['n'] ?? null, 'the capped fetch did not wait for the record');
+        $this->assertSame("{$this->topic}:0:3", $job['id'] ?? null);
+        $this->assertLessThan(1.6, $took, sprintf('pop() took %.1fs (deadline ~1s)', $took));
+        $offsets = new \ReflectionProperty($backend, 'offsets');
+        $offsets->setAccessible(true);
+        $this->assertSame(4, $offsets->getValue($backend)[$this->topic]);
+    }
+
+    /**
+     * A backlog of skipped records longer than one deadline is cut off at it.
+     * Each fetch of a skipped record returns at once, so only the deadline check
+     * stops the loop: without it one pop() walked the whole backlog. The backlog
+     * is empty values (skipped like tombstones) written one record per batch by
+     * the backend's own producer, because the console producer is far too slow
+     * to write thousands of single-record batches.
+     */
+    public function testPopKeepsItsDeadlineThroughABacklogOfSkippedRecords(): void
+    {
+        $url = getenv('TINA4_TEST_KAFKA_URL');
+        $producer = new \Tina4\Queue\KafkaBackend(['brokers' => $url]);
+        foreach (['ensureConnected' => [], 'ensureTopicMetadata' => [$this->topic]] as $name => $args) {
+            $call = new \ReflectionMethod($producer, $name);
+            $call->setAccessible(true);
+            $call->invoke($producer, ...$args);
+        }
+        $produce = new \ReflectionMethod($producer, 'sendProduce');
+        $produce->setAccessible(true);
+        $total = 9000;
+        for ($i = 0; $i < $total; $i++) {
+            $produce->invoke($producer, $this->topic, 'k', '');
+        }
+
+        $backend = new \Tina4\Queue\KafkaBackend([
+            'brokers' => $url, 'group_id' => 'tina4_php_tomb_backlog_' . bin2hex(random_bytes(4)),
+        ]);
+        $started = microtime(true);
+        $this->assertNull($backend->dequeueRecord($this->topic));
+        $took = microtime(true) - $started;
+        $this->assertLessThan(1.6, $took, sprintf('pop() took %.1fs on a backlog (deadline ~1s)', $took));
+        $offsets = new \ReflectionProperty($backend, 'offsets');
+        $offsets->setAccessible(true);
+        $this->assertLessThan($total, $offsets->getValue($backend)[$this->topic], 'one pop() walked the whole backlog');
+    }
+
+    /**
+     * An empty value is stepped over like a null one; both used to stop the
+     * consumer on the spot for ever.
+     */
+    public function testAnEmptyValueIsSteppedOver(): void
+    {
+        $this->produceRecord('k1', '');
+        $this->produceRecord('k2', '{"n":2}');
+
+        $job = (new Queue('kafka', [], $this->topic))->pop();
+        $this->assertSame(2, $job?->payload['n'] ?? null, 'the consumer stopped at the empty value');
+    }
+
+    /**
+     * pop() keeps its ~1 s deadline while a stream of tombstones arrives
+     * (unbounded it ran as long as the stream, 14 s here).
+     * Stepping over one went straight back to the fetch and never checked a
+     * deadline, so one pop() blocked for as long as the tombstones kept coming.
+     */
+    public function testPopKeepsItsDeadlineUnderAStreamOfTombstones(): void
+    {
+        $this->produceRecord('k0', '{"n":0}');
+        $queue = new Queue('kafka', [], $this->topic);
+        $warm = $queue->pop();
+        $this->assertSame(0, $warm?->payload['n'] ?? null);
+        $warm->complete();
+
+        // Up to 60 tombstones, one console-producer run each so every one lands
+        // in its own batch (one producer reading stdin packs several per batch,
+        // and the decoder reads only a batch's first record). A counted loop:
+        // proc_open runs /bin/sh, which is dash on Debian/Ubuntu, and dash has
+        // no $SECONDS. After each run the feeder touches a marker file: the
+        // console producer exits only once its record is acknowledged.
+        $sent = sys_get_temp_dir() . '/tina4_tomb_sent_' . bin2hex(random_bytes(6));
+        $feeder = proc_open(sprintf(
+            'i=0; while [ $i -lt 60 ]; do i=$((i+1)); printf %%s k,TOMBSTONE | docker exec -i %s /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic %s --property parse.key=true --property key.separator=, --property null.marker=TOMBSTONE >/dev/null 2>&1; : > %s; done',
+            escapeshellarg($this->container),
+            escapeshellarg($this->topic),
+            escapeshellarg($sent)
+        ), [], $pipes);
+        try {
+            // Start timing only once the first tombstone is on the topic: each
+            // console-producer run starts a JVM, which can take seconds on a busy
+            // runner, and a pop() on an empty topic waits out the broker's 5 s
+            // long-poll on any code.
+            $waitUntil = microtime(true) + 45;
+            while (!file_exists($sent)) {
+                $this->assertLessThan($waitUntil, microtime(true), 'no tombstone reached the topic in 45 s');
+                usleep(50000);
+            }
+            $started = microtime(true);
+            $job = $queue->pop();
+            $took = microtime(true) - $started;
+            $this->assertNull($job);
+            $this->assertLessThan(2.5, $took, sprintf('pop() took %.1fs under a tombstone stream (deadline ~1s)', $took));
+        } finally {
+            proc_terminate($feeder);
+            proc_close($feeder);
+            @unlink($sent);
+        }
+    }
+
+    /**
+     * Nothing commits on the tombstone path; acknowledging the record after it
+     * commits past both, so a restarted consumer in the same group neither stops
+     * at the tombstone nor redelivers anything.
+     */
+    public function testAFreshProcessGetsPastATombstoneThroughTheNormalAcknowledge(): void
+    {
+        $url = getenv('TINA4_TEST_KAFKA_URL');
+        $group = 'tina4_php_tomb_restart_' . bin2hex(random_bytes(4));
+        // One record per batch: the decoder reads only a batch's first record.
+        $this->produceRecord('k1', '{"n":1}');
+        $this->produceRecord('k1', 'TOMBSTONE');
+        $this->produceRecord('k2', '{"n":2}');
+        $committed = function () use ($url, $group): int {
+            $probe = new \Tina4\Queue\KafkaBackend(['brokers' => $url, 'group_id' => $group]);
+            $connect = new \ReflectionMethod($probe, 'ensureConnected');
+            $connect->setAccessible(true);
+            $connect->invoke($probe);
+            $read = new \ReflectionMethod($probe, 'fetchCommittedOffset');
+            $read->setAccessible(true);
+            return $read->invoke($probe, $this->topic, 0);
+        };
+
+        $first = new \Tina4\Queue\KafkaBackend(['brokers' => $url, 'group_id' => $group]);
+        $job = $first->dequeueRecord($this->topic);
+        $this->assertSame(1, $job['payload']['n'] ?? null);
+        $first->acknowledge($this->topic, (string) $job['id']);
+        $this->assertSame(1, $committed(), 'the ack did not commit up to the tombstone');
+
+        $second = new \Tina4\Queue\KafkaBackend(['brokers' => $url, 'group_id' => $group]);
+        $job = $second->dequeueRecord($this->topic);
+        $this->assertSame(2, $job['payload']['n'] ?? null, 'a restart did not get past the tombstone');
+        $second->acknowledge($this->topic, (string) $job['id']);
+        $this->assertSame(3, $committed());
+
+        $third = new \Tina4\Queue\KafkaBackend(['brokers' => $url, 'group_id' => $group]);
+        $this->assertNull($third->dequeueRecord($this->topic));
+    }
+
+    /**
      * #264: push(raw=true) produces the value with NO Tina4 envelope and no
      * injected id, so a non-Tina4 consumer reads the exact top-level schema. Read
      * the raw bytes back with the low-level KafkaBackend::dequeue — what a foreign
