@@ -1699,7 +1699,16 @@ class Server
             // Reap and replace. A worker that dies - crashed, OOM-killed, or
             // recycled at TINA4_SERVE_MAX_REQUESTS - is replaced immediately,
             // so the pool stays at strength without operator involvement.
+            //
+            // waitpid(-1) also reaps children that are NOT workers: orphans
+            // re-parented to this process when it is PID 1 in a container (or
+            // a subreaper), and anything the application forked here before
+            // the pool started. Those are reaped and nothing more - replacing
+            // them would grow the pool by one worker per reaped orphan, forever.
             while (($pid = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+                if (!isset($this->workerPids[$pid])) {
+                    continue;
+                }
                 unset($this->workerPids[$pid]);
                 if ($this->running) {
                     $this->spawnWorker();
