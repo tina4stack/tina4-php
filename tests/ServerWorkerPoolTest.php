@@ -28,6 +28,8 @@
  *     from the outside and be worth nothing.
  *   - a worker that DIES is replaced, because a pool that silently shrinks to
  *     zero is worse than no pool.
+ *   - reaping a child that is NOT a worker (an adopted orphan) does not grow
+ *     the pool, because PID 1 in a container reaps every orphan it is given.
  *   - TINA4_SERVE_MAX_REQUESTS really recycles a worker.
  *   - the pool REFUSES to start in debug mode, because the dashboard, hot
  *     reload and the WebSocket registry are all per-process.
@@ -47,6 +49,8 @@ class ServerWorkerPoolTest extends TestCase
     /** @var resource|null */
     private $proc = null;
     private int $port = 0;
+    /** @var int[] Supervisor children that are not workers (see the orphan test). */
+    private array $strayPids = [];
 
     protected function setUp(): void
     {
@@ -58,6 +62,10 @@ class ServerWorkerPoolTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->strayPids as $pid) {
+            @posix_kill($pid, SIGKILL);
+        }
+        $this->strayPids = [];
         $this->stopServer();
     }
 
@@ -81,8 +89,9 @@ class ServerWorkerPoolTest extends TestCase
      * Boot a server. $env adds or overrides .env lines.
      *
      * @param array<string, string> $env
+     * @param string $preRun PHP run in the supervisor process before the server starts.
      */
-    private function startServer(array $env = []): int
+    private function startServer(array $env = [], string $preRun = ''): int
     {
         $port = \FreePort::get();
 
@@ -109,6 +118,7 @@ PHP);
         file_put_contents($this->appDir . '/index.php', <<<PHP
 <?php
 require '{$autoload}';
+{$preRun}
 \$app = new \\Tina4\\App(__DIR__);
 \$app->run('127.0.0.1', {$port});
 PHP);
@@ -389,6 +399,114 @@ PHP);
             . implode(',', $this->liveWorkerPids())
         );
         $this->assertNotEmpty($this->collectPids(10), 'the pool stopped serving after a worker died');
+    }
+
+    /**
+     * Reaping a child that is NOT a worker must not grow the pool (#358).
+     *
+     * The supervisor reaps with waitpid(-1), which collects ANY child of the
+     * process, not just the workers it forked. As PID 1 in a container (or a
+     * subreaper) every orphan in the container is re-parented to it, and a
+     * supervisor that respawned on every reap added one worker per orphan that
+     * exited - 8 grew to 15 in a day in production.
+     *
+     * The stray children here are real: the supervisor process itself forks
+     * three `sleep` processes before the server starts, so they are its own
+     * children that the pool never spawned - the same position an adopted
+     * orphan is in. Killing them makes the supervisor reap three pids that are
+     * not workers. The pool must then still be exactly the original workers
+     * (no replacements), the strays must be reaped (no zombies), and a REAL
+     * worker dying afterwards must still be replaced.
+     */
+    public function testReapingAChildThatIsNotAWorkerDoesNotGrowThePool(): void
+    {
+        $strays = 3;
+        $this->startServer([], <<<PHP
+// Children of the supervisor that are NOT pool workers.
+\$__strays = [];
+for (\$__i = 0; \$__i < {$strays}; \$__i++) {
+    \$__pid = pcntl_fork();
+    if (\$__pid === 0) {
+        pcntl_exec('/bin/sleep', ['300']);
+        posix_kill(posix_getpid(), SIGKILL);   // exec failed: die without PHP shutdown
+    }
+    \$__strays[] = \$__pid;
+}
+file_put_contents(__DIR__ . '/strays.txt', implode(',', \$__strays));
+PHP);
+
+        $this->strayPids = array_map('intval', explode(',', (string)file_get_contents($this->appDir . '/strays.txt')));
+        $this->assertCount($strays, $this->strayPids, 'the supervisor did not fork its stray children');
+        $strayStrings = array_map('strval', $this->strayPids);
+
+        $children = $this->waitForWorkers(self::WORKERS + $strays);
+        $this->assertCount(
+            self::WORKERS + $strays,
+            $children,
+            'expected the pool plus the stray children under the supervisor: ' . implode(',', $children)
+        );
+        foreach ($strayStrings as $stray) {
+            $this->assertContains($stray, $children, "stray {$stray} is not a child of the supervisor");
+        }
+        $workers = array_values(array_diff($children, $strayStrings));
+        sort($workers);
+        $this->assertCount(self::WORKERS, $workers, 'the pool did not start at strength');
+
+        // The strays exit; the supervisor reaps three pids it never spawned.
+        foreach ($this->strayPids as $stray) {
+            posix_kill($stray, SIGKILL);
+        }
+
+        // Wait until every stray is gone from the process table, which means
+        // the supervisor REAPED it (an unreaped child stays listed as a zombie).
+        $reaped = false;
+        $deadline = microtime(true) + 15;
+        while (microtime(true) < $deadline) {
+            if (array_intersect($strayStrings, $this->liveWorkerPids()) === []) {
+                $reaped = true;
+                break;
+            }
+            usleep(100000);
+        }
+        $this->assertTrue($reaped, 'the supervisor never reaped its non-worker children: '
+            . implode(',', $this->liveWorkerPids()));
+        $this->strayPids = [];
+
+        // Give a respawn every chance to happen: the supervisor polls every
+        // 100ms and the buggy one forked in the same loop pass as the reap.
+        usleep(1000000);
+
+        $after = $this->liveWorkerPids();
+        sort($after);
+        $this->assertSame(
+            $workers,
+            $after,
+            'reaping ' . $strays . ' children that were not workers changed the pool from '
+            . count($workers) . ' to ' . count($after) . ' processes ('
+            . implode(',', $workers) . ' -> ' . implode(',', $after) . '): the supervisor '
+            . 'respawned a worker for every reaped pid, so adopted orphans grow the pool without limit'
+        );
+
+        // The guard must not have cost the real job: a WORKER that dies is
+        // still replaced, back to exactly the configured size.
+        $victim = $workers[0];
+        posix_kill((int)$victim, SIGKILL);
+        $replaced = false;
+        $deadline = microtime(true) + 15;
+        while (microtime(true) < $deadline) {
+            $now = $this->liveWorkerPids();
+            if (count($now) === self::WORKERS && !in_array($victim, $now, true)) {
+                $replaced = true;
+                break;
+            }
+            usleep(100000);
+        }
+        $this->assertTrue($replaced, 'the supervisor did not replace worker ' . $victim
+            . ' - the pool now has ' . implode(',', $this->liveWorkerPids()));
+
+        usleep(500000);
+        $this->assertCount(self::WORKERS, $this->liveWorkerPids(), 'the pool overshot after replacing a worker');
+        $this->assertNotEmpty($this->collectPids(5), 'the pool stopped serving');
     }
 
     /**
