@@ -174,6 +174,17 @@ class PortTakeover
         @unlink(self::pidfilePath($port, $baseDir));
     }
 
+    /** True when a plain TCP listener on *host*:*port* binds right now. */
+    private static function bindable(string $host, int $port): bool
+    {
+        $probe = @stream_socket_server("tcp://{$host}:{$port}", $errno, $errstr);
+        if ($probe === false) {
+            return false;
+        }
+        fclose($probe);
+        return true;
+    }
+
     /** Raw lsof/netstat PID tokens for whatever holds *port*. @return string[] */
     private static function portHolders(int $port): array
     {
@@ -224,8 +235,15 @@ class PortTakeover
         bool $dev,
         bool $noTakeover,
         ?string $baseDir = null,
-        float $grace = 0.5
+        float $grace = 0.5,
+        ?string $host = null
     ): array {
+        // Before a bind, the caller passes the host it will bind. If that bind
+        // would succeed, nothing holds the port: there is nothing to refuse, so
+        // say nothing. Dev-mode reclaim still goes by the holder.
+        if ($host !== null && ($noTakeover || !$dev) && self::bindable($host, $port)) {
+            return self::result(self::NOTHING, $port);
+        }
         if ($noTakeover) {
             return self::result(self::REFUSED_OPTOUT, $port, [],
                 "Port {$port} is in use and takeover is disabled (TINA4_NO_TAKEOVER/--no-kill) "

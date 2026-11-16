@@ -199,6 +199,23 @@ PHP);
         $this->assertTrue($this->running(0), 'production bind killed a port holder');
     }
 
+    public function testAFreePortIsNotRefusedOutsideDevMode(): void
+    {
+        // Nothing holds it: there is nothing to refuse, and no "in use" message.
+        $result = PortTakeover::takeOverPort($this->freePort(), dev: false, noTakeover: false, baseDir: $this->baseDir, host: '127.0.0.1');
+
+        $this->assertSame(PortTakeover::NOTHING, $result['status']);
+        $this->assertSame('', $result['message']);
+    }
+
+    public function testAFreePortIsNotRefusedWhenOptedOut(): void
+    {
+        $result = PortTakeover::takeOverPort($this->freePort(), dev: true, noTakeover: true, baseDir: $this->baseDir, host: '127.0.0.1');
+
+        $this->assertSame(PortTakeover::NOTHING, $result['status']);
+        $this->assertSame('', $result['message']);
+    }
+
     public function testTheRuntimePathAlsoSparesAForeignHolder(): void
     {
         // The runtime bind-failure fallback (Server::freePort) runs the SAME
