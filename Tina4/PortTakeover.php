@@ -185,6 +185,33 @@ class PortTakeover
         return true;
     }
 
+    /**
+     * The result to return before any holder lookup, or null to carry on.
+     *
+     * Takeover is refused when opted out or outside dev mode. Before a bind,
+     * the caller passes the host it will bind: if that bind would succeed,
+     * nothing holds the port, so there is nothing to refuse and nothing to say.
+     *
+     * @return array{status:string,port:int,killed:int[],message:string}|null
+     */
+    private static function refusal(int $port, bool $dev, bool $noTakeover, ?string $host): ?array
+    {
+        if (!$noTakeover && $dev) {
+            return null;
+        }
+        if ($host !== null && self::bindable($host, $port)) {
+            return self::result(self::NOTHING, $port);
+        }
+        if ($noTakeover) {
+            return self::result(self::REFUSED_OPTOUT, $port, [],
+                "Port {$port} is in use and takeover is disabled (TINA4_NO_TAKEOVER/--no-kill) "
+                . "-- free it or choose another port.");
+        }
+        return self::result(self::REFUSED_PROD, $port, [],
+            "Port {$port} is in use; takeover is disabled outside dev mode "
+            . "-- free it or choose another port.");
+    }
+
     /** Raw lsof/netstat PID tokens for whatever holds *port*. @return string[] */
     private static function portHolders(int $port): array
     {
@@ -238,21 +265,9 @@ class PortTakeover
         float $grace = 0.5,
         ?string $host = null
     ): array {
-        // Before a bind, the caller passes the host it will bind. If that bind
-        // would succeed, nothing holds the port: there is nothing to refuse, so
-        // say nothing. Dev-mode reclaim still goes by the holder.
-        if ($host !== null && ($noTakeover || !$dev) && self::bindable($host, $port)) {
-            return self::result(self::NOTHING, $port);
-        }
-        if ($noTakeover) {
-            return self::result(self::REFUSED_OPTOUT, $port, [],
-                "Port {$port} is in use and takeover is disabled (TINA4_NO_TAKEOVER/--no-kill) "
-                . "-- free it or choose another port.");
-        }
-        if (!$dev) {
-            return self::result(self::REFUSED_PROD, $port, [],
-                "Port {$port} is in use; takeover is disabled outside dev mode "
-                . "-- free it or choose another port.");
+        $early = self::refusal($port, $dev, $noTakeover, $host);
+        if ($early !== null) {
+            return $early;
         }
         if (self::inContainer()) {
             return self::result(self::SKIPPED_CONTAINER, $port);
