@@ -1153,8 +1153,9 @@ route('/data', async () => {
   return html`<p>${data.message}</p>`;
 });
 
-// Start the router
-router.start({ target: '#app', mode: 'hash' });  // or mode: 'history'
+// Start the router. History mode is the default (src/router/router.ts) and gives clean URLs;
+// use mode: 'hash' only on a static host that cannot rewrite unknown paths to index.html.
+router.start({ target: '#app', mode: 'history' });
 
 // Listen for route changes
 router.on('change', ({ path, params, pattern, durationMs }) => {
