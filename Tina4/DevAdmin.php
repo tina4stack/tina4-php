@@ -503,6 +503,7 @@ class DevAdmin
                 $mailboxCount = (new DevMailbox())->count();
             } catch (\Throwable) {
             }
+            $memory = self::processMemory();
             // Shape mirrors Python _api_status exactly (keys + order).
             // Shared memory/uptime/framework_version fields are *also*
             // emitted by Python — ported symmetrically.
@@ -520,8 +521,12 @@ class DevAdmin
                 'messages' => MessageLog::count(),
                 'requests' => RequestInspector::stats(),
                 'health' => ['unresolved' => ErrorTracker::unresolvedCount()],
-                'memory_usage_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
-                'peak_memory_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
+                // Current / peak = the PROCESS's resident set (VmRSS / VmHWM)
+                // where the OS exposes it, else PHP's own allocator figures;
+                // memory_source says which (parity with tina4-python#316).
+                'memory_usage_mb' => $memory['current_mb'],
+                'peak_memory_mb' => $memory['peak_mb'],
+                'memory_source' => $memory['source'],
                 'uptime_seconds' => round(microtime(true) - self::bootTime(), 1),
                 'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
@@ -1521,6 +1526,7 @@ class DevAdmin
                 }
             } catch (\Throwable) {
             }
+            $memory = self::processMemory();
             return $response->json([
                 'php_version' => PHP_VERSION,
                 'platform' => PHP_OS_FAMILY . ' ' . php_uname('r'),
@@ -1533,7 +1539,9 @@ class DevAdmin
                 // Redacted: this is a PUBLIC GET on the dev server and it
                 // returned the whole TINA4_DATABASE_URL, password and all.
                 'database' => self::redactedDatabaseUrl(),
-                'memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
+                // The dashboard's "Memory" figure: the process's current RSS.
+                'memory_mb' => $memory['current_mb'],
+                'memory_source' => $memory['source'],
                 'uptime_seconds' => round(microtime(true) - self::bootTime(), 1),
                 'db_tables' => $dbTables,
                 'db_connected' => $dbConnected,
@@ -2496,6 +2504,40 @@ class DevAdmin
     private static function devAdminEnvPath(): string
     {
         return self::devAdminProjectRoot() . '/.env';
+    }
+
+    /**
+     * This process's memory as the dashboard reports it, in MB.
+     *
+     * current_mb is the process's CURRENT resident set size and peak_mb its
+     * real high-water mark, read from VmRSS / VmHWM in /proc/self/status where
+     * the kernel exposes them (Linux). memory_get_usage(true) is only the Zend
+     * allocator's heap: it leaves out the PHP binary, loaded extensions, opcache
+     * and anything malloc'd outside Zend, so it sits tens of MB below what the
+     * OS (top, docker stats, a k8s memory limit) sees. Where /proc is not
+     * available (Windows, macOS) the Zend figures are the fallback and source
+     * says so: 'rss' or 'php_heap'.
+     *
+     * @return array{current_mb: float, peak_mb: float, source: string}
+     */
+    public static function processMemory(): array
+    {
+        $status = @file_get_contents('/proc/self/status');
+        if (is_string($status)
+            && preg_match('/^VmRSS:\s+(\d+)\s+kB/m', $status, $rss) === 1
+            && preg_match('/^VmHWM:\s+(\d+)\s+kB/m', $status, $hwm) === 1
+        ) {
+            return [
+                'current_mb' => round((int)$rss[1] / 1024, 2),
+                'peak_mb' => round((int)$hwm[1] / 1024, 2),
+                'source' => 'rss',
+            ];
+        }
+        return [
+            'current_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
+            'peak_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
+            'source' => 'php_heap',
+        ];
     }
 
     /**
