@@ -777,7 +777,20 @@ class Server
                 $except = null;
 
                 // 1ms timeout when idle — low latency without CPU spin
-                $changed = @stream_select($read, $write, $except, 0, 1000);
+                try {
+                    $changed = @stream_select($read, $write, $except, 0, 1000);
+                } catch (\TypeError|\ValueError $e) {
+                    // pcntl_async_signals runs the SIGTERM/SIGINT handler at any
+                    // opcode boundary. If it ran after $read was built, stop() has
+                    // closed the listeners in it, and stream_select() throws on a
+                    // closed resource (`@` does not suppress that). That is the
+                    // shutdown we asked for, so leave the loop and drain; outside
+                    // a shutdown it is a real fault and still propagates.
+                    if ($this->running) {
+                        throw $e;
+                    }
+                    break;
+                }
                 if ($changed === false) {
                     // false here is almost always EINTR — a signal (SIGCHLD,
                     // SIGTERM, alarm, etc.) interrupted the syscall. Bailing
