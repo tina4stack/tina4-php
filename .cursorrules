@@ -25,11 +25,11 @@ Router::post("/api/users", function($request, $response) {
 - Queue job payload: `$job->payload` not `$job->data`
 - Namespace: `Tina4\` — e.g., `Tina4\Router`, `Tina4\ORM`, `Tina4\Auth`
 - Templates are Twig syntax (not Blade)
-- Default port: 7146
+- Default port: 7145
 - Entry point: `new \Tina4\App(basePath: __DIR__); $app->start();`
 
 ## Project Structure
 
 Routes in `src/routes/`, ORM in `src/orm/`, templates in `src/templates/`, static in `src/public/`.
 
-See llms.txt for complete API reference.
+For the complete API reference, read `CLAUDE.md` in this repo and the docs it links. `llms.txt` is the link index (llmstxt.org format); https://tina4.com/llms-full.txt has the full documentation in one file.

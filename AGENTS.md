@@ -10,7 +10,7 @@ Codex discovers the project skills in `.agents/skills`; Cursor discovers them in
 
 ```bash
 composer install              # Install dependencies
-bin/tina4php serve            # Start dev server on port 7146
+bin/tina4php serve            # Start dev server on port 7145
 bin/tina4php migrate          # Run database migrations
 composer test                 # Run test suite
 bin/tina4php routes           # List all registered routes
