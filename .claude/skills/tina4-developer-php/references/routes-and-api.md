@@ -19,7 +19,10 @@ Routes are registered with the static `\Tina4\Router` methods — `get`, `post`,
 });
 
 \Tina4\Router::post("/users", function ($request, $response) {
-    $user = (new User($request->body))->save();   // body auto-parsed from JSON
+    $user = new User($request->body);              // body auto-parsed from JSON
+    if (!$user->save()) {                          // $this on success, false on failure
+        return $response(["error" => $user->getError()], 422);
+    }
     return $response($user, 201);
 });
 
@@ -207,16 +210,20 @@ A form token proves ORIGIN (this write came from a form you rendered), not ident
   out of the form-token check.
 
 ### In frond.js
-frond.js's `saveForm(...)` / `sendRequest(...)` pick up the form token automatically. If you POST by
-hand, read it from a meta tag you populated with `{{ formTokenValue() }}` and send it as a header.
+`frond.form.submit("formId", "/endpoint", "messageId")` collects every input in the form, including
+the hidden `formToken` field exactly as the server rendered it, so the token travels with the POST.
+If you POST by hand, read it from a meta tag you populated with `{{ formTokenValue() }}` and send it as a header.
 
 **Never skip CSRF protection on forms.** It prevents cross-site request forgery attacks.
 
 ## CORS
 
-Built-in. Register the CORS middleware globally when you need to customise it:
-`\Tina4\Router::use(\Tina4\Middleware\CorsMiddleware::class);`. In development it defaults to
-allowing all origins.
+Built-in: `\Tina4\Router::use(\Tina4\Middleware\CorsMiddleware::class);`. It is **deny by default**
+(ADR-0018), in development too: with `TINA4_CORS_ORIGINS` unset no `Access-Control-Allow-Origin`
+is sent and the browser blocks cross-origin calls. List the origins you allow, e.g.
+`TINA4_CORS_ORIGINS=http://localhost:5173,https://app.example.com` (`*` allows any, and is then
+never paired with credentials). Same-origin requests need nothing. Also: `TINA4_CORS_METHODS`,
+`TINA4_CORS_HEADERS`, `TINA4_CORS_MAX_AGE`, `TINA4_CORS_CREDENTIALS`.
 
 ## Rate Limiting
 

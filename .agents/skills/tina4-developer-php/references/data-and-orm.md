@@ -73,18 +73,26 @@ $user = User::findOrFail(1);    // returns instance, or throws RuntimeException 
 ### Read — filtered list
 
 ```php
-// find() is STATIC. Pass an associative filter for an equality match; returns array<User>.
-$users = User::find(["is_active" => true]);
+// find() is STATIC. Pass an associative filter for an equality match; returns a ModelCollection.
+$users = User::find(["is_active" => true]);           // find(filter, limit = 100, offset = 0, orderBy)
 
-// where() is an INSTANCE method — a WHERE clause (without the word WHERE) + bound params. Returns array<User>.
+// where() is an INSTANCE method — a WHERE clause (without the word WHERE) + bound params.
 $users = (new User())->where("is_active = ?", [1], limit: 20, offset: 0);
 
-// all() is an INSTANCE method — every record (respects soft-delete). Returns array<User>.
-$users = (new User())->all(limit: 50);
+// all() is an INSTANCE method — the first 100 rows by default (respects soft-delete), NOT every record.
+$users = (new User())->all(limit: 50, offset: 0, orderBy: "name ASC");
 
 // A single row: prefer where(...)[0]. selectOne() takes FULL raw SQL, so it's the wrong tool for a clause.
 $user = (new User())->where("email = ?", ["alice@example.com"])[0] ?? null;
 ```
+
+> **List reads return a `\Tina4\ModelCollection`, not a plain array, and cap at 100 rows.**
+> `all()`, `where()`, `select()` and `find([...])` all default to `limit: 100`; page with
+> `limit`/`offset`. The collection is `ArrayAccess` + `Countable` + iterable + `JsonSerializable`, so
+> `foreach`, `count()`, `[0]` and `$response->json(...)` work — but `array_map` / `array_filter` /
+> `array_column` need a real array: call `->toArray()` (the model instances). For pagination,
+> `->getTotalRecords()` is the full match count and `->toPaginate()` builds the shared paging
+> envelope.
 
 > **`selectOne(string $sql, array $params = [])` takes a COMPLETE `SELECT` statement**, not a bare
 > clause — it runs your string verbatim. `(new User())->selectOne("email = ?", [...])` is broken SQL.
@@ -233,9 +241,9 @@ $results->toJson();     // '[{"id":1,"name":"Alice"}, ...]'
 ```
 
 > `toArray()` / `toJson()` / `toCsv()` are on the `DatabaseResult` from `$db->fetch()`. ORM query
-> methods (`find`, `where`, `all`) return a plain **array of model instances** — to serialise them,
-> map over the list: `array_map(fn ($m) => $m->toDict(), (new User())->all())` (or just hand the
-> array to `$response->json(...)`, which converts each model for you).
+> methods (`find`, `where`, `all`) return a **`ModelCollection`** (an object, not an `array`) — to
+> serialise it, map over its array: `array_map(fn ($m) => $m->toDict(), (new User())->all()->toArray())`
+> (or just hand the collection to `$response->json(...)`, which converts each model for you).
 
 ## QueryBuilder — Fluent Queries with JOINs
 
@@ -342,6 +350,28 @@ firebird://user:password@localhost:3050/mydb
 tina4php migrate:create "create users table"   # creates a versioned SQL file in migrations/
 tina4php migrate                                # runs pending migrations
 ```
+
+> **Three surfaces, one migration file (ADR-0063, 3.13.121).** The two CLI paths
+> `tina4php migrate:create <desc>` and `tina4php generate migration <name>` AND
+> the MCP tool `migration_create` all write the SAME `{timestamp}_{name}.sql` +
+> `{timestamp}_{name}.down.sql` pair with the SAME `tina4:edit` markers and emit
+> the SAME `generate_v1_1` envelope (same `edit_hints[]`, same `next[]`). Both
+> `--json` and `--dry-run` are honoured on the two CLI paths. `migrate:create` is
+> the shorter form; `generate migration` composes with
+> `--fields "name:string,price:float"` for schema-aware `CREATE TABLE` emission
+> when the description begins with `create_X`. The MCP `migration_create` tool
+> delegates to `migrate:create --json` under the hood — one source of truth, no
+> drift — and returns `{ok, created, resolution}` with the same envelope shape
+> the CLI JSON emits, plus a duplicate-slug guard that points a repeat call at
+> the existing file instead of spawning a second migration for the same schema
+> change. The one deliberate semantic difference across all three:
+> `migrate:create` and MCP `migration_create` never co-emit a
+> `tests/*MigrationTest.php` (their historical "just a migration, no test"
+> contract), while `generate migration` under the default `emitTest=true` DOES
+> co-emit one for a `create_X` name. Filenames are ALWAYS `YYYYMMDDHHMMSS_x.sql`
+> — the pre-3.13.121 MCP tool used a sequential `000001_x.sql` prefix that did
+> not sort with the CLI's timestamps; both surfaces now use the same convention.
+> Neither CLI path is deprecated.
 
 > Migrations live in **`migrations/`** at the project root — **not** `src/migrations/`. That is
 > the folder the CLI scaffolds (`bin/tina4php` `migrate` / `migrate:create` / `migrate:rollback`
@@ -584,8 +614,9 @@ These bite outside the ORM but hit the same agent-build loop. Verified against s
 * **N5 — `DatabaseResult` is not an array.** `$db->fetch()` returns a `DatabaseResult`; the rows
   live on **`->records`** (a `list` of assoc arrays), accessed by key:
   `$result->records[0]["name"]`. It also carries `size()` / `toArray()` / `toJson()` / `toCsv()`.
-  A *plain array* (from ORM `all()` / `where()` / `find()`) has **none** of those — serialize it
-  with `array_map(fn ($m) => $m->toDict(), ...)` or hand it to `$response->json(...)`.
+  An ORM list (`all()` / `where()` / `find()`) is a `ModelCollection` with its own `toArray()` (the
+  model instances), `getTotalRecords()` and `toPaginate()` — serialize it with
+  `array_map(fn ($m) => $m->toDict(), $list->toArray())` or hand it to `$response->json(...)`.
 
 * **N6 — Periodic work uses `$app->background()`, not a hand-rolled loop or raw threads.**
   Register recurring work with `$app->background($callable, $intervalSeconds)` — it runs

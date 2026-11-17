@@ -33,7 +33,9 @@ COPY src/ src/
 RUN mkdir -p data data/sessions data/queue data/mailbox
 
 EXPOSE 7145
-CMD ["php", "index.php", "0.0.0.0:7145"]
+# run() ignores argv: it binds TINA4_HOST / TINA4_PORT (defaults 0.0.0.0 with TINA4_DEBUG=false, 7145)
+ENV TINA4_HOST=0.0.0.0 TINA4_PORT=7145
+CMD ["php", "index.php"]
 ```
 
 ### .dockerignore
@@ -81,7 +83,9 @@ COPY migrations/ migrations/
 COPY src/ src/
 RUN mkdir -p data data/sessions data/queue data/mailbox
 EXPOSE 7145
-CMD ["php", "index.php", "0.0.0.0:7145"]
+# run() ignores argv: it binds TINA4_HOST / TINA4_PORT (defaults 0.0.0.0 with TINA4_DEBUG=false, 7145)
+ENV TINA4_HOST=0.0.0.0 TINA4_PORT=7145
+CMD ["php", "index.php"]
 ```
 
 ### PHP — MySQL
@@ -103,7 +107,9 @@ COPY migrations/ migrations/
 COPY src/ src/
 RUN mkdir -p data data/sessions data/queue data/mailbox
 EXPOSE 7145
-CMD ["php", "index.php", "0.0.0.0:7145"]
+# run() ignores argv: it binds TINA4_HOST / TINA4_PORT (defaults 0.0.0.0 with TINA4_DEBUG=false, 7145)
+ENV TINA4_HOST=0.0.0.0 TINA4_PORT=7145
+CMD ["php", "index.php"]
 ```
 
 ### PHP — MSSQL
@@ -125,7 +131,9 @@ COPY migrations/ migrations/
 COPY src/ src/
 RUN mkdir -p data data/sessions data/queue data/mailbox
 EXPOSE 7145
-CMD ["php", "index.php", "0.0.0.0:7145"]
+# run() ignores argv: it binds TINA4_HOST / TINA4_PORT (defaults 0.0.0.0 with TINA4_DEBUG=false, 7145)
+ENV TINA4_HOST=0.0.0.0 TINA4_PORT=7145
+CMD ["php", "index.php"]
 ```
 
 ### PHP — Firebird
@@ -155,7 +163,8 @@ RUN mkdir -p data data/sessions data/queue data/mailbox
 EXPOSE 7145
 ENV TINA4_OVERRIDE_CLIENT=true
 ENV TINA4_DEBUG=false
-CMD ["php", "index.php", "0.0.0.0:7145"]
+ENV TINA4_HOST=0.0.0.0 TINA4_PORT=7145      # run() ignores argv; it binds these
+CMD ["php", "index.php"]
 ```
 
 > **Note:** The Firebird Dockerfile cannot use `tina4stack/tina4-php:v3` because the base image is
@@ -209,7 +218,7 @@ docker run -d \
 | `TINA4_DEBUG` | `false` (set in base image) | Disable debug mode |
 | `TINA4_SECRET` | — | JWT signing secret (pass at runtime) |
 | `TINA4_DATABASE_URL` | — | Database connection string |
-| `PORT` | `7145` | Listen port |
+| `TINA4_HOST` / `TINA4_PORT` | `0.0.0.0` / `7145` | Bind address and port (`index.php`'s `run()` ignores argv). Bare `PORT` is the deprecated legacy name |
 
 ## Production Checklist
 

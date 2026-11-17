@@ -122,18 +122,6 @@ It stays unimplemented for now because it is an ERGONOMICS gap, not a capability
 byte-identical output. Embed only adds inline, repeatable use mid-page. Revisit if a user
 asks.
 
-**Unknown block tags LEAK, they do not error.** Any unrecognised `{% foo %}...{% endfoo %}`
-renders its body and swallows the tag:
-
-```twig
-{% frobnicate 42 %}INNER{% endfrobnicate %}   ->  "INNER"
-{% iff user.is_admin %}<admin>{% endiff %}    ->  "<admin>"   (condition IGNORED)
-```
-
-That second one is the hazard: a typo in an `if` tag renders gated content
-unconditionally. A fail-loud guard is scheduled for 3.13.88. Until then, never assume an
-unrecognised tag is inert.
-
 ## The Cross-Framework Output Contract (3.13.87)
 
 The same expression must render the same BYTES in Python, PHP, Ruby and Node. This was an

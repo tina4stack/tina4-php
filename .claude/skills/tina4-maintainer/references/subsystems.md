@@ -5,7 +5,9 @@
 File-backed, production-grade, zero-dependency. Designed to handle 1M visitors without RabbitMQ/Kafka.
 
 ### Backends
-- **LiteBackend** (core, zero-dep) — file-based queue (JSON files on disk), lives in `queue_backends/lite_backend.*` in each framework
+- **LiteBackend** (core, zero-dep) — file-based queue (JSON files on disk). Python
+  `tina4_python/queue/lite_backend.py`, PHP `Tina4/Queue/LiteBackend.php`, Ruby
+  `lib/tina4/queue_backends/lite_backend.rb`, Node `packages/core/src/queueBackends/liteBackend.ts`
 - **RabbitMQBackend** (optional)
 - **KafkaBackend** (optional)
 - **MongoBackend** (optional)
@@ -22,7 +24,10 @@ queue/
 
 ### Instance-Scoped API (all 4 frameworks)
 
-Queue methods use `self.topic` / `@topic` / `$this->topic` — **no queue name params on public methods**.
+Queue methods use `self.topic` / `@topic` / `$this->topic` — **no queue name params on public
+methods**, with three deliberate exceptions that take a topic: `produce(topic, data, ...)` (push
+to another topic), and the optional `topic` override on `consume(topic=None, ...)` and
+`process(handler, topic=None, ...)`.
 
 ```python
 # Python
@@ -284,7 +289,7 @@ messenger.send(
 Zero-dep fake data generation with 50+ generators.
 
 ```python
-from tina4_python import FakeData, seed_orm
+from tina4_python.seeder import FakeData, seed_orm   # not exported from the top-level package
 
 fake = FakeData()
 fake.name()    # "Alice Johnson"

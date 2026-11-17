@@ -15,7 +15,7 @@ gated by default** (`auth_required = True`). A write route with no token returns
 mark it `@noauth()`. Use `@secured()` to gate a GET route.
 
 ```python
-from tina4_python import get, post, put, delete, noauth
+from tina4_python import get, post, put, delete, noauth, HTTP_CREATED
 from tina4_python.swagger import description, tags, example
 
 @get("/hello")
@@ -27,13 +27,13 @@ async def hello(request, response):
 @tags(["Users"])
 async def get_user(request, response):
     user_id = request.params["id"]
-    return response.json({"id": user_id})
+    return response({"id": user_id})
 
 @post("/users")
 @noauth()                      # public write route — without this it is 401 by default
 async def create_user(request, response):
     data = request.body
-    return response.json(data, 201)
+    return response(data, HTTP_CREATED)
 ```
 
 ### PHP (static method registration)
@@ -43,7 +43,7 @@ async def create_user(request, response):
 });
 
 \Tina4\Get::add("/users/{id}", function(\Tina4\Response $response, $id) {
-    return $response->json(["id" => $id]);
+    return $response(["id" => $id]);
 });
 
 // Or map to a class method
@@ -57,19 +57,30 @@ get "/hello" do |request, response|
 end
 
 get "/users/{id}" do |request, response|
-  response.json({ id: request.params[:id] })
+  response.call({ id: request.params[:id] })
 end
 ```
 
-### Node.js/TypeScript (decorator or file-based)
+### Node.js/TypeScript (programmatic or file-based)
 ```typescript
-import { get, post } from 'tina4';
+import { get } from "@tina4/core";
 
-export const hello = get('/hello', async (request, response) => {
-  return response.text('Hello World');
+get("/hello", async (request, response) => {
+  return response("Hello World");
 });
+```
 
-// File-based: src/routes/users/[id].get.ts auto-maps to GET /users/:id
+File-based: the FILE NAME is the method and the DIRECTORY is the path
+(`packages/core/src/routeDiscovery.ts`), so `src/routes/users/[id]/get.ts` maps to
+`GET /users/{id}`:
+
+```typescript
+// src/routes/users/[id]/get.ts
+import type { Tina4Request, Tina4Response } from "@tina4/core";
+
+export default async function (request: Tina4Request, response: Tina4Response) {
+  return response({ id: request.params.id });
+}
 ```
 
 ## Middleware
@@ -93,7 +104,7 @@ class AuthCheck:
     def before_auth(request, response):       # MUST be `before_*`, not `before`
         token = request.headers.get("Authorization")
         if not token:
-            return request, response.json({"error": "Unauthorized"}, 401)
+            return request, response({"error": "Unauthorized"}, 401)
         return request, response
 
     @staticmethod
@@ -103,7 +114,7 @@ class AuthCheck:
 @middleware(AuthCheck)
 @get("/protected")
 async def protected_route(request, response):
-    return response.json({"data": "secret"})
+    return response({"data": "secret"})
 ```
 
 ## ORM
@@ -139,7 +150,7 @@ user.save()
 user.delete()
 
 # Serialise for a JSON response — to_dict() per row (ORM objects are not JSON by default):
-return response.json([u.to_dict() for u in users])
+return response([u.to_dict() for u in users])
 
 # Relationships — declare with the v3 descriptors has_many / has_one / belongs_to
 # (or a ForeignKeyField). Do NOT assign a dict-list like `has_many = [{"Post": "user_id"}]`:
@@ -204,7 +215,8 @@ are verbatim (never re-sliced), and `page` = floor(offset / limit) + 1. Dropped:
 
 ## Database Adapters
 
-All adapters implement the same 16-method interface:
+All adapters implement the same core interface. These 15 methods are the shared surface (the
+base class carries more, e.g. `execute_many`, `quote_identifier`):
 
 `connect`, `close`, `execute`, `fetch`, `fetch_one`, `insert`, `update`, `delete`,
 `start_transaction`, `commit`, `rollback`, `table_exists`, `get_tables`, `get_columns`,
@@ -241,7 +253,9 @@ Migrations are versioned SQL files, executed in order, tracked in a migrations t
 
 ## Response Types
 
-Standardized across all languages:
+Routes return the callable `response(data, status)` - the Tina4 convention; it picks the content
+type from the data (`$response(...)` in PHP, `response.call(...)` in Ruby). The typed helpers
+below exist for the explicit cases and are standardized across all languages:
 - `response.json(data, status)` — JSON with Content-Type header
 - `response.html(content)` — HTML response
 - `response.text(content)` — Plain text

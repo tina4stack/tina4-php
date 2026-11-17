@@ -80,8 +80,8 @@ handler, read the verified payload:
 Equivalent lower-level checks:
 ```php
 $token   = $request->bearerToken();                            // the raw token, or null
-$payload = $token ? \Tina4\Auth::getPayload($token) : null;    // decoded payload, or null
-$payload = \Tina4\Auth::validToken($token);                    // verify + decode, or null
+$payload = $token ? \Tina4\Auth::validToken($token) : null;    // verify signature + expiry, then decode; or null
+$claims  = \Tina4\Auth::getPayload($token);                    // UNVERIFIED decode — never use it to authorise
 ```
 
 ### Auth API reference
@@ -90,7 +90,7 @@ $payload = \Tina4\Auth::validToken($token);                    // verify + decod
 |--------|-----------|
 | `getToken` | `getToken(array $payload, string|int|null $secret = null, int $expiresIn = 60): string` |
 | `validToken` | `validToken(string $token, ?string $secret = null, ?string $algorithm = null): ?array` (algorithm resolves `TINA4_JWT_ALGORITHM`, then HS256) |
-| `getPayload` | `getPayload(string $token): ?array` |
+| `getPayload` | `getPayload(string $token): ?array` — decodes the claims WITHOUT verifying the signature or expiry (null only if malformed). Not an auth check; use `validToken` |
 | `authenticateRequest` | `authenticateRequest(array $headers, ?string $secret = null, ?string $algorithm = null): ?array` (`?string`, default `null` → env `TINA4_JWT_ALGORITHM`, then HS256) |
 | `refreshToken` | `refreshToken(string $token, int $expiresIn = 60): ?string` |
 | `hashPassword` | `hashPassword(string $password, ?string $salt = null, int $iterations = 260000): string` |
@@ -116,8 +116,9 @@ unauthenticated write or fight phantom 401s.
 
 **`->noAuth()` is a LAST RESORT.** When a write route returns 401 in dev or from a client, the fix
 is almost always to **send the Bearer token** the route legitimately requires — not to strip its
-auth. The client carries it for you: frond.js sends the current `Authorization: Bearer` on every
-`saveForm` / `sendRequest`, and the `\Tina4\Api` client does too (`setBearerToken(...)`). Reserve
+auth. The client carries it for you: frond.js sends `Authorization: Bearer <frond.token>` on every
+`frond.request` / `frond.load` / `frond.post` / `frond.form.submit` (set `frond.token = jwt` after
+login), and the `\Tina4\Api` client does too (`setBearerToken(...)`). Reserve
 `->noAuth()` for endpoints that are *genuinely* public — login, register, health-check, inbound
 webhooks (validated by signature) — or a handler that authenticates another way *inside* it.
 
@@ -133,7 +134,11 @@ webhooks (validated by signature) — or a handler that authenticates another wa
     $auth = \Tina4\Auth::authenticateRequest($request->headers->toArray());   // verified payload, or null
     $data = $request->body;
     $data["user_id"] = $auth["user_id"];        // trust the token, not the client body
-    return $response((new Order($data))->save(), 201);
+    $order = new Order($data);
+    if (!$order->save()) {                      // save() returns $this or false — never throws
+        return $response(["error" => $order->getError()], 422);
+    }
+    return $response($order, 201);
 });
 ```
 
@@ -223,7 +228,10 @@ topic (named argument), `produce(...)` messages, and `consume(...)` them in a wo
 ### Producing Messages
 ```php
 \Tina4\Router::post("/orders", function ($request, $response) {
-    $order = (new Order($request->body))->save();
+    $order = new Order($request->body);
+    if (!$order->save()) {
+        return $response(["error" => $order->getError()], 422);
+    }
 
     // Queue an email notification for background processing
     (new \Tina4\Queue(topic: "order-emails"))->produce("order-emails", [
@@ -273,19 +281,24 @@ $queue->produce("order-emails", $data, delaySeconds: 300);     // process after 
 
 Register a WebSocket route with `\Tina4\Router::websocket($path, $handler)`:
 ```php
-\Tina4\Router::websocket("/ws/chat", function ($connection) {
-    foreach ($connection as $message) {
-        $connection->broadcast($message->data);   // broadcast to all connected clients
+\Tina4\Router::websocket("/ws/chat", function ($connection, $data, $event) {
+    // PHP order is ($connection, $data, $event) — Python/Node/Ruby use (connection, event, data).
+    // $event: "open" | "message" | "close"; $data is the frame string on "message", null otherwise.
+    if ($event === "message") {
+        $connection->broadcast((string)$data, true);   // to every client on this path, self included
     }
 });
 ```
 
+Pass `secure: true` (`Router::websocket($path, $handler, secure: true)`) to require a valid token
+on the upgrade; the verified payload is then on `$connection->auth`. Rooms: `joinRoom`,
+`broadcastToRoom`, `sendJson` (see `references/realtime.md`).
+
 ### Client (frond.js)
 ```javascript
-const ws = frond.ws("/ws/chat", {   // lowercase — the browser global is `frond`, not `Frond`
-    onMessage: (data) => {
-        document.getElementById("messages").innerHTML += `<p>${data.text}</p>`;
-    }
+const ws = frond.ws("/ws/chat");   // lowercase — the browser global is `frond`, not `Frond`
+ws.on("message", (data) => {   // messages arrive via .on("message"); there is no onMessage option
+    document.getElementById("messages").innerHTML += `<p>${data.text}</p>`;
 });
 document.getElementById("send").onclick = () => {
     ws.send({ text: document.getElementById("input").value });
@@ -299,7 +312,7 @@ Build a GraphQL API from your ORM models and register the endpoint:
 $gql = new \Tina4\GraphQL();
 $gql->fromOrm(new User())        // fromOrm() is chainable
     ->fromOrm(new Post());
-$gql->register("/graphql");      // GET = GraphiQL IDE, POST = queries
+$gql->register("/graphql");      // POST only; path defaults to TINA4_GRAPHQL_ENDPOINT or /graphql
 ```
 
 Register a custom resolver (at bootstrap / import time):
@@ -309,7 +322,9 @@ Register a custom resolver (at bootstrap / import time):
 });
 ```
 
-Visit `/graphql` in the browser for the GraphiQL IDE.
+`register()` mounts **POST only** — there is no GET route and no GraphiQL IDE in tina4-php. Send
+`{"query": "...", "variables": {...}}` with `Content-Type: application/json` (anything else gets a
+415). The route is registered `->noAuth()`, so enforce access inside your resolvers.
 
 ## Events
 
@@ -327,7 +342,10 @@ Decouple app logic with events. `\Tina4\Events::on(...)` registers a listener; `
 
 // Fire the event:
 \Tina4\Router::post("/register", function ($request, $response) {
-    $user = (new User($request->body))->save();
+    $user = new User($request->body);
+    if (!$user->save()) {
+        return $response(["error" => $user->getError()], 422);
+    }
     \Tina4\Events::emit("user.created", ["id" => $user->id, "email" => $user->email]);
     return $response($user, 201);
 })->noAuth();
@@ -356,6 +374,13 @@ $i18n = new \Tina4\I18n();
 $i18n->translate("welcome", ["name" => $user->name]);   // "Welcome, Alice!"
 $i18n->setLocale("fr");
 $i18n->translate("logout");                              // "Déconnexion"
+```
+
+In templates use the `t()` function global (auto-registered when `src/locales/` holds `.json`
+files) — there is no `trans` filter:
+```twig
+{{ t("welcome", {"name": user.name}) }}
+{{ t("logout") }}
 ```
 
 ## Caching

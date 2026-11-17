@@ -80,8 +80,8 @@ the config endpoint appends the template tokens (`/{room}`, `/{channel}`, `/{id}
 
 | feature | route registered | auth |
 |---|---|---|
-| any | `GET  {p}/api/rtc/config` | **public** — `->noAuth()` |
-| `calls` | `WS   {p}/ws/rtc/{room}` | **public** (unauthenticated) |
+| any | `GET  {p}/api/rtc/config` | **secured by default** — `->secure()`; `->noAuth()` only when `TINA4_RTC_REQUIRE_AUTH=false` (ADR-0101) |
+| `calls` | `WS   {p}/ws/rtc/{room}` | **secured by default** — `secure: true`; open only when `TINA4_RTC_REQUIRE_AUTH=false` (ADR-0101) |
 | `chat` | `WS   {p}/ws/chat/{channel}` | **secured** — `Router::websocket(..., secure: true)`; valid JWT required on upgrade |
 | `chat` | `GET  {p}/api/channels/{id}/messages` | **secured** — `->secure()` |
 | `files` | `POST {p}/api/files` | **Bearer-protected by default** (write route — no `->noAuth()`) |
@@ -91,11 +91,12 @@ If `chat` or `files` is enabled, `ensureChatTables()` runs at mount time (see Fo
 
 ---
 
-## `GET {p}/api/rtc/config` — public bootstrap
+## `GET {p}/api/rtc/config` — bootstrap (token required by default)
 
-The public config the frontend fetches (the tina4-js `rtcConfig()` helper) so client and server
-never drift. Registered with `->noAuth()`. Body is feature-gated (only keys for enabled features
-appear):
+The config the frontend fetches (the tina4-js `rtcConfig()` helper) so client and server never
+drift. **ADR-0101: it mints TURN credentials, so it requires a valid token by default**
+(`->secure()`); it is registered `->noAuth()` only when the app sets `TINA4_RTC_REQUIRE_AUTH=false`
+(see "Opting out" below). Body is feature-gated (only keys for enabled features appear):
 
 ```jsonc
 {
@@ -139,12 +140,24 @@ TURN credential scheme (verified): `username = (string)(time() + $ttl)`,
 | `TINA4_RTC_TURN_URL` | — | comma-separated TURN URLs; enables TURN when set with the secret. |
 | `TINA4_RTC_TURN_SECRET` | — | coturn `use-auth-secret` shared secret (ephemeral creds). |
 | `TINA4_RTC_TURN_TTL` | `3600` | ephemeral TURN credential lifetime (seconds). |
+| `TINA4_RTC_REQUIRE_AUTH` | `true` | ADR-0101: the config route and the signalling WS require a valid token. Only an explicit `false`/`0`/`no`/`off` opens both (anonymous calling); any other value, a typo included, stays secured. Chat, history and files are secured regardless. |
+
+### Opting out (anonymous calling)
+
+```bash
+# .env — open /api/rtc/config and /ws/rtc/{room} to unauthenticated callers
+TINA4_RTC_REQUIRE_AUTH=false
+```
+
+Only do this when calls are meant to be anonymous (a public demo room). It hands out ephemeral TURN
+credentials to anyone who asks, and anyone can join any signalling room.
 
 ---
 
-## Calls: signalling relay — `WS {p}/ws/rtc/{room}` (public)
+## Calls: signalling relay — `WS {p}/ws/rtc/{room}` (token required by default)
 
-Registered unauthenticated (no `secure:` flag). The handler follows the **PHP WebSocket handler
+Registered with `secure: self::rtcRequireAuth()` — a valid token is required on the upgrade unless
+`TINA4_RTC_REQUIRE_AUTH=false` (ADR-0101). The handler follows the **PHP WebSocket handler
 convention** `($connection, $data, $event)`:
 
 ```php
@@ -152,7 +165,7 @@ Router::websocket($paths['signalling'] . '/{room}', function ($connection, $data
     // $connection : the WebSocket connection
     // $data       : payload — string on "message", null on "open"/"close"
     // $event      : "open" | "message" | "close"
-});
+}, secure: self::rtcRequireAuth());  // ADR-0101: true unless TINA4_RTC_REQUIRE_AUTH=false
 ```
 
 Signalling behaviour (mesh relay):
@@ -335,11 +348,11 @@ byte-identical to the Python master. `ensureChatTables()` creates them in depend
   failure only resurfaces at query time. Bind a database **before** mounting realtime with
   chat/files (`TINA4_DATABASE_URL` / your DB init) or chat/history/files will error per-request
   while the app appears healthy.
-- **The signalling WS (`/ws/rtc/{room}`) is PUBLIC** — it is not `secure:`, so anyone can join any
-  room and receive relayed signalling frames. Only the **chat** WS is JWT-secured. Gate call access
-  at the app layer if you need it.
-- **The config endpoint (`/api/rtc/config`) is PUBLIC** and returns your ICE/TURN config, including
-  freshly-minted ephemeral TURN credentials.
+- **The signalling WS (`/ws/rtc/{room}`) and the config endpoint (`/api/rtc/config`) require a valid
+  token by default** (ADR-0101) — the config route mints ephemeral TURN credentials, and the room
+  relays calls. `TINA4_RTC_REQUIRE_AUTH=false` opens both for anonymous calling; then anyone can
+  fetch TURN credentials and join any room, so gate call access at the app layer if you need it. An
+  authenticated user can still join any room by name either way: room membership is not checked.
 - **WS handler signature is `($connection, $data, $event)`** — event is `"open"`/`"message"`/
   `"close"`, `$data` is a string on message and `null` on open/close. This is the **PHP** order and
   differs from Python/Node's `(connection, event, data)`.
