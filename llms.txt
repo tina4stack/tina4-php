@@ -1,241 +1,65 @@
-# tina4-php — LLM Context
+# Tina4 PHP
 
-Tina4 PHP v3.13.89. 140 cataloged features, zero external dependencies. Web framework for PHP 8.2+.
-Routes, ORM, templates, auth, queue, websocket, graphql, WSDL — all built in.
+> Tina4 PHP (`tina4stack/tina4php` on Packagist) is a web framework for PHP 8.2+ with zero runtime dependencies beyond `ext-json`: routing, ORM, Frond (Twig-compatible) templates, JWT auth, sessions, queues, WebSocket, GraphQL, WSDL/SOAP and Swagger are all built in. It is one of four Tina4 backends (Python, PHP, Ruby, Node.js) that share the same project layout, CLI, template syntax and `.env` variables.
 
-Install: composer require tina4stack/tina4php
-Version: 3.10.70
-Default port: 7146
+Quick start. Install the Rust `tina4` CLI (`curl -fsSL https://tina4.com/install.sh | sh`, `brew install tina4stack/tap/tina4`, or `irm https://tina4.com/install.ps1 | iex` on Windows), then:
 
----
-
-## Router
-
-Route files go in src/routes/ and are auto-discovered.
-
-```php
-use Tina4\Router;
-
-Router::get("/api/users", function($request, $response) {
-    return $response->json(["users" => []], 200);
-});
-
-Router::post("/api/users", function($request, $response) {
-    $body = $request->body;
-    return $response->json(["created" => $body["name"]], 201);
-});
-
-Router::get("/api/users/{id}", function($request, $response) {
-    $id = $request->params["id"];
-    return $response->json(["id" => $id]);
-});
-
-// Auth: POST/PUT/DELETE require auth by default
-// Use ->noAuth() to make public
-Router::post("/api/public", function($request, $response) {
-    return $response->json(["open" => true]);
-})->noAuth();
-
-// Use ->secure() to protect a GET route
-Router::get("/api/private", function($request, $response) {
-    return $response->json(["secret" => true]);
-})->secure();
-
-// Template rendering
-Router::get("/dashboard", function($request, $response) {
-    return $response->render("dashboard.twig", ["title" => "Dashboard"]);
-});
-
-// Wildcard routes
-Router::get("/api/files/*", function($request, $response) { ... });
+```bash
+tina4 init php my-app   # the path is required; runs composer install for you
+cd my-app
+tina4 serve             # http://localhost:7145 (TINA4_PORT overrides)
 ```
 
----
-
-## Database
-
-```php
-use Tina4\Database;
-
-$db = Database::getConnection("sqlite:///app.db"); // or postgres://, mysql://, mssql://, firebird://
-
-$result = $db->fetch("SELECT * FROM users WHERE active = ?", [true], 10, 0);
-$row = $db->fetchOne("SELECT * FROM users WHERE id = ?", [1]);
-$db->execute("INSERT INTO users (name) VALUES (?)", ["Alice"]);
-$db->insert("users", ["name" => "Alice"]);
-$db->update("users", ["id" => 1, "name" => "Bob"]);
-$db->delete("users", ["id" => 1]);
-$nextId = $db->getNextId("users"); // race-safe atomic ID generation
-```
-
----
-
-## ORM
-
-```php
-class User extends \Tina4\ORM {
-    public $tableName = "users";
-    public $primaryKey = "id";
-
-    public $id;
-    public $name;
-    public $email;
-    public $createdAt;
-
-    // Field mapping (snake_case DB → camelCase PHP)
-    public $fieldMapping = [
-        "created_at" => "createdAt"
-    ];
-}
-
-// Usage
-$user = new User();
-$user->name = "Alice";
-$user->save();
-
-$user = (new User())->load("id = ?", [1]);
-$user->delete();
-
-$users = (new User())->select("*", "active = ?", [true], "name", 10, 0);
-$user->asArray();  // to array
-$user->asObject(); // to object
-```
-
----
-
-## Frond (Templates)
-
-```php
-use Tina4\Frond;
-
-$html = Frond::render("page.twig", ["title" => "Home", "items" => $items]);
-```
-
-Templates use Twig syntax. Located in src/templates/.
-
----
-
-## Auth
-
-```php
-use Tina4\Auth;
-
-$token = Auth::getToken(["user_id" => 1, "role" => "admin"]);
-$payload = Auth::validToken($token); // returns array or null
-$hashed = Auth::hashPassword("secret");
-$valid = Auth::checkPassword("secret", $hashed);
-```
-
----
-
-## Queue
-
-```php
-use Tina4\Queue;
-
-$queue = new Queue("emails", 3); // topic, max_retries
-$queue->push(["to" => "alice@example.com", "subject" => "Hello"]);
-
-foreach ($queue->consume("emails") as $job) {
-    process($job->payload);
-    $job->complete(); // or $job->fail("reason")
-}
-
-$queue->produce("other_topic", ["data" => "value"]);
-$dead = $queue->deadLetters();
-```
-
-Backends: file (default), RabbitMQ, Kafka, MongoDB — configured via TINA4_QUEUE_BACKEND env var.
-
----
-
-## API Client
-
-```php
-use Tina4\Api;
-
-$api = new Api("https://api.example.com");
-$result = $api->get("/users"); // returns ["httpCode" => 200, "body" => [...]]
-$api->post("/users", ["name" => "Alice"]);
-$api->setBearerToken("token123");
-```
-
----
-
-## Events
-
-```php
-use Tina4\Events;
-
-Events::on("user.created", function($user) {
-    echo "Welcome {$user['name']}";
-});
-
-Events::emit("user.created", ["name" => "Alice"]);
-Events::once("app.ready", function() { echo "Started!"; });
-```
-
----
-
-## Migration
-
-```php
-use Tina4\Migration;
-
-Migration::migrate($db);
-Migration::create("add users table");
-```
-
-SQL files in migrations/ directory.
-
----
-
-## Project Structure
-
-```
-src/
-  routes/       # Auto-discovered route files
-  orm/          # ORM model definitions
-  templates/    # Frond/Twig templates
-  public/       # Static files served at /
-  app/          # Shared helpers and services
-  services/     # Service layer classes
-migrations/     # SQL migration files
-tests/          # PHPUnit test files
-vendor/         # Composer dependencies
-index.php       # Entry point
-.env            # Environment variables
-```
-
----
-
-## Entry Point (index.php)
+Add a route by dropping a file in `src/routes/` (auto-discovered):
 
 ```php
 <?php
-require_once "./vendor/autoload.php";
-$app = new \Tina4\App(basePath: __DIR__, development: true);
-$app->start();
+use Tina4\Router;
+
+Router::get("/api/hello/{name}", function ($request, $response) {
+    return $response->json(["message" => "Hello, " . $request->params["name"]]);
+});
 ```
 
----
+Gotchas an agent most needs:
 
-## Known Gotchas
+- GET routes are public; POST, PUT, PATCH and DELETE require a bearer token (or form token) by default. Chain `->noAuth()` to open a write route and `->secure()` to protect a GET.
+- Routes are registered statically (`Router::get(...)`), never on an instance. Path parameters are read from `$request->params["name"]`; a typed placeholder such as `{id:int}` converts the value.
+- `$response->json($data, $status)` and `$response->render("page.twig", $data)` are the usual returns; `$response($data)` also works.
+- The entry point is `index.php`: `$app = new \Tina4\App(); $app->run();`.
+- ORM models extend `\Tina4\ORM` and set `$tableName` and `$primaryKey`; camelCase properties map to snake_case columns automatically (`$autoMap`). Serialise with `toArray()` or `toDict()` (there is no `asArray()`).
+- The database comes from `TINA4_DATABASE_URL` (`sqlite:///`, `postgres://`, `mysql://`, `mssql://`, `firebird://`). Change schema only through SQL files in `migrations/`, never in route code.
+- The package's own CLI is `tina4php` (`vendor/bin/tina4php`); the `tina4` CLI forwards `tina4 generate <model|route|crud|migration|...>` to it. Generated write routes are secure by default.
 
-1. Route methods are static: `Router::get()` not `$router->get()`
-2. POST/PUT/DELETE require auth by default. Chain `->noAuth()` to make public
-3. GET is public by default. Chain `->secure()` to protect
-4. ORM uses `asArray()` not `toArray()` for array conversion
-5. Database `fetch()` params are positional: `fetch(sql, params, limit, offset)` not named
-6. Queue job payload accessed via `$job->payload` not `$job->data`
-7. Import via `use Tina4\ClassName` — PSR-4 autoloading
-8. Templates are Twig syntax (not Blade, not PHP)
-9. Default port: 7146
-10. `$response->json()` not `response()` — PHP uses method call
+## Docs
 
-## Scaffolding (`tina4php generate`)
-Scaffold boilerplate instead of hand-writing it: `tina4php generate <feature>` for model, route, crud,
-migration, service, queue, validator, seeder, websocket, listener, form, view, auth. Generated write
-routes are secure by default (token-gated; pass `--public` to open them); reads are public. Logic
-stubs carry an AI-FILL fill-spec placeholder (Intent/Given/Use/Return/Ground + a loud not-implemented
-throw) — fill only that; working CRUD carries a lighter EXTEND marker.
+- [Quick reference](https://tina4.com/php/index.md): one-page cheat sheet of every feature
+- [Getting started](https://tina4.com/php/01-getting-started.md): install, scaffold, project layout, first route
+- [Routing](https://tina4.com/php/02-routing.md): methods, path parameters, route groups, auth modifiers, wildcards
+- [Request and response](https://tina4.com/php/03-request-response.md): request fields, response helpers, status codes, validation, uploads
+- [Templates](https://tina4.com/php/04-templates.md): Frond template engine, filters, inheritance
+- [Database](https://tina4.com/php/05-database.md): configuration, parameterised queries, transactions, migrations, seeding
+- [ORM](https://tina4.com/php/06-orm.md): models, CRUD, relationships, eager loading, soft delete, auto-CRUD
+- [Authentication](https://tina4.com/php/08-authentication.md): JWT tokens, password hashing, login flow, protecting routes, CSRF
+- [Middleware and security](https://tina4.com/php/10-middleware-security.md): the middleware pipeline, built-in and custom middleware
+- [Queues](https://tina4.com/php/12-queues.md): producers, consumers, retries, dead letters, backends
+- [Scaffolding](https://tina4.com/php/19-scaffolding.md): `tina4 generate` generators
+- [CLI](https://tina4.com/php/31-cli.md): every `tina4` and `tina4php` command
+- [Environment variables](https://tina4.com/php/33-environment-variables.md): the `.env` reference
+- [Deployment](https://tina4.com/php/34-deployment.md): production config, Docker, health checks, reverse proxy, scaling
+- [Release notes](https://tina4.com/php/36-releases.md): what changed in each release
+- [Upgrading from v2](https://tina4.com/php/37-upgrading-from-v2.md): migration guide from Tina4 PHP v2
+
+## Repository
+
+- [CLAUDE.md](https://raw.githubusercontent.com/tina4stack/tina4-php/v3/CLAUDE.md): maintainer guide to this codebase
+- [AGENTS.md](https://raw.githubusercontent.com/tina4stack/tina4-php/v3/AGENTS.md): instructions for coding agents
+- [CHANGELOG.md](https://raw.githubusercontent.com/tina4stack/tina4-php/v3/CHANGELOG.md): release history
+
+## Optional
+
+- [Tina4 site map](https://tina4.com/llms.txt): llms.txt for all of tina4.com, every language
+- [Tina4 full docs](https://tina4.com/llms-full.txt): the whole documentation in one file
+- [Feature list](https://tina4.com/php/38-feature-list.md): the full cataloged feature inventory
+- [PHP on Windows](https://tina4.com/php/php-on-windows.md): installing PHP and Composer on Windows
+- [PHP on macOS](https://tina4.com/php/php-on-mac.md): installing PHP and Composer on macOS
