@@ -1477,12 +1477,13 @@ function parseFlags(array $args): array
  *
  * @return bool True only when a Tina4 holder was actually signalled.
  */
-function killProcessOnPort(int $port): bool
+function killProcessOnPort(int $port, ?string $host = null): bool
 {
     $result = \Tina4\PortTakeover::takeOverPort(
         $port,
         \Tina4\PortTakeover::isDev(),
-        \Tina4\PortTakeover::noTakeoverOptedOut()
+        \Tina4\PortTakeover::noTakeoverOptedOut(),
+        host: $host
     );
     // Server::console, never echo: an echo here would mark headers as sent for
     // the whole serve process, and PHP then refuses its native sessions.
@@ -2349,7 +2350,7 @@ DOCKERFILE;
         $port = (int)$port;
 
         // Kill existing process on port
-        killProcessOnPort($port);
+        killProcessOnPort($port, $host);
 
         // Find index.php
         if (file_exists($cwd . '/index.php')) {
