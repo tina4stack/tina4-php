@@ -6,6 +6,23 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.164 - 2026-11-17
+
+### Fixed
+
+- Static `\Tina4\Frond::addGlobal` / `addFilter` / `addTest` now reach every page `$response->render` produces, whenever they are registered; before, only engines built after the call saw them, and the response engine already exists after `App::start()`. Instance-level registrations stay local to their engine (#368, #370; ADR-0106, ADR-0107; parity with tina4-python, tina4-ruby, tina4-nodejs).
+- The worker pool no longer grows when it reaps a process it did not spawn. `runWorkerPool()` reaped with `pcntl_waitpid(-1)` and respawned a worker for every reaped pid, so an orphan re-parented to the master (PID 1 in a container, or a subreaper) added a worker each time - 8 grew to 15 in a day. Only the pool's own workers are replaced now; other children are still reaped (#360, closes #358).
+- A SIGTERM that arrives while the accept loop builds its read set no longer exits 255. `stop()` could close the listening sockets between building the list and `stream_select()`, which then threw a `TypeError` that `@` does not suppress. A shutdown in progress now leaves the loop cleanly and exits 0; any other error still surfaces (#364).
+- `tina4php serve` no longer prints "Port N is in use; takeover is disabled outside dev mode" for a port nothing holds (#362, parity with tina4-python#318, tina4-ruby#173, tina4-nodejs#198).
+- `/__dev` memory figures report the process's resident memory (VmRSS, peak VmHWM) where the OS exposes it, not PHP's allocator heap, which read about 30 MB low. `memory_source` says which was used (#363).
+
+### Changed
+
+- AI skills: the shared tina4-maintainer and tina4-js skills are synced with tina4-python; tina4-developer-php's contradictions are fixed against the code (frond.js API, `getPayload` is an unverified decode - use `validToken`, `ModelCollection` reads, the WebSocket handler signature, realtime auth by default); the skill forbids patching the framework (#366, #369).
+- AI tool files point at `CLAUDE.md` for the full API; `AGENTS.md` / `.cursorrules` give PHP's port 7145 (they said 7146) (#367).
+- `llms.txt` follows the llmstxt.org specification, with link lists to the markdown docs and a CI check (#365).
+- Test-only: the raw-TCP contract tests take their own free port instead of the HTTP port + 1 (#361).
+
 ## 3.13.163 - 2026-11-13
 
 ### Fixed
