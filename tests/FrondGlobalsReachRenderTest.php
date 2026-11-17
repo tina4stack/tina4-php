@@ -9,12 +9,13 @@
  */
 
 /**
- * A template global registered through the public static API reaches every
- * page $response->render() produces, whenever it is registered.
+ * A template global, filter or test registered through the public static API
+ * reaches every page $response->render() produces, whenever it is registered
+ * (ADR-0106 for globals, ADR-0107 for filters and tests).
  *
- * The engine copied Frond::$classGlobals once, in its constructor, so a
- * Frond::addGlobal() made after the response engine existed (after the first
- * render) never reached a page. Every case boots a real Tina4\App in a
+ * The engine copied Frond::$classGlobals / $classFilters / $classTests once,
+ * in its constructor, so a registration made after the response engine
+ * existed (after the first render) never reached a page. Every case boots a real Tina4\App in a
  * throwaway project and renders a real template through a real route and the
  * real front controller (Tina4\TestClient). No mocks.
  *
@@ -45,6 +46,8 @@ class FrondGlobalsReachRenderTest extends TestCase
         $templates = [
             'globals.twig' => '[{{ early }}][{{ late }}][{{ shared }}]',
             'call.twig' => '{{ shout("hi") }}',
+            'filter.twig' => '{{ "hi"|loud }}',
+            'test.twig' => '{% if 4 is quad %}yes{% else %}no{% endif %}',
             'flag.twig' => '{% if is_admin %}admin{% else %}guest{% endif %}',
             'greeting.twig' => '{{ t("greeting") }}',
             'welcome.twig' => '{{ t("welcome", {"name": "Ana"}) }}',
@@ -178,5 +181,58 @@ class FrondGlobalsReachRenderTest extends TestCase
         Response::getFrond()->addGlobal('shared', 'instance');
         $this->assertSame('[][][instance]', $this->page('/globals'));
         $this->assertSame('[][][class]', (new Frond('src/templates'))->render('globals.twig'));
+    }
+
+    public function testClassFilterRegisteredBeforeFirstRenderReachesRender(): void
+    {
+        Frond::addFilter('loud', fn ($value) => strtoupper((string) $value));
+        $this->assertSame('HI', $this->page('/filter'));
+    }
+
+    public function testClassFilterRegisteredAfterFirstRenderReachesRender(): void
+    {
+        $this->assertSame('hi', $this->page('/filter')); // the response engine now exists
+        Frond::addFilter('loud', fn ($value) => strtoupper((string) $value));
+        $this->assertSame('HI', $this->page('/filter'));
+    }
+
+    public function testClassTestRegisteredBeforeFirstRenderReachesRender(): void
+    {
+        Frond::addTest('quad', fn ($value) => $value === 4);
+        $this->assertSame('yes', $this->page('/test'));
+    }
+
+    public function testClassTestRegisteredAfterFirstRenderReachesRender(): void
+    {
+        $this->assertSame('no', $this->page('/test'));
+        Frond::addTest('quad', fn ($value) => $value === 4);
+        $this->assertSame('yes', $this->page('/test'));
+    }
+
+    public function testInstanceFilterOnAnotherEngineDoesNotLeakIntoRender(): void
+    {
+        $otherEngine = new Frond('src/templates');
+        $otherEngine->addFilter('loud', fn ($value) => 'LEAK');
+        $this->assertSame('hi', $this->page('/filter'));
+        $this->assertSame('LEAK', $otherEngine->render('filter.twig'));
+    }
+
+    public function testInstanceTestOnAnotherEngineDoesNotLeakIntoRender(): void
+    {
+        $otherEngine = new Frond('src/templates');
+        $otherEngine->addTest('quad', fn ($value) => true);
+        $this->assertSame('no', $this->page('/test'));
+        $this->assertSame('yes', $otherEngine->render('test.twig'));
+    }
+
+    public function testInstanceFilterOverridesClassFilter(): void
+    {
+        Frond::addFilter('loud', fn ($value) => 'class');
+        $this->assertSame('class', $this->page('/filter'));
+        Response::getFrond()->addFilter('loud', fn ($value) => 'instance');
+        $this->assertSame('instance', $this->page('/filter'));
+        Frond::addFilter('loud', fn ($value) => 'class again'); // a later class change
+        $this->assertSame('instance', $this->page('/filter'));
+        $this->assertSame('class again', (new Frond('src/templates'))->render('filter.twig'));
     }
 }

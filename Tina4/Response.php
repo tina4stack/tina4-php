@@ -67,7 +67,8 @@ class Response
 
             // Sync custom filters and globals from the user engine
             $userFrond = self::getFrond();
-            foreach ($userFrond->getFilters() as $name => $fn) {
+            // Instance filters only: class filters reach every engine already.
+            foreach ($userFrond->getInstanceFilters() as $name => $fn) {
                 self::$frameworkFrond->addFilter($name, $fn);
             }
             // Instance globals only: class globals are read live by every engine.

@@ -50,8 +50,18 @@ class Frond
     private array $globals = [];
     /** @var array<string, mixed> Built-in globals (formToken, dump, csp_nonce, ...). */
     private array $builtinGlobals = [];
+    /** @var array<string, callable> Effective filters: built-in < class < instance (see syncRegistries). */
     private array $filters = [];
+    /** @var array<string, callable> Effective tests: class < instance (see syncRegistries). */
     private array $tests = [];
+    /** @var array<string, callable> Built-in filters, captured once at construction. */
+    private array $builtinFilters = [];
+    /** @var array<string, callable> Filters registered on THIS instance (instance-local, ADR-0052). */
+    private array $localFilters = [];
+    /** @var array<string, callable> Tests registered on THIS instance (instance-local, ADR-0052). */
+    private array $localTests = [];
+    /** The class-registry version $filters/$tests were last merged at. */
+    private int $registryVersion = -1;
     /**
      * @var array<string, array{content: string, time: int, ttl: int}>
      *   Runtime store for {% cache %} fragments. Bounded at TEMPLATE_CACHE_MAX
@@ -66,7 +76,7 @@ class Frond
      *
      * Mirrors Python's ``Frond._class_filters`` — when a module calls
      * ``Frond::addFilter("money", $fn)`` statically at app-startup, the filter
-     * is stored here and drained into every subsequent ``new Frond()``. This
+     * is stored here and merged into every Frond at render time (ADR-0107). This
      * lets app.php register filters once, and have every later request's
      * Frond pick them up automatically without manual wiring.
      *
@@ -79,6 +89,9 @@ class Frond
 
     /** @var array<string, callable> Class-level registry for tests (see $classFilters). */
     private static array $classTests = [];
+
+    /** Bumped on every class-level filter/test change (see syncRegistries). */
+    private static int $classRegistryVersion = 0;
 
     /** @var array<string, array> Live blocks: name -> parsed body AST (re-executed by renderLive). */
     private static array $liveFragments = [];
@@ -200,20 +213,38 @@ class Frond
         $this->registerBuiltinTests();
         $this->registerBuiltinGlobals();
 
-        // Drain the class-level filter/test registries into this instance —
-        // filters/tests registered statically via Frond::addFilter() before
-        // this instance was constructed are now available on $this. Class
-        // GLOBALS are not copied: withGlobals() reads self::$classGlobals at
-        // render time, so a Frond::addGlobal() made after this engine exists
-        // (after the first $response->render(), say) still reaches it.
-        $this->filters = array_merge($this->filters, self::$classFilters);
-        $this->tests = array_merge($this->tests, self::$classTests);
+        // Class registrations are never copied in for good: withGlobals()
+        // reads self::$classGlobals at render time, and syncRegistries()
+        // re-merges the class filters/tests whenever they change. So a
+        // Frond::addGlobal/addFilter/addTest made after this engine exists
+        // (after the first $response->render(), say) still reaches it
+        // (ADR-0106, ADR-0107).
+        $this->builtinFilters = $this->filters;
+        $this->syncRegistries();
+    }
+
+    /**
+     * Rebuild the effective filter/test maps when the class registry changed.
+     *
+     * Same layering as globals -- built-ins < class < this instance. Filter
+     * lookup is on the hot path, so the merge is a plain array rebuilt only
+     * when the class-registry version moves, never a per-lookup chain.
+     */
+    private function syncRegistries(): void
+    {
+        if ($this->registryVersion === self::$classRegistryVersion) {
+            return;
+        }
+        $this->filters = array_merge($this->builtinFilters, self::$classFilters, $this->localFilters);
+        $this->tests = array_merge(self::$classTests, $this->localTests);
+        $this->registryVersion = self::$classRegistryVersion;
     }
 
     /* ───────────────────── public API ───────────────────── */
 
     public function render(string $template, array $data = []): string
     {
+        $this->syncRegistries();
         $file = $this->templateDir . '/' . $template;
         if (!is_file($file)) {
             throw new \RuntimeException("Template not found: $file");
@@ -278,6 +309,7 @@ class Frond
 
     public function renderString(string $source, array $data = [], ?string $templateName = null): string
     {
+        $this->syncRegistries();
         $key = md5($source);
         $cached = $this->compiledStrings[$key] ?? null;
 
@@ -424,7 +456,18 @@ class Frond
      */
     public function getFilters(): array
     {
+        $this->syncRegistries();
         return $this->filters;
+    }
+
+    /**
+     * Get only the filters registered on this instance (its own addFilter calls).
+     *
+     * @return array<string, callable>
+     */
+    public function getInstanceFilters(): array
+    {
+        return $this->localFilters;
     }
 
     /**
@@ -460,6 +503,7 @@ class Frond
         self::$classFilters = [];
         self::$classGlobals = [];
         self::$classTests = [];
+        self::$classRegistryVersion++;
         self::$liveFragments = [];
         self::$liveSources = [];
         self::$liveWsPaths = [];
@@ -475,16 +519,16 @@ class Frond
      *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry
      *   ``$frond->addFilter("money", $fn)`` → ``__call``       → instance map only
      *
-     * Future ``new Frond()`` instances drain the class filters/tests in their
-     * constructor; class globals are read at render time, so they reach every
-     * instance, existing ones included. Instance calls remain local.
-     * tina4: ADR-0052, ADR-0106.
+     * Class globals, filters and tests are read at render time, so they reach
+     * every instance, existing ones included. Instance calls remain local.
+     * tina4: ADR-0052, ADR-0106, ADR-0107.
      */
     public function __call(string $method, array $args): mixed
     {
         switch ($method) {
             case 'addFilter':
                 [$name, $fn] = $args;
+                $this->localFilters[$name] = $fn;
                 $this->filters[$name] = $fn;
                 return null;
             case 'addGlobal':
@@ -493,6 +537,7 @@ class Frond
                 return null;
             case 'addTest':
                 [$name, $fn] = $args;
+                $this->localTests[$name] = $fn;
                 $this->tests[$name] = $fn;
                 return null;
         }
@@ -503,9 +548,8 @@ class Frond
      * Static dispatch for ``Frond::addFilter`` / ``addGlobal`` / ``addTest``.
      *
      * See ``__call`` for the dual static/instance call semantics. Static
-     * calls only touch the class registry — the next ``new Frond()``
-     * constructor drains filters/tests into the instance; globals are read
-     * from the registry at render time (ADR-0106).
+     * calls only touch the class registry; every engine reads it at render
+     * time (ADR-0106, ADR-0107).
      */
     public static function __callStatic(string $method, array $args): mixed
     {
@@ -513,6 +557,7 @@ class Frond
             case 'addFilter':
                 [$name, $fn] = $args;
                 self::$classFilters[$name] = $fn;
+                self::$classRegistryVersion++;
                 return null;
             case 'addGlobal':
                 [$name, $value] = $args;
@@ -521,6 +566,7 @@ class Frond
             case 'addTest':
                 [$name, $fn] = $args;
                 self::$classTests[$name] = $fn;
+                self::$classRegistryVersion++;
                 return null;
         }
         throw new \BadMethodCallException(sprintf('Frond::%s does not exist', $method));
