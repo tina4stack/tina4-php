@@ -46,7 +46,10 @@ final class FrondAutoGlobal
 class Frond
 {
     private string $templateDir;
+    /** @var array<string, mixed> Globals registered on THIS instance (instance-local, ADR-0052). */
     private array $globals = [];
+    /** @var array<string, mixed> Built-in globals (formToken, dump, csp_nonce, ...). */
+    private array $builtinGlobals = [];
     private array $filters = [];
     private array $tests = [];
     /**
@@ -197,12 +200,13 @@ class Frond
         $this->registerBuiltinTests();
         $this->registerBuiltinGlobals();
 
-        // Drain class-level registries into this instance. Mirrors Python's
-        // ``self._globals.update(Frond._class_globals)`` etc. — filters/globals/
-        // tests registered statically via Frond::addFilter() before this
-        // instance was constructed will now be available on $this.
+        // Drain the class-level filter/test registries into this instance —
+        // filters/tests registered statically via Frond::addFilter() before
+        // this instance was constructed are now available on $this. Class
+        // GLOBALS are not copied: withGlobals() reads self::$classGlobals at
+        // render time, so a Frond::addGlobal() made after this engine exists
+        // (after the first $response->render(), say) still reaches it.
         $this->filters = array_merge($this->filters, self::$classFilters);
-        $this->globals = array_merge($this->globals, self::$classGlobals);
         $this->tests = array_merge($this->tests, self::$classTests);
     }
 
@@ -233,7 +237,7 @@ class Frond
                 }
             }
             if ($cached !== null && !$stale) {
-                $data = array_merge($this->globals, $data);
+                $data = $this->withGlobals($data);
                 return $this->renderAst($template, $cached['ast'], $data, $template);
             }
         }
@@ -253,7 +257,7 @@ class Frond
             'cachedAt' => time(),
         ];
 
-        $data = array_merge($this->globals, $data);
+        $data = $this->withGlobals($data);
         // Prod keys the compiled fn by template name (files are stable under a
         // running prod worker); dev keys it by a hash of THIS source so an edit
         // produces a new key and recompiles, keeping hot-reload visibility while
@@ -262,17 +266,27 @@ class Frond
         return $this->renderAst($compileKey, $ast, $data, $template);
     }
 
+    /**
+     * Layer the globals under the render data: built-ins < class globals
+     * (read live, so registration order never matters) < this instance's own
+     * globals < the data passed to render().
+     */
+    private function withGlobals(array $data): array
+    {
+        return array_merge($this->builtinGlobals, self::$classGlobals, $this->globals, $data);
+    }
+
     public function renderString(string $source, array $data = [], ?string $templateName = null): string
     {
         $key = md5($source);
         $cached = $this->compiledStrings[$key] ?? null;
 
         if ($cached !== null) {
-            $data = array_merge($this->globals, $data);
+            $data = $this->withGlobals($data);
             return $this->renderAst($key, $cached['ast'], $data, $templateName);
         }
 
-        $data = array_merge($this->globals, $data);
+        $data = $this->withGlobals($data);
         $tokens = $this->tokenize($source);
         $ast = $this->parse($tokens);
         $this->capMemoCache($this->compiledStrings, self::TEMPLATE_CACHE_MAX);
@@ -414,11 +428,21 @@ class Frond
     }
 
     /**
-     * Get all registered globals (built-in + custom).
+     * Get every global this engine renders with (built-in + class + instance).
      *
      * @return array<string, mixed>
      */
     public function getGlobals(): array
+    {
+        return array_merge($this->builtinGlobals, self::$classGlobals, $this->globals);
+    }
+
+    /**
+     * Get only the globals registered on this instance (its own addGlobal calls).
+     *
+     * @return array<string, mixed>
+     */
+    public function getInstanceGlobals(): array
     {
         return $this->globals;
     }
@@ -451,10 +475,10 @@ class Frond
      *   ``Frond::addFilter("money", $fn)``  → ``__callStatic`` → class registry
      *   ``$frond->addFilter("money", $fn)`` → ``__call``       → instance map only
      *
-     * Future ``new Frond()`` instances drain the class registry in their
-     * constructor, so filters/globals/tests registered statically at
-     * app-startup propagate to every later instance automatically. Instance
-     * calls remain local. tina4: ADR-0052.
+     * Future ``new Frond()`` instances drain the class filters/tests in their
+     * constructor; class globals are read at render time, so they reach every
+     * instance, existing ones included. Instance calls remain local.
+     * tina4: ADR-0052, ADR-0106.
      */
     public function __call(string $method, array $args): mixed
     {
@@ -480,7 +504,8 @@ class Frond
      *
      * See ``__call`` for the dual static/instance call semantics. Static
      * calls only touch the class registry — the next ``new Frond()``
-     * constructor drains it into the instance.
+     * constructor drains filters/tests into the instance; globals are read
+     * from the registry at render time (ADR-0106).
      */
     public static function __callStatic(string $method, array $args): mixed
     {
@@ -3853,22 +3878,22 @@ class Frond
             return $generateFormJwt($descriptor);
         };
 
-        $this->globals['formToken'] = $formTokenFn;
-        $this->globals['form_token'] = $formTokenFn;
-        $this->globals['formTokenValue'] = $formTokenValueFn;
-        $this->globals['form_token_value'] = $formTokenValueFn;
+        $this->builtinGlobals['formToken'] = $formTokenFn;
+        $this->builtinGlobals['form_token'] = $formTokenFn;
+        $this->builtinGlobals['formTokenValue'] = $formTokenValueFn;
+        $this->builtinGlobals['form_token_value'] = $formTokenValueFn;
 
         // Debug helper: {{ dump(x) }} — gated on TINA4_DEBUG=true.
         // Both this global and the |dump filter call self::renderDump()
         // which returns an empty string in production.
-        $this->globals['dump'] = static fn($v = null) => self::renderDump($v);
+        $this->builtinGlobals['dump'] = static fn($v = null) => self::renderDump($v);
 
         // CSP nonce (ADR-0088): {{ csp_nonce() }} returns the current response's
         // nonce so a template can serve an inline <style>/<script> under the
         // strict default Content-Security-Policy — <style nonce="{{ csp_nonce() }}">.
         // The value matches the 'nonce-X' the security middleware puts in the
         // Content-Security-Policy header (both read the request-scoped Tina4\Csp).
-        $this->globals['csp_nonce'] = static fn(): string => Csp::currentCspNonce();
+        $this->builtinGlobals['csp_nonce'] = static fn(): string => Csp::currentCspNonce();
 
         // Also register as filters so {{ "" | formToken }} and {{ "" | form_token }} work
         $this->filters['formToken'] = fn($v) => $formTokenFn((string)($v ?: ''));
