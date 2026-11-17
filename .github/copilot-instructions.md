@@ -26,4 +26,4 @@ Router::post("/api/public", function($request, $response) {
 - Namespace: `Tina4\` — `Tina4\Router`, `Tina4\ORM`, `Tina4\Auth`
 - Templates: Twig syntax (not Blade)
 
-See llms.txt for full API reference.
+For the complete API reference, read `CLAUDE.md` in this repo and the docs it links. `llms.txt` is the link index (llmstxt.org format); https://tina4.com/llms-full.txt has the full documentation in one file.
