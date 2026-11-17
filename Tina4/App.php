@@ -954,10 +954,9 @@ class App
             return;
         }
 
-        // Don't overwrite a user-registered t() global
-        $frond = Response::getFrond();
-        $globals = $frond->getGlobals();
-        if (isset($globals['t'])) {
+        // Don't overwrite a user-registered t() global (class-level, or on the
+        // engine $response->render() uses).
+        if (isset(Response::getFrond()->getGlobals()['t'])) {
             return;
         }
 
@@ -966,8 +965,10 @@ class App
         // directory as the path.
         $i18n = new I18n(null, $localeDir);
 
-        // Register t() as a callable template global
-        $frond->addGlobal('t', function (string $key, array $params = [], ?string $locale = null) use ($i18n): string {
+        // Register t() as a class-level template global, so it reaches every
+        // engine — $response->render()'s, the framework templates' — whenever
+        // that engine was built. Templates call t("key") or t("key", {params}).
+        Frond::addGlobal('t', function (string $key, array $params = [], ?string $locale = null) use ($i18n): string {
             return $i18n->translate($key, $params, $locale);
         });
     }

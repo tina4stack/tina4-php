@@ -70,7 +70,8 @@ class Response
             foreach ($userFrond->getFilters() as $name => $fn) {
                 self::$frameworkFrond->addFilter($name, $fn);
             }
-            foreach ($userFrond->getGlobals() as $name => $value) {
+            // Instance globals only: class globals are read live by every engine.
+            foreach ($userFrond->getInstanceGlobals() as $name => $value) {
                 self::$frameworkFrond->addGlobal($name, $value);
             }
         }
