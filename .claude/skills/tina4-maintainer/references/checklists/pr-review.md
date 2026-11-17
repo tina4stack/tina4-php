@@ -50,6 +50,13 @@ found afterwards.
       A comment saying "no mocks" is fine. A fake collaborator is a block - including a test that
       builds on a long-standing fake helper already in the file (it is still a fake; replace the
       helper, as nodejs#200 did for `mockReq`/`mockRes`).
+- [ ] **No patching the framework from outside it.** In an example app, a gallery demo, a docs
+      sample or an agent's output, code that monkey-patches Tina4 (assigns over a framework
+      function, class or prototype at runtime, reopens a `Tina4::` class, edits `vendor/`,
+      `node_modules` or `site-packages`) to make something work is a framework bug report in
+      disguise. Do not merge the patch: reproduce the defect, fix it IN the framework at parity
+      with a regression test, then drop the patch. The developer skills forbid it for the same
+      reason - a patch hides the bug and breaks on the next upgrade.
 - [ ] **No unresolved review threads.** The `v3` rulesets require thread resolution, and CodeQL posts
       its findings as threads, so a PR with every check green can still be blocked:
       `gh api graphql -f query='query{repository(owner:"tina4stack",name:"<repo>"){pullRequest(number:<N>){reviewThreads(first:50){nodes{isResolved comments(first:1){nodes{author{login} body}}}}}}}'`

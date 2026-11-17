@@ -101,6 +101,17 @@ breaking what must not break. Three tiers:
   browser - on its own line with a short geeky one-liner. Never faked (no clean build, no
   Bazinga) and never on a trivial step.
 
+  **Never patch the framework to make your code work - report it.** When tina4-js does not do
+  what your code needs, or looks broken, do NOT patch it: no overwriting `Tina4` / `tina4js`
+  exports or prototypes (`Tina4Element.prototype`, `signal`, the router) at runtime, no editing
+  `node_modules/tina4js` or the vendored `tina4js.min.js`.
+  A patch hides the bug from everyone else, silently breaks on the next upgrade, and leaves the
+  next agent debugging a framework that no longer matches its docs. Instead: reproduce it in the
+  smallest app you can, report it with that reproduction and the version (`npm ls tina4js`) at
+  https://github.com/tina4stack/tina4-js/issues, tell the developer, and meanwhile use a supported public
+  API. A temporary workaround lives in YOUR code, never in the framework's, and carries a
+  `tina4:` comment linking the issue.
+
 - 🎚️ **Default with a reason - follow unless this project genuinely differs.**
   Pick the smaller flow that fits (IIFE for a spike, scaffold for an app you will maintain); the
   Lazy Frontend Ladder (platform first, then tina4-js, then the minimum code); the plan-driven
