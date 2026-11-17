@@ -3,25 +3,25 @@
 ## Unified CLI
 
 A Rust-based `tina4` CLI auto-detects project language and dispatches to the correct runtime.
-Language-specific aliases: `tina4py`, `tina4php`, `tina4rb`, `tina4js`.
+Each framework ships its own CLI, which `tina4` forwards to: `tina4python`, `tina4php`,
+`tina4ruby`, `tina4nodejs` (`tina4-js` front-end projects use esbuild).
 
 ### Commands
+The authority is `tina4 --help` and the `tina4-cli` skill; this is the shape (tina4 `src/main.rs`).
 ```bash
-tina4 init              # Scaffold new project
-tina4 serve             # Start dev server with hot reload
-tina4 test              # Run test suite
-tina4 migrate           # Run pending migrations
-tina4 migrate:create    # Create new migration file
-tina4 seed              # Run all seeders
-tina4 seed:create       # Create new seeder file
-tina4 routes            # List all registered routes
-tina4 build             # Build Docker image
-tina4 deploy push       # Push image to registry
-tina4 deploy k8s        # Deploy to Kubernetes
-tina4 stage             # Build + push + deploy (~30s)
-tina4 stage --watch     # Stage with file watching
-tina4 deploy promote staging production  # Promote exact image
+tina4 init [lang] [name]   # Scaffold a new project
+tina4 serve                # Dev server: file watcher, SCSS, browser reload
+tina4 scss                 # Compile src/scss -> src/public/css
+tina4 build                # Production front-end assets: SCSS minify + bundle (--no-minify)
+tina4 deploy <target>      # Generate deployment SCAFFOLDING only: docker | systemd | nginx | cpanel
+                           #   (--runtime cli|fpm|swoole for PHP docker, --force to overwrite)
+tina4 env | metrics | codeql | doctor | install | setup | skills | update | ...
 ```
+Any command the client does not own is forwarded verbatim to the framework CLI, so
+`tina4 migrate`, `tina4 migrate:create`, `tina4 seed`, `tina4 test`, `tina4 routes`, `tina4 lint`
+and the rest are owned by each framework. The CLI does not build or push images, deploy to
+Kubernetes, or promote between environments - that is the app's own pipeline (the `tina4-k8s`
+skill covers the GitOps flow).
 
 ---
 
@@ -44,38 +44,33 @@ Shared HTML/CSS/JS across all four languages.
 
 ## .broken File System
 
-Health monitoring via JSON files in `data/.broken/`.
+Error diagnostics as JSON files in `data/.broken/` (Python `tina4_python/core/server.py`).
 
-### How It Works
-- Global exception handler catches unhandled errors
-- Creates a `.broken` file with error details, request context, environment snapshot
-- Deduplicated by error type + location (same error doesn't create multiple files)
-- Health check endpoint returns 503 when .broken files exist
-- K8s liveness/readiness probes integrate with this
-
-### Configuration
-- Auto-resolve: optionally clear .broken files after N successful requests
-- Max files: cap to prevent disk fill
-- Threshold: N errors before marking unhealthy
+- An unhandled route error, or a route file that fails to import during auto-discovery, writes a
+  `.broken` sentinel with the error details.
+- The **dev dashboard** reads them. They are diagnostics only: they do **not** drive the health
+  endpoint's status code and are not in its body (ADR-0016).
+- Sentinels from a previous run are cleared at startup, so they describe THIS run only.
 
 ---
 
 ## Structured Logging
 
-### Format
-- **Development**: Human-readable, colorized
-- **Production**: JSON (one object per line)
+The logger is a shared cross-framework contract:
+`tina4-documentation/plan/v3/fixtures/logger_contract.json` (feature 2, ADR-0041). Python
+`tina4_python/debug/__init__.py` documents every setting.
 
-### Channels
-`main`, `error`, `query`, `access`
-
-### Rotation
-Daily, hourly, or size-based. Old logs compressed. Configurable retention period.
-
-### Log Levels
-EMERGENCY, ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFO, DEBUG
-
-Request ID auto-injected into all log entries for tracing.
+- **Format** (`TINA4_LOG_FORMAT`): `json` in production, `text` when `TINA4_DEBUG` is truthy.
+- **Levels**: `ALL`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, `NONE`. `TINA4_LOG_LEVEL`
+  gates the console (default `INFO`); `TINA4_LOG_FILE_LEVEL` gates the file sink (default `ALL`).
+- **Sinks** (`TINA4_LOG_OUTPUT`): `stdout`, `file` or `both`; the file sink is on by default only in
+  debug. `TINA4_LOG_DIR` (default `logs`), `TINA4_LOG_FILE`.
+- **Rotation** is size-based only: `TINA4_LOG_ROTATE_SIZE` (bytes, default 10 MiB, minimum 1024)
+  and `TINA4_LOG_ROTATE_KEEP` (backups, default 5). No time-based rotation, no compression, no
+  channels.
+- The request id is carried as the `request_id` key of each event.
+- Removed settings hard-fail configuration: `TINA4_LOG_MAX_SIZE`, `TINA4_LOG_KEEP`,
+  `TINA4_LOG_APPEND`, `TINA4_DEBUG_LEVEL`, `TINA4_LOG_CRITICAL`.
 
 ---
 
@@ -95,7 +90,9 @@ TINA4_SWAGGER_TITLE=My API
 TINA4_API_KEY=optional-key
 ```
 
-Supports environment-specific overrides: `.env.development`, `.env.production`, `.env.testing`.
+Precedence: real environment > `.env.local` (gitignored, local-only keys such as the generated dev
+secret) > `.env`. `TINA4_ENV_FILE` names a different `.env` file; a `.env.local` beside it still
+applies. There are no `.env.development` / `.env.production` / `.env.testing` files.
 
 ---
 
@@ -103,17 +100,21 @@ Supports environment-specific overrides: `.env.development`, `.env.production`, 
 
 ### Official Base Images (Docker Hub)
 
-| Framework | Image | Port | Size | Base |
-|-----------|-------|------|------|------|
-| Python | `tina4stack/tina4-python:v3` | 7146 | ~56MB | Alpine 3.23, Python 3.13 |
-| PHP | `tina4stack/tina4-php:v3` | 7145 | ~154MB | Alpine 3.23, PHP 8.4 |
+Sizes are the **compressed** Docker Hub sizes of `:v3` (amd64; arm64 within 0.5 MB), read from the
+Hub API on 2026-11-17. Re-measure on the Hub API before you quote them.
 
-Base images ship with **SQLite only** and include:
-- Python: libffi, sqlite-libs, PYTHONUNBUFFERED=1, TINA4_OVERRIDE_CLIENT=true, TINA4_NO_BROWSER=true
-- PHP: sqlite3, pdo_sqlite, OPcache (production settings), TINA4_OVERRIDE_CLIENT=true
+| Framework | Image | Port | Size (compressed) | Base (repo `Dockerfile`) |
+|-----------|-------|------|-------------------|--------------------------|
+| Python | `tina4stack/tina4-python:v3` | 7146 | ~14 MB | `alpine:3.23` (built on `python:3.13-alpine3.23`) |
+| PHP | `tina4stack/tina4-php:v3` | 7145 | ~43 MB | `php:8.4.27-cli-alpine3.23` |
+| Ruby | `tina4stack/tina4-ruby:v3` | 7147 | ~42 MB | `ruby:3.3-alpine` |
+| Node.js | `tina4stack/tina4-nodejs:v3` | 7148 | ~65 MB | `node:24-alpine` |
 
-Both use multi-stage builds. App Dockerfiles extend these with `FROM tina4stack/tina4-python:v3`
-or `FROM tina4stack/tina4-php:v3` and only add app code + any extra database drivers.
+Base images ship with **SQLite only** and set `TINA4_OVERRIDE_CLIENT=true` and `TINA4_DEBUG=false`
+(Python also sets `TINA4_NO_BROWSER=true`). All four use multi-stage builds. App Dockerfiles extend
+them with `FROM tina4stack/tina4-<lang>:v3` and only add app code + any extra database drivers.
+Publishing is manual: `tina4-documentation/scripts/publish-docker-images.sh` (see
+`references/checklists/release.md`).
 
 Database driver installation recipes are in the tina4-developer skill at
 `references/deployment.md` — covers PostgreSQL, MySQL, MSSQL, and Firebird for both Python and PHP.
@@ -135,23 +136,22 @@ Provided for integration testing with real databases (PostgreSQL, MySQL, MSSQL, 
 ```yaml
 livenessProbe:
   httpGet:
-    path: /health
-readinessProbe:
-  httpGet:
-    path: /health
+    path: /__health
 ```
 
-The `/health` endpoint checks:
-- Application is running
-- Database is connected
-- No .broken files exist
+The built-in health endpoint is a **liveness** probe only (ADR-0016; Python
+`tina4_python/core/server.py` `_health_handler`):
+- Default path `/__health` (override with `TINA4_HEALTH_PATH`); `/health` is also kept registered.
+- It answers **200** whenever the process can answer. It checks no database, cache, queue or
+  network, and `.broken` files do not affect it.
+- Body: `{"status": "ok", "uptime": <seconds>, "framework": "tina4-<lang>"}`, plus `version` in
+  debug only (ADR-0078).
+- A **readiness** endpoint that probes dependencies and returns 503 is specified in ADR-0016 but
+  **not built**. Until it exists, a readiness check is the app's own route.
 
 ---
 
 ## Development Workflow
-
-### Golden Path
-Local dev → Staging → Production. No shortcuts.
 
 ### Local Development
 ```bash
@@ -167,24 +167,15 @@ file watching, and browser auto-open — `python app.py` skips all of this.
 the framework server. The framework checks `"--managed" in sys.argv` and refuses to start
 without it. To bypass (e.g. Docker, CI), set `TINA4_OVERRIDE_CLIENT=true` in `.env`.
 
-### Staging
-```bash
-tina4 stage         # Build + push + deploy in ~33 seconds
-```
-Same database engine as production. Full integration testing.
+### Deploying an app
+`tina4 deploy docker|systemd|nginx|cpanel` writes deployment files into the project. Building,
+pushing and promoting images between environments is the app's own CI/CD or GitOps pipeline (the
+`tina4-k8s` skill covers Flux image automation and promotion); the `tina4` CLI has no `stage` or
+`promote` command.
 
-### Production
-```bash
-tina4 deploy promote staging production
-```
-Promotes the exact tested image — no rebuild. Zero-downtime rolling update.
-Auto-rollback on failed health check.
-
-### Branching
-- `main` — production
-- `develop` — staging
-- `feature/*` — feature branches off develop
-- `hotfix/*` — merge to both main and develop
+### Branching (framework repos)
+Feature branch → PR → `v3` (the four frameworks) or `main` (`tina4` CLI, `tina4-documentation`).
+There is no `develop` or staging branch. Full model: `references/workflow-and-release.md`.
 
 ---
 

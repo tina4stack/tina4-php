@@ -45,7 +45,7 @@ Version 3.13.163 - Full Tina4 PHP framework and application scaffold. See https:
 - **Error handling in routes** — Wrap route logic in `try/catch`, log with `Log::error()` / `Log::warning()` / `Log::info()` / `Log::debug()` (or alias `Debug` if you have a backwards-compat shim), return response with appropriate status
 - **PHPDoc** — Every public method and function carries a docblock: a present-tense one-line summary of the behaviour, `@param` for each argument, `@return`, and `@throws` for each exception the caller can hit (with its trigger condition). Describe the behaviour, never the fix or a version note (those go in the changelog); types must match the real signature (including `?`/union); no orphaned docblocks. See `CONTRIBUTING.md`
 - **All links and references** should point to https://tina4.com
-- **Push to staging only** — Never push to production without explicit approval
+- **Pull requests only (ADR-0073)** — Never push directly to `v3` or `main` (or `v2`); work on a feature branch, open a PR, wait for the required checks, then merge. Never force-push or move a tag. A tag publishes, merging never does
 - PSR-4 autoloading — core classes live in `Tina4/` (not `src/Tina4/`)
 - Namespace `Tina4\` for core, `Tina4\Database\` for adapters, `Tina4\Middleware\` for middleware, `Tina4\Queue\` for queue backends, `Tina4\Session\` for session handlers
 - Namespace `\` for src/app/orm/routes
@@ -465,7 +465,7 @@ Max upload size: `TINA4_MAX_UPLOAD_SIZE` env var (default 10MB).
 ### Auth
 
 ```php
-// expires_in is in MINUTES (default 60). Reads SECRET from env if not passed.
+// expires_in is in MINUTES (default 60). Reads TINA4_SECRET from env if not passed.
 // $algorithm=null resolves TINA4_JWT_ALGORITHM, then HS256.
 Auth::getToken($payload, $secret=null, $expiresIn=60, $algorithm=null): string
 Auth::validToken($token, $secret=null, $algorithm=null): ?array

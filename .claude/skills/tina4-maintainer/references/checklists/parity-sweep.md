@@ -26,8 +26,9 @@ named regression test in all four — never file N separate tickets.
       Changing a cross-framework contract means superseding an ADR deliberately, never silently.
 - [ ] Write/adjust the executable `fixtures/<feature>_contract.json` (the SAME bytes drive all
       four runners) with named positive AND negative regressions.
-- [ ] Fix the divergence in ALL FOUR, Python master leading, the others mirroring.
-- [ ] Flip owed→proven via `scripts/audit-contract-fixtures.py`; sync the `CONTRACT-MAP.md` row
+- [ ] Fix the divergence in ALL FOUR. Python leads the API; where a sibling's implementation is
+      measurably better, the best implementation prevails and Python adopts it (ADR-0004).
+- [ ] Flip owed→proven via `tina4-documentation/scripts/audit-contract-fixtures.py`; sync the `CONTRACT-MAP.md` row
       from the auditor's OWN counts, never a hand count.
 - [ ] Verify yourself at HEAD on the lab (no mocks, zero skips). Log the fix in the plan's Bugs
       section, ticked only when a real test proves it.

@@ -19,7 +19,10 @@ Routes are registered with the static `\Tina4\Router` methods — `get`, `post`,
 });
 
 \Tina4\Router::post("/users", function ($request, $response) {
-    $user = (new User($request->body))->save();   // body auto-parsed from JSON
+    $user = new User($request->body);              // body auto-parsed from JSON
+    if (!$user->save()) {                          // $this on success, false on failure
+        return $response(["error" => $user->getError()], 422);
+    }
     return $response($user, 201);
 });
 
@@ -191,21 +194,36 @@ All state-changing forms must include a CSRF token. Tina4 provides this built-in
 ```
 
 `{{ formToken() }}` (and its snake_case alias `{{ form_token() }}`) renders a hidden input with a
-secure token. The framework validates it automatically on POST/PUT/DELETE requests. If the token is
-missing or invalid, the request is rejected. Need just the raw token string (e.g. for a meta tag or
-a fetch header)? Use `{{ formTokenValue() }}` / `{{ form_token_value() }}`.
+secure, session-bound token. Enable CSRF with `TINA4_CSRF=true`; the framework then validates the
+token on POST/PUT/DELETE and rejects a missing/invalid one with 403. Need just the raw token string
+(e.g. for a meta tag or a fetch header)? Use `{{ formTokenValue() }}` / `{{ form_token_value() }}`.
+
+A form token proves ORIGIN (this write came from a form you rendered), not identity. CSRF and
+`->noAuth()` are orthogonal:
+
+- **Public form** (contact, sign-up): `->noAuth()` route + `{{ form_token() }}` in the form. It posts
+  with no login AND stays CSRF-protected. `->noAuth()` no longer skips CSRF.
+- **Protected form**: a real identity token authenticates the write (frond.js sends it as the
+  `Authorization: Bearer` header). A form token is not an identity, so a protected route 401s without
+  one - send the login token, do not drop `->noAuth()`.
+- **Webhook / server-to-server** (no browser, no form): chain `->noCsrf()` (with `->noAuth()`) to opt
+  out of the form-token check.
 
 ### In frond.js
-frond.js's `saveForm(...)` / `sendRequest(...)` pick up the form token automatically. If you POST by
-hand, read it from a meta tag you populated with `{{ formTokenValue() }}` and send it as a header.
+`frond.form.submit("formId", "/endpoint", "messageId")` collects every input in the form, including
+the hidden `formToken` field exactly as the server rendered it, so the token travels with the POST.
+If you POST by hand, read it from a meta tag you populated with `{{ formTokenValue() }}` and send it as a header.
 
 **Never skip CSRF protection on forms.** It prevents cross-site request forgery attacks.
 
 ## CORS
 
-Built-in. Register the CORS middleware globally when you need to customise it:
-`\Tina4\Router::use(\Tina4\Middleware\CorsMiddleware::class);`. In development it defaults to
-allowing all origins.
+Built-in: `\Tina4\Router::use(\Tina4\Middleware\CorsMiddleware::class);`. It is **deny by default**
+(ADR-0018), in development too: with `TINA4_CORS_ORIGINS` unset no `Access-Control-Allow-Origin`
+is sent and the browser blocks cross-origin calls. List the origins you allow, e.g.
+`TINA4_CORS_ORIGINS=http://localhost:5173,https://app.example.com` (`*` allows any, and is then
+never paired with credentials). Same-origin requests need nothing. Also: `TINA4_CORS_METHODS`,
+`TINA4_CORS_HEADERS`, `TINA4_CORS_MAX_AGE`, `TINA4_CORS_CREDENTIALS`.
 
 ## Rate Limiting
 

@@ -53,7 +53,7 @@ of truth, derived from the actual source code.
 Read top to bottom once, then jump by section. The deep API detail lives in `references/` - load it on demand.
 
 **Orientation**
-- Which flow? - Flow A (IIFE drop-in, no install) vs Flow B (`tina4 init js my-app`, then `tina4 serve`)
+- Which flow? - Flow A (IIFE drop-in, no install) vs Flow B (`tina4 init js ./my-app`, then `tina4 serve`)
 - The Tina4 Working Method - plan file, tests first, scaffold, verify, report
 - Working reflexes - delegate by tier, terse output, plain English, ask only when blocked
 - **Degrees of freedom** - what is inviolable vs. a default vs. your judgement (read this next)
@@ -165,10 +165,15 @@ Use when the developer wants ANY of:
 - multiple pages, a router, and persistent signal storage
 
 ```bash
-tina4 init js my-app
+tina4 init js ./my-app
 cd my-app
 tina4 serve
 ```
+
+Pass a PATH (`./my-app`) when you want the project in the current folder. A BARE name
+(`tina4 init js my-app`) goes into your configured projects folder when one is set, and the CLI
+prints where it landed, so a following `cd my-app` fails. In that case use `tina4 serve my-app`,
+which resolves the name the same way.
 
 Creates a working TypeScript/esbuild project, installs its packages, and starts
 it through the unified Tina4 client. Do not make `npx tina4js create`,
@@ -193,8 +198,8 @@ main session, **you still own the plan file**. Cursor todos / chat checklists ar
 
 | Phase | What happens | Output |
 |-------|--------------|--------|
-| 1. Scope | Restate the request, agree the slice with the developer | a feature entry in `plan/<feature>.md` |
-| 2. Plan | Write Scope / Tests / Bugs / Commits checklists | the plan file (outcome stated, then start) |
+| 1. Scope | Restate the request and the outcome you inferred, state it, and start | a feature entry in `plan/<feature>.md` |
+| 2. Plan | Write Scope / Spec / Tests / Bugs / Commits checklists | the plan file (outcome stated, then start) |
 | 3. Delegate | Prefer a worker per task; main session stays free when possible | worker(s) (or you) running off the plan |
 | 4. Test-first | Pin the behaviour BEFORE building the component | a real check that fails first |
 | 5. Scaffold + Build | Run `tina4 generate page|component` → ground with `tina4_context` → fill the custom reactive code | it works in the browser |
@@ -208,7 +213,12 @@ steer while the UI hot-reloads. **Required either way:** whoever builds must upd
 file still shows `[ ]` is a process failure — fix the file before you report.
 
 Tick Scope/Tests when verified in the browser (real UI), not when waiting for per-item human
-approval. You start the plan and mark it `## Status: Complete` yourself on that evidence - no approval gate; the developer can redirect.
+approval. State the inferred outcome and start the plan. Close it (`## Status: Complete`) yourself
+on verified evidence: every Scope and Tests item ticked after a real run in the browser. There is no
+approval gate; the developer can redirect at any time. Ask FIRST only when a wrong guess is
+expensive or hard to reverse: a destructive data change, a choice between architectures that is
+costly to undo (for example SPA vs islands on an existing app), a public release, or an
+irreversible external action.
 
 ## Working reflexes
 
@@ -218,7 +228,7 @@ approval. You start the plan and mark it `## Status: Complete` yourself on that 
 - **Write plain English for a global team.** Most Tina4 engineers do not speak English first. Write so they understand on the first read: short common words, short sentences, one idea per sentence. No idioms, no slang, no metaphors. Spell out an acronym the first time you use it. Say the plain word, not the clever one.
 - **Keep it short.** Give the answer or the code first, then stop. Stay under about 150 words unless a document, report, or walkthrough was asked for. Use bullets. Skip the preamble, the recap, and the "I'll now ..." lines.
 - **Match the effort to the task.** Take the simplest approach that holds. Do not build more than was asked. A small task gets a small answer and a short thought; do not over-think it.
-- **Ask before you guess - but only when you are blocked.** Default: decide from the code, the conventions, and these skills, and keep working. When the choice is genuinely the owner's (which component pattern, which trade-off), ask at most 3 questions as short pick-one options BEFORE writing code. Never a wall of questions, and never after you have already guessed.
+- **State the outcome and start; ask only when a wrong guess is expensive.** Default: decide from the code, the conventions, and these skills, say in one line what you decided, and keep working. Ask FIRST only when a wrong guess is expensive or hard to reverse: a destructive data change, a choice between architectures that is costly to undo, a public release, or an irreversible external action. Then ask at most 3 questions as short pick-one options BEFORE writing code. Never a wall of questions, and never after you have already guessed.
 
 ### 2. Every instruction is allocated to a plan
 No work happens off-plan. A new request that fits an existing feature → **rescope it into that
@@ -240,7 +250,8 @@ feature plan owns the detail:
 | Checkout flow      | [checkout.md](checkout.md)              | 🟡 In Progress |
 ```
 
-A feature plan has four parts — a Scope checklist, the Tests, a Bugs section, and a Commit log:
+A feature plan has one format: Scope / Spec / Tests / Bugs / Commits / Status. The Spec holds the
+acceptance criteria (`AC-N`, given/when/then); each criterion gets one real test:
 
 ```markdown
 # Feature: Product List Component
@@ -250,9 +261,14 @@ A feature plan has four parts — a Scope checklist, the Tests, a Bugs section, 
 - [x] <product-list> renders each product as a card
 - [ ] search box filters the list reactively
 
-## Tests (written first, real — no smoke tests)
-- [x] renders one card per product in the signal   (real DOM, seeded signal)
-- [ ] typing in the search box narrows the rendered cards
+## Spec — acceptance criteria
+- AC-1: given 3 products in the signal, when the list renders, then there are 3 cards
+- AC-2: given the list, when the user types "wid", then only cards whose name contains "wid" remain
+- Non-goals: server-side search
+
+## Tests (written first, real — no smoke tests) — ONE per acceptance criterion
+- [x] AC-1 renders one card per product in the signal   (real DOM, seeded signal)
+- [ ] AC-2 typing in the search box narrows the rendered cards
 
 ## Bugs
 - [x] list didn't re-render on filter — used ${signal.value} not ${signal} (a1b2c3d)
@@ -729,6 +745,13 @@ batch(() => {
 });
 ```
 
+## Mobile-first layout
+
+Build the smallest screen first, then enhance upward with `min-width` media queries - the base
+styles ARE the mobile styles, never a desktop layout patched down with `max-width`. Keep every
+interactive control at least 44x44px. Map tokens onto tina4-css; the `tina4-design` skill owns the
+full token + breakpoint detail. This is the default stance for any component you build.
+
 ## HTML Templates — DOM Creation
 
 Read `references/html-and-components.md` for the full API. Quick reference:
@@ -1021,26 +1044,83 @@ html`
 
 ## Islands Architecture
 
-tina4-js supports an "islands" pattern: use Tina4Element web components as self-contained
-interactive widgets within server-rendered pages. Each island auto-registers and hydrates
-independently.
+**The rule (the same in every Tina4 skill):**
+- Frond server-rendered pages are the default.
+- tina4-js "islands" — components mounted into Frond-rendered pages — are fine for the
+  interactive parts of a page (a live search box, a cart, a chat window).
+- A full tina4-js SPA is the choice when the frontend is decoupled from the backend (a separate
+  app that talks to the API).
 
-```html
-<!-- Server-rendered page (e.g. RedwoodSDK RSC, PHP template, Go template) -->
-<h1>Product Page</h1>
-<p>Server-rendered content here...</p>
+An island is a `Tina4Element` web component. Frond renders the page and the island's host tag;
+the IIFE bundle provides `window.Tina4`; each island script defines its element, and the browser
+upgrades every matching tag on the page.
 
-<!-- tina4-js island — self-contained, ~2.3KB per island vs 42KB for React -->
-<product-rating product-id="42"></product-rating>
-<add-to-cart product-id="42" price="29.99"></add-to-cart>
+```twig
+{# src/templates/pages/product.twig — a Frond page with two islands #}
+{% extends "base.twig" %}
+{% block content %}
+  <h1>{{ product.name }}</h1>
+  <p>{{ product.description }}</p>
 
-<script src="/js/tina4js.min.js"></script>
-<script src="/js/islands/product-rating.js"></script>
-<script src="/js/islands/add-to-cart.js"></script>
+  {# Frond writes the initial data into attributes (auto-escaped) #}
+  <product-rating product-id="{{ product.id }}"></product-rating>
+  <add-to-cart product-id="{{ product.id }}" price="{{ product.price }}"
+               form-token="{{ form_token_value() }}"></add-to-cart>
+
+  <script src="/js/tina4js.min.js"></script>
+  <script src="/js/islands/product-rating.js"></script>
+  <script src="/js/islands/add-to-cart.js"></script>
+{% endblock %}
 ```
 
-Each island is a standard Tina4Element that calls `customElements.define()` at the bottom of
-its file. The IIFE bundle provides the framework globally; island scripts just use it.
+```js
+// src/public/js/islands/add-to-cart.js — no build step, uses the IIFE global
+const { Tina4Element, html, signal, api } = Tina4;
+
+class AddToCart extends Tina4Element {
+  static props = { 'product-id': Number, price: Number, 'form-token': String };
+  static shadow = false;   // light DOM, so the page's tina4-css styles apply
+  added = signal(false);
+
+  render() {
+    return html`<button class="btn btn-primary" @click=${() => this.add()}>
+      ${() => (this.added.value ? 'Added' : 'Add to cart')}</button>`;
+  }
+
+  async add() {
+    await api.post('/api/cart', {
+      product_id: this.prop('product-id').value,
+      formToken: this.prop('form-token').value,   // CSRF for an anonymous write
+    });
+    this.added.value = true;
+  }
+}
+customElements.define('add-to-cart', AddToCart);
+```
+
+**How an island gets its data:**
+- **Initial data — attributes.** Declare each one in `static props` (`String`, `Number`, or
+  `Boolean`); read it with `this.prop('name')`, which is a signal. Frond auto-escapes the value.
+  For larger data, have the island fetch it.
+- **More data — the `api` client.** Same origin, so no `baseUrl` is needed. It sends the bearer
+  token only after `api.configure({ auth: true })`, and reads it from `localStorage`
+  (`tina4_token`). See "The `api` client and the auth token" above.
+- **Writes and CSRF.** With `TINA4_CSRF=true` the backend checks every write. A valid bearer
+  token skips the check. An anonymous island (no token) must send the form token: render it with
+  `{{ form_token_value() }}` into an attribute, and post it as `formToken`, as above.
+
+**Genuine caveats (these are technical, not policy):**
+- **One owner per piece of DOM and state.** An island owns everything inside its tag. Frond
+  owns the rest of the page. Do not let a `{% live %}` block, frond.js `inject`, or another
+  island re-render the same element, and do not keep the same state in a Frond template and an
+  island signal. If two parts of the page need the same live state, make it one island.
+- **Shadow DOM blocks page CSS.** `Tina4Element` uses Shadow DOM by default, so tina4-css and
+  your page stylesheet do not reach inside it. Set `static shadow = false` to use page styles,
+  or put the island's CSS in `static styles`.
+- **One token owner.** frond.js keeps its token in memory (`frond.token`); the `api` client
+  reads `localStorage`. They do not share it. If a page uses both, decide which one holds the
+  login token.
+- **Load order.** `tina4js.min.js` must load before the island scripts.
 
 ## Routing — IMPORTANT: {param} not :param
 
@@ -1073,8 +1153,9 @@ route('/data', async () => {
   return html`<p>${data.message}</p>`;
 });
 
-// Start the router
-router.start({ target: '#app', mode: 'hash' });  // or mode: 'history'
+// Start the router. History mode is the default (src/router/router.ts) and gives clean URLs;
+// use mode: 'hash' only on a static host that cannot rewrite unknown paths to index.html.
+router.start({ target: '#app', mode: 'history' });
 
 // Listen for route changes
 router.on('change', ({ path, params, pattern, durationMs }) => {
@@ -1121,7 +1202,8 @@ cross-tab updates, `silenceCredentialWarning` to silence false positives like `t
 warns loudly the first time it sees a credential-shaped key or value. Never put any of these
 behind `persist()`:
 
-- Auth tokens, JWTs, session IDs, API keys — use `httpOnly` + `Secure` + `SameSite` cookies.
+- Auth tokens, JWTs, session IDs, API keys. Do not wrap them in `persist()`. (The `api`
+  client's own token handling is a separate, deliberate choice; see below.)
 - Passwords, including "encrypted" or "hashed" client-side ones.
 - Personal data (names, emails, phone numbers, addresses, IDs) — POPIA/GDPR exposure.
 - Payment data (card numbers, CVV, expiry) — not PCI-DSS compliant.
@@ -1129,6 +1211,25 @@ behind `persist()`:
 - Encryption keys, OTP seeds, secrets.
 - Server-of-record state (orders, balances, ledger entries) — fetch fresh from the database.
 - Anything that must not survive a logout — clear it via `clearPersistedKeys()` on logout.
+
+### The `api` client and the auth token — what it actually does
+
+The rule above is about `persist()`. The `api` client handles the bearer token on its own, and
+you should know exactly how:
+
+- It only sends a token after `api.configure({ auth: true })`. The default is `auth: false`.
+- It reads the token from `localStorage` under `tina4_token` (change the key with `tokenKey`).
+  There is no `setToken()` method: your login code writes the token there, and the client also
+  saves a `FreshToken` response header from a trusted origin (your own origin or `baseUrl`).
+- It sends the token as `Authorization: Bearer` and, on JSON writes, also as `formToken` in the
+  body, but only to a trusted origin. It never sends the token to another origin.
+
+The trade-off: a token in `localStorage` survives a reload, but any script that runs on your
+origin (an XSS bug, a compromised third-party script) can read it. So keep XSS out (text
+binding, no untrusted `innerHTML`, a Content Security Policy), keep token lifetimes short, and
+remove the key on logout (`localStorage.removeItem('tina4_token')`). If the app cannot accept
+that risk, do not use the `api` client's token storage: keep auth in an `httpOnly` + `Secure` +
+`SameSite` session cookie set by the server, and leave `auth: false`.
 
 ### What it is for
 

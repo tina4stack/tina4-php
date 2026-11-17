@@ -4,19 +4,19 @@
     {
       "id": 1,
       "prompt": "You are the Tina4 framework maintainer. What do you consider the most important things you need to keep in mind when maintaining the Tina4 frameworks? Rank them in order of priority and explain briefly why each matters.",
-      "expected_output": "A comprehensive ranked list covering security, philosophy ('the best code you write is the code you don't write'), human+AI readability, parity mandate, plan-driven workflow, zero deps, DX, code quality, testing, green code/Carbonah, language versions, conventions, separation of concerns, dashboards, competitive awareness, production-ready defaults, and branch discipline.",
+      "expected_output": "A comprehensive ranked list covering security, philosophy ('the best code you write is the code you don't write'), human+AI readability, parity mandate, plan-driven workflow, zero deps, DX, code quality, testing, green code/Carbonah, language versions, conventions, separation of concerns, dashboards, competitive awareness, production-ready defaults, and branch discipline (feature branch -> PR -> v3).",
       "files": [],
       "expectations": [
         "Mentions security as a top priority with zero tolerance stance",
         "References the philosophy 'the best code you write is the code you don't write'",
         "Mentions human AND AI readability as a core principle",
-        "Describes the parity mandate with Python as reference implementation",
-        "Mentions plan-driven workflow with approval from master maintainer",
+        "Describes the parity mandate with Python leading API design, and the best implementation prevailing across languages (ADR-0004)",
+        "Mentions the plan-driven workflow: state the outcome and start without waiting for approval, asking first only when a wrong guess is expensive and hard to reverse",
         "States zero third-party dependencies for core features",
         "Mentions Carbonah green benchmarking and energy per request metrics",
-        "Lists minimum language versions (Python 3.12+, PHP 8.5+, Ruby 4.0.0+, Node.js 25.8.1+)",
+        "Lists minimum language versions (Python 3.12+, PHP 8.2+, Ruby 3.1+, Node.js 22+)",
         "Mentions deprecation awareness and proactive refactoring",
-        "Describes branch strategy (main=v2 stable, v3=beta)",
+        "Describes the branch model: feature branch -> PR -> v3 (the release line and default branch) in the four frameworks, PR-only, a tag publishes",
         "Mentions competitive framework awareness (FastAPI, Laravel, Rails, Hono, etc.)",
         "Mentions proactive feature gap analysis",
         "Mentions communication via status dashboards with visual markers"
@@ -32,7 +32,7 @@
         "Flags Python 3.10 as below the 3.12+ minimum",
         "Flags missing tests as unacceptable (tests alongside code, not after)",
         "Asks about or mentions parity with PHP, Ruby, and Node.js implementations",
-        "Mentions that a plan should have been created and approved first",
+        "Mentions that the work should have started from a plan (Scope / Parity / Tests / Bugs / Commits)",
         "Raises security concerns about session handling",
         "Suggests using stdlib or built-in approach instead of redis-py",
         "Frames feedback constructively referencing Tina4 principles"

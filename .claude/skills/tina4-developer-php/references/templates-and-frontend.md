@@ -22,46 +22,36 @@ directly: `$html = (new \Tina4\Frond())->render("emails/welcome.twig", $data);`
 
 ### Globals (values available in every template)
 
-Register a value every template can read with `addGlobal`:
+Register a global on the engine that `$response->render()` uses, at boot (e.g. in `index.php`):
 
 ```php
-$engine = new \Tina4\Frond();
-$engine->addGlobal("app_name", "My App");
+\Tina4\Response::getFrond()->addGlobal("app_name", "My App");   // the shared render engine
 ```
 
 ```twig
 <title>{{ app_name }}</title>
 ```
 
-**`addGlobal` takes a VALUE, not a lazy callable.** Whatever you pass is stored
-as-is and merged into the render context unchanged — Frond never calls it for you
-when you name it bare. A `Closure` is therefore stored uncalled, and in a
-condition it is a plain object, which is truthy. So this section shows to
-everyone:
+Do not register on a throwaway `new \Tina4\Frond()` — that instance is discarded and no page ever
+sees the global. The static form `\Tina4\Frond::addGlobal(...)` goes into a class registry that is
+copied into each engine **when the engine is constructed** (ADR-0052), so it reaches the shared
+engine only if it runs before that engine is first built; `Response::getFrond()->addGlobal(...)`
+works at any time.
+
+**A zero-argument closure global is called for you (ADR-0085).** Naming it bare in an expression
+invokes it once and uses its return value, so this works as written:
 
 ```php
-$frond->addGlobal("admin_only", fn() => Access::adminOnly());   // WRONG for {% if %}
+\Tina4\Response::getFrond()->addGlobal("admin_only", fn() => Access::adminOnly());
 ```
 
 ```twig
-{% if admin_only %} ...admin link... {% endif %}   {# always true — admin_only is a Closure #}
+{% if admin_only %} ...admin link... {% endif %}   {# calls admin_only() — false hides it #}
 ```
 
-Verified on tina4php 3.13.x with `addGlobal("g", fn() => false)`: `{% if g %}` is
-**true**, `{% if g|default(false) %}` is **true**, and only `{% if g() %}` calls
-it (false). Fixes:
-
-- **Resolve it before you pass it:** `$frond->addGlobal("admin_only", Access::adminOnly());` — a real bool.
-- **Or call it in the template:** `{% if admin_only() %}`.
-- **Accept either a closure global or a plain bool from the render context:**
-  `{% if (admin_only is boolean and admin_only) or admin_only() %}`. A name that
-  is not registered, called as `nope()`, renders as false (it does not throw on
-  3.13.x), so this form is safe when the global is missing.
-
-**Tests must register the global the way the app does.** A plain bool passed in
-the render context (`render($tpl, ["admin_only" => false])`) makes
-`{% if admin_only %}` behave correctly, so a test that passes a bool hides the
-closure bug that production hits through `addGlobal`.
+Verified on tina4php v3: `addGlobal("g", fn() => false)` makes `{% if g %}` false; `{% if g() %}`
+still calls it explicitly. A closure that declares parameters is NOT auto-called — call it with its
+arguments (`{{ greet(name) }}`). Objects and plain values are used as-is.
 
 ### Basic Syntax
 ```twig
@@ -135,9 +125,10 @@ All filter names use **snake_case**. Need a custom filter? Register one at app s
 The framework validates the token automatically on POST/PUT/DELETE. Need the raw token string for a
 meta tag or a manual fetch? Use `{{ formTokenValue() }}` / `{{ form_token_value() }}`.
 
-### Inline SQL Queries (Frond-unique)
+### Data comes from the route (there is no `{% query %}` tag)
+Frond has no SQL tag — an unknown tag such as `{% query %}` throws `Frond: unknown tag "query"`.
 ```twig
-{# Frond has no `{% query %}` tag. Fetch in the route and pass the rows to the template. #}
+{# Fetch in the route and pass the rows to the template. #}
 {# Route: `$products = \Tina4\Database\Database::fromEnv()->fetch("SELECT * FROM products WHERE active = ?", [true]);` #}
 {% for product in products %}
     <div>{{ product.name }} — ${{ product.price | number_format(2) }}</div>
@@ -243,9 +234,9 @@ frond.graphql("/graphql", "{ users { id name } }", {}, (res) => console.log(res.
 ### WebSocket / SSE (auto-reconnect)
 ```javascript
 const ws = frond.ws("/ws/chat", {
-    onOpen:    () => console.log("connected"),
-    onMessage: (data) => console.log(data),
+    onOpen: () => console.log("connected"),   // options: onOpen/onClose/onError, reconnect settings
 });
+ws.on("message", (data) => console.log(data));  // messages arrive via .on("message"), not an option
 ws.send({ type: "message", text: "Hello" });
 
 const stream = frond.sse("/events");

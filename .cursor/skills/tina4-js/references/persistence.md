@@ -108,7 +108,7 @@ browser extension reads every key.
 
 | Do not store | Where it belongs |
 |---|---|
-| Auth tokens, JWTs, session IDs, API keys | `httpOnly` + `Secure` + `SameSite` cookies |
+| Auth tokens, JWTs, session IDs, API keys | Not in `persist()`. Either the `api` client's own token handling (below) or an `httpOnly` + `Secure` + `SameSite` cookie |
 | Passwords (including "client-side encrypted") | Server only, bcrypt/argon2 |
 | Personal data: names, emails, phones, ID numbers | Server, fetched on demand, in memory only |
 | Payment data | Tokenised by the payment processor |
@@ -116,6 +116,13 @@ browser extension reads every key.
 | Encryption keys, OTP seeds | Never client-side |
 | Authoritative server state (orders, balances) | The database — fetch fresh |
 | State that must not outlive a logout | Wipe with `clearPersistedKeys()` on logout |
+
+**The `api` client is a separate case.** With `api.configure({ auth: true })` it reads the
+bearer token from `localStorage` under `tina4_token` and saves a `FreshToken` header there. That
+is a deliberate trade-off: the login survives a reload, but an XSS bug can read the token. Keep
+XSS out, keep token lifetimes short, and remove `tina4_token` on logout. If the app cannot accept
+that, use a server-set `httpOnly` cookie and leave `auth: false`. Never copy the token into a
+`persist()` signal as well.
 
 If your code looks like it is using `persist()` for any row above, it is
 wrong. The credential-shape warning catches the obvious cases but is not a
@@ -214,7 +221,8 @@ how to survive a refresh.
 2. **Persisting an `isAdmin` flag.** The user can rewrite the localStorage
    value in devtools. Any code that trusts a persisted permission is broken.
 3. **Persisting a JWT.** The framework will warn. Listen to the warning.
-   The fix is `httpOnly` cookies, not `silenceCredentialWarning: true`.
+   The fix is to drop the `persist()` wrapper (the `api` client already holds the token, or use
+   an `httpOnly` cookie), not `silenceCredentialWarning: true`.
 4. **Forgetting `clearPersistedKeys()` on logout.** Drafts and filters leak
    to the next user on the device.
 5. **Assuming `syncTabs: true` always reflects.** The `storage` event fires

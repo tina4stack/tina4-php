@@ -54,7 +54,9 @@ pwsh ./scripts/sign-installers.ps1
 - [ ] `git add install-skills.ps1` (binary attribute keeps the exact signed bytes), commit.
 - [ ] Sync the tina4.com shim: `tina4-documentation/docs/public/install-skills.ps1` must be the SAME
       signed bytes (it is the served copy). Bump its pinned ref too.
-- [ ] (Re)create the skills tag `3.13.NNN` on the `tina4` repo at the SIGNED commit.
+- [ ] Create the skills tag `3.13.NNN` on the `tina4` repo ONCE, at the SIGNED commit. Never move
+      or delete an existing tag (ADR-0073; the `tina4-release-tags` ruleset blocks it): if the tagged
+      commit is wrong, fix forward and tag the next version.
 
 Full release flow: `tina4/scripts/RELEASING.md` and the `tina4` repo `tina4/CLAUDE.md` section
 "Releasing the skills installer". See also [[release]].
