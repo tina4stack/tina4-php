@@ -168,6 +168,9 @@ class DatabaseSessionHandler
     /** @var DatabaseAdapter|null Resolved on FIRST USE, never in the constructor. */
     private ?DatabaseAdapter $db = null;
 
+    /** True when db() built the connection itself (from the env), so close() may release it. */
+    private bool $ownsDb = false;
+
     /** @var mixed The caller's config['db'], held unresolved until first use. */
     private mixed $configuredDb;
 
@@ -229,6 +232,7 @@ class DatabaseSessionHandler
             );
         }
 
+        $this->ownsDb = true;
         return $this->db = $database->getAdapter();
     }
 
@@ -354,11 +358,26 @@ class DatabaseSessionHandler
     }
 
     /**
-     * Close the handler (no-op for database — connection managed externally).
+     * Release the connection this handler opened itself from TINA4_DATABASE_URL.
+     *
+     * An injected adapter (config['db']) belongs to the caller and is never
+     * closed here. Idempotent; the next read or write reopens the connection.
+     * Until this ran, a SQLite session file stayed open for the life of the
+     * process, and on Windows an open file cannot be deleted or replaced.
+     *
+     * @return void
      */
     public function close(): void
     {
-        // Nothing to do — the DatabaseAdapter manages its own connection lifecycle.
+        if (!$this->ownsDb || $this->db === null) {
+            return;
+        }
+        try {
+            $this->db->close();
+        } finally {
+            $this->db = null;
+            $this->ownsDb = false;
+        }
     }
 
     /**
