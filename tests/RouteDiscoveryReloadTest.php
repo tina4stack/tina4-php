@@ -49,6 +49,22 @@ class RouteDiscoveryReloadTest extends TestCase
         $this->removeDir($this->tempDir);
     }
 
+    /**
+     * An absolute Windows path starts with a drive letter. A ':' in an NTFS file
+     * name writes an alternate data stream instead of a file, so the marker
+     * vanished from every data/.broken/*.broken listing. Linux allows the ':',
+     * so the name itself is the check there; on Windows the glob is.
+     */
+    public function testBrokenImportMarkerNameDropsTheDriveColon(): void
+    {
+        RouteDiscovery::recordBrokenImport('C:\\app\\src\\routes\\broken.php', new \ParseError('boom'));
+
+        $markers = glob($this->tempDir . '/data/.broken/discover_*.broken') ?: [];
+        $this->assertCount(1, $markers, 'one marker, found by a *.broken listing');
+        $this->assertStringNotContainsString(':', basename($markers[0]));
+        $this->assertStringContainsString('broken.php', (string) file_get_contents($markers[0]));
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

@@ -253,7 +253,10 @@ class RouteDiscovery
             if (!is_dir($brokenDir)) {
                 @mkdir($brokenDir, 0755, true);
             }
-            $slug = str_replace(['/', '\\'], '_', $file);
+            // ':' too: an absolute Windows path starts with a drive letter, and on
+            // NTFS a colon in a file name writes an alternate data stream instead
+            // of a file, so no data/.broken/*.broken listing would see the marker.
+            $slug = str_replace(['/', '\\', ':'], '_', $file);
             $payload = json_encode([
                 'type' => 'auto_discover_failure',
                 'file' => $file,
