@@ -305,6 +305,12 @@ class Server
      */
     private bool $shutdownAlarmArmable = false;
 
+    /** True once start() has installed the Windows ctrl handler and its drain-fuse shutdown function. */
+    private bool $windowsDrainFuseArmable = false;
+
+    /** True once stop() has armed the Windows drain fuse (set_time_limit). */
+    private bool $windowsDrainFuseLit = false;
+
     /** @var int Seconds of client silence tolerated; 0 disables the reaper. */
     private int $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT;
 
@@ -563,6 +569,8 @@ class Server
                     }
                 });
             }
+        } elseif (PHP_SAPI === 'cli' && function_exists('sapi_windows_set_ctrl_handler')) {
+            $this->armWindowsCtrlHandler();
         }
 
         $this->forkPerRequest = $this->resolveForkPerRequest();
@@ -908,7 +916,8 @@ class Server
      * being served runs to completion and writes its whole response.
      *
      * The drain that follows is bounded by TINA4_SHUTDOWN_TIMEOUT seconds via
-     * SIGALRM — see forceShutdown().
+     * SIGALRM — see forceShutdown() — or, on Windows, via the wall-clock
+     * execution-time limit — see armWindowsCtrlHandler().
      *
      * Idempotent: a second signal while a shutdown is already under way is a
      * no-op, so an impatient `kill` cannot re-arm the alarm or double-close.
@@ -954,7 +963,82 @@ class Server
         // shutdownTimeout seconds later.
         if ($this->shutdownAlarmArmable && function_exists('pcntl_alarm') && defined('SIGALRM')) {
             pcntl_alarm($this->shutdownTimeout);
+        } elseif ($this->windowsDrainFuseArmable) {
+            // Windows has no SIGALRM. Its execution-time limit is measured in
+            // WALL-CLOCK time (on POSIX it counts CPU time only), so it serves as
+            // the drain bound: it fires as a "Maximum execution time" fatal at
+            // the next VM instruction, and the shutdown function that
+            // armWindowsCtrlHandler() registered turns that into the same
+            // cleanup and exit 0 forceShutdown() gives POSIX.
+            $this->windowsDrainFuseLit = true;
+            set_time_limit($this->shutdownTimeout);
         }
+    }
+
+    /**
+     * Trap Ctrl+C and Ctrl+Break on Windows and run the graceful shutdown.
+     *
+     * ext-pcntl does not exist on Windows, so without this the built-in server
+     * had no graceful shutdown there at all: Ctrl+C, Ctrl+Break and the
+     * CTRL_BREAK_EVENT a console or service manager sends a process group all
+     * killed it mid-request (exit 0xC000013A), with no drain and no clean exit.
+     *
+     * PHP runs the handler at the next VM instruction boundary in the main
+     * thread, the same delivery pcntl_async_signals(true) gives POSIX, so the
+     * listeners close while a request handler is still running and that
+     * handler still runs to completion.
+     *
+     * The drain is bounded by TINA4_SHUTDOWN_TIMEOUT through set_time_limit()
+     * (see stop()). Three limits remain that POSIX does not have. The fuse fires
+     * only at a VM instruction, so a handler blocked inside one long C call (a
+     * single sleep(), a slow query) overruns the bound until that call returns.
+     * The application's own shutdown functions run before cleanup() on that
+     * path, because PHP calls shutdown functions in registration order. And
+     * PHP's Windows socket close waits up to 500ms for a socket to become
+     * writable before closing it, which a listening socket never does, so each
+     * listener takes 500ms to close: a connection arriving in that window is
+     * accepted and then reset instead of refused.
+     */
+    private function armWindowsCtrlHandler(): void
+    {
+        try {
+            $installed = sapi_windows_set_ctrl_handler(function (int $event): void {
+                $this->stop($event === PHP_WINDOWS_EVENT_CTRL_BREAK ? 'SIGBREAK' : 'SIGINT');
+            });
+        } catch (\Throwable $e) {
+            $installed = false;
+        }
+
+        if (!$installed) {
+            return;
+        }
+
+        $this->windowsDrainFuseArmable = true;
+        register_shutdown_function(function (): void {
+            if (!$this->windowsDrainFuseLit || $this->cleanedUp) {
+                return;
+            }
+            $error = error_get_last();
+            if ($error === null || !str_starts_with($error['message'], 'Maximum execution time')) {
+                return;
+            }
+            // The drain ran out of time. Tear down, then exit 0 from a shutdown
+            // function registered NOW, so it runs after every other one instead
+            // of cutting the queue short.
+            try {
+                Log::warning(sprintf(
+                    'Graceful shutdown exceeded TINA4_SHUTDOWN_TIMEOUT=%ds — force-closing %d connection(s) still open',
+                    $this->shutdownTimeout,
+                    count($this->clients)
+                ));
+                $this->cleanup();
+            } catch (\Throwable $e) {
+                self::console('Force-shutdown teardown failed (exiting cleanly): ' . $e->getMessage() . "\n");
+            }
+            register_shutdown_function(static function (): void {
+                exit(0);
+            });
+        });
     }
 
     /**
@@ -3055,6 +3139,8 @@ class Server
         // SIGALRM fuse is disarmed even on a re-entrant call.
         if (function_exists('pcntl_alarm')) {
             pcntl_alarm(0);
+        } elseif ($this->windowsDrainFuseLit) {
+            set_time_limit(0);
         }
 
         // Run the teardown body exactly once. pcntl_async_signals(true) lets the

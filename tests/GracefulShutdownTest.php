@@ -45,6 +45,13 @@
  * inherited descriptor makes a `phpunit | tee` pipeline hang forever even after
  * phpunit has printed its summary (see TestServer's docblock for the full
  * post-mortem).
+ *
+ * WINDOWS. There is no ext-pcntl and no SIGTERM, so the server traps Ctrl+C and
+ * Ctrl+Break through sapi_windows_set_ctrl_handler(). The graceful cases (named
+ * SIGTERM, identically to the other three suites) run there too: the fixture is
+ * started in its own console process group and sent CTRL_BREAK_EVENT, which is
+ * what a console or a service manager sends. Cases that cannot exist on Windows
+ * (SIGINT to one child, SIGHUP) skip there with a reason naming why.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -60,6 +67,31 @@ class GracefulShutdownTest extends TestCase
 
     /** Upper bound on a graceful shutdown for the exit-status cases. */
     private const EXIT_WAIT_SECONDS = 15.0;
+
+    /**
+     * How long /slow blocks in the stop-accepting case. Windows answers a connect
+     * to a CLOSED loopback port only after about 2s of SYN retries, so the drain
+     * must outlast that or "refused" would arrive after the process had exited.
+     */
+    private const VERY_SLOW_SECONDS = 5.0;
+
+    /**
+     * How long Windows takes to close the listeners, in microseconds. PHP's
+     * Windows socket close waits up to 500ms for the socket to become writable
+     * before closesocket(), and a listening socket never does, so each listener
+     * (127.0.0.1 plus the [::1] sibling) costs 500ms: measured 0.51s per fclose().
+     * Still far inside the 5s drain, so close-first and close-last stay distinct.
+     */
+    private const WINDOWS_LISTENER_CLOSE_MICROS = 1_300_000;
+
+    /** Connect timeout for the refusal probe: past Windows' ~2s refusal of a closed port. */
+    private const PROBE_CONNECT_SECONDS = 3.0;
+
+    /** Windows exit status of a process killed by an unhandled Ctrl+C / Ctrl+Break. */
+    private const STATUS_CONTROL_C_EXIT = -1073741510;
+
+    private const SKIP_NO_POSIX_SIGINT = '[needs:os=posix] Windows cannot send SIGINT (Ctrl+C) to a single '
+        . 'child: a new console process group has Ctrl+C disabled, and group 0 would interrupt PHPUnit too';
 
     /** @var resource|null */
     private $process = null;
@@ -80,7 +112,11 @@ class GracefulShutdownTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!function_exists('posix_kill') || !function_exists('pcntl_signal')) {
+        if (self::isWindows()) {
+            if (!function_exists('sapi_windows_generate_ctrl_event')) {
+                self::markTestSkipped('[needs:os=windows-cli] sapi_windows_generate_ctrl_event() is required to signal a real server');
+            }
+        } elseif (!function_exists('posix_kill') || !function_exists('pcntl_signal')) {
             self::markTestSkipped('ext-posix and ext-pcntl are required to signal a real server');
         }
         $unique = bin2hex(random_bytes(6));
@@ -103,37 +139,51 @@ class GracefulShutdownTest extends TestCase
     /** SIGTERM lets the in-flight request finish */
     public function testSigtermLetsTheInFlightRequestFinish(): void
     {
-        $this->assertInFlightRequestSurvives(SIGTERM);
+        $this->assertInFlightRequestSurvives();
     }
 
     /** SIGTERM stops accepting new connections */
     public function testSigtermStopsAcceptingNewConnections(): void
     {
-        $this->startServer();
+        $this->startServer(slowSeconds: self::VERY_SLOW_SECONDS);
         $inFlight = $this->beginSlowRequest();
         usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
 
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         // Give the handler a beat to run, then knock on the door. The in-flight
         // request is still being served at this point, which is exactly the
         // window in which a listener left open accepts into the kernel backlog
         // and then resets the client.
-        usleep(150000);
+        usleep(self::isWindows() ? self::WINDOWS_LISTENER_CLOSE_MICROS : 150000);
         $verdict = $this->probeNewConnection();
+        $stateAtVerdict = $this->readState();
+        $aliveAtVerdict = (bool)proc_get_status($this->process)['running'];
 
         $this->readResponse($inFlight);
+
+        $this->assertTrue(
+            $aliveAtVerdict,
+            'the server must still be running (draining) when the refusal arrives; '
+            . 'a refusal from a process that already died proves nothing about closing the listener first'
+        );
 
         $this->assertStringStartsWith(
             'refused',
             $verdict,
             "a connection arriving after the signal must get a clean CONNECTION REFUSED; got: {$verdict}"
         );
+        $this->assertStringNotContainsString(
+            'slow-finished',
+            $stateAtVerdict,
+            'the refusal must arrive WHILE the in-flight request is still draining; '
+            . 'a refusal after the handler finished proves only that the process exited'
+        );
     }
 
     /** SIGTERM exits with code 0 */
     public function testSigtermExitsWithCodeZero(): void
     {
-        $this->assertSignalExitsCleanly(SIGTERM);
+        $this->assertSignalExitsCleanly();
     }
 
     /** SIGTERM releases the listening port */
@@ -143,9 +193,14 @@ class GracefulShutdownTest extends TestCase
         $port = $this->serverPort;
         $inFlight = $this->beginSlowRequest();
         usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
-        $this->signalServer(SIGTERM);
-        $this->readResponse($inFlight);
-        $this->awaitExit();
+        $this->sendGracefulShutdown();
+        $response = $this->readResponse($inFlight);
+        $status = $this->awaitExit();
+
+        // The port must be released by the GRACEFUL path: a process killed by
+        // the signal frees its port too, so on its own a rebind proves nothing.
+        $this->assertStringContainsString('slow-done', $response, 'the drain must complete before the port is released');
+        $this->assertSame(0, $status['exitcode'], 'the port must be released by a clean exit; log: ' . $this->readLog());
 
         $rebound = @stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr);
         $this->assertIsResource(
@@ -158,12 +213,18 @@ class GracefulShutdownTest extends TestCase
     /** SIGINT lets the in-flight request finish */
     public function testSigintLetsTheInFlightRequestFinish(): void
     {
+        if (self::isWindows()) {
+            self::markTestSkipped(self::SKIP_NO_POSIX_SIGINT);
+        }
         $this->assertInFlightRequestSurvives(SIGINT);
     }
 
     /** SIGINT exits with code 0 */
     public function testSigintExitsWithCodeZero(): void
     {
+        if (self::isWindows()) {
+            self::markTestSkipped(self::SKIP_NO_POSIX_SIGINT);
+        }
         $this->assertSignalExitsCleanly(SIGINT);
     }
 
@@ -175,6 +236,9 @@ class GracefulShutdownTest extends TestCase
      */
     public function testSighupIsNotTrappedAndTerminatesTheProcess(): void
     {
+        if (self::isWindows()) {
+            self::markTestSkipped('[needs:os=posix] Windows has no SIGHUP');
+        }
         $this->startServer();
         $this->signalServer(SIGHUP);
         $status = $this->awaitExit();
@@ -215,7 +279,7 @@ class GracefulShutdownTest extends TestCase
         $this->assertTrue($ticked, 'the real server must report exactly one registered tick callback: ' . $this->readState());
 
         $started = microtime(true);
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $status = $this->awaitExit();
         $elapsed = microtime(true) - $started;
 
@@ -241,7 +305,7 @@ class GracefulShutdownTest extends TestCase
         usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
 
         $started = microtime(true);
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $status = $this->awaitExit();
         $elapsed = microtime(true) - $started;
         @fclose($inFlight);
@@ -268,7 +332,7 @@ class GracefulShutdownTest extends TestCase
         $this->startServer();
         $webSocket = $this->openWebSocket();
 
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $frame = $this->readUntilClose($webSocket, 8.0);
         @fclose($webSocket);
         $this->awaitExit();
@@ -302,7 +366,7 @@ class GracefulShutdownTest extends TestCase
         $this->startServer(env: ['TINA4_SHUTDOWN_TIMEOUT' => '-5']);
         $inFlight = $this->beginSlowRequest();
         usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $response = $this->readResponse($inFlight);
         $status = $this->awaitExit();
         $log = $this->readLog();
@@ -369,7 +433,7 @@ class GracefulShutdownTest extends TestCase
                 'TINA4_LOG_DIR'          => $logDir,
                 'TINA4_SHUTDOWN_TIMEOUT' => '-5',
             ]);
-            $this->signalServer(SIGTERM);
+            $this->sendGracefulShutdown();
             $status = $this->awaitExit();
 
             $this->assertFalse(
@@ -409,7 +473,7 @@ class GracefulShutdownTest extends TestCase
             'the fixture must really open a database before this proves anything'
         );
 
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $status = $this->awaitExit();
         $state = $this->readState();
 
@@ -452,21 +516,33 @@ class GracefulShutdownTest extends TestCase
         $this->startEmbeddedApp();
 
         $started = microtime(true);
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $status = $this->awaitExit(8.0, 'an embedded App with no event loop');
         $elapsed = microtime(true) - $started;
 
-        $this->assertTrue(
-            (bool)$status['signaled'],
-            'an App with no event loop must still die on SIGTERM — it exited with code '
-            . var_export($status['exitcode'], true)
-            . ', which means a handler swallowed the signal and the process ran on'
-        );
-        $this->assertSame(
-            SIGTERM,
-            $status['termsig'],
-            'the process must be terminated by SIGTERM itself'
-        );
+        if (self::isWindows()) {
+            // Windows reports no signal; a process killed by an unhandled
+            // CTRL_BREAK_EVENT exits with STATUS_CONTROL_C_EXIT instead.
+            $this->assertSame(
+                self::STATUS_CONTROL_C_EXIT,
+                $status['exitcode'],
+                'an App with no event loop must still die on CTRL_BREAK_EVENT — it exited with code '
+                . var_export($status['exitcode'], true)
+                . ', which means a ctrl handler swallowed the event and the process ran on'
+            );
+        } else {
+            $this->assertTrue(
+                (bool)$status['signaled'],
+                'an App with no event loop must still die on SIGTERM — it exited with code '
+                . var_export($status['exitcode'], true)
+                . ', which means a handler swallowed the signal and the process ran on'
+            );
+            $this->assertSame(
+                SIGTERM,
+                $status['termsig'],
+                'the process must be terminated by SIGTERM itself'
+            );
+        }
         $this->assertStringNotContainsString(
             'SURVIVED-SIGTERM',
             $this->readState(),
@@ -506,7 +582,7 @@ class GracefulShutdownTest extends TestCase
 
         $this->assertStringContainsString('pong', $answer, 'the built-in server must serve exactly as before');
 
-        $this->signalServer(SIGTERM);
+        $this->sendGracefulShutdown();
         $status = $this->awaitExit();
 
         $this->assertSame(0, $status['exitcode'], 'shutdown is unaffected too');
@@ -519,15 +595,19 @@ class GracefulShutdownTest extends TestCase
 
     // ── shared assertions ──────────────────────────────────────────────────
 
-    /** A request already being served must run to completion and write its whole response. */
-    private function assertInFlightRequestSurvives(int $signal): void
+    /**
+     * A request already being served must run to completion and write its whole response.
+     *
+     * @param int|null $signal A POSIX signal, or null for the platform's graceful shutdown.
+     */
+    private function assertInFlightRequestSurvives(?int $signal = null): void
     {
         $this->startServer();
         $inFlight = $this->beginSlowRequest();
         usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
 
         $started = microtime(true);
-        $this->signalServer($signal);
+        $this->deliver($signal);
         $response = $this->readResponse($inFlight);
         $elapsed = microtime(true) - $started;
 
@@ -554,13 +634,17 @@ class GracefulShutdownTest extends TestCase
         );
     }
 
-    /** A handled signal drains and exits 0 — never 128+signum. */
-    private function assertSignalExitsCleanly(int $signal): void
+    /**
+     * A handled signal drains and exits 0 — never 128+signum.
+     *
+     * @param int|null $signal A POSIX signal, or null for the platform's graceful shutdown.
+     */
+    private function assertSignalExitsCleanly(?int $signal = null): void
     {
         $this->startServer();
         $inFlight = $this->beginSlowRequest();
         usleep((int)(self::SIGNAL_DELAY_SECONDS * 1_000_000));
-        $this->signalServer($signal);
+        $this->deliver($signal);
         $this->readResponse($inFlight);
         $status = $this->awaitExit();
 
@@ -647,7 +731,18 @@ class GracefulShutdownTest extends TestCase
      */
     private function spawnFixture(string $fixture, array $args, array $env = []): void
     {
-        $environment = $env + [
+        $platform = [];
+        if (self::isWindows()) {
+            // A hand-built environment inherits nothing, and on Windows Winsock
+            // cannot even create a socket without SystemRoot (WSAEPROVIDERFAILEDINIT).
+            foreach (['SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA'] as $name) {
+                $value = getenv($name);
+                if ($value !== false) {
+                    $platform[$name] = $value;
+                }
+            }
+        }
+        $environment = $env + $platform + [
             'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
             'HOME' => getenv('HOME') ?: sys_get_temp_dir(),
             'TINA4_NO_BROWSER' => 'true', // a hand-built env inherits nothing: never open a browser
@@ -662,16 +757,23 @@ class GracefulShutdownTest extends TestCase
 
         // fd 1 and 2 -> a real FILE. Never a pipe nobody reads (the child would
         // block once the 64KB buffer filled) and never the runner's own fds.
+        //
+        // Windows: fd 2 shares fd 1's handle, because two separately opened
+        // handles to one file each keep their own offset there and overwrite
+        // each other's lines. The child leads its own console process group so
+        // CTRL_BREAK_EVENT reaches it and not PHPUnit.
+        $windows = self::isWindows();
         $this->process = proc_open(
             array_merge([PHP_BINARY, __DIR__ . '/fixtures/' . $fixture], $args),
             [
-                0 => ['file', '/dev/null', 'r'],
+                0 => ['file', $windows ? 'NUL' : '/dev/null', 'r'],
                 1 => ['file', $this->logFile, 'a'],
-                2 => ['file', $this->logFile, 'a'],
+                2 => $windows ? ['redirect', 1] : ['file', $this->logFile, 'a'],
             ],
             $pipes,
             dirname(__DIR__),
-            $environment
+            $environment,
+            $windows ? ['create_process_group' => true] : null
         );
         $this->assertIsResource($this->process, "the {$fixture} process must start");
 
@@ -762,7 +864,12 @@ class GracefulShutdownTest extends TestCase
      */
     private function probeNewConnection(): string
     {
-        $socket = @stream_socket_client("tcp://127.0.0.1:{$this->serverPort}", $errno, $errstr, 1.0);
+        $socket = @stream_socket_client(
+            "tcp://127.0.0.1:{$this->serverPort}",
+            $errno,
+            $errstr,
+            self::PROBE_CONNECT_SECONDS
+        );
         if ($socket === false) {
             return "refused: {$errstr} ({$errno})";
         }
@@ -803,6 +910,44 @@ class GracefulShutdownTest extends TestCase
         }
 
         return $buffer;
+    }
+
+    /**
+     * Ask the REAL server process to shut down gracefully, the way its platform does.
+     *
+     * POSIX: SIGTERM. Windows: CTRL_BREAK_EVENT to the child's console process
+     * group, which is what a console's Ctrl+Break and a service manager send.
+     */
+    private function sendGracefulShutdown(): void
+    {
+        if (!self::isWindows()) {
+            $this->signalServer(SIGTERM);
+            return;
+        }
+        $this->assertTrue(
+            sapi_windows_generate_ctrl_event(PHP_WINDOWS_EVENT_CTRL_BREAK, $this->serverPid),
+            "could not send CTRL_BREAK_EVENT to the server process group {$this->serverPid}"
+        );
+    }
+
+    /**
+     * Deliver a POSIX signal, or the platform's graceful shutdown when null.
+     *
+     * @param int|null $signal A POSIX signal number, or null.
+     */
+    private function deliver(?int $signal): void
+    {
+        if ($signal === null) {
+            $this->sendGracefulShutdown();
+            return;
+        }
+        $this->signalServer($signal);
+    }
+
+    /** True on Windows, where there is no pcntl/posix and shutdown arrives as a console ctrl event. */
+    private static function isWindows(): bool
+    {
+        return PHP_OS_FAMILY === 'Windows';
     }
 
     /** Send a REAL signal to the REAL server process. */
@@ -856,6 +1001,29 @@ class GracefulShutdownTest extends TestCase
      */
     private function reapServer(): void
     {
+        if (self::isWindows()) {
+            // No posix_kill: TerminateProcess the exact php process (array form,
+            // no shell in between), then prove the PORT is free.
+            if (is_resource($this->process)) {
+                if (proc_get_status($this->process)['running']) {
+                    proc_terminate($this->process);
+                }
+                @proc_close($this->process);
+            }
+            $this->process = null;
+            $this->finalStatus = null;
+            for ($attempt = 0; $attempt < 40 && $this->serverPort > 0; $attempt++) {
+                if (!self::isListening($this->serverPort)) {
+                    break;
+                }
+                usleep(50000);
+            }
+            $this->serverPort = 0;
+            $this->serverPid = 0;
+
+            return;
+        }
+
         if (is_resource($this->process)) {
             if ($this->serverPid > 0) {
                 @posix_kill($this->serverPid, SIGTERM);
