@@ -94,6 +94,8 @@ class SeedDirFailLoudTest extends TestCase
         file_put_contents($second, $this->record('002_second'));
         file_put_contents($first, $this->record('001_first'));
         file_put_contents($this->seeds() . '/_helper.php', '<?php throw new \RuntimeException("a helper must never run");');
+        // Not a .php seed file: a runner that requires every file would run it.
+        file_put_contents($this->seeds() . '/README.txt', '<?php throw new \RuntimeException("a README must never run");');
 
         $executed = (new FakeData())->seedDir($this->seeds());
 
