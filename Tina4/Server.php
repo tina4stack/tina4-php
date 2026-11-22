@@ -1025,16 +1025,7 @@ class Server
             // The drain ran out of time. Tear down, then exit 0 from a shutdown
             // function registered NOW, so it runs after every other one instead
             // of cutting the queue short.
-            try {
-                Log::warning(sprintf(
-                    'Graceful shutdown exceeded TINA4_SHUTDOWN_TIMEOUT=%ds — force-closing %d connection(s) still open',
-                    $this->shutdownTimeout,
-                    count($this->clients)
-                ));
-                $this->cleanup();
-            } catch (\Throwable $e) {
-                self::console('Force-shutdown teardown failed (exiting cleanly): ' . $e->getMessage() . "\n");
-            }
+            $this->forceTeardown();
             register_shutdown_function(static function (): void {
                 exit(0);
             });
@@ -1079,6 +1070,18 @@ class Server
      */
     private function forceShutdown(): void
     {
+        $this->forceTeardown();
+        exit(0);
+    }
+
+    /**
+     * Log the drain overrun and tear everything down, never throwing.
+     *
+     * Shared by the POSIX SIGALRM fuse (forceShutdown) and the Windows
+     * execution-time fuse (armWindowsCtrlHandler); each exits 0 afterwards.
+     */
+    private function forceTeardown(): void
+    {
         // Runs from the async SIGALRM handler. A throw here would escape at an
         // arbitrary VM point and fatal the process (exit 255) on a handled signal;
         // the contract is exit 0. Degrade on any teardown error and still exit 0.
@@ -1095,7 +1098,6 @@ class Server
         } catch (\Throwable $e) {
             self::console('Force-shutdown teardown failed (exiting cleanly): ' . $e->getMessage() . "\n");
         }
-        exit(0);
     }
 
     /**
