@@ -899,7 +899,7 @@ FakeData::seedOrm(string $modelClass, int $count = 10, array $overrides = [], bo
 // Batch-seed FK-related models — topo-sorts by $foreignKeys so parents seed
 // before children (clears in reverse), and points child FKs at real parent PKs.
 FakeData::seedModels(array $modelClasses, int $count = 10, array $overrides = [], bool $clear = false, ?int $seed = null, bool $strict = false): array  // [ClassName => SeedSummary]
-$fake->seedDir(string $seedDir = 'src/seeds'): array
+$fake->seedDir(string $seedDir = 'src/seeds'): array  // executed paths in order; the first seed file that throws stops the run and throws Tina4SeedError (->seedFile, ->completed); `tina4php seed` then exits 1 (ADR-0108)
 $fake->run(callable $seeder, int $count = 10): array
 ```
 
