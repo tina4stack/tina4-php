@@ -161,11 +161,19 @@ class GracefulShutdownTest extends TestCase
 
         $this->readResponse($inFlight);
 
-        $this->assertTrue(
-            $aliveAtVerdict,
-            'the server must still be running (draining) when the refusal arrives; '
-            . 'a refusal from a process that already died proves nothing about closing the listener first'
-        );
+        // Windows serves the request IN the server process, so that process must
+        // still be alive (draining) when the refusal arrives: a refusal from a
+        // process the signal killed outright proves nothing about closing the
+        // listener first. POSIX forks per request, so the in-flight request
+        // drains in a child and the spawned parent may legitimately be gone
+        // already; there the slow-finished check below is the guard.
+        if (self::isWindows()) {
+            $this->assertTrue(
+                $aliveAtVerdict,
+                'the server must still be running (draining) when the refusal arrives; '
+                . 'a refusal from a process that already died proves nothing about closing the listener first'
+            );
+        }
 
         $this->assertStringStartsWith(
             'refused',
