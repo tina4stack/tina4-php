@@ -6,6 +6,17 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.165 - 2026-11-22
+
+### Fixed
+
+- Windows: the broken-import marker name drops the drive letter's colon. It kept `C:` in the filename, so NTFS wrote an alternate data stream and no `data/.broken/*.broken` listing found the marker (#372; same rule in tina4-python#328, tina4-ruby#183, tina4-nodejs#211).
+- `DatabaseSessionHandler::close()` releases a connection the handler opened itself. It was a no-op, so the connection, and SQLite's `-wal` / `-shm` files, stayed open until the process ended. An injected connection is never closed; `close()` is idempotent and the next use reopens lazily (#372; same rule as tina4-ruby and tina4-nodejs).
+
+### Changed
+
+- AI skills: tina4-developer-php carries `updated_for_version: 3.13.165`. Its content changed in 3.13.164 while the field still said 3.13.147, so an older install reported itself current; it now reports itself out of date.
+
 ## 3.13.164 - 2026-11-17
 
 ### Fixed
