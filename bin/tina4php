@@ -2755,19 +2755,23 @@ DOCKERFILE;
             echo "No seeds directory found at src/seeds/\n";
             break;
         }
-        $seeds = glob($seedDir . '/*.php');
-        if (empty($seeds)) {
+        // FakeData::seedDir runs both seed shapes (inline work, or a returned
+        // callable) in name order. ADR-0108: the first seed file that throws
+        // stops the run and exits 1, so a failed seeder fails `tina4 seed`.
+        try {
+            $executed = (new \Tina4\FakeData())->seedDir($seedDir);
+        } catch (\Tina4\SeedError $error) {
+            foreach ($error->completed as $seedFile) {
+                echo "Seeded " . basename($seedFile) . "\n";
+            }
+            fwrite(STDERR, $error->getMessage() . "\n");
+            exit(1);
+        }
+        if (empty($executed)) {
             echo "No seed files found in src/seeds/\n";
         }
-        foreach ($seeds as $seedFile) {
-            echo "Running " . basename($seedFile) . "...\n";
-            // A seed file may run its work inline (legacy) OR return a callable
-            // (the `generate seeder` shape — returns a closure so it requires
-            // cleanly). Invoke the returned callable so both styles work.
-            $seedResult = include $seedFile;
-            if (is_callable($seedResult)) {
-                $seedResult();
-            }
+        foreach ($executed as $seedFile) {
+            echo "Seeded " . basename($seedFile) . "\n";
         }
         break;
 

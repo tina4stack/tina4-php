@@ -366,9 +366,9 @@ class SeederV3Test extends TestCase
         mkdir($dir, 0755, true);
         file_put_contents($dir . '/test_seed.php', '<?php return function() { return ["name" => "Alice"]; };');
 
+        // ADR-0108: the runner returns the executed paths, in order.
         $result = $this->fake->seedDir($dir);
-        $this->assertArrayHasKey('test_seed.php', $result);
-        $this->assertSame('loaded', $result['test_seed.php']);
+        $this->assertSame([$dir . '/test_seed.php'], $result);
 
         unlink($dir . '/test_seed.php');
         rmdir($dir);

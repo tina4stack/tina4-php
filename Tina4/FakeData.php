@@ -579,36 +579,45 @@ class FakeData
     // ── Seeder runner ───────────────────────────────────────────
 
     /**
-     * Discover and run seed files from a directory.
+     * Runs the PHP seed files in a directory in name order, skipping files whose
+     * name starts with `_`. A seed file either does its work when required, or
+     * returns a callable (the shape `generate seeder` writes) that is then called.
      *
-     * Each seed file should return a callable that produces a single row as an associative array.
+     * A seed file that throws stops the run: it is logged and a SeedError naming
+     * it is thrown, and no later file runs (ADR-0108).
      *
      * @param string $seedDir Directory containing seed PHP files
-     * @return array Summary of seeded files
+     * @return string[] Paths of the seed files executed, in order (empty when the directory is missing)
+     * @throws SeedError When a seed file throws; carries the file, the files completed before it and the cause
      */
     public function seedDir(string $seedDir = 'src/seeds'): array
     {
-        $results = [];
+        $executed = [];
 
         if (!is_dir($seedDir)) {
-            return $results;
+            return $executed;
         }
 
-        $files = glob($seedDir . '/*.php');
-        if ($files === false) {
-            return $results;
-        }
-
+        $files = glob($seedDir . '/*.php') ?: [];
         sort($files);
 
         foreach ($files as $file) {
-            $seeder = require $file;
-            if (is_callable($seeder)) {
-                $results[basename($file)] = 'loaded';
+            if (str_starts_with(basename($file), '_')) {
+                continue;
             }
+            try {
+                $seeder = require $file;
+                if (is_callable($seeder)) {
+                    $seeder();
+                }
+            } catch (\Throwable $error) {
+                Log::error('Seeder: ' . basename($file) . ' failed, seeding stopped: ' . $error->getMessage());
+                throw new SeedError($file, $executed, $error);
+            }
+            $executed[] = $file;
         }
 
-        return $results;
+        return $executed;
     }
 
     /**
