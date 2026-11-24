@@ -194,7 +194,25 @@ class KafkaBackend implements QueueBackend
         // stored false made every later call fwrite(false, ...) and die with
         // a TypeError instead of this clean, reconnectable exception.
         $this->socket = null;
-        throw new \RuntimeException("Kafka connection failed: could not connect to any broker in [{$this->brokers}]");
+        // Each broker is named through the shared redaction: TINA4_QUEUE_URL
+        // "kafka://u:secret@host:9092" arrives here as "u:secret@host:9092",
+        // and this message printed it whole (GHSA-h2mr-m3v3-cq8c).
+        // A plain host[:port] is shown as is; anything else (userinfo, a
+        // non-numeric port, a mangled "kafka//" scheme) is redacted.
+        $named = implode(',', array_map(
+            static function (string $broker): string {
+                $broker = trim($broker);
+                if (preg_match('/^[A-Za-z0-9._\-]*(?::\d+)?$|^\[[0-9A-Fa-f:.]+\](?::\d+)?$/', $broker)) {
+                    return $broker;
+                }
+                if (preg_match('#^[A-Za-z][A-Za-z0-9+.\-]*(?::/|//)#', $broker)) {
+                    return \Tina4\DatabaseUrl::redact($broker);
+                }
+                return substr(\Tina4\DatabaseUrl::redact('kafka://' . $broker), strlen('kafka://'));
+            },
+            $brokerList
+        ));
+        throw new \RuntimeException("Kafka connection failed: could not connect to any broker in [{$named}]");
     }
 
     /**

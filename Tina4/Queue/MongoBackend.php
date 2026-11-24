@@ -112,7 +112,12 @@ class MongoBackend implements QueueBackend
             $this->collection = $this->client->selectCollection($this->dbName, $this->collectionName);
             $this->ensureIndexes();
         } catch (\Throwable $e) {
-            throw new \RuntimeException("MongoDB connection failed: " . $e->getMessage());
+            // The driver quotes the URI it was given ("Failed to parse MongoDB
+            // URI: '<uri>'"), password included, so its message is scrubbed and
+            // the driver exception is NOT chained (GHSA-h2mr-m3v3-cq8c).
+            throw new \RuntimeException(
+                'MongoDB connection failed: ' . \Tina4\DatabaseUrl::scrubMessage($e->getMessage(), $this->uri)
+            );
         }
     }
 

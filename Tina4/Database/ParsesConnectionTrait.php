@@ -54,8 +54,22 @@ trait ParsesConnectionTrait
      */
     private function parseUrlConnection(#[\SensitiveParameter] string $input, int $defaultPort): array
     {
-        if (str_contains($input, '://')) {
-            $parts = parse_url($input);
+        // Anything URL-shaped goes through the framework's one URL rule -
+        // including "mysql:/u:pw@h" and "u:pw@h", which used to fall to the
+        // bare-host branch below and reach the connect error (and mysqli's own
+        // "getaddrinfo for <host> failed") as the raw HOST string, password
+        // included (GHSA-h2mr-m3v3-cq8c). A value the rule refuses is refused
+        // here, without being echoed.
+        if (str_contains($input, '@')
+            || preg_match('#^[A-Za-z][A-Za-z0-9+.\-]*(?:://|:/|//)#', $input)
+        ) {
+            try {
+                $parts = \Tina4\DatabaseUrl::parseParts($input);
+            } catch (\InvalidArgumentException $e) {
+                throw new \InvalidArgumentException(
+                    (new \ReflectionClass($this))->getShortName() . ': invalid connection URL - ' . $e->getMessage()
+                );
+            }
             return [
                 'host' => $parts['host'] ?? 'localhost',
                 'port' => $parts['port'] ?? $defaultPort,

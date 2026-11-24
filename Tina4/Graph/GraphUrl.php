@@ -88,9 +88,13 @@ class GraphUrl
     public function __construct(#[\SensitiveParameter] string $url)
     {
         $this->raw = $url;
-        $parts = parse_url($url);
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        // The framework's one URL rule (DatabaseUrl::parseParts), not
+        // parse_url(): parse_url() read "neo4j:/u:pw@h/g" as the PATH, so the
+        // graph name - printed by getDsn() in every connect error - was
+        // "u:pw@h/g" (GHSA-h2mr-m3v3-cq8c). The scheme is checked first, so
+        // an unsupported one keeps its answer (naming only the scheme token);
+        // any refusal after that never echoes the value.
+        $scheme = preg_match('#^([A-Za-z][A-Za-z0-9+.\-]*):#', $url, $match) ? strtolower($match[1]) : '';
         if (!isset(self::SCHEME_ENGINE[$scheme])) {
             $supported = array_keys(self::SCHEME_ENGINE);
             sort($supported);
@@ -99,6 +103,11 @@ class GraphUrl
                 . implode(', ', $supported)
                 . ' (e.g. ultipa://host:60061/mygraph).'
             );
+        }
+        try {
+            $parts = \Tina4\DatabaseUrl::parseParts($url);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Invalid graph URL - ' . $e->getMessage());
         }
 
         $this->scheme = $scheme;

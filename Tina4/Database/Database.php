@@ -2286,7 +2286,8 @@ class Database implements DatabaseAdapter
     {
         $raw = '';
         if (str_contains($url, '://')) {
-            $query = parse_url($url, PHP_URL_QUERY);
+            // The shared URL rule: a '?' inside the password is not the query.
+            $query = \Tina4\DatabaseUrl::tryParseParts($url)['query'] ?? null;
             if (is_string($query) && $query !== '') {
                 parse_str($query, $params);
                 $raw = (string) ($params['driver'] ?? '');
@@ -2380,15 +2381,18 @@ class Database implements DatabaseAdapter
             return self::makeSqlite($url, $autoCommit);
         }
 
-        // Parse standard URL
-        $parts = parse_url($url);
-        if ($parts === false || !isset($parts['scheme'])) {
-            // Redacted, never raw: this is the SECOND copy of the invalid-URL
-            // message (DatabaseUrl has the first) and it leaked the password
-            // the same way — measured 2026-08-02 with a bad port.
+        // Parse standard URL - by the framework's one URL rule, not
+        // parse_url(), which accepted "postgres:/u:pw@h" and handed the
+        // adapter "u:pw@h" as the database name (GHSA-h2mr-m3v3-cq8c).
+        try {
+            $parts = \Tina4\DatabaseUrl::parseParts($url);
+        } catch (\InvalidArgumentException $e) {
+            // Never the raw value, never chained: this is the SECOND copy of
+            // the invalid-URL message (DatabaseUrl has the first) and it
+            // leaked the password the same way - measured 2026-08-02 with a
+            // bad port. The reason is generic or holds only the redacted URL.
             throw new \InvalidArgumentException(
-                'Database: Cannot determine database type from '
-                . \Tina4\DatabaseUrl::redact($url) . '. '
+                'Database: Cannot determine database type - ' . $e->getMessage() . '. '
                 . "Use a URL like 'postgres://user:pass@host/db' or 'sqlite:///path/to/db'."
             );
         }

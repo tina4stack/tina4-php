@@ -136,7 +136,9 @@ class PdoPostgresAdapter implements DatabaseAdapter
     /** The server this connection reaches for, as "host:port". */
     protected function connectTarget(): string
     {
-        $parts = parse_url($this->connectionString) ?: [];
+        // The shared URL rule, so the host named here is never a piece of
+        // the password (GHSA-h2mr-m3v3-cq8c).
+        $parts = \Tina4\DatabaseUrl::tryParseParts($this->connectionString) ?? [];
         if (isset($parts['host'])) {
             return $parts['host'] . ':' . ($parts['port'] ?? 5432);
         }
@@ -153,7 +155,9 @@ class PdoPostgresAdapter implements DatabaseAdapter
         $input = $this->connectionString;
 
         // libpq key=value DSN (e.g. "host=.. port=.. dbname=.. user=..").
-        if (str_contains($input, '=') && !str_contains($input, '://')) {
+        // "keyword=" must open it - a mangled URL such as
+        // "postgres:/u:pw@h/db?sslmode=require" holds an '=' as well.
+        if (preg_match('/^\s*[A-Za-z_][A-Za-z0-9_]*\s*=/', $input)) {
             $kv = [];
             foreach (preg_split('/\s+/', trim($input)) as $pair) {
                 if (str_contains($pair, '=')) {
@@ -172,8 +176,14 @@ class PdoPostgresAdapter implements DatabaseAdapter
             return [$dsn, $user, $pass, []];
         }
 
-        // URL form: postgres://user:pass@host:port/dbname
-        $parts = parse_url($input) ?: [];
+        // URL form: postgres://user:pass@host:port/dbname - by the shared URL
+        // rule; parse_url() put "u:pw@h" from "postgres:/u:pw@h/db" into
+        // dbname. Refused without echoing the value.
+        try {
+            $parts = \Tina4\DatabaseUrl::parseParts($input);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('PdoPostgresAdapter: invalid connection URL - ' . $e->getMessage());
+        }
         $host = $parts['host'] ?? 'localhost';
         $port = $parts['port'] ?? 5432;
         $dbname = isset($parts['path']) ? ltrim($parts['path'], '/') : '';

@@ -740,8 +740,21 @@ class FirebirdAdapter implements DatabaseAdapter
     {
         $envOverride = \Tina4\DotEnv::getEnv('TINA4_DATABASE_FIREBIRD_PATH');
 
-        if (str_contains($input, '://')) {
-            $parts = parse_url($input);
+        // URL-shaped values go through the framework's one URL rule. Firebird
+        // prints the DATABASE PATH in its connect errors, and parse_url() read
+        // "firebird:/u:pw@h/db" - or a password holding '/' - as that path
+        // (GHSA-h2mr-m3v3-cq8c). Refused without echoing the value. The
+        // malformed "firebird:/" and "firebird//" spellings are caught by name:
+        // a generic one-slash pattern would also match a bare Windows path
+        // such as C:/Data/app.fdb, which is a valid database identifier.
+        if (str_contains($input, '://')
+            || preg_match('#^firebird(?::/|//)#i', $input)
+        ) {
+            try {
+                $parts = \Tina4\DatabaseUrl::parseParts($input);
+            } catch (\InvalidArgumentException $e) {
+                throw new \InvalidArgumentException('Firebird: invalid connection URL - ' . $e->getMessage());
+            }
             $rawPath = $parts['path'] ?? '';
             $database = ($envOverride !== null && $envOverride !== '')
                 ? $envOverride
@@ -808,7 +821,8 @@ class FirebirdAdapter implements DatabaseAdapter
     {
         $urlCharset = null;
         if (str_contains($connectionString, '://')) {
-            $query = parse_url($connectionString, PHP_URL_QUERY);
+            // The shared URL rule: a '?' inside the password is not the query.
+            $query = \Tina4\DatabaseUrl::tryParseParts($connectionString)['query'] ?? null;
             if (is_string($query) && $query !== '') {
                 parse_str($query, $params);
                 if (isset($params['charset']) && is_string($params['charset']) && $params['charset'] !== '') {
