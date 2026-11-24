@@ -633,14 +633,21 @@ class PostgresAdapter implements DatabaseAdapter
     private function buildDsn(#[\SensitiveParameter] string $input): string
     {
         // Already a key=value DSN — the caller wrote it, so it is theirs to quote.
-        if (str_contains($input, '=') && !str_contains($input, '://')) {
+        // "keyword=" must open it: "postgres:/u:pw@h/db?sslmode=require" holds
+        // an '=' too, and handed to libpq raw it came back quoted, password
+        // and all, in libpq's own "missing '=' after ..." error.
+        if (preg_match('/^\s*[A-Za-z_][A-Za-z0-9_]*\s*=/', $input)) {
             return $input;
         }
 
-        // Parse URL format
-        $parts = parse_url($input);
-        if ($parts === false) {
-            return $input;
+        // Parse URL format - the framework's one URL rule. parse_url() read
+        // "postgres:/u:pw@h/db" as the PATH "/u:pw@h/db" and this method then
+        // sent (and the connect error printed) dbname='u:pw@h/db'. A value
+        // that is not a usable URL is refused without being echoed.
+        try {
+            $parts = \Tina4\DatabaseUrl::parseParts($input);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('PostgresAdapter: invalid connection URL - ' . $e->getMessage());
         }
 
         // EVERY interpolated value is quoted, not just the password: host,

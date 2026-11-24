@@ -121,7 +121,7 @@ class RedisBackplane implements WebSocketBackplaneInterface
     /** @var array<string, callable> channel => callback */
     private array $subscriptions = [];
 
-    public function __construct(?string $url = null)
+    public function __construct(#[\SensitiveParameter] ?string $url = null)
     {
         $url = $url ?? ($_ENV['TINA4_WS_BACKPLANE_URL']
             ?? getenv('TINA4_WS_BACKPLANE_URL')
@@ -131,11 +131,14 @@ class RedisBackplane implements WebSocketBackplaneInterface
         // scheme://[user[:password]@]host[:port][/db], the same form the Redis
         // cache backend reads. The password never appears in a message: every
         // error below names host:port only.
-        $parsed = parse_url(str_contains($url, '://') ? $url : 'tcp://' . $url);
-        if (!is_array($parsed)) {
-            throw new \InvalidArgumentException(
-                'Invalid TINA4_WS_BACKPLANE_URL ' . DatabaseUrl::redact($url)
-            );
+        // Parsed by the framework's one URL rule (GHSA-h2mr-m3v3-cq8c), so the
+        // host:port every message below names is never a piece of the
+        // password. A value the rule refuses is refused without being echoed
+        // (or with only its redacted form, for a bad port).
+        try {
+            $parsed = DatabaseUrl::parseParts(self::withScheme($url));
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Invalid TINA4_WS_BACKPLANE_URL - ' . $e->getMessage());
         }
         $this->host = $parsed['host'] ?? '127.0.0.1';
         $this->port = (int)($parsed['port'] ?? 6379);
@@ -184,6 +187,19 @@ class RedisBackplane implements WebSocketBackplaneInterface
         // Non-blocking so poll() never stalls the single-threaded event loop.
         stream_set_blocking($sock, false);
         $this->rawSocket = $sock;
+    }
+
+    /**
+     * A bare "host:port" (documented) gets the tcp:// scheme the parser needs.
+     * A MANGLED scheme - "redis:/..." or "redis//..." - does not: it is left
+     * for the parser to refuse rather than read as user "redis".
+     */
+    private static function withScheme(#[\SensitiveParameter] string $url): string
+    {
+        if (str_contains($url, '://') || preg_match('#^[A-Za-z][A-Za-z0-9+.\-]*(?::/|//)#', $url)) {
+            return $url;
+        }
+        return 'tcp://' . $url;
     }
 
     /** Connect one phpredis client, authenticated and on the URL's database. */
@@ -509,7 +525,7 @@ class NATSBackplane implements WebSocketBackplaneInterface
     private string $url;
     private array $subscriptions = [];
 
-    public function __construct(?string $url = null)
+    public function __construct(#[\SensitiveParameter] ?string $url = null)
     {
         if (!class_exists('\Basis\Nats\Client')) {
             throw new \RuntimeException(
@@ -522,7 +538,13 @@ class NATSBackplane implements WebSocketBackplaneInterface
             ?? getenv('TINA4_WS_BACKPLANE_URL')
             ?: 'nats://localhost:4222');
 
-        $parsed = parse_url($this->url);
+        // The framework's one URL rule (GHSA-h2mr-m3v3-cq8c); refused without
+        // echoing the value.
+        try {
+            $parsed = DatabaseUrl::parseParts($this->url);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Invalid TINA4_WS_BACKPLANE_URL - ' . $e->getMessage());
+        }
         $host = $parsed['host'] ?? 'localhost';
         $port = $parsed['port'] ?? 4222;
 

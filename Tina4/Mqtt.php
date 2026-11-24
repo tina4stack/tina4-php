@@ -242,62 +242,51 @@ final class Mqtt
                     'mqtt://, tcp:// or mqtts:// (TLS). WebSocket transports are not implemented.'
                 );
             }
-            $rest = substr($raw, strlen($m[0]));
+            $forParser = $raw;
+        } elseif (preg_match('#^[A-Za-z][A-Za-z0-9+.\-]*(?::/|//)#', $raw)) {
+            // "mqtt:/u:pw@h" or "mqtt//u:pw@h": a mangled scheme, not a bare
+            // host. Refused without echoing the value (GHSA-h2mr-m3v3-cq8c).
+            throw new \InvalidArgumentException(
+                "malformed MQTT url -- expected mqtt://host:port (the value is not shown because it may hold a password)"
+            );
         } else {
-            $rest = $raw;
+            // A bare "host" / "host:port" / "user:pw@host": the scheme is
+            // supplied for the parser only.
+            $forParser = 'tcp://' . $raw;
         }
 
         $tls = $scheme === 'mqtts';
 
-        // Split on the LAST "@" so a password containing an un-encoded "@" still
-        // leaves the host intact.
-        $username = null;
-        $password = null;
-        $atPos = strrpos($rest, '@');
-        if ($atPos !== false) {
-            $userinfo = substr($rest, 0, $atPos);
-            $rest = substr($rest, $atPos + 1);
-            $colon = strpos($userinfo, ':');
-            if ($colon === false) {
-                $username = self::percentDecode($userinfo);
-            } else {
-                $username = self::percentDecode(substr($userinfo, 0, $colon));
-                $password = self::percentDecode(substr($userinfo, $colon + 1));
-            }
+        // The framework's one URL rule (DatabaseUrl::parseParts): userinfo ends
+        // at the LAST "@", the password starts at the first ":" in it, and an
+        // "@" it cannot place is refused rather than guessed.
+        try {
+            $parts = DatabaseUrl::parseParts($forParser);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException(match ($e->getCode()) {
+                DatabaseUrl::REFUSED_PORT => "malformed MQTT url '{$safe}' -- port must be numeric",
+                DatabaseUrl::REFUSED_HOST => str_contains($e->getMessage(), 'IPv6')
+                    ? "malformed MQTT url '{$safe}' -- unclosed IPv6 bracket"
+                    : "malformed MQTT url '{$safe}' -- expected mqtt://host:port",
+                // Generic refusals never echo the value, not even redacted.
+                default => 'malformed MQTT url -- ' . $e->getMessage(),
+            });
         }
+        $username = isset($parts['user']) ? self::percentDecode($parts['user']) : null;
+        $password = isset($parts['pass']) ? self::percentDecode($parts['pass']) : null;
 
-        // host is a [bracketed ipv6] or a run without : or /
-        $hostPort = explode('/', $rest, 2)[0];
-        $host = $hostPort;
-        $portStr = null;
-        if (str_starts_with($hostPort, '[')) {
-            $close = strpos($hostPort, ']');
-            if ($close === false) {
-                throw new \InvalidArgumentException("malformed MQTT url '{$safe}' -- unclosed IPv6 bracket");
-            }
-            $host = substr($hostPort, 1, $close - 1);
-            $after = substr($hostPort, $close + 1);
-            if (str_starts_with($after, ':')) {
-                $portStr = substr($after, 1);
-            }
-        } else {
-            $colon = strpos($hostPort, ':');
-            if ($colon !== false) {
-                $host = substr($hostPort, 0, $colon);
-                $portStr = substr($hostPort, $colon + 1);
-            }
+        // An IPv6 literal comes back bracketed, as from parse_url().
+        $host = $parts['host'] ?? '';
+        if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
+            $host = substr($host, 1, -1);
         }
-
         if ($host === '') {
             throw new \InvalidArgumentException("malformed MQTT url '{$safe}' -- expected mqtt://host:port");
-        }
-        if ($portStr !== null && $portStr !== '' && !ctype_digit($portStr)) {
-            throw new \InvalidArgumentException("malformed MQTT url '{$safe}' -- port must be numeric");
         }
 
         return [
             'host' => $host,
-            'port' => ($portStr !== null && $portStr !== '') ? (int) $portStr : ($tls ? self::DEFAULT_TLS_PORT : self::DEFAULT_PORT),
+            'port' => $parts['port'] ?? ($tls ? self::DEFAULT_TLS_PORT : self::DEFAULT_PORT),
             'tls' => $tls,
             'username' => ($username !== null && $username !== '') ? $username : null,
             'password' => $password,

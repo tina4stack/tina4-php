@@ -30,7 +30,7 @@ namespace Tina4\Graph;
  *   neo4j://host/db               (engine: bolt)
  *   arango://host/db              (engine: arango)
  */
-class GraphUrl
+class GraphUrl implements \JsonSerializable
 {
     /** @var array<string, string> URL scheme to CANONICAL engine name. */
     private const SCHEME_ENGINE = [
@@ -88,9 +88,13 @@ class GraphUrl
     public function __construct(#[\SensitiveParameter] string $url)
     {
         $this->raw = $url;
-        $parts = parse_url($url);
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        // The framework's one URL rule (DatabaseUrl::parseParts), not
+        // parse_url(): parse_url() read "neo4j:/u:pw@h/g" as the PATH, so the
+        // graph name - printed by getDsn() in every connect error - was
+        // "u:pw@h/g" (GHSA-h2mr-m3v3-cq8c). The scheme is checked first, so
+        // an unsupported one keeps its answer (naming only the scheme token);
+        // any refusal after that never echoes the value.
+        $scheme = preg_match('#^([A-Za-z][A-Za-z0-9+.\-]*):#', $url, $match) ? strtolower($match[1]) : '';
         if (!isset(self::SCHEME_ENGINE[$scheme])) {
             $supported = array_keys(self::SCHEME_ENGINE);
             sort($supported);
@@ -99,6 +103,11 @@ class GraphUrl
                 . implode(', ', $supported)
                 . ' (e.g. ultipa://host:60061/mygraph).'
             );
+        }
+        try {
+            $parts = \Tina4\DatabaseUrl::parseParts($url);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Invalid graph URL - ' . $e->getMessage());
         }
 
         $this->scheme = $scheme;
@@ -122,6 +131,40 @@ class GraphUrl
 
         $this->useTls = str_ends_with($scheme, 's')
             || in_array((string) ($params['tls'] ?? ''), ['1', 'true'], true);
+    }
+
+    /**
+     * What print_r()/var_dump() show. $password and $raw both hold the secret,
+     * so a dumped GraphUrl printed it twice (GHSA-h2mr-m3v3-cq8c). DatabaseUrl
+     * guards the same way; Ruby redacts GraphUrl#inspect.
+     *
+     * @return array<string, mixed> The public state with the password masked
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'raw' => \Tina4\DatabaseUrl::redact($this->raw),
+            'scheme' => $this->scheme,
+            'engine' => $this->engine,
+            'host' => $this->host,
+            'port' => $this->port,
+            'graph' => $this->graph,
+            'username' => $this->username,
+            'password' => $this->password === null ? null : '***',
+            'params' => $this->params,
+            'useTls' => $this->useTls,
+        ];
+    }
+
+    /**
+     * What json_encode() emits: Tina4 auto-serialises a returned object, so an
+     * unguarded GraphUrl in a route response put the password on the wire.
+     *
+     * @return array<string, mixed> The public state with the password masked
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__debugInfo();
     }
 
     /**

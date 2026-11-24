@@ -88,7 +88,9 @@ class RedisBackend extends CacheBackend
      */
     private function parseUrl(string $url): void
     {
-        $parts = parse_url($url);
+        // The framework's one URL rule (GHSA-h2mr-m3v3-cq8c): a password
+        // holding '/', '?' or '#' no longer becomes the host or the db index.
+        $parts = \Tina4\DatabaseUrl::tryParseParts($url);
         if (is_array($parts)) {
             $this->host = $parts['host'] ?? 'localhost';
             $this->port = $parts['port'] ?? 6379;

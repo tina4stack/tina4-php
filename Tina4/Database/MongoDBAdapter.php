@@ -1328,8 +1328,9 @@ class MongoDBAdapter implements DatabaseAdapter
         // Normalise pymongo scheme
         $url = preg_replace('/^pymongo:\/\//i', 'mongodb://', $url);
 
-        $parts = parse_url($url);
-        if ($parts === false || !isset($parts['host'])) {
+        // The framework's one URL rule (GHSA-h2mr-m3v3-cq8c), not parse_url().
+        $parts = \Tina4\DatabaseUrl::tryParseParts($url);
+        if ($parts === null || !isset($parts['host'])) {
             // A mongodb:// URL carries its credentials in the userinfo exactly
             // like a postgres:// one, so the raw string can never go in the
             // message. Redacted keeps the host/port/scheme that identify it.

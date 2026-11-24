@@ -86,7 +86,9 @@ class MongoSessionHandler
         $this->collection = $config['collection'] ?? (getenv('TINA4_SESSION_MONGO_COLLECTION') ?: 'sessions');
         $this->ttl = (int)($config['ttl'] ?? (getenv('TINA4_SESSION_TTL') ?: 3600));
 
-        $parsed = parse_url($this->mongoUrl);
+        // The framework's one URL rule (GHSA-h2mr-m3v3-cq8c): the host named
+        // in a connect error is never a piece of the password.
+        $parsed = \Tina4\DatabaseUrl::tryParseParts($this->mongoUrl) ?? [];
         $this->host = $parsed['host'] ?? 'localhost';
         $this->port = $parsed['port'] ?? 27017;
     }

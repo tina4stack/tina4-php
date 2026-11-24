@@ -1910,7 +1910,17 @@ function getCollection(string $name): object
     // SQLite path never needs it.
     $uri = docStoreMongoUri();
     $dbName = (getenv('TINA4_MONGO_DB') ?: '') ?: ((getenv('TINA4_SESSION_MONGO_DB') ?: '') ?: 'tina4');
-    $client = new \MongoDB\Client($uri);
+    try {
+        $client = new \MongoDB\Client($uri);
+    } catch (\MongoDB\Driver\Exception\InvalidArgumentException $e) {
+        // The driver quotes the URI it could not parse - password included -
+        // in this message. Scrubbed, and the driver exception is NOT chained
+        // (GHSA-h2mr-m3v3-cq8c).
+        throw new \InvalidArgumentException(
+            "Tina4 DocStore: {$source} is not a usable MongoDB URI: "
+            . \Tina4\DatabaseUrl::scrubMessage($e->getMessage(), $uri)
+        );
+    }
 
     return new DocStoreDelegator($client->selectCollection($dbName, $name));
 }

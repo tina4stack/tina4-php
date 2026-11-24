@@ -1,0 +1,59 @@
+{
+  "_about": "GHSA-h2mr-m3v3-cq8c shared cases. Every framework feeds each URL below (for each scheme it supports) to its REAL redact, parse and connect/error paths and asserts that no output - redacted string, exception message, exception cause/previous chain, log line - contains any of the secret fragments. Hosts, users and db names never contain a fragment.",
+  "secret_fragments": [
+    "Pq1",
+    "Rs2"
+  ],
+  "passwords": [
+    "Pq1Rs2",
+    "Pq1/Rs2",
+    "Pq1?Rs2",
+    "Pq1#Rs2",
+    "Pq1@Rs2",
+    "Pq1%Rs2",
+    "Pq1 Rs2",
+    "Pq1:Rs2",
+    "Pq1/Rs2?x=1#y",
+    "12?Pq1Rs2",
+    "12Pq1/Rs2",
+    "12#Pq1Rs2"
+  ],
+  "templates": [
+    "{scheme}://u:{pw}@dbhost:5432/appdb",
+    "{scheme}://u:{pw}@dbhost/appdb?sslmode=require",
+    "{scheme}:/u:{pw}@dbhost/appdb",
+    "{scheme}//u:{pw}@dbhost/appdb",
+    "{scheme}://u:{pw}",
+    "{scheme}://u:{pw}@dbhost:notaport/appdb",
+    "{scheme}://u:{pw}@/appdb"
+  ],
+  "known_unmaskable": [
+    "A host-less URL whose password is all digits (postgres://u:123/x) cannot be told apart from a port; not in this list, and documented."
+  ],
+  "must_still_parse": [
+    {
+      "url": "postgres://u:Pq1Rs2@dbhost:5432/appdb",
+      "host": "dbhost",
+      "port": 5432,
+      "user": "u",
+      "password": "Pq1Rs2",
+      "database": "appdb"
+    },
+    {
+      "url": "postgres://u:Pq1%2FRs2@dbhost/appdb",
+      "host": "dbhost",
+      "user": "u",
+      "password": "Pq1/Rs2",
+      "database": "appdb"
+    },
+    {
+      "url": "postgres://u:Pq1/Rs2@dbhost/appdb",
+      "host": "dbhost",
+      "user": "u",
+      "password": "Pq1/Rs2",
+      "database": "appdb"
+    }
+  ],
+  "redacted_must_keep": "the scheme, the user and the host (dbhost) where one exists, so the log line is still useful",
+  "_added": "Digit-led passwords (12?..., 12...) added after the Ruby mutation run: a whole-value URI parser reads u:12?x@h as host u, port 12."
+}

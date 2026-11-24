@@ -928,24 +928,31 @@ class Queue
     /**
      * Parse an AMQP URL into config array.
      */
-    public static function parseAmqpUrl(string $url): array
+    public static function parseAmqpUrl(#[\SensitiveParameter] string $url): array
     {
         $config = [];
-        $url = str_replace(['amqp://', 'amqps://'], '', $url);
 
-        if (str_contains($url, '@')) {
-            [$creds, $rest] = explode('@', $url, 2);
-            if (str_contains($creds, ':')) {
-                [$config['username'], $config['password']] = explode(':', $creds, 2);
-            } else {
-                $config['username'] = $creds;
-            }
-        } else {
-            $rest = $url;
+        // The framework's one URL rule (DatabaseUrl::parseParts). This used to
+        // split at the FIRST '@', so "amqp://u:p@ss@rabbit/v" made the HOST
+        // "ss@rabbit" - and the connect error printed it, password tail and
+        // all (GHSA-h2mr-m3v3-cq8c). A value the rule refuses raises a message
+        // that never contains it. Credentials keep their previous form: taken
+        // verbatim, not percent-decoded.
+        try {
+            $parts = \Tina4\DatabaseUrl::parseParts($url);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Queue: invalid AMQP URL - ' . $e->getMessage());
+        }
+        if (isset($parts['user'])) {
+            $config['username'] = $parts['user'];
+        }
+        if (isset($parts['pass'])) {
+            $config['password'] = $parts['pass'];
         }
 
-        if (str_contains($rest, '/')) {
-            [$hostport, $vhost] = explode('/', $rest, 2);
+        $path = $parts['path'] ?? '';
+        if ($path !== '') {
+            $vhost = substr($path, 1);
             // THE VHOST IS THE PATH SEGMENT, URL-DECODED, WITH NO LEADING SLASH
             // (RabbitMQ URI spec). This used to prepend '/', so
             // amqp://guest:guest@rabbit:5672/orders asked for a vhost literally
@@ -970,15 +977,13 @@ class Queue
             if ($vhost !== '') {
                 $config['vhost'] = rawurldecode($vhost);
             }
-        } else {
-            $hostport = $rest;
         }
 
-        if (str_contains($hostport, ':')) {
-            [$config['host'], $port] = explode(':', $hostport, 2);
-            $config['port'] = (int)$port;
-        } elseif ($hostport) {
-            $config['host'] = $hostport;
+        if (isset($parts['host'])) {
+            $config['host'] = $parts['host'];
+        }
+        if (isset($parts['port'])) {
+            $config['port'] = $parts['port'];
         }
 
         return $config;

@@ -55,7 +55,8 @@ class MongoBackend extends CacheBackend
     {
         $this->maxEntries = $maxEntries;
 
-        $parsed = parse_url($url);
+        // The framework's one URL rule (GHSA-h2mr-m3v3-cq8c).
+        $parsed = \Tina4\DatabaseUrl::tryParseParts($url);
         if (is_array($parsed)) {
             $this->host = $parsed['host'] ?? 'localhost';
             $this->port = $parsed['port'] ?? 27017;
