@@ -400,6 +400,38 @@ class RouterTest extends TestCase
 
         $this->assertEquals('Tina4\Request Tina4\Request', $result); // Assigns the same $request to both
     }
+    /**
+     * A server-executable / interpretable file placed under src/public (for
+     * example via an upload) must never be served by the static handler: not
+     * executed, and not even disclosed as source. returnStatic() must treat it
+     * as "not found" (false), while a legitimate static asset is still served.
+     */
+    public function testReturnStaticRefusesExecutableFiles(): void
+    {
+        $dir = sys_get_temp_dir() . "/tina4-static-" . uniqid();
+        mkdir($dir);
+        $created = [];
+
+        foreach (["evil.php", "evil.PHP", "x.phtml", "x.pht", "x.phar", "x.php5", "x.phps", "x.cgi", "x.pl", "x.py", "x.sh", ".htaccess"] as $name) {
+            $path = $dir . DIRECTORY_SEPARATOR . $name;
+            file_put_contents($path, "<?php echo 'nope';");
+            $created[] = $path;
+            $this->assertFalse($this->router->returnStatic($path), "must refuse to serve: {$name}");
+        }
+
+        // A legitimate static asset is still served (not false).
+        $txt = $dir . DIRECTORY_SEPARATOR . "note.txt";
+        file_put_contents($txt, "hello");
+        $created[] = $txt;
+        $this->assertNotFalse($this->router->returnStatic($txt), "a .txt asset must still be served");
+
+        foreach (array_unique($created) as $f) {
+            if (file_exists($f)) {
+                @unlink($f);
+            }
+        }
+        @rmdir($dir);
+    }
 }
 
 // Helper class for testing instance and static methods

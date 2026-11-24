@@ -178,6 +178,20 @@ class Router extends Data
         if (is_dir($fileName)) {
             return false;
         }
+
+        // Never serve a server-executable / interpretable file as static content,
+        // even when one has been placed under src/public (e.g. via an upload).
+        // The file is neither executed nor its source disclosed: it is treated as
+        // "not found" here, independent of the web-server configuration, so a
+        // planted script in the public tree can never run or leak through Tina4.
+        $blockedExtensions = [
+            "php", "php3", "php4", "php5", "php7", "phtml", "pht", "phps", "phpt",
+            "phar", "cgi", "pl", "py", "sh", "lua", "rb", "htaccess", "htpasswd",
+        ];
+        if (in_array(strtolower((string) pathinfo($fileName, PATHINFO_EXTENSION)), $blockedExtensions, true)) {
+            return false;
+        }
+
         $fileName = preg_replace('#/+#', '/', $fileName);
         $mimeType = self::getMimeType($fileName);
 
