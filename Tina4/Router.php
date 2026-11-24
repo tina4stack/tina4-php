@@ -127,6 +127,15 @@ class Router
     /** @var string Method of the last registered route */
     private static ?string $lastRouteMethod = null;
 
+    /**
+     * Every [method, index] slot the chained modifiers (->noAuth(), ->secure(),
+     * ->role(), ...) apply to. One slot after get()/post()/...; five after any(),
+     * so a modifier chained on any() reaches every method it registered.
+     *
+     * @var array<int, array{0: string, 1: int}>
+     */
+    private static array $lastRouteTargets = [];
+
     /** @var bool True while devAdminRoutes() runs: routes added then are the dev dashboard's own */
     private static bool $registeringDevAdmin = false;
 
@@ -263,12 +272,17 @@ class Router
      */
     public static function any(string $path, callable $handler, array $middleware = [], array $swaggerMeta = [], ?string $template = null): self
     {
+        $targets = [];
         foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
             self::addRoute($method, $path, $handler, $swaggerMeta, $middleware, $template);
+            $targets[] = [$method, self::$lastRouteIndex];
         }
-        // Point lastRoute to the GET one for chaining
+        // Point lastRoute to the GET one for middleware(), and at every
+        // method's slot for the other chained modifiers (noAuth, secure,
+        // role, ...) so they reach all five routes, not only GET.
         self::$lastRouteMethod = 'GET';
-        self::$lastRouteIndex = count(self::$routes['GET']) - 1;
+        self::$lastRouteIndex = $targets[0][1];
+        self::$lastRouteTargets = $targets;
         return new self();
     }
 
@@ -353,8 +367,8 @@ class Router
      */
     public function cache(): self
     {
-        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['cache'] = true;
+        foreach (self::$lastRouteTargets as [$m, $i]) {
+            self::$routes[$m][$i]['cache'] = true;
         }
         return $this;
     }
@@ -366,8 +380,8 @@ class Router
      */
     public function noCache(): self
     {
-        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['cache'] = false;
+        foreach (self::$lastRouteTargets as [$m, $i]) {
+            self::$routes[$m][$i]['cache'] = false;
         }
         return $this;
     }
@@ -388,9 +402,9 @@ class Router
      */
     public function swagger(array $meta): self
     {
-        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            $existing = self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['swagger'] ?? [];
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['swagger'] = array_merge($existing, $meta);
+        foreach (self::$lastRouteTargets as [$m, $i]) {
+            $existing = self::$routes[$m][$i]['swagger'] ?? [];
+            self::$routes[$m][$i]['swagger'] = array_merge($existing, $meta);
         }
         return $this;
     }
@@ -402,8 +416,8 @@ class Router
      */
     public function secure(): self
     {
-        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['secure'] = true;
+        foreach (self::$lastRouteTargets as [$m, $i]) {
+            self::$routes[$m][$i]['secure'] = true;
         }
         return $this;
     }
@@ -418,8 +432,8 @@ class Router
      */
     public function noAuth(): self
     {
-        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['noAuth'] = true;
+        foreach (self::$lastRouteTargets as [$m, $i]) {
+            self::$routes[$m][$i]['noAuth'] = true;
         }
         return $this;
     }
@@ -438,8 +452,8 @@ class Router
      */
     public function noCsrf(): self
     {
-        if (self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['noCsrf'] = true;
+        foreach (self::$lastRouteTargets as [$m, $i]) {
+            self::$routes[$m][$i]['noCsrf'] = true;
         }
         return $this;
     }
@@ -453,9 +467,11 @@ class Router
      */
     public function role(string ...$names): self
     {
-        if ($names !== [] && self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['roles'][] = $names;
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['secure'] = true;
+        if ($names !== []) {
+            foreach (self::$lastRouteTargets as [$m, $i]) {
+                self::$routes[$m][$i]['roles'][] = $names;
+                self::$routes[$m][$i]['secure'] = true;
+            }
         }
         return $this;
     }
@@ -470,9 +486,11 @@ class Router
      */
     public function can(string ...$permissions): self
     {
-        if ($permissions !== [] && self::$lastRouteMethod !== null && self::$lastRouteIndex !== null) {
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['perms'][] = $permissions;
-            self::$routes[self::$lastRouteMethod][self::$lastRouteIndex]['secure'] = true;
+        if ($permissions !== []) {
+            foreach (self::$lastRouteTargets as [$m, $i]) {
+                self::$routes[$m][$i]['perms'][] = $permissions;
+                self::$routes[$m][$i]['secure'] = true;
+            }
         }
         return $this;
     }
@@ -2989,6 +3007,7 @@ class Router
         self::$groupMiddleware = [];
         self::$lastRouteIndex = null;
         self::$lastRouteMethod = null;
+        self::$lastRouteTargets = [];
         self::$basePath = '.';
         self::$resolvedStringMiddleware = [];
     }
@@ -3069,6 +3088,7 @@ class Router
         }
 
         self::$lastRouteMethod = $method;
+        self::$lastRouteTargets = [[$method, self::$lastRouteIndex]];
 
         return new self();
     }
