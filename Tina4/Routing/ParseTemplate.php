@@ -128,6 +128,23 @@ class ParseTemplate
         Debug::message("$this->GUID Looking for file " . $realFileName, TINA4_LOG_DEBUG);
         if (file_exists($realFileName)) {
             $this->httpCode = HTTP_OK;
+
+            // Security: never execute or disclose a server-interpretable file
+            // from a served/template path. A planted script (e.g. an upload in
+            // src/public) is treated as "not found" — neither included/executed
+            // nor returned as source — regardless of TINA4_DEBUG. Legitimate
+            // template assets (twig/html/css/js/images) under src/public are
+            // unaffected and still render/serve.
+            $tina4BlockedExt = ["php", "php3", "php4", "php5", "php7", "phtml", "pht", "phps", "phpt", "phar", "cgi", "pl", "py", "sh", "lua", "rb", "htaccess", "htpasswd"];
+            if (in_array(strtolower((string) $ext), $tina4BlockedExt, true)) {
+                Debug::message("$this->GUID Refusing to serve script file " . $realFileName, TINA4_LOG_DEBUG);
+                $this->headers[] = "Tina4-Debug: " . $this->GUID;
+                $this->httpCode = HTTP_NOT_FOUND;
+                $this->fileName = "";
+
+                return "";
+            }
+
             //Render a twig file if the extension is twig
             if ($ext === "twig") {
                 if (!isset($_SESSION["renderData"])) {
@@ -234,6 +251,13 @@ class ParseTemplate
         $parts = $this->parseParams($method);
 
         if ($object === "call") {
+            // Security: a template "call" must never invoke a dangerous callable
+            // (command/code execution, filesystem, deserialization, …). Templates
+            // are expected to be trusted, but this blocks the obvious RCE sinks if
+            // untrusted content ever reaches the parser.
+            if (self::isBlockedTemplateCallable($parts["method"])) {
+                return "[Call to {$parts["method"]} is not permitted]";
+            }
             error_reporting(E_ALL & ~E_WARNING);
             try {
                 $response = call_user_func_array($parts["method"], $parts["params"]);
@@ -243,10 +267,17 @@ class ParseTemplate
                     return $response;
                 }
             } catch (\Exception $error) {
-                $this->evals[] = $parts["method"];
+                // The call was not resolvable; render nothing rather than eval()
+                // the template-derived string (removed: arbitrary code execution).
+                return "";
             }
         } elseif (!empty($parts["method"])) {
-            eval('$object = (new ' . $object . '());');
+            // Security: instantiate by variable class name (no eval). An invalid
+            // or non-existent class name can therefore never break out into code.
+            if (!is_string($object) || !class_exists($object)) {
+                return "[Class {$object} not found]";
+            }
+            $object = new $object();
             if (method_exists($object, $parts["method"])) {
                 $response = call_user_func_array(array($object, $parts["method"]), $parts["params"]);
                 if ($response === false) {
@@ -262,6 +293,39 @@ class ParseTemplate
             return $objectReflection->newInstanceArgs($parts["params"]);
         }
         return null;
+    }
+
+    /**
+     * Whether a template "call" target is a dangerous callable that must never
+     * be invoked from template content — command/code execution, filesystem,
+     * deserialization, and the higher-order callbacks that can invoke one of
+     * those indirectly (e.g. array_map('system', …)). Case-insensitive and a
+     * leading namespace separator is ignored.
+     *
+     * @param mixed $callable the callable named in the template
+     * @return bool true when the callable is blocked
+     */
+    private static function isBlockedTemplateCallable($callable): bool
+    {
+        if (!is_string($callable)) {
+            return true;
+        }
+
+        $name = strtolower(ltrim(trim($callable), "\\"));
+
+        $blocked = [
+            "eval", "assert", "exec", "shell_exec", "system", "passthru",
+            "proc_open", "popen", "pcntl_exec", "create_function",
+            "call_user_func", "call_user_func_array", "array_map", "array_filter",
+            "array_walk", "array_reduce", "register_shutdown_function",
+            "register_tick_function", "preg_replace_callback", "usort", "uasort",
+            "uksort", "ob_start", "forward_static_call", "forward_static_call_array",
+            "file_get_contents", "file_put_contents", "fopen", "fwrite", "fputs",
+            "readfile", "unlink", "include", "include_once", "require", "require_once",
+            "unserialize", "extract", "putenv", "mail",
+        ];
+
+        return in_array($name, $blocked, true);
     }
 
     /**
@@ -300,15 +364,10 @@ class ParseTemplate
     public function parseVariables($content)
     {
 
-        foreach ($this->evals as $id => $eval) {
-            try {
-                eval($eval);
-            } catch (\ParseError $error) {
-                if (TINA4_DEBUG) {
-                    Debug::message("TINA4: Parse Error for " . $eval, TINA4_LOG_ERROR);
-                }
-            }
-        }
+        // Security: the collected "call" fallbacks are template-derived strings
+        // and are never eval()'d (removed: arbitrary code execution from template
+        // content). They are kept only so existing references do not error.
+        $this->evals = [];
 
         if (is_array($this->definedVariables)) {
             $this->definedVariables = array_merge($this->definedVariables, get_defined_vars());

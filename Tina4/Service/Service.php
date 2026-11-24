@@ -39,7 +39,7 @@ class Service extends Data
     public function addProcess(\Tina4\Process $process): void
     {
         if (file_exists($this->serviceSaveFilename)) {
-            $services = unserialize(file_get_contents($this->serviceSaveFilename));
+            $services = unserialize(file_get_contents($this->serviceSaveFilename), ["allowed_classes" => false]);
         } else {
             $services = [];
         }
@@ -54,7 +54,7 @@ class Service extends Data
     public function removeProcess(string $name): void
     {
         if (file_exists($this->serviceSaveFilename)) {
-            $services = unserialize(file_get_contents($this->serviceSaveFilename));
+            $services = unserialize(file_get_contents($this->serviceSaveFilename), ["allowed_classes" => false]);
         } else {
             $services = [];
         }
@@ -72,7 +72,7 @@ class Service extends Data
     public function getProcesses()
     {
         if (file_exists($this->serviceSaveFilename)) {
-            $services = unserialize(file_get_contents($this->serviceSaveFilename));
+            $services = unserialize(file_get_contents($this->serviceSaveFilename), ["allowed_classes" => false]);
         } else {
             $services = [];
         }
@@ -86,7 +86,7 @@ class Service extends Data
     public function addLastTimeProcess(\Tina4\Process $process): void
     {
         if (file_exists($this->servicesLastTimeFilename)) {
-            $services = unserialize(file_get_contents($this->servicesLastTimeFilename));
+            $services = unserialize(file_get_contents($this->servicesLastTimeFilename), ["allowed_classes" => false]);
         } else {
             $services = [];
         }
@@ -101,7 +101,7 @@ class Service extends Data
     public function getLastTimeProcesses()
     {
         if (file_exists($this->servicesLastTimeFilename)) {
-            $services = unserialize(file_get_contents($this->servicesLastTimeFilename));
+            $services = unserialize(file_get_contents($this->servicesLastTimeFilename), ["allowed_classes" => false]);
         } else {
             $services = [];
         }

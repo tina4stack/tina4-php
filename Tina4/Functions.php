@@ -9,6 +9,39 @@
 namespace Tina4;
 
 /**
+ * Whether a discovered PHP file lives inside one of the excluded route
+ * directories and must therefore NOT be require_once'd during route/controller
+ * discovery. The static asset directories (src/public, src/assets) are
+ * web-reachable and may hold user-uploaded files; including a planted .php from
+ * there would execute it on every request. Those directories remain valid
+ * template-include locations — this guard only stops them being treated as PHP
+ * route/controller sources.
+ *
+ * Pure and side-effect-free: a prefix match of the file's real path against each
+ * excluded directory (followed by a separator, so "src/public" never matches a
+ * sibling like "src/public-api").
+ *
+ * @param string   $realFile     the resolved real path of the discovered .php file
+ * @param string[] $excludedDirs resolved real paths of the excluded directories
+ * @return bool true when the file is inside an excluded directory and must be skipped
+ */
+function tina4IsExcludedRouteFile(string $realFile, array $excludedDirs): bool
+{
+    foreach ($excludedDirs as $excludedDir) {
+        if ($excludedDir === "") {
+            continue;
+        }
+
+        $prefix = rtrim($excludedDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (strpos($realFile, $prefix) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Render a twig file or string
  * @param $fileNameString
  * @param array $data

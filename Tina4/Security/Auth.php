@@ -162,9 +162,13 @@ class Auth extends Data
                     throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
                 }
             }
-            shell_exec("ssh-keygen -t rsa -b 1024 -m PEM -f {$this->documentRoot}secrets/private.key -q -N \"\"");
-            shell_exec("chmod 600 {$this->documentRoot}secrets/private.key");
-            shell_exec("openssl rsa -in {$this->documentRoot}secrets/private.key -pubout -outform PEM -out {$this->documentRoot}secrets/public.pub");
+            // Security: escape the interpolated paths so a document root with
+            // shell metacharacters cannot inject commands; 2048-bit RSA minimum.
+            $privateKeyPath = $this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "private.key";
+            $publicKeyPath = $this->documentRoot . "secrets" . DIRECTORY_SEPARATOR . "public.pub";
+            shell_exec("ssh-keygen -t rsa -b 2048 -m PEM -f " . escapeshellarg($privateKeyPath) . " -q -N ''");
+            shell_exec("chmod 600 " . escapeshellarg($privateKeyPath));
+            shell_exec("openssl rsa -in " . escapeshellarg($privateKeyPath) . " -pubout -outform PEM -out " . escapeshellarg($publicKeyPath));
         }
 
         return true;
