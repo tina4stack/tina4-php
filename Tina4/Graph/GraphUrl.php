@@ -30,7 +30,7 @@ namespace Tina4\Graph;
  *   neo4j://host/db               (engine: bolt)
  *   arango://host/db              (engine: arango)
  */
-class GraphUrl
+class GraphUrl implements \JsonSerializable
 {
     /** @var array<string, string> URL scheme to CANONICAL engine name. */
     private const SCHEME_ENGINE = [
@@ -131,6 +131,40 @@ class GraphUrl
 
         $this->useTls = str_ends_with($scheme, 's')
             || in_array((string) ($params['tls'] ?? ''), ['1', 'true'], true);
+    }
+
+    /**
+     * What print_r()/var_dump() show. $password and $raw both hold the secret,
+     * so a dumped GraphUrl printed it twice (GHSA-h2mr-m3v3-cq8c). DatabaseUrl
+     * guards the same way; Ruby redacts GraphUrl#inspect.
+     *
+     * @return array<string, mixed> The public state with the password masked
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'raw' => \Tina4\DatabaseUrl::redact($this->raw),
+            'scheme' => $this->scheme,
+            'engine' => $this->engine,
+            'host' => $this->host,
+            'port' => $this->port,
+            'graph' => $this->graph,
+            'username' => $this->username,
+            'password' => $this->password === null ? null : '***',
+            'params' => $this->params,
+            'useTls' => $this->useTls,
+        ];
+    }
+
+    /**
+     * What json_encode() emits: Tina4 auto-serialises a returned object, so an
+     * unguarded GraphUrl in a route response put the password on the wire.
+     *
+     * @return array<string, mixed> The public state with the password masked
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__debugInfo();
     }
 
     /**
