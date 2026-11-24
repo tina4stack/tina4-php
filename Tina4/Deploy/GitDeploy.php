@@ -149,7 +149,9 @@ class GitDeploy
             } else {
                 $this->log("Cloning " . $_ENV["GIT_REPOSITORY"] . " into " . $stagingPath);
 
-                $runClone = "{$gitBinary} clone --single-branch --branch {$branch} {$repository} {$stagingPath}";
+                // Security: escape every interpolated value so a crafted branch,
+                // repository or path cannot inject shell commands.
+                $runClone = escapeshellcmd($gitBinary) . " clone --single-branch --branch " . escapeshellarg($branch) . " " . escapeshellarg($repository) . " " . escapeshellarg($stagingPath);
                 $this->log($runClone);
                 shell_exec($runClone);
             }

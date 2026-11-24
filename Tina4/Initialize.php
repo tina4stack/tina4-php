@@ -193,7 +193,18 @@ if (!$alreadyLoaded) {
             return $input;
         }
         $debugLevel = [];
-        @eval("\$debugLevel = ".$input.";");
+        // Security: resolve a "[CONST, CONST, …]" list (or numeric levels) without
+        // eval(). Only numeric values and already-defined UPPER_CASE constants
+        // (the TINA4_LOG_* family) are accepted, so a poisoned TINA4_DEBUG_LEVEL
+        // can never execute code.
+        $names = preg_split('/[\[\],\s]+/', (string) $input, -1, PREG_SPLIT_NO_EMPTY);
+        foreach (($names ?: []) as $name) {
+            if (is_numeric($name)) {
+                $debugLevel[] = (int) $name;
+            } elseif (preg_match('/^[A-Z][A-Z0-9_]*$/', $name) && defined($name)) {
+                $debugLevel[] = constant($name);
+            }
+        }
         return $debugLevel;
     }
 
@@ -512,10 +523,27 @@ if (!$alreadyLoaded) {
 
     $routeFolder = TINA4_DOCUMENT_ROOT . 'src';
 
+    // Security: the static asset directories (src/public, src/assets) are
+    // web-reachable and may hold user-uploaded files. They must NEVER be
+    // require_once'd during route/controller discovery, or any planted .php
+    // (e.g. an upload) would be executed on every request. They remain valid
+    // template-include locations (TINA4_TEMPLATE_LOCATIONS_INTERNAL); they are
+    // simply never treated as PHP route/controller sources. The predicate is a
+    // standalone, testable function (tina4IsExcludedRouteFile).
+    $tina4ExcludedRouteDirs = array_filter([
+        realpath($routeFolder . DIRECTORY_SEPARATOR . 'public'),
+        realpath($routeFolder . DIRECTORY_SEPARATOR . 'assets'),
+    ]);
+
     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($routeFolder)) as $file) {
         if ($file->getExtension() !== 'php') continue;
 
-        require_once $file->getRealPath();
+        $tina4RealFile = $file->getRealPath();
+        if (\Tina4\tina4IsExcludedRouteFile($tina4RealFile, $tina4ExcludedRouteDirs)) {
+            continue;
+        }
+
+        require_once $tina4RealFile;
 
         // ── Class methods (controllers) ─────────────────────────────────────
         foreach (get_declared_classes() as $class) {
