@@ -6,6 +6,18 @@ number means the same thing everywhere.
 **The authoritative release notes for every shipped version live in the documentation:**
 https://tina4.com/php/36-releases
 
+## 3.13.166 - 2026-11-24
+
+### Security
+
+- Modifiers chained on `Router::any()` reach every method (GHSA-v2m3-jwg5-vv65, high, reported with a patch by Michael Smit). `any()` registered GET, POST, PUT, PATCH and DELETE but pointed the chain at the GET route only, so `Router::any('/admin', $h)->role('admin')` refused a user token on GET and answered 200 on POST, PUT, PATCH and DELETE. `role()`, `can()`, `secure()`, `noAuth()`, `noCsrf()`, `cache()`, `noCache()` and `swagger()` now apply to all five routes. `any()->noAuth()` and `any()->noCsrf()` now open all five methods, as written (#379).
+- Database URL redaction never prints the password (GHSA-h2mr-m3v3-cq8c, reported by Michael Smit). A password containing `/ ? # @ %` or a space, a URL with one slash or no colon after the scheme, a URL with no host, or a non-numeric port printed the password, or part of it, in startup logs, connection errors and exception messages. One rule now finds the password (userinfo ends at the last `@`) and one parser replaces `parse_url()` at every call site; refusals never echo the value. Also covered: AMQP split at the first `@`, the MySQL/MSSQL error that printed the raw host string, the connect-timeout message that printed its target raw (ODBC's whole connection string included), and Kafka printing `kafka://u:pw@h`. A dumped or JSON-serialised `GraphUrl` hides its password. An unencoded `@` in a path or query is refused (encode it as `%40`) (#380).
+
+### Fixed
+
+- A failing seed file fails loud (ADR-0108). `seedDir` reported seeds it never ran: it required each file but never called the closure the file returns. It now calls it, returns the executed paths in order, skips `_` files, and on a failure logs and throws `Tina4\SeedError` naming the file, the files that ran before it and the cause. `tina4php seed` runs through `seedDir` and exits 1 on a failure (it died with exit 255) (#375, #376).
+- Windows: the built-in server shuts down gracefully on Ctrl+C, Ctrl+Break and a service stop through a console control handler; with no pcntl on Windows it had no graceful shutdown at all (#374).
+
 ## 3.13.165 - 2026-11-22
 
 ### Fixed
