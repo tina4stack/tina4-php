@@ -36,20 +36,20 @@ class ResponseTest extends TestCase
     }
 
     /**
+     * render() must delegate to the real \Tina4\renderTemplate engine and wrap
+     * the rendered output through __invoke(). The fixture template at
+     * tests/fixtures/templates/index.twig holds "Hello {{ name }}", so rendering
+     * it with ['name' => 'Test'] must yield the string "Hello Test" — proving the
+     * data actually reached Twig, not just that a name was echoed back.
+     *
      * @throws \Exception
      */
     public function testRender()
     {
-        // Mock \Tina4\renderTemplate to return a fixed string
-        if (!function_exists('\Tina4\renderTemplate')) {
-            function renderTemplate($template, $data)
-            {
-                return 'Rendered: ' . $template . ' with data ' . json_encode($data);
-            }
-        }
+        $template = __DIR__ . '/fixtures/templates/index.twig';
 
         $response = new Response();
-        $result = $response->render('index.twig', ['name' => 'Test']);
+        $result = $response->render($template, ['name' => 'Test']);
 
         $this->assertEquals('Hello Test', $result['content']);
         $this->assertEquals(200, $result['httpCode']);
