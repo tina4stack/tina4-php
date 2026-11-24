@@ -143,13 +143,7 @@ trait ConnectTimeoutTrait
 
         $driverSaid = trim((string) preg_replace('/\s+/', ' ', $driverSaid));
 
-        // A plain "host:port" is printed as is. Anything that can carry a
-        // credential - ODBC's whole "DSN=..;PWD=.." string, or a user:pw@host
-        // value - goes through the framework's one redaction rule first
-        // (GHSA-h2mr-m3v3-cq8c); it used to be printed verbatim.
-        if (str_contains($target, '=') || str_contains($target, '@')) {
-            $target = \Tina4\DatabaseUrl::redact($target);
-        }
+        $target = self::displayTarget($target);
 
         throw new \RuntimeException(
             sprintf(
@@ -163,6 +157,21 @@ trait ConnectTimeoutTrait
             0,
             $cause instanceof \Throwable ? $cause : null
         );
+    }
+
+    /**
+     * The connect target as it may be printed. A plain "host:port" is shown
+     * as is. Anything that can carry a credential - ODBC's whole
+     * "DSN=..;PWD=.." string, or a user:pw@host value - goes through the
+     * framework's one redaction rule first (GHSA-h2mr-m3v3-cq8c); it used to
+     * be printed verbatim.
+     */
+    private static function displayTarget(#[\SensitiveParameter] string $target): string
+    {
+        if (str_contains($target, '=') || str_contains($target, '@')) {
+            return \Tina4\DatabaseUrl::redact($target);
+        }
+        return $target;
     }
 
     /**

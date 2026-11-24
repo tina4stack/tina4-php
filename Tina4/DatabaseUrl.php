@@ -120,63 +120,11 @@ class DatabaseUrl implements \JsonSerializable
             $url = 'sqlite:' . substr($url, 8);
         }
 
-        if ($url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
-            $this->engine = 'sqlite';
-            $this->host = null;
-            $this->port = null;
-            $this->database = ':memory:';
-            $this->username = null;
-            $this->password = null;
+        if ($this->initSqlite($url)) {
             return;
         }
 
-        if (str_starts_with($url, 'sqlite:')) {
-            // Strip the sqlite scheme on the RAW string (mirrors tina4-python/ruby/nodejs).
-            // parse_url() collapses "sqlite:/x" and "sqlite:///x", losing the distinction
-            // between a one-slash ABSOLUTE path and the documented three-slash RELATIVE form —
-            // that was the "sqlite:<abspath> silently goes relative" footgun.
-            //   sqlite:///app.db        → "app.db"       (three slashes = relative to cwd)
-            //   sqlite:///data/app.db   → "data/app.db"
-            //   sqlite:////abs/app.db   → "/abs/app.db"  (four slashes = absolute)
-            //   sqlite:///C:/Users/app  → "C:/Users/app" (Windows absolute)
-            //   sqlite:/abs/app.db      → "/abs/app.db"  (one slash = a real absolute path)
-            //   sqlite://rel/app.db     → "rel/app.db"   (two-slash legacy = relative)
-            //   sqlite:app.db           → "app.db"
-            if (str_starts_with($url, 'sqlite:///')) {
-                $rest = substr($url, 10);
-            } elseif (str_starts_with($url, 'sqlite://')) {
-                $rest = substr($url, 9);
-            } else {
-                $rest = substr($url, 7); // "sqlite:"
-            }
-
-            $this->engine = 'sqlite';
-            $this->host = null;
-            $this->port = null;
-            // Absolute vs relative is decided by the adapter at connect time
-            // (a leading "/" or a Windows drive letter → absolute).
-            $this->database = $rest;
-            $this->username = null;
-            $this->password = null;
-            return;
-        }
-
-        // Parse standard URL format - by the framework's one URL rule
-        // (parseParts), never parse_url(): see GHSA-h2mr-m3v3-cq8c there.
-        try {
-            $parts = self::parseParts($url);
-        } catch (\InvalidArgumentException $e) {
-            // NEVER interpolate the raw URL, and never chain: the reason is
-            // either generic or carries only the REDACTED value. Measured
-            // 2026-08-02 in all four frameworks: a malformed TINA4_DATABASE_URL
-            // put the PASSWORD into this message verbatim, and this message
-            // reaches the boot log, the error overlay, a crash report and a CI
-            // log.
-            throw new \InvalidArgumentException(
-                'DatabaseUrl: Invalid URL format - ' . $e->getMessage()
-                . " - expected 'engine://user:password@host:port/database'."
-            );
-        }
+        $parts = self::constructorParts($url);
 
         $scheme = strtolower($parts['scheme']);
 
@@ -203,6 +151,82 @@ class DatabaseUrl implements \JsonSerializable
         // path downstream, which is exactly why nobody reported it.
         $path = $parts['path'] ?? '';
         $this->database = str_starts_with($path, '/') ? substr($path, 1) : $path;
+    }
+
+    /**
+     * Fill the fields for an in-memory or file SQLite URL. Returns false for
+     * any other engine, which the constructor then parses as a network URL.
+     */
+    private function initSqlite(#[\SensitiveParameter] string $url): bool
+    {
+        if ($url === 'sqlite::memory:' || $url === 'sqlite:///:memory:') {
+            $this->engine = 'sqlite';
+            $this->host = null;
+            $this->port = null;
+            $this->database = ':memory:';
+            $this->username = null;
+            $this->password = null;
+            return true;
+        }
+
+        if (!str_starts_with($url, 'sqlite:')) {
+            return false;
+        }
+
+        // Strip the sqlite scheme on the RAW string (mirrors tina4-python/ruby/nodejs).
+        // parse_url() collapses "sqlite:/x" and "sqlite:///x", losing the distinction
+        // between a one-slash ABSOLUTE path and the documented three-slash RELATIVE form —
+        // that was the "sqlite:<abspath> silently goes relative" footgun.
+        //   sqlite:///app.db        → "app.db"       (three slashes = relative to cwd)
+        //   sqlite:///data/app.db   → "data/app.db"
+        //   sqlite:////abs/app.db   → "/abs/app.db"  (four slashes = absolute)
+        //   sqlite:///C:/Users/app  → "C:/Users/app" (Windows absolute)
+        //   sqlite:/abs/app.db      → "/abs/app.db"  (one slash = a real absolute path)
+        //   sqlite://rel/app.db     → "rel/app.db"   (two-slash legacy = relative)
+        //   sqlite:app.db           → "app.db"
+        if (str_starts_with($url, 'sqlite:///')) {
+            $rest = substr($url, 10);
+        } elseif (str_starts_with($url, 'sqlite://')) {
+            $rest = substr($url, 9);
+        } else {
+            $rest = substr($url, 7); // "sqlite:"
+        }
+
+        $this->engine = 'sqlite';
+        $this->host = null;
+        $this->port = null;
+        // Absolute vs relative is decided by the adapter at connect time
+        // (a leading "/" or a Windows drive letter → absolute).
+        $this->database = $rest;
+        $this->username = null;
+        $this->password = null;
+        return true;
+    }
+
+    /**
+     * parseParts() for the constructor, with the refusal re-worded for it.
+     *
+     * @return array{scheme: string, user?: string, pass?: string, host?: string, port?: int, path?: string, query?: string, fragment?: string}
+     */
+    private static function constructorParts(#[\SensitiveParameter] string $url): array
+    {
+        // Parse standard URL format - by the framework's one URL rule
+        // (parseParts), never parse_url(): see GHSA-h2mr-m3v3-cq8c there.
+        try {
+            $parts = self::parseParts($url);
+        } catch (\InvalidArgumentException $e) {
+            // NEVER interpolate the raw URL, and never chain: the reason is
+            // either generic or carries only the REDACTED value. Measured
+            // 2026-08-02 in all four frameworks: a malformed TINA4_DATABASE_URL
+            // put the PASSWORD into this message verbatim, and this message
+            // reaches the boot log, the error overlay, a crash report and a CI
+            // log.
+            throw new \InvalidArgumentException(
+                'DatabaseUrl: Invalid URL format - ' . $e->getMessage()
+                . " - expected 'engine://user:password@host:port/database'."
+            );
+        }
+        return $parts;
     }
 
     /**
@@ -427,30 +451,36 @@ class DatabaseUrl implements \JsonSerializable
     {
         $at = strrpos($value, '@', $start);
         if ($at !== false) {
-            $userinfo = substr($value, $start, $at - $start);
-            $colon = strpos($userinfo, ':');
-            if ($colon === false) {
-                return $value; // a user, no password
-            }
-            $slash = strpos($userinfo, '/');
-            if ($slash !== false && $slash < $colon) {
-                return $value; // "host/path...@..." - a path, not a password
-            }
-            return substr($value, 0, $start + $colon + 1) . self::REDACTED . substr($value, $at);
+            return self::maskUserinfoPassword($value, $start, $at);
         }
+        return self::maskPortPassword($value, $start);
+    }
 
-        // No '@': a non-numeric "port" is a password ("scheme://u:secret").
-        $authority = substr($value, $start, strcspn($value, '/?#', $start));
-        $portOffset = null;
-        if (str_starts_with($authority, '[')) {
-            $close = strpos($authority, ']');
-            if ($close !== false && ($authority[$close + 1] ?? '') === ':') {
-                $portOffset = $close + 1;
-            }
-        } else {
-            $colon = strpos($authority, ':');
-            $portOffset = $colon === false ? null : $colon;
+    /**
+     * With an '@': mask from the first ':' of the userinfo to the last '@'.
+     */
+    private static function maskUserinfoPassword(#[\SensitiveParameter] string $value, int $start, int $at): string
+    {
+        $userinfo = substr($value, $start, $at - $start);
+        $colon = strpos($userinfo, ':');
+        if ($colon === false) {
+            return $value; // a user, no password
         }
+        $slash = strpos($userinfo, '/');
+        if ($slash !== false && $slash < $colon) {
+            return $value; // "host/path...@..." - a path, not a password
+        }
+        return substr($value, 0, $start + $colon + 1) . self::REDACTED . substr($value, $at);
+    }
+
+    /**
+     * No '@': a non-numeric "port" is a password ("scheme://u:secret"), and
+     * so is a digit-led one ("scheme://u:12?secret").
+     */
+    private static function maskPortPassword(#[\SensitiveParameter] string $value, int $start): string
+    {
+        $authority = substr($value, $start, strcspn($value, '/?#', $start));
+        $portOffset = self::portOffset($authority);
         if ($portOffset === null) {
             return $value;
         }
@@ -460,15 +490,7 @@ class DatabaseUrl implements \JsonSerializable
             return $value;
         }
         if (ctype_digit($port)) {
-            // A digit-led password: "scheme://u:12?secret" or "u:12#secret"
-            // reads as port 12 plus a query/fragment. A real query after a
-            // bare port is key=value; anything else directly after the digits
-            // is the rest of the password, so it is masked to the end.
-            $after = substr($value, $start + strlen($authority));
-            if ($after !== '' && ($after[0] === '?' || $after[0] === '#') && !self::isKeyValueQuery($after)) {
-                return substr($value, 0, $secretStart) . self::REDACTED;
-            }
-            return $value; // a real port - or the KNOWN LIMIT, an all-digit password
+            return self::maskDigitLedPassword($value, $start + strlen($authority), $secretStart);
         }
 
         $tail = substr($value, $secretStart);
@@ -478,6 +500,41 @@ class DatabaseUrl implements \JsonSerializable
             $keep = substr($tail, $query);
         }
         return substr($value, 0, $secretStart) . self::REDACTED . $keep;
+    }
+
+    /**
+     * Offset of the ':' before the port inside an authority ("host:port" or
+     * "[ipv6]:port"), or null when there is none.
+     */
+    private static function portOffset(#[\SensitiveParameter] string $authority): ?int
+    {
+        if (!str_starts_with($authority, '[')) {
+            $colon = strpos($authority, ':');
+            return $colon === false ? null : $colon;
+        }
+        $close = strpos($authority, ']');
+        if ($close !== false && ($authority[$close + 1] ?? '') === ':') {
+            return $close + 1;
+        }
+        return null;
+    }
+
+    /**
+     * A digit-led password: "scheme://u:12?secret" or "u:12#secret" reads as
+     * port 12 plus a query/fragment. A real query after a bare port is
+     * key=value; anything else directly after the digits is the rest of the
+     * password, so it is masked to the end.
+     *
+     * @param int $afterAuthority Offset just past the authority
+     * @param int $secretStart    Offset of the first character of the "port"
+     */
+    private static function maskDigitLedPassword(#[\SensitiveParameter] string $value, int $afterAuthority, int $secretStart): string
+    {
+        $after = substr($value, $afterAuthority);
+        if ($after !== '' && ($after[0] === '?' || $after[0] === '#') && !self::isKeyValueQuery($after)) {
+            return substr($value, 0, $secretStart) . self::REDACTED;
+        }
+        return $value; // a real port - or the KNOWN LIMIT, an all-digit password
     }
 
     /**
@@ -527,28 +584,67 @@ class DatabaseUrl implements \JsonSerializable
         $parts = ['scheme' => $match[1]];
         $rest = substr($url, strlen($match[0]));
 
-        $at = strrpos($rest, '@');
-        if ($at !== false) {
-            $userinfo = substr($rest, 0, $at);
-            $rest = substr($rest, $at + 1);
-            $colon = strpos($userinfo, ':');
-            $user = $colon === false ? $userinfo : substr($userinfo, 0, $colon);
-            $innerAt = strpos($userinfo, '@');
-            if (strpbrk($user, '/?#') !== false
-                || ($innerAt !== false && strpbrk(substr($userinfo, $innerAt), '/?#') !== false)
-            ) {
-                throw new \InvalidArgumentException(
-                    "an '@' outside the user:password part must be percent-encoded as %40 ("
-                    . self::NOT_ECHOED . ')',
-                    self::REFUSED_AMBIGUOUS_AT
-                );
-            }
-            $parts['user'] = $user;
-            if ($colon !== false) {
-                $parts['pass'] = substr($userinfo, $colon + 1);
-            }
+        $hasUserinfo = self::takeUserinfo($rest, $parts);
+        $rest = self::takePathQueryAndFragment($rest, $parts);
+        self::takeHostAndPort($rest, $url, $parts);
+        if (!$hasUserinfo) {
+            self::refuseDigitLedPassword($parts);
         }
 
+        return $parts;
+    }
+
+    /**
+     * Split the userinfo off at the LAST '@' into $parts['user'] / ['pass'],
+     * leaving the rest in $rest. Refuses an '@' it cannot place.
+     *
+     * @param array<string, int|string> $parts
+     * @return bool Whether the value had userinfo
+     */
+    private static function takeUserinfo(#[\SensitiveParameter] string &$rest, array &$parts): bool
+    {
+        $at = strrpos($rest, '@');
+        if ($at === false) {
+            return false;
+        }
+        $userinfo = substr($rest, 0, $at);
+        $rest = substr($rest, $at + 1);
+        $colon = strpos($userinfo, ':');
+        $user = $colon === false ? $userinfo : substr($userinfo, 0, $colon);
+        if (self::isAmbiguousAt($user, $userinfo)) {
+            throw new \InvalidArgumentException(
+                "an '@' outside the user:password part must be percent-encoded as %40 ("
+                . self::NOT_ECHOED . ')',
+                self::REFUSED_AMBIGUOUS_AT
+            );
+        }
+        $parts['user'] = $user;
+        if ($colon !== false) {
+            $parts['pass'] = substr($userinfo, $colon + 1);
+        }
+        return true;
+    }
+
+    /**
+     * True when the '@' the userinfo ends at cannot be the delimiter: the
+     * "user" holds a '/', '?' or '#' (the '@' is in the path or query), or an
+     * earlier unencoded '@' is followed by one.
+     */
+    private static function isAmbiguousAt(#[\SensitiveParameter] string $user, #[\SensitiveParameter] string $userinfo): bool
+    {
+        $innerAt = strpos($userinfo, '@');
+        return strpbrk($user, '/?#') !== false
+            || ($innerAt !== false && strpbrk(substr($userinfo, $innerAt), '/?#') !== false);
+    }
+
+    /**
+     * Move the "#fragment", "?query" and "/path" of what follows the userinfo
+     * into $parts, returning the authority that is left.
+     *
+     * @param array<string, int|string> $parts
+     */
+    private static function takePathQueryAndFragment(#[\SensitiveParameter] string $rest, array &$parts): string
+    {
         $hash = strpos($rest, '#');
         if ($hash !== false) {
             $parts['fragment'] = substr($rest, $hash + 1);
@@ -564,56 +660,73 @@ class DatabaseUrl implements \JsonSerializable
             $parts['path'] = substr($rest, $slash);
             $rest = substr($rest, 0, $slash);
         }
+        return $rest;
+    }
 
-        // What is left is the authority: host[:port] or [ipv6][:port].
-        $host = $rest;
-        $port = null;
-        if (str_starts_with($rest, '[')) {
-            $close = strpos($rest, ']');
-            if ($close === false) {
-                throw new \InvalidArgumentException('unclosed IPv6 bracket in ' . self::redact($url), self::REFUSED_HOST);
-            }
-            $host = substr($rest, 0, $close + 1);
-            $after = substr($rest, $close + 1);
-            if ($after !== '') {
-                if ($after[0] !== ':') {
-                    throw new \InvalidArgumentException('malformed host in ' . self::redact($url), self::REFUSED_HOST);
-                }
-                $port = substr($after, 1);
-            }
-        } else {
-            $colon = strpos($rest, ':');
-            if ($colon !== false) {
-                $host = substr($rest, 0, $colon);
-                $port = substr($rest, $colon + 1);
-            }
-        }
+    /**
+     * Read the authority - host[:port] or [ipv6][:port] - into $parts,
+     * refusing a non-numeric port with only the redacted value.
+     *
+     * @param array<string, int|string> $parts
+     */
+    private static function takeHostAndPort(#[\SensitiveParameter] string $authority, #[\SensitiveParameter] string $url, array &$parts): void
+    {
+        [$host, $port] = self::splitHostAndPort($authority, $url);
         if ($port !== null && $port !== '') {
             if (!ctype_digit($port) || (int) $port > 65535) {
                 throw new \InvalidArgumentException('port must be numeric in ' . self::redact($url), self::REFUSED_PORT);
-            }
-            // No '@' and the digits are followed straight by '?' or '#' that is
-            // not a key=value query: "u:12?secret" is a digit-led PASSWORD, not
-            // host "u", port 12 and a query. parse_url() split it that way and
-            // put the password in the query/fragment (GHSA-h2mr-m3v3-cq8c).
-            if ($at === false && !isset($parts['path']) && (isset($parts['query']) || isset($parts['fragment']))) {
-                $tail = (isset($parts['query']) ? '?' . $parts['query'] : '')
-                    . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
-                if (!self::isKeyValueQuery($tail)) {
-                    throw new \InvalidArgumentException(
-                        "a ':' followed by digits and then '?' or '#' cannot be told from a password - "
-                        . 'percent-encode the password (' . self::NOT_ECHOED . ')',
-                        self::REFUSED_AMBIGUOUS_PORT
-                    );
-                }
             }
             $parts['port'] = (int) $port;
         }
         if ($host !== '') {
             $parts['host'] = $host;
         }
+    }
 
-        return $parts;
+    /**
+     * @return array{0: string, 1: ?string} The host and the raw port text (null when absent)
+     */
+    private static function splitHostAndPort(#[\SensitiveParameter] string $authority, #[\SensitiveParameter] string $url): array
+    {
+        if (!str_starts_with($authority, '[')) {
+            $colon = strpos($authority, ':');
+            return $colon === false
+                ? [$authority, null]
+                : [substr($authority, 0, $colon), substr($authority, $colon + 1)];
+        }
+        $close = strpos($authority, ']');
+        if ($close === false) {
+            throw new \InvalidArgumentException('unclosed IPv6 bracket in ' . self::redact($url), self::REFUSED_HOST);
+        }
+        $after = substr($authority, $close + 1);
+        if ($after !== '' && $after[0] !== ':') {
+            throw new \InvalidArgumentException('malformed host in ' . self::redact($url), self::REFUSED_HOST);
+        }
+        return [substr($authority, 0, $close + 1), $after === '' ? null : substr($after, 1)];
+    }
+
+    /**
+     * No '@', a numeric port and no path, followed straight by '?' or '#'
+     * that is not a key=value query: "u:12?secret" is a digit-led PASSWORD,
+     * not host "u", port 12 and a query. parse_url() split it that way and
+     * put the password in the query/fragment (GHSA-h2mr-m3v3-cq8c).
+     *
+     * @param array<string, int|string> $parts
+     */
+    private static function refuseDigitLedPassword(array $parts): void
+    {
+        if (!isset($parts['port']) || isset($parts['path'])) {
+            return;
+        }
+        $tail = (isset($parts['query']) ? '?' . $parts['query'] : '')
+            . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
+        if ($tail !== '' && !self::isKeyValueQuery($tail)) {
+            throw new \InvalidArgumentException(
+                "a ':' followed by digits and then '?' or '#' cannot be told from a password - "
+                . 'percent-encode the password (' . self::NOT_ECHOED . ')',
+                self::REFUSED_AMBIGUOUS_PORT
+            );
+        }
     }
 
     /**
